@@ -63,7 +63,7 @@ export async function onResume(this: WebSocket, { d }: Payload) {
     previous.replayBuffer = undefined;
     previous.resumedBy = this;
 
-    this.once("close", () => holdForResume(this, this.listenerCleanup!));
+    this.once("close", (code: number) => holdForResume(this, this.listenerCleanup!, code));
 
     for (const payload of missed) await Send(this, payload);
     await Send(this, { op: OPCODES.Dispatch, t: "RESUMED", s: this.sequence++, d: {} });
