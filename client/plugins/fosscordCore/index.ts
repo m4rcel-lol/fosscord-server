@@ -35,6 +35,14 @@ export default definePlugin({
             },
         },
         {
+            find: "=location.pathname+location.search;return(0,",
+            all: true,
+            replacement: {
+                match: /let (\i)=location\.pathname\+location\.search;/,
+                replace: 'let $1=/^\\/(login|register)(\\/|$)/.test(location.pathname)?new URLSearchParams(location.search).get("redirect_to"):location.pathname+location.search;',
+            },
+        },
+        {
             find: "/api/v2/incidents/unresolved.json",
             replacement: {
                 match: /`\$\{\i\.\i\}\/api\/v2\//g,
