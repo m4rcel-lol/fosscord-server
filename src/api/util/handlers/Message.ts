@@ -61,6 +61,7 @@ import {
     v1CompTypes,
 } from "@spacebar/schemas";
 import { addPendingPoll } from "../utility/polls";
+import { applyE2eeToMessage } from "../utility/e2ee";
 import { MessageOptionAttachment, MessageOptions } from "@spacebar/util/dtos/MessageOptions";
 
 const allow_empty = false;
@@ -330,6 +331,7 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
     });
     message.channel = channel;
     await processMessageOptionAttachments(opts, message);
+    await applyE2eeToMessage(opts, channel, message);
 
     if (opts.author_id) {
         message.author = await User.findOneOrFail({
