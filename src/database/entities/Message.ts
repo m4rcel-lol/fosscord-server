@@ -382,7 +382,7 @@ export class Message extends BaseClass {
             interaction: this.interaction ? { id: this.interaction.id, type: this.interaction.type, name: this.interaction.name, user: this.interaction.user } : undefined,
             interaction_metadata: this.interaction_metadata ?? undefined,
             reactions: undefined,
-            sticker_items: this.sticker_items ?? undefined,
+            sticker_items: this.sticker_items?.map(({ id, name, format_type }) => ({ id, name, format_type })),
             message_reference: this.message_reference ?? undefined,
             mention_everyone: this.mention_everyone ?? false,
             author: {
