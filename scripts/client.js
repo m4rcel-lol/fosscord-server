@@ -40,7 +40,8 @@ const patch = (content) =>
         .replaceAll("`https://${", "`${location.protocol}//${")
         .replace(/Discord Nitro/g, `${INSTANCE_NAME} Premium`)
         .replace(/(["> ])Nitro([ ."<,!?])/g, "$1Premium$2")
-        .replace(/(["> ])Discord(['’]s|[ ."<,!?:])/g, `$1${INSTANCE_NAME}$2`);
+        .replace(/(["> ])Discord(['’]s|[ ."<,!?:])/g, `$1${INSTANCE_NAME}$2`)
+        .replace(/(["> ])Discord(?=\\u2019|\\u2014|\\'|-|\))/g, `$1${INSTANCE_NAME}`);
 
 const sliceExpression = (source, start) => {
     const closers = { "(": ")", "[": "]", "{": "}" };
