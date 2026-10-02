@@ -31,7 +31,12 @@ router.get("/", route({}), async (req: Request, res: Response) => {
     if (!channel || !channel.recipients?.some((r) => r.user_id === req.user_id)) throw DiscordApiErrors.UNKNOWN_CHANNEL;
     const others = channel.recipients.map((r) => r.user_id).filter((id) => id !== req.user_id);
     const bots = channel.type === ChannelType.DM && others.length ? await User.find({ where: { id: In(others), bot: true }, select: { id: true } }) : [];
-    res.json(await buildCommandIndex(bots.map((b) => b.id), { context: 1 }));
+    res.json(
+        await buildCommandIndex(
+            bots.map((b) => b.id),
+            { context: 1, integrationType: 0 },
+        ),
+    );
 });
 
 export default router;

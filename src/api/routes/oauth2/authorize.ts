@@ -18,8 +18,8 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { Application, Member, Role, User } from "@spacebar/database";
-import { DiscordApiErrors, FieldErrors, Permissions, emitEvent, getPermission, GuildRoleCreateEvent } from "@spacebar/util";
+import { Application, ApplicationAuthorization, Member, Role, User } from "@spacebar/database";
+import { DiscordApiErrors, FieldErrors, Permissions, Snowflake, emitEvent, getPermission, GuildRoleCreateEvent } from "@spacebar/util";
 import { emitCommandIndexUpdate } from "@spacebar/api/util/handlers/ApplicationCommands";
 import { ApplicationAuthorizeSchema } from "@spacebar/schemas";
 
@@ -151,7 +151,10 @@ router.get(
                 bot: true,
                 approximated_guild_count: 0, // TODO
             },
-            authorized: false,
+            authorized:
+                req.query.integration_type === "1"
+                    ? await ApplicationAuthorization.exists({ where: { user_id: req.user_id, application_id: app.id, integration_type: 1 } })
+                    : false,
         });
     },
 );
@@ -203,6 +206,20 @@ router.post(
             relations: { bot: true },
         });
         if (!app) throw DiscordApiErrors.UNKNOWN_APPLICATION;
+        if (body.integration_type === 1) {
+            const scopes = String(req.query.scope ?? "applications.commands")
+                .split(/[\s+]+/)
+                .filter(Boolean);
+            const existing = await ApplicationAuthorization.findOne({ where: { user_id: req.user_id, application_id: app.id } });
+            await ApplicationAuthorization.save({
+                ...(existing ?? { id: Snowflake.generate(), created_at: new Date() }),
+                user_id: req.user_id,
+                application_id: app.id,
+                integration_type: 1,
+                scopes: [...new Set([...(existing?.scopes ?? []), ...scopes])],
+            } as ApplicationAuthorization);
+            return res.json({ location: "/oauth2/authorized" });
+        }
         if (!app.bot) throw DiscordApiErrors.OAUTH2_APPLICATION_BOT_ABSENT;
         if (!body.guild_id) throw FieldErrors({ guild_id: { code: "BASE_TYPE_REQUIRED", message: req.t("common:field.BASE_TYPE_REQUIRED") } });
 

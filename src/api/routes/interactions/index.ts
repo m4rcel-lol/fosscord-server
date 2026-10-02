@@ -19,10 +19,10 @@
 import { randomBytes } from "node:crypto";
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
-import { InteractionSchema, InteractionType, ApplicationCommandType, MessageCreateCloudAttachment, PublicAttachment } from "@spacebar/schemas";
+import { InteractionSchema, InteractionType, ApplicationCommandType, ChannelType, MessageCreateCloudAttachment, PublicAttachment } from "@spacebar/schemas";
 import { route } from "@spacebar/api/middlewares";
-import { Application, ApplicationCommand, Channel, Guild, Member, Session } from "@spacebar/database";
-import { Config, DiscordApiErrors, emitEvent, getPermission, InteractionCreateEvent, pendingInteractions, Snowflake, storeInteraction } from "@spacebar/util";
+import { Application, ApplicationAuthorization, ApplicationCommand, Channel, Guild, Member, Session } from "@spacebar/database";
+import { Config, DiscordApiErrors, emitEvent, getPermission, InteractionCreateEvent, pendingInteractions, Permissions, Snowflake, storeInteraction } from "@spacebar/util";
 import { buildResolved, emitInteractionFailure, fetchInteractionMessage } from "@spacebar/api/util/handlers/Interaction";
 import { convertCloudAttachmentToAttachment } from "@spacebar/api/util";
 
@@ -43,6 +43,18 @@ router.post("/", route({}), async (req: Request, res: Response) => {
     permission.hasThrow("VIEW_CHANNEL");
     if (guildId && body.type !== InteractionType.MessageComponent && body.type !== InteractionType.ModalSubmit) permission.hasThrow("USE_APPLICATION_COMMANDS");
 
+    const guildInstalled = guildId ? await Member.exists({ where: { guild_id: guildId, id: application.id } }) : false;
+    const userInstalled = await ApplicationAuthorization.exists({ where: { user_id: req.user_id, application_id: application.id, integration_type: 1 } });
+    const botDm = !guildId && channel.type === ChannelType.DM && !!channel.recipients?.some((r) => r.user_id === application.id);
+    const context = guildId ? 0 : botDm ? 1 : 2;
+    const authorizingOwners: Record<string, string> = {
+        ...(guildInstalled && guildId && { "0": guildId }),
+        ...(botDm && { "0": "0" }),
+        ...(userInstalled && { "1": req.user_id }),
+    };
+    if (!Object.keys(authorizingOwners).length) throw DiscordApiErrors.UNKNOWN_APPLICATION;
+    const forceEphemeral = !!guildId && !guildInstalled && !permission.has("USE_EXTERNAL_APPS");
+
     const interactionId = Snowflake.generate();
     const token = Buffer.from(`interaction:${interactionId}:${randomBytes(48).toString("hex")}`).toString("base64url");
 
@@ -59,7 +71,15 @@ router.post("/", route({}), async (req: Request, res: Response) => {
         case InteractionType.ApplicationCommand:
         case InteractionType.ApplicationCommandAutocomplete: {
             command = await ApplicationCommand.findOne({ where: { id: data.id as string, application_id: application.id } });
-            if (!command) throw DiscordApiErrors.UNKNOWN_APPLICATION_COMMAND;
+            if (!command || (command.guild_id && command.guild_id !== guildId)) throw DiscordApiErrors.UNKNOWN_APPLICATION_COMMAND;
+            const integrationTypes = command.integration_types?.length ? command.integration_types : [0];
+            const contexts = command.contexts?.length ? command.contexts : command.dm_permission === false ? [0] : [0, 1, 2];
+            const usable = contexts.includes(context) && ((integrationTypes.includes(0) && (guildInstalled || botDm)) || (integrationTypes.includes(1) && userInstalled));
+            if (!usable) throw DiscordApiErrors.UNKNOWN_APPLICATION_COMMAND;
+            if (guildId && guildInstalled && command.default_member_permissions != null && !permission.has("ADMINISTRATOR")) {
+                const required = BigInt(command.default_member_permissions);
+                if (required === 0n || (permission.bitfield & required) !== required) throw DiscordApiErrors.MISSING_PERMISSIONS.withParams("default_member_permissions");
+            }
             const targetId = data.target_id as string | undefined;
             const uploads = (data.attachments ?? []) as MessageCreateCloudAttachment[];
             const attachments: Record<string, PublicAttachment & { id: string }> = {};
@@ -131,16 +151,21 @@ router.post("/", route({}), async (req: Request, res: Response) => {
         type: body.type,
         commandType: command?.type ?? (command ? ApplicationCommandType.CHAT_INPUT : undefined),
         commandName: command
-            ? [command.name, ...(function path(options?: { type: number; name?: string; options?: unknown[] }[]): string[] {
-                  const sub = options?.find((o) => o.type === 1 || o.type === 2);
-                  return sub ? [sub.name ?? "", ...path(sub.options as never)] : [];
-              })(data.options as never)].join(" ")
+            ? [
+                  command.name,
+                  ...(function path(options?: { type: number; name?: string; options?: unknown[] }[]): string[] {
+                      const sub = options?.find((o) => o.type === 1 || o.type === 2);
+                      return sub ? [sub.name ?? "", ...path(sub.options as never)] : [];
+                  })(data.options as never),
+              ].join(" ")
             : undefined,
         commandId: command?.id,
         commandOptions: data.options,
         targetId: data.target_id as string | undefined,
         customId: data.custom_id as string | undefined,
         componentType: data.component_type as number | undefined,
+        authorizingOwners,
+        forceEphemeral,
         triggeringInteraction: triggering
             ? (({ expires, timeout, triggeringInteraction, ...rest }) => {
                   void expires;
@@ -161,7 +186,7 @@ router.post("/", route({}), async (req: Request, res: Response) => {
 
     const guild = guildId ? await Guild.findOne({ where: { id: guildId } }) : null;
     const member = guildId ? await Member.findOne({ where: { guild_id: guildId, id: req.user_id }, relations: { user: true, roles: true } }) : null;
-    const appPermissions = await getPermission(application.id, guildId, channel);
+    const appPermissions = await getPermission(application.id, guildId, channel).catch(() => null);
 
     const payload = {
         id: interactionId,
@@ -182,12 +207,12 @@ router.post("/", route({}), async (req: Request, res: Response) => {
             permissions: permission.bitfield.toString(),
             recipients: guildId ? undefined : channel.recipients?.map((r) => ({ id: r.user_id })),
         },
-        app_permissions: appPermissions.bitfield.toString(),
+        app_permissions: (appPermissions?.bitfield ?? new Permissions(["SEND_MESSAGES", "EMBED_LINKS", "ATTACH_FILES", "USE_EXTERNAL_EMOJIS"]).bitfield).toString(),
         locale: req.user?.settings?.locale ?? "en-US",
         entitlements: [],
         entitlement_sku_ids: [],
-        authorizing_integration_owners: guildId ? { "0": guildId } : { "1": req.user_id },
-        context: guildId ? 0 : channel.recipients?.some((r) => r.user_id === application.id) ? 1 : 2,
+        authorizing_integration_owners: authorizingOwners,
+        context,
         attachment_size_limit: Config.get().cdn.maxAttachmentSize,
         ...(guild && {
             guild_id: guild.id,

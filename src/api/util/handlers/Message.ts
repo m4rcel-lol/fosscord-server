@@ -408,6 +408,15 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
             message.author.avatar = message.avatar;
         }
     } else {
+        if (!permission && opts.interaction_metadata) {
+            const appPermission = await getPermission(opts.author_id, channel.guild_id, channel).catch(() => null);
+            permission = new Permissions(
+                (appPermission?.bitfield ?? 0n) |
+                    new Permissions(["VIEW_CHANNEL", "SEND_MESSAGES", "EMBED_LINKS", "ATTACH_FILES", "READ_MESSAGE_HISTORY", "USE_EXTERNAL_EMOJIS", "USE_EXTERNAL_STICKERS"])
+                        .bitfield,
+            );
+            if (appPermission) permission.cache = appPermission.cache;
+        }
         permission ||= await getPermission(opts.author_id, channel.guild_id, channel);
         if (permission === null) throw new HTTPError("permission was null after getPermission", 500);
         permission.hasThrow("SEND_MESSAGES");

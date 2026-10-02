@@ -40,6 +40,8 @@ export interface PendingInteraction {
     targetId?: string;
     customId?: string;
     componentType?: number;
+    authorizingOwners: Record<string, string>;
+    forceEphemeral?: boolean;
     triggeringInteraction?: Omit<PendingInteraction, "expires" | "timeout" | "triggeringInteraction">;
     acknowledged: boolean;
     responseMessageId?: string;

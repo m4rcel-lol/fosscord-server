@@ -18,6 +18,7 @@
 
 export * from "./Application";
 export * from "./ApplicationCommand";
+export * from "./ApplicationAuthorization";
 export * from "./Attachment";
 export * from "./AuditLog";
 export * from "./AutomodRule";

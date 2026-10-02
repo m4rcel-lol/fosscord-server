@@ -95,7 +95,12 @@ async function emitToAudience(message: Message, event: "MESSAGE_CREATE" | "MESSA
     } as MessageCreateEvent | MessageUpdateEvent);
 }
 
-export async function buildResolved(options: { type: number; value?: unknown; options?: unknown[] }[] | undefined, guildId: string | undefined, channelId: string, extra: { users?: string[]; messages?: string[] } = {}) {
+export async function buildResolved(
+    options: { type: number; value?: unknown; options?: unknown[] }[] | undefined,
+    guildId: string | undefined,
+    channelId: string,
+    extra: { users?: string[]; messages?: string[] } = {},
+) {
     const users = new Set(extra.users ?? []);
     const roles = new Set<string>();
     const channels = new Set<string>();
@@ -141,7 +146,10 @@ export async function buildResolved(options: { type: number; value?: unknown; op
         const found = await Channel.find({ where: { id: In([...channels]) } });
         if (found.length)
             resolved.channels = Object.fromEntries(
-                found.map((c) => [c.id, { id: c.id, name: c.name, type: c.type, parent_id: c.parent_id, guild_id: c.guild_id, nsfw: c.nsfw, position: c.position, flags: c.flags }]),
+                found.map((c) => [
+                    c.id,
+                    { id: c.id, name: c.name, type: c.type, parent_id: c.parent_id, guild_id: c.guild_id, nsfw: c.nsfw, position: c.position, flags: c.flags },
+                ]),
             );
     }
     if (extra.messages?.length) {
@@ -160,7 +168,7 @@ async function interactionMetadata(interaction: PendingInteraction, extra: Recor
         type: i.type,
         user: user.toPublicUser(),
         user_id: i.userId,
-        authorizing_integration_owners: i.guildId ? { "0": i.guildId } : { "1": i.userId },
+        authorizing_integration_owners: i.authorizingOwners,
         ...(i.type === InteractionType.ApplicationCommand && {
             name: i.commandName,
             command_type: i.commandType,
@@ -187,10 +195,12 @@ function messageTypeFor(interaction: PendingInteraction) {
 
 export async function createInteractionMessage(interaction: PendingInteraction, data: InteractionMessage = {}, opts: { loading?: boolean; followup?: boolean } = {}) {
     let flags = (data.flags ?? 0) & SETTABLE_FLAGS;
+    if (interaction.forceEphemeral) flags |= EPHEMERAL;
     if (opts.loading) flags |= LOADING;
     const ephemeral = (flags & EPHEMERAL) !== 0;
 
-    if (!opts.loading && !data.content && !data.embeds?.length && !data.components?.length && !data.attachments?.length && !data.poll) throw new HTTPError("Cannot send an empty message", 400);
+    if (!opts.loading && !data.content && !data.embeds?.length && !data.components?.length && !data.attachments?.length && !data.poll)
+        throw new HTTPError("Cannot send an empty message", 400);
     if (data.content && data.content.length > Config.get().limits.message.maxCharacters) throw new HTTPError("Content length over max character limit", 400);
 
     const { type, origin } = messageTypeFor(interaction);
@@ -216,14 +226,24 @@ export async function createInteractionMessage(interaction: PendingInteraction, 
         allowed_mentions: data.allowed_mentions as never,
         message_reference: referenced ? { message_id: referenced.id, channel_id: referenced.channel_id, guild_id: referenced.guild_id ?? undefined } : undefined,
         interaction:
-            origin.type === InteractionType.ApplicationCommand ? ({ id: origin.id, type: origin.type, name: origin.commandName ?? "", user: user.toPublicUser(), command_id: origin.commandId, options: origin.commandOptions } as never) : undefined,
+            origin.type === InteractionType.ApplicationCommand
+                ? ({
+                      id: origin.id,
+                      type: origin.type,
+                      name: origin.commandName ?? "",
+                      user: user.toPublicUser(),
+                      command_id: origin.commandId,
+                      options: origin.commandOptions,
+                  } as never)
+                : undefined,
         interaction_metadata: (await interactionMetadata(
             interaction,
             opts.followup && interaction.responseMessageId ? { original_response_message_id: interaction.responseMessageId } : {},
         )) as never,
     });
     message.type = type;
-    if (referenced?.author_id && !message.content?.match(new RegExp(`<@!?${referenced.author_id}>`))) message.mentions = message.mentions.filter((u) => u.id !== referenced.author_id);
+    if (referenced?.author_id && !message.content?.match(new RegExp(`<@!?${referenced.author_id}>`)))
+        message.mentions = message.mentions.filter((u) => u.id !== referenced.author_id);
     if (!referenced) {
         message.message_reference = undefined;
         message.referenced_message = undefined;

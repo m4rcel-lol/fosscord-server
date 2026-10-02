@@ -61,12 +61,14 @@ function validate(body: ApplicationCommandCreateSchema, path = "") {
     const errors: Record<string, { code: string; message: string }> = {};
     if (!NAME_PATTERN.test(name) && type === ApplicationCommandType.CHAT_INPUT)
         errors[`${path}name`] = { code: "APPLICATION_COMMAND_INVALID_NAME", message: `Command name is invalid` };
-    if (type === ApplicationCommandType.CHAT_INPUT && name !== name.toLowerCase()) errors[`${path}name`] = { code: "APPLICATION_COMMAND_INVALID_NAME", message: "Command name is invalid" };
+    if (type === ApplicationCommandType.CHAT_INPUT && name !== name.toLowerCase())
+        errors[`${path}name`] = { code: "APPLICATION_COMMAND_INVALID_NAME", message: "Command name is invalid" };
     if (name.length < 1 || name.length > 32) errors[`${path}name`] = { code: "BASE_TYPE_BAD_LENGTH", message: "Must be between 1 and 32 in length." };
     const description = body.description?.trim() ?? "";
     if (type === ApplicationCommandType.CHAT_INPUT && (description.length < 1 || description.length > 100))
         errors[`${path}description`] = { code: "BASE_TYPE_BAD_LENGTH", message: "Must be between 1 and 100 in length." };
-    if (type !== ApplicationCommandType.CHAT_INPUT && description) errors[`${path}description`] = { code: "APPLICATION_COMMAND_INVALID_DESCRIPTION", message: "Context menu commands cannot have description" };
+    if (type !== ApplicationCommandType.CHAT_INPUT && description)
+        errors[`${path}description`] = { code: "APPLICATION_COMMAND_INVALID_DESCRIPTION", message: "Context menu commands cannot have description" };
     if ((body.options?.length ?? 0) > 25) errors[`${path}options`] = { code: "BASE_TYPE_MAX_LENGTH", message: "Must be 25 or fewer in length." };
     if (Object.keys(errors).length) throw FieldErrors(errors);
     return { type, name, description };
@@ -112,7 +114,13 @@ export async function emitCommandIndexUpdate(applicationId: string, guildId?: st
         guildIds.map(async (id) => {
             const members = await Member.find({ where: { guild_id: id, user: { bot: true } }, select: { id: true } });
             const commands = members.length
-                ? await ApplicationCommand.find({ where: members.flatMap((m) => [{ application_id: m.id, guild_id: IsNull() }, { application_id: m.id, guild_id: id }]), select: { type: true } })
+                ? await ApplicationCommand.find({
+                      where: members.flatMap((m) => [
+                          { application_id: m.id, guild_id: IsNull() },
+                          { application_id: m.id, guild_id: id },
+                      ]),
+                      select: { type: true },
+                  })
                 : [];
             const counts = { 1: 0, 2: 0, 3: 0 } as Record<number, number>;
             for (const c of commands) counts[c.type ?? 1] = (counts[c.type ?? 1] ?? 0) + 1;
@@ -125,7 +133,7 @@ export async function emitCommandIndexUpdate(applicationId: string, guildId?: st
     );
 }
 
-export async function buildCommandIndex(applicationIds: string[], scope: { guildId?: string; context?: number }) {
+export async function buildCommandIndex(applicationIds: string[], scope: { guildId?: string; context?: number; integrationType?: number }) {
     if (!applicationIds.length) return { applications: [], application_commands: [], version: "0" };
     const applications = await Application.find({ where: { id: In(applicationIds) }, relations: { bot: true } });
     const commands = applications.length
@@ -135,6 +143,7 @@ export async function buildCommandIndex(applicationIds: string[], scope: { guild
           })
         : [];
     const visible = commands.filter((c) => {
+        if (scope.integrationType !== undefined && !(c.integration_types?.length ? c.integration_types : [0]).includes(scope.integrationType)) return false;
         if (c.guild_id || scope.context === undefined) return true;
         if (c.contexts?.length) return c.contexts.includes(scope.context);
         return scope.context !== 1 || c.dm_permission !== false;
@@ -157,15 +166,11 @@ export async function buildCommandIndex(applicationIds: string[], scope: { guild
 export function commandListRouter() {
     const router = Router({ mergeParams: true });
 
-    router.get(
-        "/",
-        route({ query: { with_localizations: { type: "boolean", required: false } } }),
-        async (req: Request, res: Response) => {
-            const application = await assertCanManageCommands(req);
-            const commands = await ApplicationCommand.find({ where: { application_id: application.id, guild_id: (req.params.guild_id as string) ?? IsNull() }, order: { id: "ASC" } });
-            res.json(commands.map(serializeCommand));
-        },
-    );
+    router.get("/", route({ query: { with_localizations: { type: "boolean", required: false } } }), async (req: Request, res: Response) => {
+        const application = await assertCanManageCommands(req);
+        const commands = await ApplicationCommand.find({ where: { application_id: application.id, guild_id: (req.params.guild_id as string) ?? IsNull() }, order: { id: "ASC" } });
+        res.json(commands.map(serializeCommand));
+    });
 
     router.post("/", route({ requestBody: "ApplicationCommandCreateSchema" }), async (req: Request, res: Response) => {
         const application = await assertCanManageCommands(req);

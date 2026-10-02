@@ -19,7 +19,7 @@ const accounts = Object.fromEntries(
 );
 
 const commands = [
-    { name: "ping", description: "Replies with pong" },
+    { name: "ping", description: "Replies with pong", integration_types: [0, 1], contexts: [0, 1, 2] },
     { name: "echo", description: "Repeats what you say", options: [{ type: 3, name: "text", description: "What to say", required: true }, { type: 5, name: "loud", description: "Shout it" }] },
     { name: "buttons", description: "Sends a message with buttons and a select menu" },
     { name: "secret", description: "Replies with an ephemeral message" },
