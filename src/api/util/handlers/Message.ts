@@ -47,6 +47,7 @@ import {
 } from "@spacebar/util";
 import {
     ActionRowComponent,
+    AllowedMentions,
     AttachmentFlags,
     BaseMessageComponents,
     ButtonStyle,
@@ -416,57 +417,59 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
         }
 
         if (opts.tts) permission.hasThrow("SEND_TTS_MESSAGES");
-        if (opts.message_reference) {
+        if (opts.message_reference?.type === MessageReferenceType.FORWARD) {
+            const { message_id, channel_id } = opts.message_reference;
+            if (!message_id || !channel_id) throw new HTTPError("Forwards require message_id and channel_id", 400);
+            const source = await Channel.findOneOrFail({ where: { id: channel_id } });
+            const sourcePermission = await getPermission(opts.author_id, source.guild_id, source);
+            sourcePermission.hasThrow("VIEW_CHANNEL");
+            sourcePermission.hasThrow("READ_MESSAGE_HISTORY");
+            const forwarded = await Message.findOneOrFail({
+                where: { id: message_id, channel_id },
+                relations: { mentions: true, mention_roles: true, attachments: true, sticker_items: true },
+            });
+            message.message_reference = { type: MessageReferenceType.FORWARD, message_id, channel_id, guild_id: source.guild_id ?? undefined };
+            message.message_snapshots = [forwarded.toSnapshot()];
+            message.referenced_message = undefined;
+            message.type = MessageType.DEFAULT;
+        } else if (opts.message_reference) {
             permission.hasThrow("READ_MESSAGE_HISTORY");
-            // code below has to be redone when we add custom message routing
-            if (message.guild_id !== null) {
-                await Guild.findOneOrFail({
-                    where: { id: channel.guild_id },
+            if (!opts.message_reference.guild_id && channel.guild_id) opts.message_reference.guild_id = channel.guild_id;
+            if (!opts.message_reference.channel_id) opts.message_reference.channel_id = opts.channel_id;
+
+            if ((opts.message_reference.guild_id ?? null) !== (channel.guild_id ?? null)) throw new HTTPError("You can only reference messages from this guild");
+            if (opts.message_reference.channel_id !== opts.channel_id && opts.type !== MessageType.THREAD_STARTER_MESSAGE && opts.type !== MessageType.THREAD_CREATED)
+                throw new HTTPError("You can only reference messages from this channel");
+
+            message.message_reference = opts.message_reference;
+            if (message.message_reference.message_id) {
+                const referenced = await Message.findOne({
+                    where: {
+                        id: opts.message_reference.message_id,
+                    },
+                    relations: {
+                        author: true,
+                        webhook: true,
+                        application: true,
+                        mentions: true,
+                        mention_roles: true,
+                        mention_channels: true,
+                        sticker_items: true,
+                        attachments: true,
+                    },
                 });
-                if (!opts.message_reference.guild_id) opts.message_reference.guild_id = channel.guild_id;
-                if (!opts.message_reference.channel_id) opts.message_reference.channel_id = opts.channel_id;
-
-                if (opts.message_reference.type != 1) {
-                    if (opts.message_reference.guild_id !== channel.guild_id) throw new HTTPError("You can only reference messages from this guild");
-                    if (opts.message_reference.channel_id !== opts.channel_id && opts.type !== MessageType.THREAD_STARTER_MESSAGE && opts.type !== MessageType.THREAD_CREATED)
-                        throw new HTTPError("You can only reference messages from this channel");
-                }
-
-                message.message_reference = opts.message_reference;
-                if (message.message_reference.message_id) {
-                    message.referenced_message = await Message.findOneOrFail({
-                        where: {
-                            id: opts.message_reference.message_id,
-                        },
-                        relations: {
-                            author: true,
-                            webhook: true,
-                            application: true,
-                            mentions: true,
-                            mention_roles: true,
-                            mention_channels: true,
-                            sticker_items: true,
-                            attachments: true,
-                        },
-                    });
-
-                    if (
-                        message.referenced_message.channel_id &&
-                        message.referenced_message.channel_id !== opts.message_reference.channel_id &&
-                        opts.type !== MessageType.THREAD_STARTER_MESSAGE
-                    )
-                        throw new HTTPError("Referenced message not found in the specified channel", 404);
-                    if (
-                        message.referenced_message.guild_id &&
-                        message.referenced_message.guild_id !== opts.message_reference.guild_id &&
-                        opts.type !== MessageType.THREAD_STARTER_MESSAGE
-                    )
-                        throw new HTTPError("Referenced message not found in the specified channel", 404);
-                }
+                if (!referenced && opts.message_reference.fail_if_not_exists !== false) throw DiscordApiErrors.UNKNOWN_MESSAGE;
+                if (referenced && referenced.channel_id !== opts.message_reference.channel_id && opts.type !== MessageType.THREAD_STARTER_MESSAGE)
+                    throw new HTTPError("Referenced message not found in the specified channel", 404);
+                if (referenced) message.referenced_message = referenced;
+                else message.message_reference = undefined;
             }
-            /** Q: should be checked if the referenced message exists? ANSWER: NO
-			 otherwise backfilling won't work **/
-            if (MessageType.THREAD_STARTER_MESSAGE !== message.type && MessageType.THREAD_CREATED !== message.type && MessageType.POLL_RESULT !== message.type)
+            if (
+                message.message_reference &&
+                MessageType.THREAD_STARTER_MESSAGE !== message.type &&
+                MessageType.THREAD_CREATED !== message.type &&
+                MessageType.POLL_RESULT !== message.type
+            )
                 message.type = MessageType.REPLY;
         }
     }
@@ -510,7 +513,7 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
         }
     }
 
-    await handleMessageMentionsAsync(message);
+    await handleMessageMentionsAsync(message, opts.allowed_mentions);
 
     const attachmentIndices = new Map(message.attachments?.map((attachment, index) => [`attachment://${attachment.filename}`, index]));
     const attachmentsToRemove = new Set<number>();
@@ -687,7 +690,7 @@ export async function convertCloudAttachmentToAttachment(cloudAttachmentReferenc
     return realAtt;
 }
 
-async function handleMessageMentionsAsync(message: Message) {
+async function handleMessageMentionsAsync(message: Message, allowed?: AllowedMentions | null) {
     const sw = Stopwatch.startNew(),
         totalSw = Stopwatch.startNew();
     const trace: TraceNode = { micros: 0, calls: [] };
@@ -731,9 +734,15 @@ async function handleMessageMentionsAsync(message: Message) {
 		}*/
         contentTrace.calls.push("filterCodeblocks", { micros: sw.getElapsedAndReset().totalMicroseconds });
 
-        for (const [, mention] of content.matchAll(USER_MENTION)) mention_user_id_set.add(mention);
-        for (const [, mention] of content.matchAll(ROLE_MENTION)) mention_role_id_set.add(mention);
-        if (message.webhook?.id || message.webhook_id || permission?.has("MENTION_EVERYONE") || channel.type === ChannelType.DM || channel.type === ChannelType.GROUP_DM) {
+        const allows = (kind: "users" | "roles" | "everyone", list?: string[]) => (id?: string) => !allowed || allowed.parse?.includes(kind) || (!!id && !!list?.includes(id));
+        const allowsUser = allows("users", allowed?.users);
+        const allowsRole = allows("roles", allowed?.roles);
+        for (const [, mention] of content.matchAll(USER_MENTION)) if (allowsUser(mention)) mention_user_id_set.add(mention);
+        for (const [, mention] of content.matchAll(ROLE_MENTION)) if (allowsRole(mention)) mention_role_id_set.add(mention);
+        if (
+            allows("everyone")() &&
+            (message.webhook?.id || message.webhook_id || permission?.has("MENTION_EVERYONE") || channel.type === ChannelType.DM || channel.type === ChannelType.GROUP_DM)
+        ) {
             mention_everyone = !!content.match(EVERYONE_MENTION);
             mention_here = !!content.match(HERE_MENTION);
         }
@@ -762,7 +771,7 @@ async function handleMessageMentionsAsync(message: Message) {
         trace.calls.push("parseContent", contentTrace);
     }
 
-    if (message.message_reference?.message_id) {
+    if (message.message_reference?.message_id && message.message_reference.type !== MessageReferenceType.FORWARD) {
         const referencedMessage = await Message.findOne({
             where: {
                 id: message.message_reference.message_id,
@@ -773,7 +782,7 @@ async function handleMessageMentionsAsync(message: Message) {
                 mention_roles: true,
             },
         });
-        if (referencedMessage && referencedMessage.author_id !== message.author_id) {
+        if (referencedMessage && referencedMessage.author_id !== message.author_id && allowed?.replied_user !== false) {
             message.mentions.push(
                 // @ts-expect-error it does not like the .toPublicUser() lol
                 (await User.findOne({ where: { id: referencedMessage.author_id } }))!.toPublicUser(),
@@ -786,15 +795,6 @@ async function handleMessageMentionsAsync(message: Message) {
                 (await User.findOne({ where: { id: message.author_id } }))!.toPublicUser(),
             );
         }
-
-        if (message.message_reference.type === MessageReferenceType.FORWARD) {
-            message.type = MessageType.DEFAULT;
-
-            if (message.referenced_message) {
-                // TODO: mention_roles and mentions arrays - not needed it seems, but discord still returns that
-                message.message_snapshots = [message.referenced_message.toSnapshot()];
-            }
-        }
         trace.calls.push("handleMessageReference", { micros: sw.getElapsedAndReset().totalMicroseconds });
     }
 
@@ -803,7 +803,17 @@ async function handleMessageMentionsAsync(message: Message) {
 		Channel.create({ id: x }),
 	);*/
     message.mention_roles = mention_role_id_set.size == 0 ? [] : await Role.find({ where: { id: In(mention_role_id_set.values().toArray()), guild_id: channel.guild_id } });
-    message.mentions = [...message.mentions, ...(await User.find({ where: { id: In(mention_user_id_set.values().toArray()) } }))];
+    const mentionedUsers = await User.find({
+        where: {
+            id: In(
+                mention_user_id_set
+                    .values()
+                    .toArray()
+                    .filter((id) => !message.mentions.some((u) => u.id === id)),
+            ),
+        },
+    });
+    message.mentions = [...message.mentions, ...mentionedUsers];
     message.mention_everyone = mention_everyone;
     trace.calls.push("fillMessageMentionProperties", { micros: sw.getElapsedAndReset().totalMicroseconds });
 

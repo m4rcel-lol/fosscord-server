@@ -340,7 +340,7 @@ export class Message extends BaseClass {
 
             nonce: this.nonce ?? undefined,
             tts: this.tts ?? false,
-            guild: this.guild ?? undefined,
+            guild: undefined,
             webhook: this.webhook?.toMessageWebhook() ?? undefined,
             interaction: this.interaction ?? undefined,
             interaction_metadata: this.interaction_metadata ?? undefined,
@@ -361,7 +361,7 @@ export class Message extends BaseClass {
             content: this.content ?? "",
             pinned: this.pinned,
             thread: this.thread ? this.thread.toJSON() : this.thread,
-            referenced_message: this.referenced_message && !shallow ? this.referenced_message.toJSON(true) : undefined,
+            referenced_message: shallow ? undefined : this.referenced_message === null ? null : this.referenced_message?.toJSON(true),
         } satisfies PublicMessage;
     }
 
@@ -401,11 +401,13 @@ export class Message extends BaseClass {
         function signMedia(media: UnfurledMediaItem) {
             Object.assign(media, Attachment.prototype.signUrls.call(media, data));
         }
+        const json = this instanceof Message ? this.toJSON() : (this as unknown as PublicMessage);
+        const components = this.components as BaseMessageComponents[] | undefined;
         return {
-            ...this,
-            attachments: this.attachments?.map((attachment: Attachment) => Attachment.prototype.signUrls.call(attachment, data)),
-            components: this.components
-                ? this.components.map((comp) => {
+            ...json,
+            attachments: (this.attachments ?? json.attachments)?.map((attachment) => Attachment.prototype.signUrls.call(attachment, data)),
+            components: components
+                ? components.map((comp) => {
                       comp = structuredClone(comp);
                       if (comp.type === MessageComponentType.Section) {
                           const accessory = comp.accessory;
@@ -445,7 +447,7 @@ export class Message extends BaseClass {
                       }
                       return comp;
                   })
-                : this.components,
+                : json.components,
         };
     }
 
