@@ -32,7 +32,7 @@ const visit = async (context) => {
     const page = await context.newPage();
     const cdp = await context.newCDPSession(page);
     await cdp.send("Network.enable");
-    if (throttle) await cdp.send("Network.emulateNetworkConditions", profiles[throttle]);
+    if (profiles[throttle]) await cdp.send("Network.emulateNetworkConditions", profiles[throttle]);
     const requests = new Map();
     let identifyAt = null;
     let readyAt = null;
