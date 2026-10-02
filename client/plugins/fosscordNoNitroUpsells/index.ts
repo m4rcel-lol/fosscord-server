@@ -20,6 +20,8 @@ import definePlugin from "@utils/types";
 
 import { FosscordAuthor, hideNotices, hideSetting, redirectHome } from "../fosscordCore/shared";
 
+const NITRO_WHEEL_PATH = "M16.23 12c0 1.29-.95 2.25-2.22 2.25A2.18 2.18 0 0 1 11.8 12c0-1.29";
+
 const MAKE_IT_YOURS_ONLY_WITH_PREMIUM = "#{intl::np0X/u::raw}";
 
 export default definePlugin({
@@ -91,6 +93,13 @@ export default definePlugin({
             replacement: {
                 match: /(let (\i)=\(0,\i\.\i\)\(\{type:\i,isPreview:\i,isCoachmark:\i\}\).{0,600}?\.otherwise\(\(\)=>)\i\.intl\.string\(\i\.t\["np0X\/u"\]\)\);/,
                 replace: "$1null);if($2==null)return null;",
+            },
+        },
+        {
+            find: NITRO_WHEEL_PATH,
+            replacement: {
+                match: /function \i\(\i\)\{(?=let\{size:\i="md",width:\i,height:\i,color:\i=\i\.\i\.colors\.INTERACTIVE_ICON_DEFAULT,colorClass:\i="",\.\.\.\i\}=\i,.{0,500}?M16\.23 12c0 1\.29)/,
+                replace: "$&return null;",
             },
         },
         {
