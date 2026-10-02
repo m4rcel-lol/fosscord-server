@@ -30,6 +30,7 @@ import {
     ReadState,
     Recipient,
     Relationship,
+    Role,
     SecurityKey,
     Session,
     ThreadMember,
@@ -261,40 +262,21 @@ export async function onIdentify(this: WebSocket, data: Payload) {
                 select: { id: true, channel_id: true, last_message_id: true, last_pin_timestamp: true, mention_count: true },
             }),
         ),
-        timePromise(() =>
-            Member.find({
+        timePromise(async () => {
+            const members: Member[] = await Member.find({
                 where: { id: this.user_id },
-                select: {
-                    // We only want some member props
-                    ...OrmUtils.keysToObject(["index", ...(<string[]>MemberPrivateProjection)]),
-                    settings: true, // guild settings
-                    roles: { id: true }, // the full role is fetched from the `guild` relation
-                    guild: { id: true },
-
-                    // TODO: we don't really need every property of
-                    // guild channels, emoji, roles, stickers
-                    // but we do want almost everything from guild.
-                    // How do you do that without just enumerating the guild props?
-                    // guild: Object.fromEntries(
-                    // 	getDatabase()!
-                    // 		.getMetadata(Guild)
-                    // 		.columns.map((x) => [x.propertyName, true]),
-                    // ),
-                },
-                relations: {
-                    // "guild",
-                    // "guild.channels",
-                    // "guild.emojis",
-                    // "guild.roles",
-                    // "guild.stickers",
-                    // "guild.voice_states",
-                    roles: true,
-
-                    // For these entities, `user` is always just the logged in user we fetched above
-                    // "user",
-                },
-            }),
-        ),
+                select: OrmUtils.keysToObject(["index", ...(<string[]>MemberPrivateProjection).filter((key) => !["guild", "roles", "user"].includes(key))]),
+                order: { index: "ASC" },
+            });
+            if (!members.length) return members;
+            const memberRoles: { index: number; roles: string[] }[] = await Member.query(
+                `SELECT index, array_agg(role_id::text) AS roles FROM member_roles WHERE index = ANY($1) GROUP BY index`,
+                [members.map((m) => m.index)],
+            );
+            const rolesByIndex = new Map(memberRoles.map((row) => [String(row.index), row.roles]));
+            for (const member of members) member.roles = (rolesByIndex.get(String(member.index)) ?? []).map((id) => ({ id }) as Role);
+            return members;
+        }),
         timePromise(() =>
             Recipient.find({
                 where: { user_id: this.user_id, closed: false },
