@@ -19,25 +19,25 @@
 import { Request, Response, Router } from "express";
 import { In } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
-import { Badge, Member, Relationship, User } from "@spacebar/database";
+import { profileMetadata, resolveProfileCollectibles } from "@spacebar/api/util";
+import { Application, Badge, Member, Relationship, User } from "@spacebar/database";
 import { Config, emitEvent, FieldErrors, handleFile, UserUpdateEvent } from "@spacebar/util";
-import { PartialConnectedAccountResponse, PrivateUserProjection, PublicUser, PublicUserProjection, RelationshipType, UserProfileModifySchema } from "@spacebar/schemas";
+import { PartialConnectedAccountResponse, PrivateUserProjection, PublicUserProjection, RelationshipType, UserProfileModifySchema } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
+
+const PREMIUM_BADGE_ICON = "2ba85e8026a8614b640c2837bcdfe21b";
 
 router.get("/", route({ responses: { 200: { body: "UserProfileResponse" } } }), async (req: Request, res: Response) => {
     if (req.params.user_id === "@me") req.params.user_id = req.user_id;
 
-    const { guild_id, with_mutual_guilds, with_mutual_friends, with_mutual_friends_count } = req.query;
+    const { guild_id, with_mutual_guilds, with_mutual_friends, with_mutual_friends_count } = req.query as Record<string, string | undefined>;
     const { user_id } = req.params as { [key: string]: string };
 
     const user = await User.findOneOrFail({
-        where: {
-            id: user_id,
-        },
-        relations: { connected_accounts: true },
+        where: { id: user_id },
+        relations: { connected_accounts: true, avatar_decoration: true },
         select: {
-            // Manually select everything cause typeorm is a fuck
             connected_accounts: {
                 id: true,
                 type: true,
@@ -50,176 +50,134 @@ router.get("/", route({ responses: { 200: { body: "UserProfileResponse" } } }), 
         },
     });
 
-    const mutual_guilds: object[] = [];
-    let premium_guild_since;
+    const memberships = await Member.find({ where: { id: user_id }, select: { guild_id: true, nick: true, premium_since: true } });
+    const premium_guild_since = memberships
+        .map((x) => x.premium_since)
+        .filter((x) => x != null)
+        .sort((a, b) => Number(a) - Number(b))[0];
 
-    if (with_mutual_guilds == "true") {
-        const requested_member = await Member.find({
-            where: { id: user_id },
-        });
-        const self_member = await Member.find({
-            where: { id: req.user_id },
-        });
-
-        for (const rmem of requested_member) {
-            if (rmem.premium_since) {
-                if (premium_guild_since) {
-                    if (premium_guild_since > rmem.premium_since) {
-                        premium_guild_since = rmem.premium_since;
-                    }
-                } else {
-                    premium_guild_since = rmem.premium_since;
-                }
-            }
-            for (const smem of self_member) {
-                if (smem.guild_id === rmem.guild_id) {
-                    mutual_guilds.push({
-                        id: rmem.guild_id,
-                        nick: rmem.nick,
-                    });
-                }
-            }
-        }
+    let mutual_guilds: { id: string; nick: string | null }[] | undefined;
+    if (with_mutual_guilds === "true") {
+        const own = new Set((await Member.find({ where: { id: req.user_id }, select: { guild_id: true } })).map((x) => x.guild_id));
+        mutual_guilds = user_id === req.user_id ? [] : memberships.filter((x) => own.has(x.guild_id)).map((x) => ({ id: x.guild_id, nick: x.nick ?? null }));
     }
 
-    const guild_member =
-        guild_id && typeof guild_id == "string"
-            ? await Member.findOneOrFail({
-                  where: { id: user_id, guild_id: guild_id },
-                  relations: { roles: true },
-              })
-            : undefined;
-
-    if (guild_member) guild_member.roles = guild_member?.roles.filter((role) => role.id != guild_id);
-
-    // TODO: make proper DTO's in util?
-
-    const userProfile = {
-        bio: req.user_bot ? null : user.bio,
-        accent_color: user.accent_color,
-        banner: user.banner,
-        pronouns: user.pronouns,
-        theme_colors: user.theme_colors?.map((t) => Number(t)), // these are strings for some reason, they should be numbers
-    };
-
-    const guildMemberProfile = {
-        accent_color: null,
-        banner: guild_member?.banner || null,
-        bio: guild_member?.bio || "",
-        guild_id,
-    };
-
-    const badges = await Badge.find();
-
-    let mutual_friends: PublicUser[] = [];
-    let mutual_friends_count = 0;
-
-    if (with_mutual_friends == "true" || with_mutual_friends_count == "true") {
-        const relationshipsSelf = await Relationship.find({ where: { from_id: req.user_id, type: RelationshipType.FRIEND } });
-        const relationshipsUser = await Relationship.find({ where: { from_id: user_id, type: RelationshipType.FRIEND } });
-        const relationshipsIntersection = relationshipsSelf.filter((r1) => relationshipsUser.some((r2) => r2.to_id === r1.to_id));
-        if (with_mutual_friends_count) mutual_friends_count = relationshipsIntersection.length;
-        if (with_mutual_friends) {
-            const users = await User.find({
-                where: { id: In(relationshipsIntersection.map((r) => r.to_id)) },
-                select: Object.fromEntries(PublicUserProjection.map((i) => [i, true])),
-            }); //TODO: clean up
-            mutual_friends = users.map((u) => u.toPublicUser());
-        }
+    let mutual_friends;
+    let mutual_friends_count;
+    if (with_mutual_friends === "true" || with_mutual_friends_count === "true") {
+        const [mine, theirs] = await Promise.all(
+            [req.user_id, user_id].map((from_id) => Relationship.find({ where: { from_id, type: RelationshipType.FRIEND }, select: { to_id: true } })),
+        );
+        const theirIds = new Set(theirs.map((x) => x.to_id));
+        const mutualIds = user_id === req.user_id ? [] : mine.map((x) => x.to_id).filter((x) => theirIds.has(x));
+        mutual_friends_count = mutualIds.length;
+        if (with_mutual_friends === "true")
+            mutual_friends = mutualIds.length
+                ? (
+                      await User.find({
+                          where: { id: In(mutualIds) },
+                          select: Object.fromEntries(PublicUserProjection.map((i) => [i, true])),
+                      })
+                  ).map((u) => u.toPartialUser())
+                : [];
     }
 
-    // Only expose public properties to response
-    const publicUserConnections: PartialConnectedAccountResponse[] = [];
+    const guild_member = guild_id
+        ? await Member.findOne({
+              where: { id: user_id, guild_id },
+              relations: { roles: true },
+          })
+        : null;
 
-    user.connected_accounts
+    const badges = [];
+    if (user.premium_type > 0 && user.premium_since)
+        badges.push({
+            id: "premium",
+            description: `Subscriber since ${new Date(user.premium_since).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`,
+            icon: PREMIUM_BADGE_ICON,
+            link: "https://discord.com/settings/premium",
+        });
+    if (user.badge_ids?.length) badges.push(...(await Badge.find({ where: { id: In(user.badge_ids) } })));
+
+    const connected_accounts: PartialConnectedAccountResponse[] = user.connected_accounts
         .filter((x) => x.visibility != 0)
-        .forEach((x) => {
-            const publicUserConnection = {
-                id: x.id,
-                type: x.type,
-                name: x.name,
-                verified: x.verified ?? false,
-            } satisfies PartialConnectedAccountResponse;
+        .map((x) => ({
+            id: x.id,
+            type: x.type,
+            name: x.name,
+            verified: x.verified ?? false,
+            ...(x.metadata_visibility != 0 && x.metadata_ ? { metadata: x.metadata_ } : {}),
+        }));
 
-            if (x.metadata_visibility != 0) {
-                // @ts-expect-error idk
-                publicUserConnection.metadata = x.metadata_;
-            }
-
-            publicUserConnections.push(publicUserConnection);
-        });
+    const application = user.bot ? await Application.findOne({ where: { bot: { id: user_id } }, select: { id: true, flags: true } }) : null;
 
     res.json({
-        connected_accounts: publicUserConnections,
-        premium_guild_since: premium_guild_since, // TODO
-        premium_since: user.premium_since, // TODO
-        mutual_guilds: with_mutual_guilds ? mutual_guilds : undefined, // TODO {id: "", nick: null} when ?with_mutual_guilds=true
-        mutual_friends: with_mutual_friends ? mutual_friends : undefined,
-        mutual_friends_count: with_mutual_friends_count ? mutual_friends_count : undefined,
-        user: user.toPublicUser(),
+        user: { ...user.toPartialUser(), bio: user.bio ?? "" },
+        connected_accounts,
+        premium_since: user.premium_type > 0 ? user.premium_since : null,
         premium_type: user.premium_type,
-        profile_themes_experiment_bucket: 4, // TODO: This doesn't make it available, for some reason?
-        user_profile: userProfile,
-        guild_member: { ...guild_member?.toPublicMember(), user: user.toPublicUser() },
-        guild_member_profile: guild_id && guildMemberProfile,
-        badges: badges.filter((x) => user.badge_ids?.includes(x.id)),
+        premium_guild_since: premium_guild_since ? new Date(Number(premium_guild_since)) : null,
+        profile_themes_experiment_bucket: 4,
+        user_profile: profileMetadata(user),
+        badges,
+        guild_badges: [],
+        widgets: [],
+        legacy_username: null,
+        ...(application ? { application: { id: application.id, flags: application.flags, verified: false } } : {}),
+        ...(mutual_guilds ? { mutual_guilds } : {}),
+        ...(mutual_friends ? { mutual_friends } : {}),
+        ...(mutual_friends_count !== undefined ? { mutual_friends_count } : {}),
+        ...(guild_member
+            ? {
+                  guild_member: { ...guild_member.toPublicMember(), roles: guild_member.roles.filter((x) => x.id !== guild_id).map((x) => x.id), user: user.toPartialUser() },
+                  guild_member_profile: profileMetadata(guild_member),
+              }
+            : {}),
     });
 });
 
 router.patch("/", route({ requestBody: "UserProfileModifySchema" }), async (req: Request, res: Response) => {
     const body = req.body as UserProfileModifySchema;
 
-    if (body.banner) body.banner = await handleFile(`/banners/${req.user_id}`, body.banner as string);
     const user = await User.findOneOrFail({
         where: { id: req.user_id },
-        select: Object.fromEntries([...PrivateUserProjection, "data"].map((i) => [i, true])), //TODO: cleanup
+        select: Object.fromEntries([...PrivateUserProjection, "profile_collectibles"].map((i) => [i, true])),
     });
 
-    if (body.bio) {
-        const { maxBio } = Config.get().limits.user;
-        if (body.bio.length > maxBio) {
-            throw FieldErrors({
-                bio: {
-                    code: "BIO_INVALID",
-                    message: `Bio must be less than ${maxBio} in length`,
-                },
-            });
-        }
-    }
+    const { maxBio, maxPronouns } = Config.get().limits.user;
+    if (body.bio && body.bio.length > maxBio)
+        throw FieldErrors({
+            bio: {
+                code: "BIO_INVALID",
+                message: `Bio must be less than ${maxBio} in length`,
+            },
+        });
+    if (body.pronouns && body.pronouns.length > maxPronouns)
+        throw FieldErrors({
+            pronouns: {
+                code: "PRONOUNS_INVALID",
+                message: `Pronouns must be less than ${maxPronouns} in length`,
+            },
+        });
 
-    if (body.pronouns) {
-        const { maxPronouns } = Config.get().limits.user;
-        if (body.pronouns.length > maxPronouns) {
-            throw FieldErrors({
-                pronouns: {
-                    code: "PRONOUNS_INVALID",
-                    message: `Pronouns must be less than ${maxPronouns} in length`,
-                },
-            });
-        }
-    }
+    if (body.bio !== undefined) user.bio = body.bio ?? "";
+    if (body.pronouns !== undefined) Object.assign(user, { pronouns: body.pronouns || null });
+    if (body.accent_color !== undefined) Object.assign(user, { accent_color: body.accent_color });
+    if (body.theme_colors !== undefined) Object.assign(user, { theme_colors: body.theme_colors });
+    if (body.banner !== undefined) Object.assign(user, { banner: body.banner ? await handleFile(`/banners/${req.user_id}`, body.banner) : null });
 
-    user.assign(body);
+    if (body.collectibles_sku_ids !== undefined || body.profile_effect_id !== undefined)
+        user.profile_collectibles = await resolveProfileCollectibles(user.profile_collectibles, body.collectibles_sku_ids, body.profile_effect_id);
+
     await user.save();
 
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
-    delete user.data;
-
-    // TODO: send update member list event in gateway
     await emitEvent({
         event: "USER_UPDATE",
         user_id: req.user_id,
         data: user,
     } satisfies UserUpdateEvent);
 
-    res.json({
-        accent_color: user.accent_color,
-        bio: user.bio,
-        banner: user.banner,
-        theme_colors: user.theme_colors,
-        pronouns: user.pronouns,
-    });
+    res.json(profileMetadata(user));
 });
 
 export default router;

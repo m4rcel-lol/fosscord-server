@@ -17,7 +17,6 @@
 */
 
 import { Router, Response, Request } from "express";
-import { HTTPError } from "lambert-server/HTTPError";
 import { fileTypeFromBuffer } from "file-type";
 import { storage, setCacheControl } from "../util";
 
@@ -28,7 +27,7 @@ router.get("/:badge_id", setCacheControl, async (req: Request, res: Response) =>
     const path = `badge-icons/${badge_id}`;
 
     const file = await storage.get(path);
-    if (!file) throw new HTTPError("not found", 404);
+    if (!file) return res.redirect(`https://cdn.discordapp.com/badge-icons/${encodeURIComponent(badge_id)}`);
     const type = await fileTypeFromBuffer(file);
 
     res.set("Content-Type", type?.mime);

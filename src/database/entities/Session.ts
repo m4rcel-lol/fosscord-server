@@ -49,6 +49,7 @@ export class Session extends BaseClassWithoutId {
     @Column({ type: "jsonb" })
     client_info: {
         platform?: string;
+        browser?: string;
         os?: string;
         version?: number;
         location?: string;
@@ -92,7 +93,9 @@ export class Session extends BaseClassWithoutId {
             client_info: {
                 os: this.client_info?.os,
                 platform:
-                    this.client_info?.platform + (this.client_info?.version ? ` ${this.client_info?.version}` : "") + (this.session_nickname ? ` (${this.session_nickname})` : ""),
+                    [this.client_info?.browser ?? this.client_info?.platform, this.client_info?.version, this.session_nickname && `(${this.session_nickname})`]
+                        .filter(Boolean)
+                        .join(" ") || undefined,
                 location: this.last_seen_location,
             },
         };

@@ -89,7 +89,10 @@ export type PublicMemberKeys =
     | "theme_colors"
     | "pronouns"
     | "communication_disabled_until"
-    | "flags";
+    | "flags"
+    | "avatar_decoration_data"
+    | "collectibles"
+    | "display_name_styles";
 
 export const PublicMemberProjection: PublicMemberKeys[] = [
     "id",
@@ -108,6 +111,9 @@ export const PublicMemberProjection: PublicMemberKeys[] = [
     "pronouns",
     "communication_disabled_until",
     "flags",
+    "avatar_decoration_data",
+    "collectibles",
+    "display_name_styles",
 ];
 
 // TODO: make a proper schema rather than inheriting entity

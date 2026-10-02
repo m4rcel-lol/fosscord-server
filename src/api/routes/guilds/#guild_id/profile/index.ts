@@ -18,8 +18,9 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
+import { profileMetadata, resolveProfileCollectibles } from "@spacebar/api/util";
 import { Member } from "@spacebar/database";
-import { emitEvent, getPermission, getRights, GuildMemberUpdateEvent, handleFile, OrmUtils, Permissions } from "@spacebar/util";
+import { Config, emitEvent, FieldErrors, getPermission, getRights, GuildMemberUpdateEvent, handleFile, Permissions } from "@spacebar/util";
 import { MemberChangeProfileSchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
@@ -29,9 +30,7 @@ router.patch(
     route({
         requestBody: "MemberChangeProfileSchema",
         responses: {
-            200: {
-                body: "Member",
-            },
+            200: {},
             400: {
                 body: "APIErrorResponse",
             },
@@ -61,25 +60,34 @@ router.patch(
             }
         }
 
-        let member = await Member.findOneOrFail({
+        const member = await Member.findOneOrFail({
             where: { id: member_id, guild_id },
             relations: { roles: true, user: true },
         });
 
-        if (body.banner) body.banner = await handleFile(`/guilds/${guild_id}/users/${member_id}/avatars`, body.banner as string);
+        const { maxBio, maxPronouns } = Config.get().limits.user;
+        if (body.bio && body.bio.length > maxBio) throw FieldErrors({ bio: { code: "BIO_INVALID", message: `Bio must be less than ${maxBio} in length` } });
+        if (body.pronouns && body.pronouns.length > maxPronouns)
+            throw FieldErrors({ pronouns: { code: "PRONOUNS_INVALID", message: `Pronouns must be less than ${maxPronouns} in length` } });
 
-        member = await OrmUtils.mergeDeep(member, body);
+        if (body.nick !== undefined) Object.assign(member, { nick: body.nick || null });
+        if (body.bio !== undefined) member.bio = body.bio ?? "";
+        if (body.pronouns !== undefined) Object.assign(member, { pronouns: body.pronouns || null });
+        if (body.theme_colors !== undefined) Object.assign(member, { theme_colors: body.theme_colors });
+        if (body.banner !== undefined) Object.assign(member, { banner: body.banner ? await handleFile(`/guilds/${guild_id}/users/${member_id}/banners`, body.banner) : null });
+
+        if (body.collectibles_sku_ids !== undefined || body.profile_effect_id !== undefined)
+            member.profile_collectibles = await resolveProfileCollectibles(member.profile_collectibles, body.collectibles_sku_ids, body.profile_effect_id);
 
         await member.save();
 
-        // do not use promise.all as we have to first write to db before emitting the event to catch errors
         await emitEvent({
             event: "GUILD_MEMBER_UPDATE",
             guild_id,
-            data: { ...member, roles: member.roles.map((x) => x.id) },
+            data: { ...member.toPublicMember(), user: member.user.toPublicUser(), roles: member.roles.map((x) => x.id) },
         } satisfies GuildMemberUpdateEvent);
 
-        res.json(member);
+        res.json(profileMetadata(member));
     },
 );
 

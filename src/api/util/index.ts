@@ -27,3 +27,6 @@ export * from "./utility/e2ee";
 export * from "./utility/MessageSearch";
 export * from "./utility/BurstColors";
 export * from "./handlers/Thread";
+export * from "./utility/profile";
+export * from "./utility/emailChange";
+export * from "./utility/pomelo";

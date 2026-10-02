@@ -17,7 +17,7 @@
 */
 
 import { Request } from "express";
-import { Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, OneToOne, RelationId } from "typeorm";
+import { AfterLoad, Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, OneToOne, RelationId } from "typeorm";
 import { Config, Email, FieldErrors, Snowflake } from "@spacebar/util";
 import { Stopwatch, trimSpecial, Random } from "@spacebar/extensions";
 import { BaseClass } from "./BaseClass";
@@ -37,6 +37,8 @@ import {
     PartialUser,
     PrimaryGuild,
     PrivateUserProjection,
+    ProfileCollectible,
+    RecentAvatar,
     PublicUser,
     PublicUserProjection,
     UserPrivate,
@@ -201,6 +203,12 @@ export class User extends BaseClass {
     @Column({ type: "jsonb", nullable: true })
     primary_guild?: PrimaryGuild;
 
+    @Column({ type: "jsonb", nullable: true })
+    profile_collectibles?: ProfileCollectible[] | null;
+
+    @Column({ type: "jsonb", nullable: true, select: false })
+    recent_avatars?: RecentAvatar[] | null;
+
     @JoinColumn({ name: "avatar_decoration_id", foreignKeyConstraintName: "FK_user_avatar_decoration_id" })
     @OneToOne(() => AvatarDecoration, { onDelete: "SET NULL", nullable: true })
     avatar_decoration?: AvatarDecoration;
@@ -208,6 +216,15 @@ export class User extends BaseClass {
     @Column({ type: "int8", nullable: true })
     @RelationId((user: User) => user.avatar_decoration)
     avatar_decoration_id?: string;
+
+    @AfterLoad()
+    applyPremiumDefaults() {
+        const { premium, premiumType } = Config.get().defaults.user;
+        if (!premium || this.bot || this.premium_type === undefined || this.premium_type >= premiumType) return;
+        this.premium_type = premiumType;
+        if (this.premium !== undefined) this.premium = true;
+        this.premium_since ??= this.created_at;
+    }
 
     // TODO: I don't like this method?
     validate() {
@@ -250,7 +267,10 @@ export class User extends BaseClass {
                       ...this.avatar_decoration?.toJSON(),
                       ...this.avatar_decoration_data,
                   }
-                : null,
+                : (this.avatar_decoration_data ?? null),
+            collectibles: this.collectibles ?? null,
+            display_name_styles: this.display_name_styles ?? null,
+            primary_guild: this.primary_guild ?? null,
             bot: this.bot,
             system: this.system,
             banner: this.banner,

@@ -64,6 +64,7 @@ interface UserEntityPleaseRewriteThankYou {
     display_name_styles?: DisplayNameStyle;
     collectibles?: Collectibles;
     primary_guild?: PrimaryGuild;
+    profile_collectibles?: ProfileCollectible[] | null;
 }
 
 export interface PartialUser {
@@ -86,6 +87,18 @@ export interface PartialUser {
 export interface AvatarDecorationData {
     asset: string;
     sku_id: Snowflake;
+    expires_at: string | null;
+}
+
+export interface RecentAvatar {
+    id: Snowflake;
+    storage_hash: string;
+    description: string | null;
+}
+
+export interface ProfileCollectible {
+    sku_id: Snowflake;
+    type: number;
     expires_at: string | null;
 }
 
@@ -224,18 +237,12 @@ export class UserProfileModifySchema {
     pronouns?: string | null;
     bio?: string | null;
     banner?: base64str | null;
-    /**
-     * @type integer
-     */
     accent_color?: number | null;
-    /**
-     * @type array
-     * @items.type integer
-     */
-    theme_colors?: [number, number] | null;
+    theme_colors?: number[] | null;
     //@deprecated - what even was this
     popout_animation_particle_type?: Snowflake | null;
     //@deprecated - what even was this
     emoji_id?: Snowflake | null;
     profile_effect_id?: Snowflake | null;
+    collectibles_sku_ids?: Snowflake[] | null;
 }
