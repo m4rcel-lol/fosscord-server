@@ -45,6 +45,12 @@ import {
 } from "@spacebar/schemas";
 import { JsonNumber } from "@spacebar/util/util/Decorators";
 
+export interface AccountPreferences {
+    consents?: Record<string, boolean>;
+    email_categories?: Record<string, boolean>;
+    email_settings_initialized?: boolean;
+}
+
 @Entity({
     name: "users",
 })
@@ -211,6 +217,9 @@ export class User extends BaseClass {
 
     @Column({ type: "jsonb", nullable: true, select: false })
     recent_avatars?: RecentAvatar[] | null;
+
+    @Column({ type: "jsonb", nullable: true, select: false })
+    account_preferences?: AccountPreferences | null;
 
     @JoinColumn({ name: "avatar_decoration_id", foreignKeyConstraintName: "FK_user_avatar_decoration_id" })
     @OneToOne(() => AvatarDecoration, { onDelete: "SET NULL", nullable: true })
