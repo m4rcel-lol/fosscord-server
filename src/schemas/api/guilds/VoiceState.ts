@@ -32,6 +32,7 @@ export enum PublicVoiceStateEnum {
     deaf,
     channel_id,
     guild_id,
+    connected_at,
 }
 
 export type PublicVoiceStateKeys = keyof typeof PublicVoiceStateEnum;

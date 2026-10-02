@@ -472,8 +472,10 @@ export interface UserConnectionsUpdateEvent extends Event {
 
 export interface VoiceStateUpdateEvent extends Event {
     event: "VOICE_STATE_UPDATE";
-    data: PublicVoiceState & {
-        member: PublicMember;
+    data: Omit<PublicVoiceState, "guild_id" | "channel_id"> & {
+        guild_id?: string | null;
+        channel_id: string | null;
+        member?: PublicMember;
     };
 }
 
@@ -492,6 +494,7 @@ export interface StreamCreateEvent extends Event {
     data: {
         stream_key: string;
         rtc_server_id: string;
+        rtc_channel_id?: string;
         viewer_ids: string[];
         region: string;
         paused: boolean;
@@ -891,6 +894,15 @@ export type EVENT =
     | "STREAM_CREATE"
     | "STREAM_SERVER_UPDATE"
     | "STREAM_DELETE"
+    | "STREAM_UPDATE"
+    | "CALL_CREATE"
+    | "CALL_UPDATE"
+    | "CALL_DELETE"
+    | "VOICE_CHANNEL_STATUS_UPDATE"
+    | "VOICE_CHANNEL_START_TIME_UPDATE"
+    | "STAGE_INSTANCE_CREATE"
+    | "STAGE_INSTANCE_UPDATE"
+    | "STAGE_INSTANCE_DELETE"
     | "APPLICATION_COMMAND_CREATE"
     | "APPLICATION_COMMAND_UPDATE"
     | "APPLICATION_COMMAND_DELETE"

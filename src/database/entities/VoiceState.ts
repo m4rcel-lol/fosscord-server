@@ -96,6 +96,9 @@ export class VoiceState extends BaseClass {
     @Column({ nullable: true, default: null })
     request_to_speak_timestamp?: Date;
 
+    @Column({ type: "bigint", nullable: true, transformer: { to: (value?: number | null) => value, from: (value?: string | null) => (value == null ? value : Number(value)) } })
+    connected_at?: number | null;
+
     toPublicVoiceState() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const voiceState: any = {};

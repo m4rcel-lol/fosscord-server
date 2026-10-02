@@ -16,7 +16,9 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+import { Channel } from "@spacebar/database";
 import { WebSocket, Payload, OPCODES, Send, handleOffloadedGatewayRequest } from "@spacebar/gateway";
+import { Not, IsNull } from "typeorm";
 import { Config } from "@spacebar/util";
 
 export async function onRequestChannelStatuses(this: WebSocket, { d }: Payload) {
@@ -27,13 +29,13 @@ export async function onRequestChannelStatuses(this: WebSocket, { d }: Payload) 
         if (await handleOffloadedGatewayRequest(this, Config.get().offload.gateway.channelStatusesUrl!, d)) return;
     }
 
-    // TODO: implement
+    const channels = await Channel.find({ where: { guild_id: d.guild_id, status: Not(IsNull()) }, select: { id: true, status: true } });
     await Send(this, {
         op: OPCODES.Dispatch,
         t: "CHANNEL_STATUSES",
         d: {
             guild_id: d.guild_id,
-            channels: [],
+            channels: channels.map((channel) => ({ id: channel.id, status: channel.status })),
         },
     });
 }

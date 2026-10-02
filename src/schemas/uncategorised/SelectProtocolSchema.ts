@@ -27,11 +27,12 @@ export interface SelectProtocolSchema {
           };
     sdp?: string;
     codecs?: {
-        name: "opus" | "VP8" | "VP9" | "H264";
+        name: string;
         type: "audio" | "video";
         priority: number;
         payload_type: number;
         rtx_payload_type?: number;
     }[];
     rtc_connection_id?: string; // uuid
+    experiments?: string[];
 }

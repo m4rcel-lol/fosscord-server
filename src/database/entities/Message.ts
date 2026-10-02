@@ -37,6 +37,7 @@ import {
     MessageSnapshot,
     MessageType,
     PartialMessage,
+    MessageCall,
     Poll,
     PollAnswerCount,
     PublicMessage,
@@ -300,6 +301,9 @@ export class Message extends BaseClass {
     @Column({ type: "jsonb", nullable: true })
     encrypted?: E2eeEnvelope | null;
 
+    @Column({ type: "jsonb", nullable: true })
+    call?: MessageCall | null;
+
     get isWebhook() {
         return this.webhook_id != null && this.webhook != null;
     }
@@ -397,6 +401,7 @@ export class Message extends BaseClass {
             application: this.application ?? undefined,
             components: this.components ?? [],
             poll: Message.publicPoll(this.poll),
+            call: this.call ?? undefined,
             content: this.content ?? "",
             embeds: (this.embeds ?? []).map(proxyEmbedMedia),
             pinned: this.pinned,

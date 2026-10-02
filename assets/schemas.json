@@ -5304,6 +5304,12 @@
                         "type": "null"
                     }
                 ]
+            },
+            "mute": {
+                "type": "boolean"
+            },
+            "deaf": {
+                "type": "boolean"
             }
         },
         "additionalProperties": false,
@@ -6263,12 +6269,6 @@
                     "type": "object",
                     "properties": {
                         "name": {
-                            "enum": [
-                                "H264",
-                                "VP8",
-                                "VP9",
-                                "opus"
-                            ],
                             "type": "string"
                         },
                         "type": {
@@ -6299,6 +6299,12 @@
             },
             "rtc_connection_id": {
                 "type": "string"
+            },
+            "experiments": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
             }
         },
         "additionalProperties": false,
@@ -6815,6 +6821,35 @@
             "preferred_region": {
                 "type": "string"
             },
+            "preferred_regions": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "tracks": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "type": "string"
+                        },
+                        "rid": {
+                            "type": "string"
+                        },
+                        "quality": {
+                            "type": "integer"
+                        }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                        "quality",
+                        "rid",
+                        "type"
+                    ]
+                }
+            },
             "request_to_speak_timestamp": {
                 "type": "string",
                 "format": "date-time"
@@ -6831,6 +6866,25 @@
             "self_deaf",
             "self_mute"
         ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "VoiceStateModifySchema": {
+        "type": "object",
+        "properties": {
+            "channel_id": {
+                "type": "string"
+            },
+            "suppress": {
+                "type": "boolean"
+            },
+            "request_to_speak_timestamp": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "GenerateWebAuthnCredentialsSchema": {
@@ -14533,6 +14587,12 @@
                 "type": "string",
                 "format": "date-time"
             },
+            "connected_at": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
             "id": {
                 "type": "string"
             }
@@ -15655,6 +15715,16 @@
                 "anyOf": [
                     {
                         "$ref": "#/definitions/E2eeEnvelope"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "call": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/MessageCall"
                     },
                     {
                         "type": "null"
@@ -17202,6 +17272,29 @@
             "prekey_id",
             "user_id",
             "wrapped"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "MessageCall": {
+        "type": "object",
+        "properties": {
+            "participants": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "ended_timestamp": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "ended_timestamp",
+            "participants"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -19282,6 +19375,9 @@
                 "items": {
                     "$ref": "#/definitions/MessageSnapshot"
                 }
+            },
+            "call": {
+                "$ref": "#/definitions/MessageCall"
             },
             "thread": {
                 "$ref": "#/definitions/PublicChannel"

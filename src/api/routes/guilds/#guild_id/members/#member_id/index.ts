@@ -18,7 +18,7 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { AuditLog, Emoji, Guild, Member, Role, Sticker } from "@spacebar/database";
+import { AuditLog, Emoji, Guild, Member, Role, Sticker, VoiceChannels } from "@spacebar/database";
 import { CollectibleItemType, Collectibles, Config, DiscordApiErrors, emitEvent, FieldErrors, getPermission, getRights, GuildMemberUpdateEvent, handleFile } from "@spacebar/util";
 import { AuditLogEvents, MemberChangeSchema, PublicMemberProjection, PublicUserProjection } from "@spacebar/schemas";
 
@@ -118,8 +118,25 @@ router.patch(
             rights.hasThrow("MANAGE_USERS");
         }
 
-        const { avatar_decoration_sku_id, collectibles, display_name_font_id, display_name_effect_id, display_name_colors, avatar_description, avatar_id, vad_colors, ...changes } =
-            body;
+        const {
+            avatar_decoration_sku_id,
+            collectibles,
+            display_name_font_id,
+            display_name_effect_id,
+            display_name_colors,
+            avatar_description,
+            avatar_id,
+            vad_colors,
+            channel_id: voiceChannelId,
+            ...changes
+        } = body;
+
+        if ("mute" in body) permission.hasThrow("MUTE_MEMBERS");
+        if ("deaf" in body) permission.hasThrow("DEAFEN_MEMBERS");
+        if ("channel_id" in body) {
+            permission.hasThrow("MOVE_MEMBERS");
+            if (voiceChannelId && !(await getPermission(member_id, guild_id, voiceChannelId)).has("CONNECT")) throw DiscordApiErrors.MISSING_PERMISSIONS.withParams("CONNECT");
+        }
 
         if (changes.avatar) changes.avatar = await handleFile(`/guilds/${guild_id}/users/${member_id}/avatars`, changes.avatar);
         else if (changes.avatar === null) Object.assign(member, { avatar: null });
@@ -169,6 +186,8 @@ router.patch(
         }
 
         await member.save();
+        if ("mute" in body || "deaf" in body) await VoiceChannels.setServerMute(guild_id, member_id, { mute: body.mute, deaf: body.deaf });
+        if ("channel_id" in body) await VoiceChannels.move(guild_id, member_id, voiceChannelId ?? null);
 
         member.roles = member.roles.filter((x) => x.id !== guild_id);
         const data = { ...member.toPublicMember(), guild_id, user: member.user.toPublicUser(), roles: member.roles.map((x) => x.id) };

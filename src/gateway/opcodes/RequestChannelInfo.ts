@@ -16,7 +16,8 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Channel } from "@spacebar/database";
+import { Channel, VoiceChannels } from "@spacebar/database";
+import { In } from "typeorm";
 import { WebSocket, Payload, OPCODES, Send, handleOffloadedGatewayRequest } from "@spacebar/gateway";
 import { ChannelType } from "@spacebar/schemas";
 import { Config } from "@spacebar/util";
@@ -32,7 +33,7 @@ export async function onRequestChannelInfo(this: WebSocket, { d }: Payload) {
 
     const channels = (
         await Channel.find({
-            where: { guild_id: d.guild_id, type: ChannelType.GUILD_VOICE },
+            where: { guild_id: d.guild_id, type: In([ChannelType.GUILD_VOICE, ChannelType.GUILD_STAGE_VOICE]) },
             relations: {
                 voice_states: true,
             },
@@ -41,14 +42,16 @@ export async function onRequestChannelInfo(this: WebSocket, { d }: Payload) {
 
     await Send(this, {
         op: OPCODES.Dispatch,
-        t: "CHANNEL_INFO", // This is an educated guess...
+        t: "CHANNEL_INFO",
         d: {
             guild_id: d.guild_id,
-            channels: channels.map((c) => ({
-                id: c.id,
-                status: d.fields.includes("status") ? null : undefined, // TODO: we dont track this
-                voice_start_time: d.fields.includes("voice_start_time") ? new Date().toISOString() : undefined, // TODO: we dont track this
-            })),
+            channels: await Promise.all(
+                channels.map(async (c) => ({
+                    id: c.id,
+                    status: d.fields.includes("status") ? (c.status ?? null) : undefined,
+                    voice_start_time: d.fields.includes("voice_start_time") ? await VoiceChannels.startTime(c.id) : undefined,
+                })),
+            ),
         },
     });
 }

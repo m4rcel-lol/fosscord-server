@@ -17,9 +17,9 @@
 */
 
 import { Not } from "typeorm";
-import { Stream, StreamSession } from "@spacebar/database";
+import { Recipient, Stream, StreamSession } from "@spacebar/database";
 import { genVoiceToken, parseStreamKey, Payload, WebSocket } from "@spacebar/gateway";
-import { Config, emitEvent, StreamCreateEvent, StreamServerUpdateEvent } from "@spacebar/util";
+import { Config, emitEvent, getPermission, StreamCreateEvent, StreamServerUpdateEvent } from "@spacebar/util";
 import { StreamWatchSchema } from "@spacebar/schemas";
 import { check } from "./instanceOf";
 
@@ -40,7 +40,7 @@ export async function onStreamWatch(this: WebSocket, data: Payload) {
     try {
         parsedKey = parseStreamKey(body.stream_key);
     } catch (e) {
-        return this.close(4000, "Invalid stream key");
+        return emitEvent({ event: "STREAM_DELETE", user_id: this.user_id, data: { stream_key: body.stream_key, unavailable: true, reason: "stream_ended" } });
     }
 
     const { type, channelId, guildId, userId } = parsedKey;
@@ -50,14 +50,20 @@ export async function onStreamWatch(this: WebSocket, data: Payload) {
         relations: { channel: true },
     });
 
-    if (!stream) return this.close(4000, "Invalid stream key");
+    if (!stream) return emitEvent({ event: "STREAM_DELETE", user_id: this.user_id, data: { stream_key: body.stream_key, unavailable: true, reason: "stream_ended" } });
 
-    if (type === "guild" && stream.channel.guild_id != guildId) return this.close(4000, "Invalid stream key");
+    if (type === "guild" && stream.channel.guild_id != guildId)
+        return emitEvent({ event: "STREAM_DELETE", user_id: this.user_id, data: { stream_key: body.stream_key, unavailable: true, reason: "stream_ended" } });
+
+    const allowed = stream.channel.guild_id
+        ? (await getPermission(this.user_id, stream.channel.guild_id, stream.channel_id)).has("VIEW_CHANNEL")
+        : await Recipient.exists({ where: { channel_id: stream.channel_id, user_id: this.user_id } });
+    if (!allowed) return emitEvent({ event: "STREAM_DELETE", user_id: this.user_id, data: { stream_key: body.stream_key, unavailable: true, reason: "unauthorized" } });
 
     const regions = Config.get().regions;
     const guildRegion = regions.available.find((r) => r.endpoint === stream.endpoint);
 
-    if (!guildRegion) return this.close(4000, "Unknown region");
+    if (!guildRegion) return emitEvent({ event: "STREAM_DELETE", user_id: this.user_id, data: { stream_key: body.stream_key, unavailable: true, reason: "stream_ended" } });
 
     const streamSession = StreamSession.create({
         stream_id: stream.id,
@@ -82,6 +88,7 @@ export async function onStreamWatch(this: WebSocket, data: Payload) {
         data: {
             stream_key: body.stream_key,
             rtc_server_id: stream.id, // for voice connections in guilds it is guild_id, for dm voice calls it seems to be DM channel id, for GoLive streams a generated number
+            rtc_channel_id: (BigInt(stream.id) - 1n).toString(),
             viewer_ids: viewers.map((v) => v.user_id),
             region: guildRegion.name,
             paused: false,

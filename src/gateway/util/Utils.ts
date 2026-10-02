@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Session, VoiceState } from "@spacebar/database";
+import { PrivateCalls, Session, StageInstances, Stream, VoiceState } from "@spacebar/database";
 import { TimeSpan } from "@spacebar/extensions";
 import { Event } from "@spacebar/util";
 import { WebSocket } from "./WebSocket";
@@ -75,6 +75,13 @@ export async function cleanupOnStartup(): Promise<void> {
     //		self_video: false,
     //	},
     //);
+
+    PrivateCalls.endStaleCalls().catch((e) => console.error("[Gateway] Error ending stale calls on startup:", e));
+    Stream.createQueryBuilder()
+        .delete()
+        .execute()
+        .catch((e) => console.error("[Gateway] Error clearing streams on startup:", e));
+    StageInstances.clear().catch((e) => console.error("[Gateway] Error clearing stage instances on startup:", e));
 
     console.log("[Gateway] Starting async voice state wipe...");
     VoiceState.clear()

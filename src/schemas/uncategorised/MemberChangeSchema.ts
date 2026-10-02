@@ -31,4 +31,6 @@ export interface MemberChangeSchema {
     display_name_effect_id?: number | null;
     display_name_colors?: number[] | null;
     vad_colors?: number[] | null;
+    mute?: boolean;
+    deaf?: boolean;
 }

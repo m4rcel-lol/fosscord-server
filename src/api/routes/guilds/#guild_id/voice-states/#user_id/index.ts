@@ -18,9 +18,9 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { Channel, Member, VoiceState } from "@spacebar/database";
-import { DiscordApiErrors, emitEvent, getPermission, VoiceStateUpdateEvent } from "@spacebar/util";
-import { ChannelType, VoiceStateUpdateSchema } from "@spacebar/schemas";
+import { Channel, VoiceChannels, VoiceState } from "@spacebar/database";
+import { DiscordApiErrors, getPermission } from "@spacebar/util";
+import { ChannelType, VoiceStateModifySchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
 //TODO need more testing when community guild and voice stage channel are working
@@ -28,7 +28,7 @@ const router = Router({ mergeParams: true });
 router.patch(
     "/",
     route({
-        requestBody: "VoiceStateUpdateSchema",
+        requestBody: "VoiceStateModifySchema",
         responses: {
             204: {},
             400: {
@@ -43,58 +43,37 @@ router.patch(
         },
     }),
     async (req: Request, res: Response) => {
-        const body = req.body as VoiceStateUpdateSchema;
+        const body = req.body as VoiceStateModifySchema;
         const { guild_id } = req.params as { [key: string]: string };
-        const user_id = req.params.user_id === "@me" ? req.user_id : (req.params.user_id as string);
+        const self = req.params.user_id === "@me" || req.params.user_id === req.user_id;
+        const user_id = self ? req.user_id : (req.params.user_id as string);
 
-        const perms = await getPermission(req.user_id, guild_id, body.channel_id);
+        const voiceState = await VoiceState.findOne({ where: { guild_id, user_id } });
+        if (!voiceState?.channel_id || (body.channel_id && body.channel_id !== voiceState.channel_id)) throw DiscordApiErrors.UNKNOWN_VOICE_STATE;
+        const channel = await Channel.findOneOrFail({ where: { guild_id, id: voiceState.channel_id } });
+        if (channel.type !== ChannelType.GUILD_STAGE_VOICE) throw DiscordApiErrors.CANNOT_EXECUTE_ON_THIS_CHANNEL_TYPE;
+        const perms = await getPermission(req.user_id, guild_id, channel.id);
 
-        /*
-	From https://discord.com/developers/docs/resources/guild#modify-current-user-voice-state
-	You must have the MUTE_MEMBERS permission to unsuppress others. You can always suppress yourself.
-	You must have the REQUEST_TO_SPEAK permission to request to speak. You can always clear your own request to speak.
-	 */
-        if (body.suppress && user_id !== req.user_id) {
+        if (self) {
+            if ("request_to_speak_timestamp" in body) {
+                if (body.request_to_speak_timestamp) perms.hasThrow("REQUEST_TO_SPEAK");
+                voiceState.request_to_speak_timestamp = body.request_to_speak_timestamp ? new Date(body.request_to_speak_timestamp) : (null as unknown as undefined);
+            }
+            if (body.suppress === false && voiceState.suppress) perms.hasThrow("MUTE_MEMBERS");
+            if (body.suppress !== undefined) voiceState.suppress = body.suppress;
+        } else {
             perms.hasThrow("MUTE_MEMBERS");
-        }
-        if (!body.suppress) body.request_to_speak_timestamp = new Date();
-        if (body.request_to_speak_timestamp) perms.hasThrow("REQUEST_TO_SPEAK");
-
-        const voiceState = await VoiceState.findOne({
-            where: {
-                guild_id,
-                channel_id: body.channel_id,
-                user_id,
-            },
-        });
-        if (!voiceState) throw DiscordApiErrors.UNKNOWN_VOICE_STATE;
-
-        voiceState.assign(body);
-        const channel = await Channel.findOneOrFail({
-            where: { guild_id, id: body.channel_id },
-        });
-        if (channel.type !== ChannelType.GUILD_STAGE_VOICE) {
-            throw DiscordApiErrors.CANNOT_EXECUTE_ON_THIS_CHANNEL_TYPE;
+            if (body.suppress === false) {
+                voiceState.request_to_speak_timestamp = (voiceState.request_to_speak_timestamp ? null : new Date()) as unknown as undefined;
+                voiceState.suppress = false;
+            } else if (body.suppress === true) {
+                voiceState.suppress = true;
+                voiceState.request_to_speak_timestamp = null as unknown as undefined;
+            }
         }
 
-        voiceState.member = await Member.findOneOrFail({
-            where: {
-                id: voiceState.user_id,
-                guild_id: voiceState.guild_id,
-            },
-        });
-
-        await Promise.all([
-            voiceState.save(),
-            emitEvent({
-                event: "VOICE_STATE_UPDATE",
-                data: {
-                    ...voiceState.toPublicVoiceState(),
-                    member: voiceState.member.toPublicMember(),
-                },
-                guild_id,
-            } satisfies VoiceStateUpdateEvent),
-        ]);
+        await voiceState.save();
+        await VoiceChannels.publish(voiceState);
         return res.sendStatus(204);
     },
 );

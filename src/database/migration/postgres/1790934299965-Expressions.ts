@@ -23,11 +23,14 @@ export class Expressions1790934299965 implements MigrationInterface {
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(
-            `CREATE TABLE "soundboard_sounds" ("id" bigint NOT NULL, "guild_id" bigint NOT NULL, "name" character varying NOT NULL, "volume" double precision NOT NULL DEFAULT '1', "emoji_id" bigint, "emoji_name" character varying, "user_id" bigint, "available" boolean NOT NULL DEFAULT true, CONSTRAINT "PK_d1671b1f7e64535410e412f31ba" PRIMARY KEY ("id"))`,
+            `CREATE TABLE IF NOT EXISTS "soundboard_sounds" ("id" bigint NOT NULL, "guild_id" bigint NOT NULL, "name" character varying NOT NULL, "volume" double precision NOT NULL DEFAULT '1', "emoji_id" bigint, "emoji_name" character varying, "user_id" bigint, "available" boolean NOT NULL DEFAULT true, CONSTRAINT "PK_d1671b1f7e64535410e412f31ba" PRIMARY KEY ("id"))`,
         );
-        await queryRunner.query(`CREATE INDEX "IDX_124558309acd065c3cf083b848" ON "soundboard_sounds"  ("guild_id") `);
-        await queryRunner.query(`ALTER TABLE "stickers" ADD "sort_value" integer`);
-        await queryRunner.query(`ALTER TABLE "sticker_packs" ADD "sku_id" bigint`);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_124558309acd065c3cf083b848" ON "soundboard_sounds" ("guild_id")`);
+        await queryRunner.query(`ALTER TABLE "stickers" ADD COLUMN IF NOT EXISTS "sort_value" integer`);
+        await queryRunner.query(`ALTER TABLE "sticker_packs" ADD COLUMN IF NOT EXISTS "sku_id" bigint`);
+        await queryRunner.query(`ALTER TABLE "soundboard_sounds" ALTER COLUMN "emoji_id" TYPE bigint USING NULLIF("emoji_id"::text, '')::bigint`);
+        await queryRunner.query(`ALTER TABLE "soundboard_sounds" DROP CONSTRAINT IF EXISTS "FK_soundboard_sound_guild_id"`);
+        await queryRunner.query(`ALTER TABLE "soundboard_sounds" DROP CONSTRAINT IF EXISTS "FK_soundboard_sound_user_id"`);
         await queryRunner.query(
             `ALTER TABLE "soundboard_sounds" ADD CONSTRAINT "FK_soundboard_sound_guild_id" FOREIGN KEY ("guild_id") REFERENCES "guilds"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
         );

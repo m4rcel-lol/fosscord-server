@@ -4917,6 +4917,12 @@
                                 "type": "null"
                             }
                         ]
+                    },
+                    "mute": {
+                        "type": "boolean"
+                    },
+                    "deaf": {
+                        "type": "boolean"
                     }
                 }
             },
@@ -5813,12 +5819,6 @@
                             "type": "object",
                             "properties": {
                                 "name": {
-                                    "enum": [
-                                        "H264",
-                                        "VP8",
-                                        "VP9",
-                                        "opus"
-                                    ],
                                     "type": "string"
                                 },
                                 "type": {
@@ -5849,6 +5849,12 @@
                     },
                     "rtc_connection_id": {
                         "type": "string"
+                    },
+                    "experiments": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
                     }
                 },
                 "required": [
@@ -6303,6 +6309,35 @@
                     "preferred_region": {
                         "type": "string"
                     },
+                    "preferred_regions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "tracks": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {
+                                    "type": "string"
+                                },
+                                "rid": {
+                                    "type": "string"
+                                },
+                                "quality": {
+                                    "type": "integer"
+                                }
+                            },
+                            "additionalProperties": false,
+                            "required": [
+                                "quality",
+                                "rid",
+                                "type"
+                            ]
+                        }
+                    },
                     "request_to_speak_timestamp": {
                         "type": "string",
                         "format": "date-time"
@@ -6318,6 +6353,21 @@
                     "self_deaf",
                     "self_mute"
                 ]
+            },
+            "VoiceStateModifySchema": {
+                "type": "object",
+                "properties": {
+                    "channel_id": {
+                        "type": "string"
+                    },
+                    "suppress": {
+                        "type": "boolean"
+                    },
+                    "request_to_speak_timestamp": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                }
             },
             "GenerateWebAuthnCredentialsSchema": {
                 "type": "object",
@@ -13490,6 +13540,10 @@
                         "type": "string",
                         "format": "date-time"
                     },
+                    "connected_at": {
+                        "type": "integer",
+                        "nullable": true
+                    },
                     "id": {
                         "type": "string"
                     }
@@ -14529,6 +14583,16 @@
                         "anyOf": [
                             {
                                 "$ref": "#/components/schemas/E2eeEnvelope"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "call": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/MessageCall"
                             },
                             {
                                 "type": "null"
@@ -15999,6 +16063,25 @@
                     "prekey_id",
                     "user_id",
                     "wrapped"
+                ]
+            },
+            "MessageCall": {
+                "type": "object",
+                "properties": {
+                    "participants": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "ended_timestamp": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "ended_timestamp",
+                    "participants"
                 ]
             },
             "ReadState": {
@@ -17895,6 +17978,9 @@
                         "items": {
                             "$ref": "#/components/schemas/MessageSnapshot"
                         }
+                    },
+                    "call": {
+                        "$ref": "#/components/schemas/MessageCall"
                     },
                     "thread": {
                         "$ref": "#/components/schemas/PublicChannel"
@@ -23506,6 +23592,97 @@
                 ]
             }
         },
+        "/api/streams/{stream_key}/preview/": {
+            "get": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No description available"
+                    },
+                    "404": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "stream_key",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "stream_key"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ]
+            },
+            "post": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No description available"
+                    },
+                    "400": {
+                        "description": "No description available"
+                    },
+                    "403": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "stream_key",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "stream_key"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ]
+            }
+        },
+        "/api/streams/{stream_key}/notify/": {
+            "post": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "stream_key",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "stream_key"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ]
+            }
+        },
         "/api/storefront/promotions/": {
             "get": {
                 "security": [
@@ -23859,7 +24036,7 @@
                     }
                 ],
                 "responses": {
-                    "default": {
+                    "200": {
                         "description": "No description available"
                     }
                 },
@@ -23878,14 +24055,13 @@
                         "description": "No description available"
                     },
                     "400": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/APIErrorResponse"
-                                }
-                            }
-                        }
+                        "description": "No description available"
+                    },
+                    "403": {
+                        "description": "No description available"
+                    },
+                    "404": {
+                        "description": "No description available"
                     }
                 },
                 "tags": [
@@ -23954,6 +24130,104 @@
                 ],
                 "responses": {
                     "default": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "channel_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "channel_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ]
+            }
+        },
+        "/api/stage-instances/{channel_id}/": {
+            "get": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No description available"
+                    },
+                    "404": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "channel_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "channel_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ]
+            },
+            "patch": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No description available"
+                    },
+                    "400": {
+                        "description": "No description available"
+                    },
+                    "403": {
+                        "description": "No description available"
+                    },
+                    "404": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "channel_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "channel_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ]
+            },
+            "delete": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No description available"
+                    },
+                    "403": {
+                        "description": "No description available"
+                    },
+                    "404": {
                         "description": "No description available"
                     }
                 },
@@ -26460,7 +26734,7 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/VoiceStateUpdateSchema"
+                                "$ref": "#/components/schemas/VoiceStateModifySchema"
                             }
                         }
                     }
@@ -32229,6 +32503,74 @@
                 ]
             }
         },
+        "/api/channels/{channel_id}/voice-status/": {
+            "put": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No description available"
+                    },
+                    "400": {
+                        "description": "No description available"
+                    },
+                    "403": {
+                        "description": "No description available"
+                    },
+                    "404": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "channel_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "channel_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ]
+            }
+        },
+        "/api/channels/{channel_id}/voice-channel-effects/": {
+            "post": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No description available"
+                    },
+                    "400": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "channel_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "channel_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ]
+            }
+        },
         "/api/channels/{channel_id}/users/@me/threads/archived/private/": {
             "get": {
                 "x-permission-required": "VIEW_CHANNEL",
@@ -35319,6 +35661,126 @@
                                 }
                             }
                         }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "channel_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "channel_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ]
+            }
+        },
+        "/api/channels/{channel_id}/call/stop-ringing/": {
+            "get": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No description available"
+                    },
+                    "404": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "channel_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "channel_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ]
+            },
+            "patch": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No description available"
+                    },
+                    "404": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "channel_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "channel_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ]
+            },
+            "post": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No description available"
+                    },
+                    "404": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "channel_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "channel_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ]
+            }
+        },
+        "/api/channels/{channel_id}/call/ring/": {
+            "post": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No description available"
+                    },
+                    "404": {
+                        "description": "No description available"
                     }
                 },
                 "parameters": [

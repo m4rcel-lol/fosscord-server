@@ -83,6 +83,7 @@ export * from "./UserNoteUpdateSchema";
 export * from "./VanityUrlSchema";
 export * from "./VerifyEmailSchema";
 export * from "./VoiceStateUpdateSchema";
+export * from "./VoiceStateModifySchema";
 export * from "./WebAuthnSchema";
 export * from "./WebhookCreateSchema";
 export * from "./WebhookExecuteSchema";

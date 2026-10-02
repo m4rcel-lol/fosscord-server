@@ -52,7 +52,10 @@ export async function Connection(this: WS.Server, socket: WebRtcWebSocket, reque
         const { searchParams } = new URL(`http://localhost${request.url}`);
 
         socket.encoding = "json";
-        socket.version = Number(searchParams.get("v")) || 9;
+        socket.version = Math.min(Number(searchParams.get("v")) || 3, 9);
+        socket.voiceSequence = 0;
+        socket.maxDaveVersion = 0;
+        socket.daveVersion = 0;
         if (socket.version < 3) return socket.close(CLOSECODES.Unknown_error, "invalid version");
 
         setHeartbeat(socket);
@@ -62,7 +65,8 @@ export async function Connection(this: WS.Server, socket: WebRtcWebSocket, reque
         await Send(socket, {
             op: VoiceOPCodes.HELLO,
             d: {
-                heartbeat_interval: 1000 * 30,
+                v: socket.version,
+                heartbeat_interval: 13750,
             },
         });
     } catch (error) {

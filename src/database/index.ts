@@ -20,3 +20,8 @@ import "reflect-metadata";
 
 export * from "./Database";
 export * from "./entities/index";
+
+export * from "./voice/PrivateCalls";
+export * from "./voice/VoiceChannels";
+export * from "./voice/StreamPreviews";
+export * from "./voice/StageInstances";

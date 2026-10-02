@@ -1,26 +1,34 @@
 import { JSONReplacer } from "@spacebar/util";
-import { VoicePayload } from "./Constants";
+import { VoiceOPCodes, VoicePayload } from "./Constants";
 import { WebRtcWebSocket } from "./WebRtcWebSocket";
+
+const unsequenced = new Set([VoiceOPCodes.HELLO, VoiceOPCodes.HEARTBEAT_ACK, VoiceOPCodes.RESUMED]);
+
+const write = (socket: WebRtcWebSocket, buffer: Buffer | string) =>
+    new Promise((res, rej) => {
+        if (socket.readyState !== 1) return res(null);
+        socket.send(buffer, (err) => (err ? rej(err) : res(null)));
+    });
+
+const nextSequence = (socket: WebRtcWebSocket) => {
+    socket.voiceSequence = ((socket.voiceSequence ?? 0) + 1) & 0xffff;
+    return socket.voiceSequence;
+};
 
 export function Send(socket: WebRtcWebSocket, data: VoicePayload) {
     if (process.env.WRTC_WS_VERBOSE) console.log(`[WebRTC] Outgoing message: ${JSON.stringify(data)}`);
+    if (socket.encoding !== "json") return;
 
-    let buffer: Buffer | string;
+    const payload = socket.version >= 8 && !unsequenced.has(data.op) ? { ...data, seq: nextSequence(socket) } : data;
+    return write(socket, JSON.stringify(payload, JSONReplacer));
+}
 
-    // TODO: encode circular object
-    if (socket.encoding === "json") buffer = JSON.stringify(data, JSONReplacer);
-    else return;
+export function SendBinary(socket: WebRtcWebSocket, op: VoiceOPCodes, payload: Buffer) {
+    if (process.env.WRTC_WS_VERBOSE) console.log(`[WebRTC] Outgoing binary op ${op} (${payload.length} bytes)`);
+    if (socket.version < 8) return write(socket, Buffer.concat([Buffer.from([op]), payload]));
 
-    return new Promise((res, rej) => {
-        if (socket.readyState !== 1) {
-            // return rej("socket not open");
-            socket.close();
-            return;
-        }
-
-        socket.send(buffer, (err) => {
-            if (err) return rej(err);
-            return res(null);
-        });
-    });
+    const header = Buffer.alloc(3);
+    header.writeUInt16BE(nextSequence(socket), 0);
+    header.writeUInt8(op, 2);
+    return write(socket, Buffer.concat([header, payload]));
 }

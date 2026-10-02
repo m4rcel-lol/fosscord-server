@@ -26,7 +26,7 @@ export async function onRequestSoundboardSounds(this: WebSocket, { d }: Payload)
 
     const members = await Member.find({ where: { id: this.user_id, guild_id: In(requested) }, select: { guild_id: true } });
     const guild_ids = members.map((m) => m.guild_id);
-    const sounds = guild_ids.length ? await SoundboardSound.find({ where: { guild_id: In(guild_ids) }, order: { id: "ASC" } }) : [];
+    const sounds = guild_ids.length ? await SoundboardSound.find({ where: { guild_id: In(guild_ids) }, relations: { user: true }, order: { id: "ASC" } }) : [];
 
     for (const guild_id of guild_ids) {
         await Send(this, {
