@@ -36,6 +36,7 @@ export interface PendingInteraction {
     commandType?: ApplicationCommandType;
     commandName?: string;
     commandId?: string;
+    commandOptions?: unknown[];
     targetId?: string;
     customId?: string;
     componentType?: number;

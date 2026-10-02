@@ -113,8 +113,14 @@ router.post("/", route({}), async (req: Request, res: Response) => {
         messageId: messageId,
         type: body.type,
         commandType: command?.type ?? (command ? ApplicationCommandType.CHAT_INPUT : undefined),
-        commandName: command?.name,
+        commandName: command
+            ? [command.name, ...(function path(options?: { type: number; name?: string; options?: unknown[] }[]): string[] {
+                  const sub = options?.find((o) => o.type === 1 || o.type === 2);
+                  return sub ? [sub.name ?? "", ...path(sub.options as never)] : [];
+              })(data.options as never)].join(" ")
+            : undefined,
         commandId: command?.id,
+        commandOptions: data.options,
         targetId: data.target_id as string | undefined,
         customId: data.custom_id as string | undefined,
         componentType: data.component_type as number | undefined,

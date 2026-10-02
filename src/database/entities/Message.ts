@@ -41,6 +41,7 @@ import {
     Reaction,
     UnfurledMediaItem,
     PartialUser,
+    PublicUser,
     InteractionType,
 } from "@spacebar/schemas";
 import { MessageFlags } from "@spacebar/util";
@@ -261,6 +262,9 @@ export class Message extends BaseClass {
         id: string;
         type: InteractionType;
         name: string;
+        user?: PublicUser;
+        command_id?: string;
+        options?: unknown[];
     };
 
     @Column({ type: "jsonb", nullable: true })
@@ -342,7 +346,7 @@ export class Message extends BaseClass {
             tts: this.tts ?? false,
             guild: this.guild ?? undefined,
             webhook: this.webhook?.toMessageWebhook() ?? undefined,
-            interaction: this.interaction ?? undefined,
+            interaction: this.interaction ? { id: this.interaction.id, type: this.interaction.type, name: this.interaction.name, user: this.interaction.user } : undefined,
             interaction_metadata: this.interaction_metadata ?? undefined,
             reactions: this.reactions ?? undefined,
             sticker_items: this.sticker_items ?? undefined,

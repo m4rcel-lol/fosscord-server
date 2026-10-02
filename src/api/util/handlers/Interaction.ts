@@ -216,7 +216,7 @@ export async function createInteractionMessage(interaction: PendingInteraction, 
         allowed_mentions: data.allowed_mentions as never,
         message_reference: referenced ? { message_id: referenced.id, channel_id: referenced.channel_id, guild_id: referenced.guild_id ?? undefined } : undefined,
         interaction:
-            origin.type === InteractionType.ApplicationCommand ? ({ id: origin.id, type: origin.type, name: origin.commandName ?? "", user: user.toPublicUser() } as never) : undefined,
+            origin.type === InteractionType.ApplicationCommand ? ({ id: origin.id, type: origin.type, name: origin.commandName ?? "", user: user.toPublicUser(), command_id: origin.commandId, options: origin.commandOptions } as never) : undefined,
         interaction_metadata: (await interactionMetadata(
             interaction,
             opts.followup && interaction.responseMessageId ? { original_response_message_id: interaction.responseMessageId } : {},
