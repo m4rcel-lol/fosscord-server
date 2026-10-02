@@ -372,14 +372,40 @@ func (sub *Peer) recordLoss(pt *PublishedTrack, ssrc uint32, reports []rtcp.Rece
 			continue
 		}
 		sub.mu.Lock()
-		sub.videoLoss[ssrc] = lossReport{fraction: float64(report.FractionLost) / 256, at: time.Now()}
+		state := sub.videoLoss[ssrc]
+		state.totalLost = int32(report.TotalLost<<8) >> 8
+		state.highest = report.LastSequenceNumber
+		state.at = time.Now()
+		sub.videoLoss[ssrc] = state
 		sub.mu.Unlock()
 	}
 }
 
 type lossReport struct {
-	fraction float64
-	at       time.Time
+	totalLost    int32
+	highest      uint32
+	at           time.Time
+	countedLost  int32
+	countedUntil uint32
+	fraction     float64
+	measured     bool
+}
+
+func (r *lossReport) update() {
+	if r.countedUntil == 0 {
+		r.countedLost, r.countedUntil = r.totalLost, r.highest
+		return
+	}
+	expected := int64(r.highest) - int64(r.countedUntil)
+	if expected < lossMinPackets {
+		return
+	}
+	sample := min(max(float64(r.totalLost-r.countedLost)/float64(expected), 0), 1)
+	if r.measured {
+		sample = r.fraction + lossSmoothing*(sample-r.fraction)
+	}
+	r.fraction, r.measured = sample, true
+	r.countedLost, r.countedUntil = r.totalLost, r.highest
 }
 
 const (
@@ -391,6 +417,8 @@ const (
 	reportFreshness    = 5 * time.Second
 	bandwidthTick      = time.Second
 	bitrateIncreaseMul = 1.08
+	lossSmoothing      = 0.5
+	lossMinPackets     = 20
 )
 
 func worstSubscriberLoss(pt *PublishedTrack, peers []*Peer) (loss float64, remb int) {
@@ -402,11 +430,15 @@ func worstSubscriberLoss(pt *PublishedTrack, peers []*Peer) (loss float64, remb 
 		sub.mu.Lock()
 		subscribed := sub.subscriptions[key]
 		report, ok := sub.videoLoss[uint32(pt.ssrc)]
+		if ok {
+			report.update()
+			sub.videoLoss[uint32(pt.ssrc)] = report
+		}
 		if subscribed && time.Since(sub.rembAt) < reportFreshness && (remb == 0 || int(sub.remb) < remb) {
 			remb = int(sub.remb)
 		}
 		sub.mu.Unlock()
-		if subscribed && ok && time.Since(report.at) < reportFreshness {
+		if subscribed && ok && report.measured && time.Since(report.at) < reportFreshness {
 			loss = max(loss, report.fraction)
 		}
 	}
@@ -419,6 +451,7 @@ func (pt *PublishedTrack) adjustBitrateCap(peers []*Peer) int {
 	pt.lastBytes = total
 
 	loss, remb := worstSubscriberLoss(pt, peers)
+	pt.subscriberLoss = loss
 	switch {
 	case loss > lossDecreaseAbove:
 		base := rate
@@ -488,8 +521,8 @@ func logStats(peers []*Peer) {
 			if pt == nil {
 				continue
 			}
-			log.Printf("stats publisher=%s kind=%s ssrc=%d received=%d nacked=%d recovered=%d lost=%d bitrate_cap=%d",
-				p.id, pt.kind, pt.ssrc, pt.received.Load(), pt.nacked.Load(), pt.recovered.Load(), pt.lost.Load(), pt.bitrateCap)
+			log.Printf("stats publisher=%s kind=%s ssrc=%d received=%d nacked=%d recovered=%d lost=%d subscriber_loss=%.3f bitrate_cap=%d",
+				p.id, pt.kind, pt.ssrc, pt.received.Load(), pt.nacked.Load(), pt.recovered.Load(), pt.lost.Load(), pt.subscriberLoss, pt.bitrateCap)
 		}
 		log.Printf("stats subscriber=%s nacks=%d retransmitted=%d not_cached=%d",
 			p.id, p.nacksReceived.Load(), p.retransmitted.Load(), p.notCached.Load())

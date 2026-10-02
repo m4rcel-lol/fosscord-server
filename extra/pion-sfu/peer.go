@@ -96,13 +96,14 @@ type PublishedTrack struct {
 	cache      *packetCache
 	losses     *lossTracker
 
-	bytes      atomic.Uint64
-	lastBytes  uint64
-	bitrateCap int
-	received   atomic.Uint64
-	nacked     atomic.Uint64
-	recovered  atomic.Uint64
-	lost       atomic.Uint64
+	bytes          atomic.Uint64
+	lastBytes      uint64
+	bitrateCap     int
+	subscriberLoss float64
+	received       atomic.Uint64
+	nacked         atomic.Uint64
+	recovered      atomic.Uint64
+	lost           atomic.Uint64
 }
 
 func (pt *PublishedTrack) close() {
