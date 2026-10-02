@@ -18,10 +18,12 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
+import { GUILD_POWERUPS_APPLICATION_ID, guildPowerupListings } from "@spacebar/api/util";
 
 const router: Router = Router({ mergeParams: true });
 
 router.get("/", route({}), (req: Request, res: Response) => {
+    if (req.query.application_id === GUILD_POWERUPS_APPLICATION_ID) return res.json(guildPowerupListings());
     res.json([]);
 });
 
