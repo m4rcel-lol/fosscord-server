@@ -84,6 +84,7 @@ export interface AggregatedPresence {
     status: PublicStatus;
     activities: Activity[];
     client_status: ClientStatus;
+    processed_at_timestamp: number;
 }
 
 const PresencePriority: Record<string, number> = { dnd: 0, online: 1, idle: 2 };
@@ -108,7 +109,7 @@ export function isSessionConnected(session: PresenceSession, now = Date.now()) {
 export function aggregatePresence(sessions: PresenceSession[]): AggregatedPresence {
     const now = Date.now();
     const visible = sessions.filter((s) => isSessionConnected(s, now) && s.status in PresencePriority);
-    if (!visible.length) return { status: "offline", activities: [], client_status: {} };
+    if (!visible.length) return { status: "offline", activities: [], client_status: {}, processed_at_timestamp: Date.now() };
 
     const best = (a: string | undefined, b: string) => (a === undefined || PresencePriority[b] < PresencePriority[a] ? b : a);
     let status: string | undefined;
@@ -128,7 +129,7 @@ export function aggregatePresence(sessions: PresenceSession[]): AggregatedPresen
         }
     }
 
-    return { status: status as PublicStatus, activities, client_status };
+    return { status: status as PublicStatus, activities, client_status, processed_at_timestamp: Date.now() };
 }
 
 export async function getUserPresences(userIds: string[]) {
@@ -148,7 +149,7 @@ export async function getUserPresences(userIds: string[]) {
 }
 
 export async function getUserPresence(userId: string): Promise<AggregatedPresence> {
-    return (await getUserPresences([userId])).get(userId) ?? { status: "offline", activities: [], client_status: {} };
+    return (await getUserPresences([userId])).get(userId) ?? { status: "offline", activities: [], client_status: {}, processed_at_timestamp: Date.now() };
 }
 
 export async function getConnectedSessions(userId: string) {

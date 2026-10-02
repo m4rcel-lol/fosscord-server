@@ -25,5 +25,5 @@ export interface Presence {
     status: Status;
     activities: Activity[];
     client_status: ClientStatus;
-    // TODO: game
+    processed_at_timestamp?: number;
 }
