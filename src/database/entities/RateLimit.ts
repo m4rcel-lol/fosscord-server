@@ -16,14 +16,17 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity } from "typeorm";
-import { BaseClass } from "./BaseClass";
+import { Column, Entity, Index, PrimaryColumn } from "typeorm";
+import { BaseClassWithoutId } from "./BaseClass";
 
 @Entity({
     name: "rate_limits",
 })
-export class RateLimit extends BaseClass {
-    @Column() // no relation as it also
+export class RateLimit extends BaseClassWithoutId {
+    @PrimaryColumn({ type: "varchar" })
+    id: string;
+
+    @Column()
     executor_id: string;
 
     @Column()
@@ -32,6 +35,7 @@ export class RateLimit extends BaseClass {
     @Column()
     blocked: boolean;
 
+    @Index("IDX_rate_limits_expires_at")
     @Column()
     expires_at: Date;
 }
