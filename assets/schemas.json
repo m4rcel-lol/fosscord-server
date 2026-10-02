@@ -14993,6 +14993,12 @@
             "interactions_private_key": {
                 "type": "string"
             },
+            "client_secret_hash": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
             "owner": {
                 "$ref": "#/definitions/User"
             },
