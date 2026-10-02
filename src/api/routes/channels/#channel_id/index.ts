@@ -186,8 +186,10 @@ router.patch(
             if (meta.archived && payload.archived !== false && !manage) throw DiscordApiErrors.CANNOT_EDIT_ARCHIVED_THREAD;
             if (meta.archived && meta.locked && payload.archived === false && !manage) throw DiscordApiErrors.THREAD_IS_LOCKED;
             if (!manage && !isOwner && !(unarchiveOnly && (await ThreadMember.existsBy({ id: channel.id, user_id: req.user_id })))) throw DiscordApiErrors.MISSING_PERMISSIONS;
-            if (!manage && (payload.rate_limit_per_user !== undefined || payload.flags !== undefined || payload.invitable !== undefined))
-                throw DiscordApiErrors.MISSING_PERMISSIONS;
+            const changesRate = payload.rate_limit_per_user !== undefined && (payload.rate_limit_per_user || 0) !== (channel.rate_limit_per_user || 0);
+            const changesFlags = payload.flags !== undefined && payload.flags !== channel.flags;
+            const changesInvitable = payload.invitable !== undefined && payload.invitable !== (meta.invitable ?? true);
+            if (!manage && (changesRate || changesFlags || (changesInvitable && !isOwner))) throw DiscordApiErrors.MISSING_PERMISSIONS;
             if (!manage && payload.locked === false && meta.locked) throw DiscordApiErrors.MISSING_PERMISSIONS;
 
             const changes: { name?: string; rate_limit_per_user?: number; flags?: number; applied_tags?: string[] } = {};
