@@ -5195,6 +5195,16 @@
             },
             "interaction_metadata": {
                 "$ref": "#/definitions/MessageInteractionSchema"
+            },
+            "encrypted": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/E2eeEnvelope"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
             }
         },
         "additionalProperties": false,
@@ -5432,6 +5442,16 @@
             },
             "interaction_metadata": {
                 "$ref": "#/definitions/MessageInteractionSchema"
+            },
+            "encrypted": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/E2eeEnvelope"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
             }
         },
         "additionalProperties": false,
@@ -7269,6 +7289,238 @@
             "id",
             "name",
             "type"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eePrekeySchema": {
+        "type": "object",
+        "properties": {
+            "id": {
+                "type": "integer"
+            },
+            "public_key": {
+                "type": "string"
+            },
+            "signature": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "id",
+            "public_key",
+            "signature"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeIdentityUpdateSchema": {
+        "type": "object",
+        "properties": {
+            "public_key": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "public_key"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeDeviceCreateSchema": {
+        "type": "object",
+        "properties": {
+            "device_id": {
+                "type": "string"
+            },
+            "signing_key": {
+                "type": "string"
+            },
+            "identity_signature": {
+                "type": "string"
+            },
+            "name": {
+                "type": "string"
+            },
+            "prekey": {
+                "$ref": "#/definitions/E2eePrekeySchema"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "device_id",
+            "prekey",
+            "signing_key"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeKeysQuerySchema": {
+        "type": "object",
+        "properties": {
+            "user_ids": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "channel_id": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "ChannelE2eeUpdateSchema": {
+        "type": "object",
+        "properties": {
+            "enabled": {
+                "type": "boolean"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "enabled"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeDeviceResponse": {
+        "type": "object",
+        "properties": {
+            "device_id": {
+                "type": "string"
+            },
+            "signing_key": {
+                "type": "string"
+            },
+            "identity_signature": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "status": {
+                "$ref": "#/definitions/E2eeDeviceStatus"
+            },
+            "name": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "prekey": {
+                "$ref": "#/definitions/E2eePrekeySchema"
+            },
+            "created_at": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "created_at",
+            "device_id",
+            "identity_signature",
+            "name",
+            "prekey",
+            "signing_key",
+            "status"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeUserKeysResponse": {
+        "type": "object",
+        "properties": {
+            "identity_key": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "devices": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/E2eeDeviceResponse"
+                }
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "devices",
+            "identity_key"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeKeysQueryResponse": {
+        "type": "object",
+        "properties": {
+            "users": {
+                "type": "object",
+                "additionalProperties": {
+                    "$ref": "#/definitions/E2eeUserKeysResponse"
+                }
+            },
+            "channel_members": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "users"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeStateResponse": {
+        "type": "object",
+        "properties": {
+            "identity_key": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "devices": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/E2eeDeviceResponse"
+                }
+            },
+            "channels": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "channels",
+            "devices",
+            "identity_key"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "ChannelE2eeResponse": {
+        "type": "object",
+        "properties": {
+            "channel_id": {
+                "type": "string"
+            },
+            "enabled": {
+                "type": "boolean"
+            },
+            "enabled_at": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "channel_id",
+            "enabled",
+            "enabled_at"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -10405,6 +10657,17 @@
                     "string"
                 ]
             },
+            "e2ee_enabled_at": {
+                "anyOf": [
+                    {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
             "position": {
                 "description": "Must be calculated Channel.calculatePosition",
                 "type": "integer"
@@ -13007,6 +13270,16 @@
                     "$ref": "#/definitions/MessageSnapshot"
                 }
             },
+            "encrypted": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/E2eeEnvelope"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
             "isWebhook": {
                 "type": "boolean"
             },
@@ -14458,6 +14731,78 @@
             21,
             22,
             23
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeEnvelope": {
+        "type": "object",
+        "properties": {
+            "v": {
+                "type": "integer"
+            },
+            "alg": {
+                "type": "string"
+            },
+            "sender_device": {
+                "type": "string"
+            },
+            "mid": {
+                "type": "string"
+            },
+            "iv": {
+                "type": "string"
+            },
+            "ct": {
+                "type": "string"
+            },
+            "keys": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/E2eeEnvelopeKey"
+                }
+            },
+            "sig": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "alg",
+            "ct",
+            "iv",
+            "keys",
+            "sender_device",
+            "sig",
+            "v"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeEnvelopeKey": {
+        "type": "object",
+        "properties": {
+            "user_id": {
+                "type": "string"
+            },
+            "device_id": {
+                "type": "string"
+            },
+            "prekey_id": {
+                "type": "integer"
+            },
+            "enc": {
+                "type": "string"
+            },
+            "wrapped": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "device_id",
+            "enc",
+            "prekey_id",
+            "user_id",
+            "wrapped"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -16610,6 +16955,9 @@
             },
             "webhook": {
                 "$ref": "#/definitions/PublicMessageWebhook"
+            },
+            "encrypted": {
+                "$ref": "#/definitions/E2eeEnvelope"
             }
         },
         "additionalProperties": false,
@@ -17727,6 +18075,15 @@
             "id",
             "name"
         ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeDeviceStatus": {
+        "enum": [
+            "active",
+            "pending",
+            "revoked"
+        ],
+        "type": "string",
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "AuditLogEntry": {

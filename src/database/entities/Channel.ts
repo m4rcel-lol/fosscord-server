@@ -187,6 +187,9 @@ export class Channel extends BaseClass {
     @Column("text", { nullable: true })
     status?: string | null;
 
+    @Column({ type: "timestamp with time zone", nullable: true })
+    e2ee_enabled_at?: Date | null;
+
     /** Must be calculated Channel.calculatePosition */
     position: number;
 

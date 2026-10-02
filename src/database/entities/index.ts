@@ -33,6 +33,7 @@ export * from "./CloudAttachment";
 export * from "./Config";
 export * from "./ConnectedAccount";
 export * from "./ConnectionConfigEntity";
+export * from "./E2ee";
 export * from "./EmbedCache";
 export * from "./Emoji";
 export * from "./Encryption";

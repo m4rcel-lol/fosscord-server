@@ -29,6 +29,7 @@ import {
     PublicUser,
     float,
     base64str,
+    E2eeEnvelope,
 } from "@spacebar/schemas";
 
 export type BaseMessageCreateAttachment = {
@@ -85,6 +86,7 @@ export interface MessageCreateSchema {
     avatar_url?: string; // Not implemented yet, for webhooks
     interaction?: MessageInteractionSchema;
     interaction_metadata?: MessageInteractionSchema;
+    encrypted?: E2eeEnvelope | null;
 }
 
 // TypeScript complains once this is used above

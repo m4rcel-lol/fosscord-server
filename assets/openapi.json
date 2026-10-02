@@ -4848,6 +4848,16 @@
                     },
                     "interaction_metadata": {
                         "$ref": "#/components/schemas/MessageInteractionSchema"
+                    },
+                    "encrypted": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/E2eeEnvelope"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
                     }
                 }
             },
@@ -5079,6 +5089,16 @@
                     },
                     "interaction_metadata": {
                         "$ref": "#/components/schemas/MessageInteractionSchema"
+                    },
+                    "encrypted": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/E2eeEnvelope"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
                     }
                 }
             },
@@ -6774,6 +6794,208 @@
                     "id",
                     "name",
                     "type"
+                ]
+            },
+            "E2eePrekeySchema": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "public_key": {
+                        "type": "string"
+                    },
+                    "signature": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "id",
+                    "public_key",
+                    "signature"
+                ]
+            },
+            "E2eeIdentityUpdateSchema": {
+                "type": "object",
+                "properties": {
+                    "public_key": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "public_key"
+                ]
+            },
+            "E2eeDeviceCreateSchema": {
+                "type": "object",
+                "properties": {
+                    "device_id": {
+                        "type": "string"
+                    },
+                    "signing_key": {
+                        "type": "string"
+                    },
+                    "identity_signature": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "prekey": {
+                        "$ref": "#/components/schemas/E2eePrekeySchema"
+                    }
+                },
+                "required": [
+                    "device_id",
+                    "prekey",
+                    "signing_key"
+                ]
+            },
+            "E2eeKeysQuerySchema": {
+                "type": "object",
+                "properties": {
+                    "user_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "channel_id": {
+                        "type": "string"
+                    }
+                }
+            },
+            "ChannelE2eeUpdateSchema": {
+                "type": "object",
+                "properties": {
+                    "enabled": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "enabled"
+                ]
+            },
+            "E2eeDeviceResponse": {
+                "type": "object",
+                "properties": {
+                    "device_id": {
+                        "type": "string"
+                    },
+                    "signing_key": {
+                        "type": "string"
+                    },
+                    "identity_signature": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/E2eeDeviceStatus"
+                    },
+                    "name": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "prekey": {
+                        "$ref": "#/components/schemas/E2eePrekeySchema"
+                    },
+                    "created_at": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "device_id",
+                    "identity_signature",
+                    "name",
+                    "prekey",
+                    "signing_key",
+                    "status"
+                ]
+            },
+            "E2eeUserKeysResponse": {
+                "type": "object",
+                "properties": {
+                    "identity_key": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "devices": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/E2eeDeviceResponse"
+                        }
+                    }
+                },
+                "required": [
+                    "devices",
+                    "identity_key"
+                ]
+            },
+            "E2eeKeysQueryResponse": {
+                "type": "object",
+                "properties": {
+                    "users": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "$ref": "#/components/schemas/E2eeUserKeysResponse"
+                        }
+                    },
+                    "channel_members": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "users"
+                ]
+            },
+            "E2eeStateResponse": {
+                "type": "object",
+                "properties": {
+                    "identity_key": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "devices": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/E2eeDeviceResponse"
+                        }
+                    },
+                    "channels": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "channels",
+                    "devices",
+                    "identity_key"
+                ]
+            },
+            "ChannelE2eeResponse": {
+                "type": "object",
+                "properties": {
+                    "channel_id": {
+                        "type": "string"
+                    },
+                    "enabled": {
+                        "type": "boolean"
+                    },
+                    "enabled_at": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "channel_id",
+                    "enabled",
+                    "enabled_at"
                 ]
             },
             "AuditLogResponse": {
@@ -9709,6 +9931,17 @@
                         "type": "string",
                         "nullable": true
                     },
+                    "e2ee_enabled_at": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
                     "position": {
                         "description": "Must be calculated Channel.calculatePosition",
                         "type": "integer"
@@ -12196,6 +12429,16 @@
                             "$ref": "#/components/schemas/MessageSnapshot"
                         }
                     },
+                    "encrypted": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/E2eeEnvelope"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
                     "isWebhook": {
                         "type": "boolean"
                     },
@@ -13574,6 +13817,74 @@
                     21,
                     22,
                     23
+                ]
+            },
+            "E2eeEnvelope": {
+                "type": "object",
+                "properties": {
+                    "v": {
+                        "type": "integer"
+                    },
+                    "alg": {
+                        "type": "string"
+                    },
+                    "sender_device": {
+                        "type": "string"
+                    },
+                    "mid": {
+                        "type": "string"
+                    },
+                    "iv": {
+                        "type": "string"
+                    },
+                    "ct": {
+                        "type": "string"
+                    },
+                    "keys": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/E2eeEnvelopeKey"
+                        }
+                    },
+                    "sig": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "alg",
+                    "ct",
+                    "iv",
+                    "keys",
+                    "sender_device",
+                    "sig",
+                    "v"
+                ]
+            },
+            "E2eeEnvelopeKey": {
+                "type": "object",
+                "properties": {
+                    "user_id": {
+                        "type": "string"
+                    },
+                    "device_id": {
+                        "type": "string"
+                    },
+                    "prekey_id": {
+                        "type": "integer"
+                    },
+                    "enc": {
+                        "type": "string"
+                    },
+                    "wrapped": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "device_id",
+                    "enc",
+                    "prekey_id",
+                    "user_id",
+                    "wrapped"
                 ]
             },
             "ReadState": {
@@ -15543,6 +15854,9 @@
                     },
                     "webhook": {
                         "$ref": "#/components/schemas/PublicMessageWebhook"
+                    },
+                    "encrypted": {
+                        "$ref": "#/components/schemas/E2eeEnvelope"
                     }
                 },
                 "required": [
@@ -16561,6 +16875,14 @@
                     "id",
                     "name"
                 ]
+            },
+            "E2eeDeviceStatus": {
+                "enum": [
+                    "active",
+                    "pending",
+                    "revoked"
+                ],
+                "type": "string"
             },
             "AuditLogEntry": {
                 "type": "object",
@@ -19088,6 +19410,289 @@
                 },
                 "tags": [
                     "api"
+                ]
+            }
+        },
+        "/api/users/@me/e2ee/": {
+            "get": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/E2eeStateResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/users/@me/e2ee/identity": {
+            "put": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/E2eeIdentityUpdateSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/E2eeStateResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/users/@me/e2ee/devices/": {
+            "get": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/E2eeUserKeysResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            },
+            "post": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/E2eeDeviceCreateSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/E2eeDeviceResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/users/@me/e2ee/devices/{device_id}/prekey": {
+            "put": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/E2eePrekeySchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/E2eeDeviceResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "device_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/users/@me/e2ee/devices/{device_id}": {
+            "delete": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No description available"
+                    },
+                    "404": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "device_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "device_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
                 ]
             }
         },
@@ -26393,6 +26998,56 @@
                 ]
             }
         },
+        "/api/e2ee/keys/query/": {
+            "post": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/E2eeKeysQuerySchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/E2eeKeysQueryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
         "/api/download/": {
             "get": {
                 "security": [
@@ -29254,6 +29909,108 @@
                 ],
                 "tags": [
                     "api"
+                ]
+            }
+        },
+        "/api/channels/{channel_id}/e2ee/": {
+            "get": {
+                "x-permission-required": "VIEW_CHANNEL",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ChannelE2eeResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "channel_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "channel_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            },
+            "put": {
+                "x-permission-required": "VIEW_CHANNEL",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ChannelE2eeUpdateSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ChannelE2eeResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "channel_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "channel_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
                 ]
             }
         },

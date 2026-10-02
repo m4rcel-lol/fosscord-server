@@ -31,6 +31,7 @@ import { NewUrlUserSignatureData } from "../../util/Signing";
 import {
     ApplicationCommandType,
     BaseMessageComponents,
+    E2eeEnvelope,
     Embed,
     MessageComponentType,
     MessageSnapshot,
@@ -290,6 +291,9 @@ export class Message extends BaseClass {
     @Column({ default: "[]", type: "jsonb" })
     message_snapshots: MessageSnapshot[];
 
+    @Column({ type: "jsonb", nullable: true })
+    encrypted?: E2eeEnvelope | null;
+
     get isWebhook() {
         return this.webhook_id != null && this.webhook != null;
     }
@@ -362,6 +366,7 @@ export class Message extends BaseClass {
             pinned: this.pinned,
             thread: this.thread ? this.thread.toJSON() : this.thread,
             referenced_message: this.referenced_message && !shallow ? this.referenced_message.toJSON(true) : undefined,
+            encrypted: this.encrypted ?? undefined,
         } satisfies PublicMessage;
     }
 

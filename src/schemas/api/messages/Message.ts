@@ -18,7 +18,7 @@
 
 // TODO: remove entity import
 import { Sticker } from "@spacebar/database";
-import { Embed, MessageActivity, MessageComponent, PartialUser, Poll, PublicChannel, Snowflake, WebhookType } from "@spacebar/schemas";
+import { E2eeEnvelope, Embed, MessageActivity, MessageComponent, PartialUser, Poll, PublicChannel, Snowflake, WebhookType } from "@spacebar/schemas";
 import { PublicAttachment } from "./Attachments";
 
 export enum MessageType {
@@ -209,6 +209,7 @@ export interface PublicMessage {
     shared_client_theme?: SharedClientTheme;
     // spacebar extension
     webhook: PublicMessageWebhook;
+    encrypted?: E2eeEnvelope;
 }
 
 export interface PublicMessageWebhook {
