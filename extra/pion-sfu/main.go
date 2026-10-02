@@ -8,13 +8,13 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"syscall"
-	"time"
 
 	"github.com/pion/ice/v4"
 	"github.com/pion/interceptor"
 	"github.com/pion/logging"
-	"github.com/pion/rtcp"
+	"github.com/pion/sdp/v3"
 	"github.com/pion/transport/v4/stdnet"
 	"github.com/pion/webrtc/v4"
 )
@@ -67,6 +67,20 @@ func createMediaEngine() (*webrtc.MediaEngine, error) {
 		return nil, err
 	}
 
+	if err := m.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: sdp.AudioLevelURI}, webrtc.RTPCodecTypeAudio); err != nil {
+		return nil, err
+	}
+	for _, uri := range []string{sdp.ABSSendTimeURI, "urn:ietf:params:rtp-hdrext:toffset", "http://www.webrtc.org/experiments/rtp-hdrext/playout-delay", "urn:3gpp:video-orientation"} {
+		if err := m.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: uri}, webrtc.RTPCodecTypeVideo); err != nil {
+			return nil, err
+		}
+	}
+	m.RegisterFeedback(webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBNACK}, webrtc.RTPCodecTypeVideo)
+	m.RegisterFeedback(webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBNACK, Parameter: "pli"}, webrtc.RTPCodecTypeVideo)
+	m.RegisterFeedback(webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBCCM, Parameter: "fir"}, webrtc.RTPCodecTypeVideo)
+	m.RegisterFeedback(webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBGoogREMB}, webrtc.RTPCodecTypeVideo)
+	m.RegisterFeedback(webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBNACK}, webrtc.RTPCodecTypeAudio)
+
 	return m, nil
 }
 
@@ -87,21 +101,27 @@ func handleJoin(clientID string) error {
 	masterVideo := NewMultiplexTrack(webrtc.RTPCodecTypeVideo, "video", "multiplex")
 
 	// add them to the peer connection immediately so they are included in the initial Offer/Answer
-	if _, err := pc.AddTrack(masterAudio); err != nil {
+	audioSender, err := pc.AddTrack(masterAudio)
+	if err != nil {
 		return fmt.Errorf("AddTrack audio: %w", err)
 	}
 	videoSender, err := pc.AddTrack(masterVideo)
 	if err != nil {
 		return fmt.Errorf("AddTrack video: %w", err)
 	}
-	go forwardKeyframeRequests(videoSender)
+	go drainRTCP(audioSender)
+	go drainRTCP(videoSender)
 
 	p := &Peer{
 		id:            clientID,
 		pc:            pc,
+		transport:     videoSender.Transport(),
 		masterAudio:   masterAudio,
 		masterVideo:   masterVideo,
 		subscriptions: make(map[string]bool),
+		sinks:         make(map[uint32]*rtcpSink),
+		rtxSequence:   make(map[uint32]uint16),
+		videoLoss:     make(map[uint32]lossReport),
 	}
 
 	sfu.AddPeer(p)
@@ -129,42 +149,9 @@ func handleJoin(clientID string) error {
 	return nil
 }
 
-func forwardKeyframeRequests(sender *webrtc.RTPSender) {
+func drainRTCP(sender *webrtc.RTPSender) {
 	for {
-		packets, _, err := sender.ReadRTCP()
-		if err != nil {
-			return
-		}
-		for _, packet := range packets {
-			var mediaSSRC uint32
-			switch pkt := packet.(type) {
-			case *rtcp.PictureLossIndication:
-				mediaSSRC = pkt.MediaSSRC
-			case *rtcp.FullIntraRequest:
-				mediaSSRC = pkt.MediaSSRC
-			default:
-				continue
-			}
-			requestKeyframe(webrtc.SSRC(mediaSSRC))
-		}
-	}
-}
-
-func requestKeyframe(ssrc webrtc.SSRC) {
-	sfu.mu.RLock()
-	defer sfu.mu.RUnlock()
-	for _, publisher := range sfu.peers {
-		publisher.mu.Lock()
-		pt := publisher.videoPublished
-		due := pt != nil && pt.ssrc == ssrc && time.Since(publisher.lastKeyframeRequest) > 500*time.Millisecond
-		if due {
-			publisher.lastKeyframeRequest = time.Now()
-		}
-		publisher.mu.Unlock()
-		if due {
-			if err := publisher.pc.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(ssrc)}}); err != nil {
-				log.Printf("WriteRTCP: %v", err)
-			}
+		if _, _, err := sender.ReadRTCP(); err != nil {
 			return
 		}
 	}
@@ -324,14 +311,8 @@ func handleSubscribe(p *Peer, msg SignalMessage, requestID string) error {
 	if pt != nil {
 		ssrc = uint32(pt.ssrc)
 		log.Printf("%s Subscribed to track ssrc %d", p.id, pt.ssrc)
-		if err := publisher.pc.WriteRTCP([]rtcp.Packet{
-			&rtcp.PictureLossIndication{
-				SenderSSRC: uint32(pt.ssrc),
-				MediaSSRC:  uint32(pt.ssrc),
-			},
-		}); err != nil {
-			log.Printf("WriteRTCP: %v", err)
-		}
+		p.ensureSinks(pt)
+		pt.requestKeyframe()
 	} else {
 		log.Printf("%s Subscribed to %s of %s before its first packet", p.id, trackType, publisherID)
 	}
@@ -368,57 +349,70 @@ func handleUnsubscribe(p *Peer, msg SignalMessage) error {
 	return nil
 }
 
-// ontrack handler: when a remote track arrives, create a local track that
-// mirrors it (preserving the original SSRC) and forward RTP packets.
 func setupOnTrack(p *Peer) {
 	p.pc.OnTrack(func(remoteTrack *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
 		var trackType string
-		if remoteTrack.Kind() == webrtc.RTPCodecTypeAudio && remoteTrack.Codec().MimeType == webrtc.MimeTypeOpus {
+		mime := remoteTrack.Codec().MimeType
+		switch {
+		case remoteTrack.Kind() == webrtc.RTPCodecTypeAudio && strings.EqualFold(mime, webrtc.MimeTypeOpus):
 			trackType = "audio"
-		} else if remoteTrack.Kind() == webrtc.RTPCodecTypeVideo && remoteTrack.Codec().MimeType == webrtc.MimeTypeH264 {
+		case remoteTrack.Kind() == webrtc.RTPCodecTypeVideo && strings.EqualFold(mime, webrtc.MimeTypeH264):
 			trackType = "video"
-
-			/**
-			// send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
-			// do we need this? takes a while to see the video otherwise
-			go func() {
-				ticker := time.NewTicker(time.Second * 3)
-				for range ticker.C {
-					errSend := p.pc.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(remoteTrack.SSRC())}})
-					if errSend != nil {
-						fmt.Println(errSend)
-					}
-				}
-			}()
-			*/
-		} else {
-			log.Printf("Client %s started publishing unknown track type %s", p.id, remoteTrack.Codec().MimeType)
+		case remoteTrack.Kind() == webrtc.RTPCodecTypeVideo && strings.EqualFold(mime, webrtc.MimeTypeRTX):
+			log.Printf("Client %s started sending retransmissions (SSRC: %d)", p.id, remoteTrack.SSRC())
+			go readRepairStream(p, remoteTrack)
+			return
+		default:
+			log.Printf("Client %s started publishing unknown track type %s", p.id, mime)
 			return
 		}
 
 		ssrc := webrtc.SSRC(remoteTrack.SSRC())
+		extensions := make(map[uint8]string)
+		for _, e := range receiver.GetParameters().HeaderExtensions {
+			extensions[uint8(e.ID)] = e.URI
+		}
+		cacheSize := 512
+		if trackType == "video" {
+			cacheSize = 2048
+		}
 
 		pt := &PublishedTrack{
-			ssrc: ssrc,
-			stop: make(chan struct{}),
+			ssrc:       ssrc,
+			kind:       trackType,
+			publisher:  p,
+			extensions: extensions,
+			stop:       make(chan struct{}),
+			cache:      newPacketCache(cacheSize),
+			losses:     newLossTracker(),
 		}
 
 		p.mu.Lock()
+		previous := p.getPublishedTrack(trackType)
 		p.setPublishedTrack(trackType, pt)
 		p.mu.Unlock()
+		if previous != nil {
+			previous.close()
+		}
 
 		log.Printf("Client %s started publishing %s (SSRC: %d)", p.id, trackType, ssrc)
 
-		if trackType == "video" {
-			if err := p.pc.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(ssrc)}}); err != nil {
-				log.Printf("WriteRTCP: %v", err)
+		subKey := p.id + "_" + trackType
+		sfu.mu.RLock()
+		for _, other := range sfu.peers {
+			other.mu.Lock()
+			subscribed := other.subscriptions[subKey]
+			other.mu.Unlock()
+			if subscribed {
+				other.ensureSinks(pt)
 			}
 		}
+		sfu.mu.RUnlock()
 
-		// Forward RTP packets to all subscribed peers
+		pt.requestKeyframe()
+		go pt.requestRetransmissions()
+
 		go func() {
-			subKey := p.id + "_" + trackType
-
 			for {
 				select {
 				case <-pt.stop:
@@ -429,38 +423,11 @@ func setupOnTrack(p *Peer) {
 				rtpPkt, _, readErr := remoteTrack.ReadRTP()
 				if readErr != nil {
 					log.Printf("Track read error for %s/%s: %v", p.id, trackType, readErr)
+					pt.close()
 					return
 				}
-
-				if !p.isAudioPublished && trackType == "audio" || !p.isVideoPublished && trackType == "video" {
-					// if we are not publishing this track, skip forwarding it
-					continue
-				}
-
-				// Preserve original SSRC so the client can demultiplex
 				rtpPkt.SSRC = uint32(ssrc)
-
-				// Fan-out to all subscribers
-				sfu.mu.RLock()
-				for _, other := range sfu.peers {
-					other.mu.Lock()
-					isSubscribed := other.subscriptions[subKey]
-					var masterTrack *MultiplexTrack
-					if trackType == "audio" {
-						masterTrack = other.masterAudio
-					} else {
-						masterTrack = other.masterVideo
-					}
-					other.mu.Unlock()
-
-					if isSubscribed && masterTrack != nil {
-						if writeErr := masterTrack.WriteRTP(rtpPkt); writeErr != nil {
-							// don't spam on closed channels
-							// log.Printf("Track write error to subscriber %s: %v", other.id, writeErr)
-						}
-					}
-				}
-				sfu.mu.RUnlock()
+				pt.ingest(rtpPkt)
 			}
 		}()
 	})
@@ -475,16 +442,17 @@ func cleanupPeer(p *Peer) {
 
 	p.mu.Lock()
 	if p.audioPublished != nil {
-		close(p.audioPublished.stop)
+		p.audioPublished.close()
 		p.isAudioPublished = false
 		p.audioPublished = nil
 	}
 	if p.videoPublished != nil {
-		close(p.videoPublished.stop)
+		p.videoPublished.close()
 		p.isVideoPublished = false
 		p.videoPublished = nil
 	}
 	p.mu.Unlock()
+	p.dropSinks(nil)
 
 	// Remove subscriptions from other peers that were subscribed to this peer
 	sfu.mu.RLock()
@@ -497,6 +465,7 @@ func cleanupPeer(p *Peer) {
 			}
 		}
 		other.mu.Unlock()
+		other.dropSinks(p)
 	}
 	sfu.mu.RUnlock()
 
@@ -510,6 +479,8 @@ func main() {
 	webrtcPublicIp := flag.String("ip", "[IP_ADDRESS]", "WebRTC public IP")
 	ipcPath := flag.String("ipc", "/tmp/sfu-ipc.sock", "IPC unix socket path")
 	verbose := flag.Bool("verbose", false, "Enable pion debug logging")
+	flag.Float64Var(&incomingDropPercent, "drop-in", 0, "Percentage of publisher RTP packets to drop on arrival, for testing loss recovery")
+	flag.Float64Var(&outgoingDropPercent, "drop-out", 0, "Percentage of RTP packets to drop on the way to subscribers, for testing loss recovery")
 
 	// Parse the flags from the command line
 	flag.Parse()
@@ -549,9 +520,13 @@ func main() {
 	// Listen on 0.0.0.0 (all interfaces) to avoid binding to each local IP individually.
 	// NewMultiUDPMuxFromPort binds to every (interface, IP) pair separately, which fails
 	// when the same IP appears on multiple interfaces (Docker bridge networks for exemple).
-	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: *webrtcPort})
+	udpConn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: *webrtcPort})
 	if err != nil {
 		log.Fatalf("ListenUDP: %v", err)
+	}
+	var conn net.PacketConn = udpConn
+	if incomingDropPercent > 0 || outgoingDropPercent > 0 {
+		conn = &lossyConn{PacketConn: udpConn}
 	}
 
 	netTransport, err := stdnet.NewNet()
@@ -590,7 +565,10 @@ func main() {
 	//	panic(err)
 	//}
 
-	// We want TWCC in case the subscriber supports it
+	if err = webrtc.ConfigureTWCCHeaderExtensionSender(mediaEngine, interceptorRegistry); err != nil {
+		panic(err)
+	}
+
 	if err = webrtc.ConfigureTWCCSender(mediaEngine, interceptorRegistry); err != nil {
 		panic(err)
 	}
@@ -606,6 +584,10 @@ func main() {
 	)
 
 	ipcConn = &IpcConnection{conn: nil}
+	go bandwidthLoop()
+	if incomingDropPercent > 0 || outgoingDropPercent > 0 {
+		log.Printf("Simulating packet loss: %.1f%% incoming, %.1f%% outgoing", incomingDropPercent, outgoingDropPercent)
+	}
 
 	listener, err := getListener(*ipcPath)
 	if err != nil {

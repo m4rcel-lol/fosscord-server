@@ -1,7 +1,9 @@
 package main
 
 import (
+	"math/rand/v2"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pion/webrtc/v4"
@@ -9,8 +11,9 @@ import (
 
 type Peer struct {
 	// unique clientId
-	id string
-	pc *webrtc.PeerConnection
+	id        string
+	pc        *webrtc.PeerConnection
+	transport *webrtc.DTLSTransport
 
 	mu             sync.Mutex
 	audioPublished *PublishedTrack
@@ -27,6 +30,18 @@ type Peer struct {
 
 	// subscriptions[publisherID+"_"+trackType] = true (we no longer need the webrtc.RTPSender instance)
 	subscriptions map[string]bool
+
+	sinks map[uint32]*rtcpSink
+
+	rtxSequence map[uint32]uint16
+
+	remb      float32
+	rembAt    time.Time
+	videoLoss map[uint32]lossReport
+
+	nacksReceived atomic.Uint64
+	retransmitted atomic.Uint64
+	notCached     atomic.Uint64
 }
 
 func (p *Peer) getPublishedTrack(trackType string) *PublishedTrack {
@@ -44,16 +59,52 @@ func (p *Peer) setPublishedTrack(trackType string, pt *PublishedTrack) {
 	}
 }
 
-// wraps a local static RTP track fed by an incoming remote
-// track. We keep the RTP packets flowing in a goroutine
-type PublishedTrack struct {
-	track *webrtc.TrackLocalStaticRTP
-	ssrc  webrtc.SSRC
-	stop  chan struct{}
+func (p *Peer) isPublishing(trackType string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if trackType == "audio" {
+		return p.isAudioPublished
+	}
+	return p.isVideoPublished
 }
 
-// track we added to a subscriber's PeerConnection.
-//type Subscription struct {
-//	sender *webrtc.RTPSender
-//	track  *webrtc.TrackLocalStaticRTP
-//}
+func (p *Peer) master(trackType string) *MultiplexTrack {
+	if trackType == "audio" {
+		return p.masterAudio
+	}
+	return p.masterVideo
+}
+
+func (p *Peer) nextRTXSequence(ssrc uint32) uint16 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	seq, ok := p.rtxSequence[ssrc]
+	if !ok {
+		seq = uint16(rand.Uint32())
+	}
+	p.rtxSequence[ssrc] = seq + 1
+	return seq
+}
+
+type PublishedTrack struct {
+	ssrc       webrtc.SSRC
+	kind       string
+	publisher  *Peer
+	extensions map[uint8]string
+	stop       chan struct{}
+	stopOnce   sync.Once
+	cache      *packetCache
+	losses     *lossTracker
+
+	bytes      atomic.Uint64
+	lastBytes  uint64
+	bitrateCap int
+	received   atomic.Uint64
+	nacked     atomic.Uint64
+	recovered  atomic.Uint64
+	lost       atomic.Uint64
+}
+
+func (pt *PublishedTrack) close() {
+	pt.stopOnce.Do(func() { close(pt.stop) })
+}
