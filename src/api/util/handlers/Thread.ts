@@ -67,7 +67,7 @@ export async function createThread(opts: CreateThreadOptions) {
         nsfw: parent.nsfw,
         flags: 0,
         permission_overwrites: [],
-        rate_limit_per_user: parent.threadOnly() ? parent.default_thread_rate_limit_per_user || 0 : opts.rate_limit_per_user || 0,
+        rate_limit_per_user: (parent.threadOnly() ? undefined : opts.rate_limit_per_user) ?? parent.default_thread_rate_limit_per_user ?? 0,
         applied_tags: opts.applied_tags ?? [],
         member_count: 1,
         message_count: 0,
