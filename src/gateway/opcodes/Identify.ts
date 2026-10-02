@@ -78,11 +78,15 @@ import {
     PrivateStatus,
     PrivateUserProjection,
     PublicUser,
+    PublicMember,
+    PublicMemberProjection,
     PublicUserProjection,
     RelationshipType,
 } from "@spacebar/schemas";
 import { check } from "./instanceOf";
 import { openConnections } from "../events/Connection";
+
+type GuildPresenceMember = Omit<PublicMember, "user">;
 
 // TODO: user sharding
 // TODO: check privileged intents, if defined in the config
@@ -200,6 +204,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     }
 
     this.pendingDispatches = [];
+    this.isBot = !!user.bot;
     const listenerPromise = setupListener.call(this);
     // this.session.status = identify.presence?.status || "online";
     this.session.last_seen = new Date();
@@ -361,12 +366,23 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     const memberGuildIds = members.map((m) => m.guild_id);
 
     const friendPresencePromise = timePromise(() => getUserPresences(friendPresenceUserIds));
+    const affinityUserIds = [
+        ...new Set([...friendPresenceUserIds, ...recipients.flatMap((r) => r.channel.recipients?.map((x) => x.user?.id).filter((id) => id && id !== this.user_id) ?? [])]),
+    ];
     const guildPresencePromise = (async () => {
-        if (!memberGuildIds.length) return { guildPresenceMembers: [] as Member[], guildPresenceMap: new Map() as Awaited<ReturnType<typeof getUserPresences>> };
+        if (!memberGuildIds.length || (!user.bot && !affinityUserIds.length))
+            return {
+                guildPresenceMembers: [] as GuildPresenceMember[],
+                guildPresenceMap: new Map() as Awaited<ReturnType<typeof getUserPresences>>,
+                guildPresenceUsers: [] as User[],
+            };
         const onlineSessions = await Session.createQueryBuilder("session")
             .select("session.user_id", "user_id")
             .distinct(true)
-            .where("session.user_id IN (SELECT m.id FROM members m WHERE m.guild_id IN (:...guildIds))", { guildIds: memberGuildIds })
+            .where(
+                user.bot ? "session.user_id IN (SELECT m.id FROM members m WHERE m.guild_id IN (:...guildIds))" : "session.user_id IN (:...affinityUserIds)",
+                user.bot ? { guildIds: memberGuildIds } : { affinityUserIds },
+            )
             .andWhere("session.status NOT IN ('offline', 'invisible')")
             .andWhere("session.is_admin_session = false")
             .andWhere("session.user_id != :self", { self: this.user_id })
@@ -374,13 +390,24 @@ export async function onIdentify(this: WebSocket, data: Payload) {
             .limit(1000)
             .getRawMany<{ user_id: string }>();
         const onlineUserIds = onlineSessions.map((x) => x.user_id);
-        const [guildPresenceMembers, guildPresenceMap] = await Promise.all([
+        const [guildPresenceMembers, guildPresenceMap, guildPresenceUsers] = await Promise.all([
             onlineUserIds.length
-                ? Member.find({ where: { id: In(onlineUserIds), guild_id: In(memberGuildIds) }, relations: { user: true, roles: true } })
-                : Promise.resolve([] as Member[]),
+                ? (Member.query(
+                      `SELECT ${PublicMemberProjection.filter((x) => x !== "roles")
+                          .map((x) => `m."${x}"`)
+                          .join(", ")}, COALESCE(array_agg(mr.role_id::text) FILTER (WHERE mr.role_id IS NOT NULL AND mr.role_id <> m.guild_id), '{}') AS roles
+                       FROM members m LEFT JOIN member_roles mr ON mr.index = m.index
+                       WHERE m.id = ANY($1) AND m.guild_id = ANY($2)
+                       GROUP BY m.index`,
+                      [onlineUserIds, memberGuildIds],
+                  ) as Promise<GuildPresenceMember[]>)
+                : Promise.resolve([] as GuildPresenceMember[]),
             getUserPresences(onlineUserIds),
+            onlineUserIds.length
+                ? User.find({ where: { id: In(onlineUserIds) }, select: Object.fromEntries(PublicUserProjection.map((x) => [x, true])) })
+                : Promise.resolve([] as User[]),
         ]);
-        return { guildPresenceMembers, guildPresenceMap };
+        return { guildPresenceMembers, guildPresenceMap, guildPresenceUsers };
     })();
 
     // select relations
@@ -457,11 +484,8 @@ export async function onIdentify(this: WebSocket, data: Payload) {
         ScheduledEvents.forGuilds(memberGuildIds),
     ]);
 
-    const [{ elapsed: sessionSaveTime }, { result: friendPresenceMap, elapsed: friendPresenceSessionsQueryTime }, { guildPresenceMembers, guildPresenceMap }] = await Promise.all([
-        sessionSavePromise,
-        friendPresencePromise,
-        guildPresencePromise,
-    ]);
+    const [{ elapsed: sessionSaveTime }, { result: friendPresenceMap, elapsed: friendPresenceSessionsQueryTime }, { guildPresenceMembers, guildPresenceMap, guildPresenceUsers }] =
+        await Promise.all([sessionSavePromise, friendPresencePromise, guildPresencePromise]);
     const { result: friendPresences, elapsed: generateFriendPresencesTime } = timeFunction(() =>
         relationships
             .filter((x) => x.type === RelationshipType.FRIEND && friendPresenceMap.has(x.to_id))
@@ -682,6 +706,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
 
     // From user relationships ( friends ), also append to `users` list
     user.relationships.forEach((x) => addUser(x.to.toPublicUser()));
+    guildPresenceUsers.forEach((x) => addUser(x.toPublicUser()));
     const appendRelationshipsTime = taskSw.getElapsedAndReset();
 
     const allSessions = sessions.concat(this.session!).map((x) => x.toPrivateGatewayDeviceInfo());
@@ -946,9 +971,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     });
 
     const supplementalGuildMembers = guilds.map((guild) =>
-        (guildPresenceMembersByGuild.get(guild.id) ?? [])
-            .filter((m) => guildPresenceMap.has(m.id))
-            .map((m) => ({ ...m.toPublicMember(), roles: m.roles.filter((r) => r.id !== guild.id).map((r) => r.id), user: m.user.toPublicUser() })),
+        (guildPresenceMembersByGuild.get(guild.id) ?? []).filter((m) => guildPresenceMap.has(m.id)).map(({ id, ...member }) => ({ ...member, user_id: id })),
     );
 
     await Send(this, {
@@ -959,8 +982,8 @@ export async function onIdentify(this: WebSocket, data: Payload) {
             guilds: readySupplementalGuilds,
             merged_members: supplementalGuildMembers,
             merged_presences: {
-                friends: friendPresences,
-                guilds: supplementalGuildMembers.map((members) => members.map((m) => ({ user: m.user, ...guildPresenceMap.get(m.user.id)! }))),
+                friends: friendPresences.map(({ user, ...presence }) => ({ ...presence, user_id: user.id })),
+                guilds: supplementalGuildMembers.map((members) => members.map((m) => ({ ...guildPresenceMap.get(m.user_id)!, user_id: m.user_id }))),
             },
             lazy_private_channels: [],
             disclose: [],
