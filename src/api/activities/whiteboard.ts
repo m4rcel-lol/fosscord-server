@@ -19,7 +19,7 @@
 import path from "node:path";
 import express, { NextFunction, Request, Response, Router } from "express";
 import { In } from "typeorm";
-import { ActivityInstanceParticipant, ActivityInstances, User } from "@spacebar/database";
+import { ActivityInstance, ActivityInstanceParticipant, ActivityInstances, Member, User } from "@spacebar/database";
 import { Config } from "@spacebar/util";
 import { ACTIVITY_ASSETS, BuiltinActivity, readProxyTicket } from "./common";
 
@@ -65,7 +65,10 @@ const broadcast = (instanceId: string, event: string, data: unknown, exceptClien
 
 const people = async (instanceId: string) => {
     const rows = await ActivityInstances.participants(instanceId);
-    const users = rows.length ? await User.find({ where: { id: In(rows.map((r) => r.user_id)) }, select: { id: true, username: true, global_name: true, avatar: true } }) : [];
+    const ids = rows.map((r) => r.user_id);
+    const users = ids.length ? await User.find({ where: { id: In(ids) }, select: { id: true, username: true, global_name: true, avatar: true } }) : [];
+    const guildId = (await ActivityInstance.findOne({ where: { id: instanceId }, select: { id: true, guild_id: true } }))?.guild_id;
+    const members = guildId && ids.length ? await Member.find({ where: { guild_id: guildId, id: In(ids) }, select: { id: true, nick: true } }) : [];
     const cdn = (Config.get().cdn.endpointPublic ?? "").replace(/\/$/, "");
     return rows.flatMap((row) => {
         const user = users.find((u) => u.id === row.user_id);
@@ -73,7 +76,7 @@ const people = async (instanceId: string) => {
         const avatar = user.avatar
             ? `${cdn}/avatars/${user.id}/${user.avatar}.${user.avatar.startsWith("a_") ? "gif" : "png"}?size=64`
             : `${cdn}/embed/avatars/${Number((BigInt(user.id) >> 22n) % 6n)}.png`;
-        return [{ id: user.id, name: user.global_name || user.username, avatar }];
+        return [{ id: user.id, name: members.find((m) => m.id === user.id)?.nick || user.global_name || user.username, avatar }];
     });
 };
 
