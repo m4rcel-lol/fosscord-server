@@ -633,8 +633,14 @@ try {
     log("all e2ee checks passed");
 } finally {
     if (tester.password !== originalPassword) {
-        const login = await call("POST", "/auth/login", null, { login: tester.email, password: tester.password });
-        await call("PATCH", "/users/@me", login.body?.token, { password: tester.password, new_password: originalPassword });
+        const restore = (token) => call("PATCH", "/users/@me", token, { password: tester.password, new_password: originalPassword });
+        let restored = await restore(tester.token);
+        for (let attempt = 0; restored.status !== 200 && attempt < 5; attempt++) {
+            await new Promise((resolve) => setTimeout(resolve, 15000));
+            const login = await call("POST", "/auth/login", null, { login: tester.email, password: tester.password });
+            restored = await restore(login.body?.token);
+        }
+        if (restored.status !== 200) console.error(`couldn't restore the tester password, it is now ${tester.password}`);
     }
     try {
         rmSync(profiles, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
