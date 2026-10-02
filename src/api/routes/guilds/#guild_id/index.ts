@@ -247,21 +247,18 @@ router.patch(
         // delete data.vanity_url_code;
         delete data.template_id;
 
-        await Promise.all([
-            guild.save(),
-            emitEvent({
-                event: "GUILD_UPDATE",
-                data: {
-                    ...data,
-                    // TODO: did i do this right?
-                    afk_channel_id: data.afk_channel_id ?? undefined,
-                    public_updates_channel_id: data.public_updates_channel_id ?? undefined,
-                    rules_channel_id: data.rules_channel_id ?? undefined,
-                    system_channel_id: data.system_channel_id ?? undefined,
-                } satisfies GuildCreateResponse, // apparently we dont have a separate schema for this
-                guild_id,
-            } satisfies GuildUpdateEvent),
-        ]);
+        await guild.save();
+        await emitEvent({
+            event: "GUILD_UPDATE",
+            data: {
+                ...data,
+                afk_channel_id: data.afk_channel_id ?? undefined,
+                public_updates_channel_id: data.public_updates_channel_id ?? undefined,
+                rules_channel_id: data.rules_channel_id ?? undefined,
+                system_channel_id: data.system_channel_id ?? undefined,
+            } satisfies GuildCreateResponse,
+            guild_id,
+        } satisfies GuildUpdateEvent);
 
         return res.json(data);
     },
