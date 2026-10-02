@@ -16,15 +16,26 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { GifsResponse, GifTrendingCategory } from "@spacebar/schemas";
+import { storage } from "./Storage";
 
-export interface IGifProvider {
-    id: string;
-    available: boolean;
+const inflight = new Map<string, Promise<Buffer | null>>();
 
-    init(): Promise<void>;
-    search(query: { q: string; limit?: number; media_format: string; locale: string }): Promise<GifsResponse>;
-    getTrendingCategories(query: { media_format: string; locale: string }): Promise<GifTrendingCategory[]>;
-    getTrendingGifs(query: { q: string; limit?: number; media_format: string; locale: string }): Promise<GifsResponse>;
-    suggest?(query: { q: string; limit: number; locale: string }): Promise<string[]>;
+export function fetchUpstreamAsset(path: string, url: string): Promise<Buffer | null> {
+    const pending = inflight.get(path);
+    if (pending) return pending;
+    const task = (async () => {
+        try {
+            const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+            if (!response.ok) return null;
+            const buffer = Buffer.from(await response.arrayBuffer());
+            await storage.set(path, buffer);
+            return buffer;
+        } catch {
+            return null;
+        } finally {
+            inflight.delete(path);
+        }
+    })();
+    inflight.set(path, task);
+    return task;
 }

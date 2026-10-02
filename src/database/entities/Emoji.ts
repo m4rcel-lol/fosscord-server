@@ -74,4 +74,9 @@ export class Emoji extends BaseClass {
 
     @Column({ type: "int8", array: true, nullable: true })
     groups: string[]; // user groups this emoji is whitelisted to (Spacebar extension)
+
+    toJSON() {
+        const json = super.toJSON();
+        return { ...json, roles: json.roles ?? [], user: this.user?.toPublicUser?.() ?? undefined };
+    }
 }

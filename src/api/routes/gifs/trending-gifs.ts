@@ -52,9 +52,10 @@ router.get(
         },
     }),
     async (req: Request, res: Response) => {
-        const provider = GifProviderManager.getProvider((req.query.provider as string) ?? "klipy");
-        const results = await provider.getTrendingGifs(req.query as typeof provider.getTrendingGifs.arguments);
-        res.json(results).status(200);
+        const provider = GifProviderManager.findProvider(req.query.provider as string);
+        if (!provider) return res.json([]);
+        const results = await provider.getTrendingGifs(req.query as typeof provider.getTrendingGifs.arguments).catch(() => []);
+        res.json(results);
     },
 );
 

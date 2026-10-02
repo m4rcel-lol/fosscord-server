@@ -57,14 +57,15 @@ export default class KlipyGifProvider implements IGifProvider {
     async search(query: { q: string; limit?: number; media_format: string; locale: string }): Promise<GifsResponse> {
         query.media_format ??= "gif";
         query.locale ??= "en";
-        const response = await fetch(`https://api.klipy.com/api/v1/${this.#apiKey}/gifs/search?q=${query.q}&locale=${query.locale}`, {
+        const params = new URLSearchParams({ q: query.q, locale: query.locale, per_page: String(Math.min(Number(query.limit) || 50, 50)) });
+        const response = await fetch(`https://api.klipy.com/api/v1/${this.#apiKey}/gifs/search?${params}`, {
             method: "get",
             headers: { "Content-Type": "application/json" },
         });
 
         if (!response.ok) console.log(response, await response.text());
         const responseData = (await response.json()) as KlipyGifsResponse;
-        return responseData.data.data.map(this.convertGifResult);
+        return responseData.data.data.map((result) => this.convertGifResult(result, query.media_format));
     }
 
     async getTrendingCategories(query: { locale: string }): Promise<GifTrendingCategory[]> {
@@ -89,7 +90,7 @@ export default class KlipyGifProvider implements IGifProvider {
         return await this.#trendingGifsCache.getOrUpdate(async () => {
             // query.media_format ??= "gif";
             query.locale ??= "en";
-            const response = await fetch(`https://api.klipy.com/api/v1/${this.#apiKey}/gifs/trending?locale=${query.locale}`, {
+            const response = await fetch(`https://api.klipy.com/api/v1/${this.#apiKey}/gifs/trending?locale=${encodeURIComponent(query.locale)}&per_page=50`, {
                 method: "get",
                 headers: {
                     "Content-Type": "application/json",
@@ -99,16 +100,17 @@ export default class KlipyGifProvider implements IGifProvider {
 
             if (!response.ok) console.log(response, await response.text());
             const responseData = (await response.json()) as KlipyGifsResponse;
-            return responseData.data.data.map(this.convertGifResult);
+            return responseData.data.data.map((result) => this.convertGifResult(result, query.media_format));
         });
     }
 
-    private convertGifResult(result: KlipyMediaItem) {
+    private convertGifResult(result: KlipyMediaItem, media_format?: string) {
+        const format = media_format === "webm" || media_format === "gif" ? media_format : "mp4";
         return {
             id: result.id.toString(),
             title: result.title,
             url: "https://klipy.com/gifs/" + result.slug,
-            src: result.file.hd.mp4.url,
+            src: (result.file.hd[format] ?? result.file.hd.mp4).url,
             gif_src: result.file.hd.gif.url,
             width: result.file.hd.gif.width,
             height: result.file.hd.gif.height,

@@ -41,6 +41,10 @@ router.get(
                 type: "string",
                 description: "Locale",
             },
+            limit: {
+                type: "number",
+                description: "Maximum number of GIFs to return",
+            },
             provider: {
                 type: "string",
                 description: "Provider to use",
@@ -53,9 +57,10 @@ router.get(
         },
     }),
     async (req: Request, res: Response) => {
-        const impl = GifProviderManager.getProvider((req.query.provider as string) ?? "klipy");
-        const result = await impl.search(req.query as typeof impl.search.arguments);
-        res.json(result).status(200);
+        const impl = GifProviderManager.findProvider(req.query.provider as string);
+        if (!impl) return res.json([]);
+        const result = await impl.search(req.query as typeof impl.search.arguments).catch(() => []);
+        res.json(result);
     },
 );
 

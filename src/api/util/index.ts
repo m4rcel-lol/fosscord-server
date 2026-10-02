@@ -30,3 +30,5 @@ export * from "./handlers/Thread";
 export * from "./utility/profile";
 export * from "./utility/emailChange";
 export * from "./utility/pomelo";
+export * from "./utility/StickerPacks";
+export * from "./utility/Soundboard";

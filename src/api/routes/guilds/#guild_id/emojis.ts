@@ -17,12 +17,31 @@
 */
 
 import { Request, Response, Router } from "express";
+import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
 import { Emoji, Member } from "@spacebar/database";
-import { Config, DiscordApiErrors, GuildEmojisUpdateEvent, Snowflake, emitEvent, handleFile } from "@spacebar/util";
+import { Config, DiscordApiErrors, FieldErrors, GuildEmojisUpdateEvent, Snowflake, deleteFile, emitEvent, handleFile } from "@spacebar/util";
 import { EmojiCreateSchema, EmojiModifySchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
+
+const normalizeName = (name?: string) => {
+    if (name === undefined) return undefined;
+    const cleaned = name.replace(/[^A-Za-z0-9_]/g, "");
+    if (cleaned.length < 2 || cleaned.length > 32)
+        throw FieldErrors({ name: { code: "BASE_TYPE_BAD_LENGTH", message: "Must be between 2 and 32 in length and contain only letters, numbers and underscores." } });
+    return cleaned;
+};
+
+const emitEmojisUpdate = async (guild_id: string) =>
+    emitEvent({
+        event: "GUILD_EMOJIS_UPDATE",
+        guild_id,
+        data: {
+            guild_id,
+            emojis: await Emoji.find({ where: { guild_id } }),
+        },
+    } satisfies GuildEmojisUpdateEvent);
 
 router.get(
     "/",
@@ -70,10 +89,11 @@ router.get(
 
         await Member.IsInGuildOrFail(req.user_id, guild_id);
 
-        const emoji = await Emoji.findOneOrFail({
+        const emoji = await Emoji.findOne({
             where: { guild_id: guild_id, id: emoji_id },
             relations: { user: true },
         });
+        if (!emoji) throw DiscordApiErrors.UNKNOWN_EMOJI;
 
         return res.json(emoji);
     },
@@ -107,35 +127,27 @@ router.post(
         const { maxEmojis } = Config.get().limits.guild;
 
         if (emoji_count >= maxEmojis) throw DiscordApiErrors.MAXIMUM_NUMBER_OF_EMOJIS_REACHED.withParams(maxEmojis);
-        if (body.require_colons == null) body.require_colons = true;
-        if (body.name?.includes("-")) body.name = body.name?.replaceAll("-", ""); // Dashes are invalid apparently
+        const name = normalizeName(body.name ?? "emoji")!;
+        if (!body.image?.startsWith("data:")) throw FieldErrors({ image: { code: "BINARY_TYPE_MAX_SIZE", message: "Invalid image data" } });
 
-        const user = req.user;
-        await handleFile(`/emojis/${id}`, body.image);
+        const hash = await handleFile(`/emojis/${id}`, body.image);
+        if (!hash) throw new HTTPError("Invalid image data", 400);
 
-        const mimeType = body.image.split(":")[1].split(";")[0];
-        const emoji = await Emoji.create({
+        await Emoji.create({
             id: id,
             guild_id: guild_id,
-            name: body.name,
-            require_colons: body.require_colons ?? undefined, // schema allows nulls, db does not
-            user: user,
+            name,
+            require_colons: body.require_colons ?? true,
+            user: req.user,
             managed: false,
-            animated: mimeType == "image/gif" || mimeType == "image/apng" || mimeType == "video/webm",
+            animated: hash.startsWith("a_"),
             available: true,
-            roles: [],
+            roles: body.roles ?? [],
         }).save();
 
-        await emitEvent({
-            event: "GUILD_EMOJIS_UPDATE",
-            guild_id: guild_id,
-            data: {
-                guild_id: guild_id,
-                emojis: await Emoji.find({ where: { guild_id: guild_id } }),
-            },
-        } satisfies GuildEmojisUpdateEvent);
+        await emitEmojisUpdate(guild_id);
 
-        return res.status(201).json(emoji);
+        return res.status(201).json(await Emoji.findOneOrFail({ where: { id }, relations: { user: true } }));
     },
 );
 
@@ -157,26 +169,17 @@ router.patch(
         const { emoji_id, guild_id } = req.params as { [key: string]: string };
         const body = req.body as EmojiModifySchema;
 
-        if (body.name?.includes("-")) body.name = body.name?.replaceAll("-", ""); // Dashes are invalid apparently
-
-        await Emoji.findOneOrFail({
+        const emoji = await Emoji.findOne({
             where: { guild_id: guild_id, id: emoji_id },
+            relations: { user: true },
         });
+        if (!emoji) throw DiscordApiErrors.UNKNOWN_EMOJI;
 
-        const emoji = await Emoji.create({
-            ...body,
-            id: emoji_id,
-            guild_id: guild_id,
-        }).save();
+        if (body.name !== undefined) emoji.name = normalizeName(body.name)!;
+        if (body.roles !== undefined) emoji.roles = body.roles ?? [];
+        await emoji.save();
 
-        await emitEvent({
-            event: "GUILD_EMOJIS_UPDATE",
-            guild_id: guild_id,
-            data: {
-                guild_id: guild_id,
-                emojis: await Emoji.find({ where: { guild_id: guild_id } }),
-            },
-        } satisfies GuildEmojisUpdateEvent);
+        await emitEmojisUpdate(guild_id);
 
         return res.json(emoji);
     },
@@ -196,19 +199,13 @@ router.delete(
     async (req: Request, res: Response) => {
         const { emoji_id, guild_id } = req.params as { [key: string]: string };
 
-        await Emoji.delete({
-            id: emoji_id,
-            guild_id: guild_id,
-        });
+        const emoji = await Emoji.findOne({ where: { id: emoji_id, guild_id } });
+        if (!emoji) throw DiscordApiErrors.UNKNOWN_EMOJI;
 
-        await emitEvent({
-            event: "GUILD_EMOJIS_UPDATE",
-            guild_id: guild_id,
-            data: {
-                guild_id: guild_id,
-                emojis: await Emoji.find({ where: { guild_id: guild_id } }),
-            },
-        } satisfies GuildEmojisUpdateEvent);
+        await Emoji.delete({ id: emoji_id, guild_id });
+        await deleteFile(`/emojis/${emoji_id}`).catch(() => undefined);
+
+        await emitEmojisUpdate(guild_id);
 
         res.sendStatus(204);
     },

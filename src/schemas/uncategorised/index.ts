@@ -57,6 +57,7 @@ export * from "./MessageCreateSchema";
 export * from "./MessageEditSchema";
 export * from "./MfaCodesSchema";
 export * from "./ModifyGuildStickerSchema";
+export * from "./SoundboardSoundSchema";
 export * from "./PasswordResetSchema";
 export * from "./PreloadMessagesRequestSchema";
 export * from "./PruneSchema";

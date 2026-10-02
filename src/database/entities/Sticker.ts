@@ -72,4 +72,12 @@ export class Sticker extends BaseClass {
 
     @Column({ type: "int" })
     format_type: StickerFormatType;
+
+    @Column({ type: "int", nullable: true })
+    sort_value?: number;
+
+    toJSON() {
+        const json = super.toJSON();
+        return { ...json, user: this.user?.toPublicUser?.() ?? undefined };
+    }
 }

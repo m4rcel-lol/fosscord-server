@@ -16,15 +16,42 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { GifsResponse, GifTrendingCategory } from "@spacebar/schemas";
+import { float } from "@spacebar/schemas";
 
-export interface IGifProvider {
-    id: string;
-    available: boolean;
+export interface SoundboardSoundCreateSchema {
+    /**
+     * @minLength 2
+     * @maxLength 32
+     */
+    name: string;
+    sound: string;
+    /**
+     * @minimum 0
+     * @maximum 1
+     */
+    volume?: float;
+    emoji_id?: string | null;
+    emoji_name?: string | null;
+}
 
-    init(): Promise<void>;
-    search(query: { q: string; limit?: number; media_format: string; locale: string }): Promise<GifsResponse>;
-    getTrendingCategories(query: { media_format: string; locale: string }): Promise<GifTrendingCategory[]>;
-    getTrendingGifs(query: { q: string; limit?: number; media_format: string; locale: string }): Promise<GifsResponse>;
-    suggest?(query: { q: string; limit: number; locale: string }): Promise<string[]>;
+export interface SoundboardSoundModifySchema {
+    /**
+     * @minLength 2
+     * @maxLength 32
+     */
+    name?: string;
+    /**
+     * @minimum 0
+     * @maximum 1
+     */
+    volume?: float;
+    emoji_id?: string | null;
+    emoji_name?: string | null;
+}
+
+export interface SendSoundboardSoundSchema {
+    sound_id: string;
+    source_guild_id?: string | null;
+    emoji_id?: string | null;
+    emoji_name?: string | null;
 }

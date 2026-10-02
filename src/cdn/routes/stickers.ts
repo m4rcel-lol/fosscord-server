@@ -21,12 +21,9 @@ import { Router, Response, Request } from "express";
 import { fileTypeFromBuffer } from "file-type";
 import { HTTPError } from "lambert-server/HTTPError";
 import { Config } from "@spacebar/util";
-import { storage, multer, setCacheControl, setCacheControlNotFound } from "../util";
-
-// TODO: check premium and animated pfp are allowed in the config
-// TODO: generate different sizes of icon
-// TODO: generate different image types of icon
-// TODO: delete old icons
+import { Sticker } from "@spacebar/database";
+import { StickerFormatType, StickerType } from "@spacebar/schemas";
+import { storage, multer, setCacheControl, setCacheControlNotFound, fetchUpstreamAsset } from "../util";
 
 const ANIMATED_MIME_TYPES = ["image/apng", "image/gif", "image/gifv"];
 const STATIC_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/svg+xml", "image/svg"];
@@ -43,9 +40,9 @@ router.post("/:sticker_id", multer.single("file"), async (req: Request, res: Res
 
     let hash = crypto.createHash("md5").update(buffer).digest("hex");
 
-    const type = await fileTypeFromBuffer(buffer);
-    if (!type || !ALLOWED_MIME_TYPES.includes(type.mime)) throw new HTTPError("Invalid file type");
-    if (ANIMATED_MIME_TYPES.includes(type.mime)) hash = `a_${hash}`; // animated icons have a_ infront of the hash
+    const type = (await fileTypeFromBuffer(buffer)) ?? (isLottie(buffer) ? { mime: "application/json" } : undefined);
+    if (!type || ![...ALLOWED_MIME_TYPES, "application/json"].includes(type.mime)) throw new HTTPError("Invalid file type");
+    if (ANIMATED_MIME_TYPES.includes(type.mime)) hash = `a_${hash}`;
 
     const path = `${pathPrefix}/${sticker_id}`;
     const endpoint = Config.get().cdn.endpointPublic;
@@ -65,14 +62,35 @@ router.get("/:sticker_id", setCacheControl, async (req: Request, res: Response) 
     sticker_id = sticker_id.split(".")[0]; // remove .file extension
     const path = `${pathPrefix}/${sticker_id}`;
 
-    const file = await storage.get(path);
+    const file = (await storage.get(path)) ?? (await fetchStandardSticker(sticker_id, path));
     if (!file) return setCacheControlNotFound(req, res);
     const type = await fileTypeFromBuffer(file);
 
-    res.set("Content-Type", type?.mime);
+    res.set("Content-Type", type?.mime ?? (isLottie(file) ? "application/json" : "application/octet-stream"));
 
     return res.send(file);
 });
+
+function isLottie(buffer: Buffer) {
+    if (buffer[0] !== 0x7b) return false;
+    try {
+        const json = JSON.parse(buffer.toString("utf8"));
+        return typeof json === "object" && json !== null && "layers" in json;
+    } catch {
+        return false;
+    }
+}
+
+async function fetchStandardSticker(sticker_id: string, path: string) {
+    if (!/^\d+$/.test(sticker_id)) return null;
+    const sticker = await Sticker.findOne({ where: { id: sticker_id, type: StickerType.STANDARD }, select: { id: true, format_type: true } });
+    if (!sticker) return null;
+    const url =
+        sticker.format_type === StickerFormatType.LOTTIE
+            ? `https://discord.com/stickers/${sticker_id}.json`
+            : `https://media.discordapp.net/stickers/${sticker_id}.${sticker.format_type === StickerFormatType.GIF ? "gif" : "png"}?passthrough=true`;
+    return fetchUpstreamAsset(path, url);
+}
 
 router.delete("/:sticker_id/", async (req: Request, res: Response) => {
     if (req.headers.signature !== Config.get().security.requestSignature) throw new HTTPError("Invalid request signature");

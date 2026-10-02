@@ -1,6 +1,6 @@
 /*
 	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
-	Copyright (C) 2023 Spacebar and Spacebar Contributors
+	Copyright (C) 2026 Spacebar and Spacebar Contributors
 	
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU Affero General Public License as published
@@ -19,6 +19,7 @@
 import { route } from "@spacebar/api/middlewares";
 import { ensureStandardStickerPacks } from "@spacebar/api/util";
 import { StickerPack } from "@spacebar/database";
+import { HTTPError } from "lambert-server/HTTPError";
 import { Request, Response, Router } from "express";
 
 const router: Router = Router({ mergeParams: true });
@@ -27,19 +28,21 @@ router.get(
     "/",
     route({
         responses: {
-            200: {
-                body: "StickersResponse",
+            200: {},
+            404: {
+                body: "APIErrorResponse",
             },
         },
     }),
     async (req: Request, res: Response) => {
         await ensureStandardStickerPacks();
-        const sticker_packs = await StickerPack.find({
+        const pack = await StickerPack.findOne({
+            where: { id: req.params.pack_id as string },
             relations: { stickers: true },
-            order: { id: "ASC", stickers: { sort_value: "ASC" } },
+            order: { stickers: { sort_value: "ASC" } },
         });
-
-        res.json({ sticker_packs });
+        if (!pack) throw new HTTPError("Unknown sticker pack", 404);
+        res.json(pack);
     },
 );
 
