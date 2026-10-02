@@ -201,6 +201,28 @@ async function processMedia(media: UnfurledMediaItem, messageId: string, batchId
             });
     }
 }
+export function assignComponentIds(components: unknown[]) {
+    type Node = { id?: number; components?: Node[]; accessory?: Node; component?: Node };
+    const walk = (nodes: Node[], visit: (node: Node) => void) => {
+        for (const node of nodes) {
+            if (!node || typeof node !== "object") continue;
+            visit(node);
+            walk([...(Array.isArray(node.components) ? node.components : []), ...(node.accessory ? [node.accessory] : []), ...(node.component ? [node.component] : [])], visit);
+        }
+    };
+    const used = new Set<number>();
+    walk(components as Node[], (node) => {
+        if (typeof node.id === "number") used.add(node.id);
+    });
+    let next = 0;
+    walk(components as Node[], (node) => {
+        if (typeof node.id === "number") return;
+        do next++;
+        while (used.has(next));
+        node.id = next;
+    });
+    return components;
+}
 export function handleComps(components: BaseMessageComponents[], flags: number) {
     const conf = Config.get();
     const mediaGalleryLimit = conf.components.mediaGalleryLimit ?? 10;
@@ -289,6 +311,7 @@ export function handleComps(components: BaseMessageComponents[], flags: number) 
     if (Object.keys(errors).length > 0) {
         throw FieldErrors(errors);
     }
+    assignComponentIds(components);
     return async (messageId: string, user: User, channel: Channel) => {
         const batchId = `CLOUD_compUploads_${Random.getString("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789", 128)}`;
         (await Promise.all(medias.map((m, index) => processMedia(m, messageId, batchId, user, channel, index + "")))).forEach((_) => _?.());
