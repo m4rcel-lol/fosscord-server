@@ -23,6 +23,7 @@ import {
     DiscordApiErrors,
     emitEvent,
     FieldErrors,
+    getPermission,
     InvisibleCharacters,
     Snowflake,
     ThreadCreateEvent,
@@ -143,12 +144,24 @@ export async function setThreadArchived(thread: Channel, archived: boolean) {
     await Channel.update({ id: thread.id }, { thread_metadata: thread.thread_metadata, flags: thread.flags });
 }
 
-export async function onThreadMessage(thread: Channel, user_id: string) {
+export async function onThreadMessage(thread: Channel, user_id: string, mentioned_ids: string[] = []) {
     if (thread.thread_metadata?.archived) {
         await setThreadArchived(thread, false);
         await emitThreadUpdate(thread);
     }
     await ThreadMember.join(thread, user_id);
+
+    const candidates = [...new Set(mentioned_ids)].filter((id) => id !== user_id);
+    if (!candidates.length || !thread.guild_id || !thread.parent_id) return;
+    if (thread.isPrivateThread() && !thread.thread_metadata?.invitable && thread.owner_id !== user_id) {
+        if (!(await getPermission(user_id, thread.guild_id, thread.parent_id)).has("MANAGE_THREADS")) return;
+    }
+    const members = await Member.find({ where: { guild_id: thread.guild_id, id: In(candidates) }, select: { id: true } });
+    for (const { id } of members) {
+        const permission = await getPermission(id, thread.guild_id, thread.parent_id).catch(() => undefined);
+        if (!permission?.has("VIEW_CHANNEL")) continue;
+        await ThreadMember.join(thread, id, ThreadMemberFlags.NONE);
+    }
 }
 
 export async function archiveInactiveThreads() {
