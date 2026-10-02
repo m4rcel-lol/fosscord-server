@@ -20,11 +20,14 @@ import express, { Application } from "express";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import crypto from "node:crypto";
 import { Config } from "@spacebar/util";
 
 const ASSET_FOLDER_PATH = path.join(__dirname, "..", "..", "assets");
 const CACHE_PATH = path.join(ASSET_FOLDER_PATH, "cache");
 const PATCH_PATH = path.join(ASSET_FOLDER_PATH, "client_patches");
+const VENCORD_PATH = path.join(ASSET_FOLDER_PATH, "vencord");
+const VENCORD_SCRIPT = path.join(VENCORD_PATH, "vencord.js");
 const UPSTREAM = "https://discord.com";
 
 const ENDPOINT_KEYS = [
@@ -107,8 +110,13 @@ const buildHtml = () => {
               .join("\n")
         : "";
 
+    const vencord = fs.existsSync(VENCORD_SCRIPT)
+        ? `<script src="/assets/vencord/vencord.js?v=${crypto.createHash("sha256").update(fs.readFileSync(VENCORD_SCRIPT)).digest("hex").slice(0, 12)}"></script>`
+        : "";
+    if (!vencord) console.warn("[TestClient] assets/vencord/vencord.js is missing, run `node scripts/vencord.js` to build the client mods");
+
     return source
-        .replace(envMatch[0], `${env}\n${patches}`)
+        .replace(envMatch[0], `${env}\n${vencord}\n${patches}`)
         .replace(/<script[^>]*>[^<]*__CF\$cv\$params[\s\S]*?<\/script>/, "")
         .replace(/ nonce="[^"]*"/g, "")
         .replace(/<link rel="preconnect"[^>]*>\s*/g, "")
@@ -118,6 +126,8 @@ const buildHtml = () => {
 
 export default function TestClient(app: Application) {
     app.use("/assets", express.static(path.join(ASSET_FOLDER_PATH, "public")));
+    app.use("/assets/vencord", express.static(VENCORD_PATH, { setHeaders: (res) => res.set("Cache-Control", "no-cache") }));
+    app.use("/vendor/monaco", express.static(path.join(VENCORD_PATH, "vendor", "monaco"), { setHeaders: (res) => res.set("Cache-Control", "no-cache") }));
     app.use(
         "/assets",
         express.static(CACHE_PATH, process.env.NODE_ENV === "development" ? { setHeaders: (res) => res.set("Cache-Control", "no-cache") } : { immutable: true, maxAge: "30d" }),
@@ -146,7 +156,7 @@ export default function TestClient(app: Application) {
 
     if (process.env.NODE_ENV === "development") {
         const sourceStamp = () =>
-            [path.join(CACHE_PATH, "index.html"), PATCH_PATH, ...(fs.existsSync(PATCH_PATH) ? fs.readdirSync(PATCH_PATH).map((x) => path.join(PATCH_PATH, x)) : [])]
+            [path.join(CACHE_PATH, "index.html"), PATCH_PATH, VENCORD_SCRIPT, ...(fs.existsSync(PATCH_PATH) ? fs.readdirSync(PATCH_PATH).map((x) => path.join(PATCH_PATH, x)) : [])]
                 .map((x) => fs.statSync(x, { throwIfNoEntry: false })?.mtimeMs ?? 0)
                 .join();
         let stamp = sourceStamp();

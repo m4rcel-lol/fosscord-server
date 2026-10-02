@@ -44,3 +44,6 @@ assets/client_patches/00-debug.js
 server.log
 assets/collectibles.json
 scripts/dev/.test-bot
+
+.vencord/
+assets/vencord/
