@@ -112,12 +112,10 @@ export class DaveSession {
             return;
         }
 
-        if (!this.established) {
-            const revoked = this.proposals.filter((p) => p.userId === userId);
-            this.proposals = this.proposals.filter((p) => p.userId !== userId);
-            for (const proposal of revoked) for (const recipient of proposal.sentTo) await this.send(recipient, VoiceOPCodes.MLS_PROPOSALS, this.encodeRevoke([proposal.ref]));
-            return;
-        }
+        const revoked = this.proposals.filter((p) => p.kind === "add" && p.userId === userId);
+        this.proposals = this.proposals.filter((p) => !revoked.includes(p));
+        for (const proposal of revoked) for (const recipient of proposal.sentTo) await this.send(recipient, VoiceOPCodes.MLS_PROPOSALS, this.encodeRevoke([proposal.ref]));
+        if (!this.established) return;
 
         if (this.members().length <= 1) await this.reset();
         await this.update();
