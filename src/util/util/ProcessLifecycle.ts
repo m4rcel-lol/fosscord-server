@@ -17,7 +17,6 @@
 */
 
 import EventEmitter from "node:events";
-import whyIsNodeRunning from "why-is-node-running";
 import { DgramSocket } from "node-unix-socket";
 
 interface ProcessLifecycleEvents {
@@ -58,9 +57,12 @@ export class ProcessLifecycle {
     }
 }
 
-process.on("SIGUSR1", () => {
+const whyIsNodeRunning = process.env.TRACE_ACTIVE_HANDLES ? import("why-is-node-running") : undefined;
+
+process.on("SIGUSR1", async () => {
     console.log("Handling SIGUSR1:");
-    whyIsNodeRunning();
+    if (whyIsNodeRunning) (await whyIsNodeRunning).default();
+    else console.log("Set TRACE_ACTIVE_HANDLES=1 at startup to list active handles.");
     console.log("\nProcess state:", ProcessLifecycle.state);
 });
 
