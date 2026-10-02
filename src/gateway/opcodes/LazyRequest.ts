@@ -20,7 +20,7 @@ import murmur from "murmurhash-js/murmurhash3_gc";
 import { In } from "typeorm";
 import { Channel, Guild, Member, Role, User } from "@spacebar/database";
 import { Stopwatch } from "@spacebar/extensions";
-import { WebSocket, Payload, OPCODES, Send, handleOffloadedGatewayRequest } from "@spacebar/gateway";
+import { WebSocket, Payload, OPCODES, Send, handleOffloadedGatewayRequest, resolveSocket } from "@spacebar/gateway";
 import { LazyRequestSchema } from "@spacebar/schemas";
 import { getPermission, Permissions, Config, getUserPresences, AggregatedPresence } from "@spacebar/util";
 import { check } from "./instanceOf";
@@ -130,8 +130,9 @@ export function scheduleMemberListSync(socket: WebSocket, guild_id: string) {
     if (!subscription || subscription.timer) return;
     subscription.timer = setTimeout(() => {
         subscription.timer = undefined;
-        if (socket.readyState !== 1) return;
-        sendMemberListSync.call(socket, guild_id).catch((e) => console.error(`[Gateway/${socket.user_id}] member list sync failed`, e));
+        const current = resolveSocket(socket);
+        if (current.readyState !== 1) return;
+        sendMemberListSync.call(current, guild_id).catch((e) => console.error(`[Gateway/${socket.user_id}] member list sync failed`, e));
     }, 750);
 }
 

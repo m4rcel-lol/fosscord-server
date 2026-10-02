@@ -22,7 +22,7 @@ import { Ban, Member, Message, Recipient, Relationship } from "@spacebar/databas
 import { EVENTEnum, EventOpts, getPermission, listenEvent, ListenEventOpts, NewUrlUserSignatureData, Permissions, RabbitMQ } from "@spacebar/util";
 import { WebSocket } from "@spacebar/gateway";
 import { PublicMember, RelationshipType } from "@spacebar/schemas";
-import { CLOSECODES, OPCODES, Send } from "../util";
+import { CLOSECODES, holdForResume, OPCODES, resolveSocket, Send } from "../util";
 import { scheduleMemberListSync } from "../opcodes/LazyRequest";
 
 // TODO: close connection on Invalidated Token
@@ -32,7 +32,9 @@ import { scheduleMemberListSync } from "../opcodes/LazyRequest";
 // Sharding: calculate if the current shard id matches the formula: shard_id = (guild_id >> 22) % num_shards
 // https://discord.com/developers/docs/topics/gateway#sharding
 
-export function handlePresenceUpdate(this: WebSocket, { event, acknowledge, data, user_id }: EventOpts) {
+export function handlePresenceUpdate(this: WebSocket, opts: EventOpts): Promise<unknown> | undefined {
+    if (this.resumedBy) return handlePresenceUpdate.call(resolveSocket(this), opts);
+    const { event, acknowledge, data, user_id } = opts;
     acknowledge?.();
     if (event === EVENTEnum.PresenceUpdate && data?.user?.id === user_id && user_id !== this.user_id) {
         return Send(this, {
@@ -157,8 +159,7 @@ export async function setupListener(this: WebSocket) {
     RabbitMQ.on("reconnected", handleReconnect);
     RabbitMQ.on("disconnected", handleDisconnect);
 
-    this.once("close", async () => {
-        // Unsubscribe from RabbitMQ events
+    this.listenerCleanup = async () => {
         RabbitMQ.off("reconnected", handleReconnect);
         RabbitMQ.off("disconnected", handleDisconnect);
 
@@ -179,11 +180,13 @@ export async function setupListener(this: WebSocket) {
             }
             opts.channel.off("error", handleChannelError);
         }
-    });
+    };
+    this.once("close", () => holdForResume(this, this.listenerCleanup!));
 }
 
 // TODO: only subscribe for events that are in the connection intents
-async function consume(this: WebSocket, opts: EventOpts) {
+async function consume(this: WebSocket, opts: EventOpts): Promise<void> {
+    if (this.resumedBy) return consume.call(resolveSocket(this), opts);
     const { data, event } = opts;
     const id = (opts.guild_id || opts.channel_id || opts.user_id || opts.session_id) as string;
     const permission = this.permissions[id] || new Permissions("ADMINISTRATOR"); // default permission for dm

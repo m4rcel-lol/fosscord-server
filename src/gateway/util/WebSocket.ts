@@ -23,6 +23,7 @@ import { Session } from "@spacebar/database";
 import { Intents, ListenEventOpts, Permissions } from "@spacebar/util";
 import { QoSPayload } from "../opcodes/Heartbeat";
 import { Capabilities } from "./Capabilities";
+import { Payload } from "./Constants";
 
 export interface WebSocket extends WS {
     recentTransactions: string[];
@@ -53,5 +54,10 @@ export interface WebSocket extends WS {
     large_threshold: number;
     qos?: QoSPayload;
     session?: Session;
+    listenerCleanup?: () => Promise<void>;
+    resumedBy?: WebSocket;
+    resumeBuffer?: Payload[];
+    replayBuffer?: Payload[];
+    resumeTimer?: NodeJS.Timeout;
     member_lists?: Record<string, { channel_id: string; ranges: [number, number][]; timer?: NodeJS.Timeout }>;
 }

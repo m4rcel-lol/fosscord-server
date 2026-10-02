@@ -18,7 +18,7 @@
 
 import { In, Not } from "typeorm";
 import { PreloadedUserSettings } from "discord-protos";
-import { Capabilities, CLOSECODES, OPCODES, Payload, Send, setupListener, WebSocket } from "@spacebar/gateway";
+import { Capabilities, CLOSECODES, OPCODES, Payload, resumableSockets, Send, setupListener, WebSocket } from "@spacebar/gateway";
 import { arrayGroupBy, ElapsedTime, Stopwatch, timeFunction, timePromise } from "@spacebar/extensions";
 import {
     getDatabase,
@@ -180,6 +180,15 @@ export async function onIdentify(this: WebSocket, data: Payload) {
 
     this.session_id = session.session_id;
     this.session = session;
+
+    const heldSocket = resumableSockets.get(this.session_id);
+    if (heldSocket) {
+        resumableSockets.delete(this.session_id);
+        clearTimeout(heldSocket.resumeTimer);
+        heldSocket.resumeBuffer = undefined;
+        heldSocket.replayBuffer = undefined;
+        heldSocket.listenerCleanup?.().catch((e) => console.error(`[Gateway/${this.user_id}] listener cleanup failed`, e));
+    }
     // this.session.status = identify.presence?.status || "online";
     this.session.last_seen = new Date();
     this.session.client_info ??= {};
