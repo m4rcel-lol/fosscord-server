@@ -26,3 +26,4 @@ export * from "./voice/VoiceChannels";
 export * from "./voice/StreamPreviews";
 export * from "./voice/StageInstances";
 export * from "./voice/ScheduledEvents";
+export * from "./voice/ActivityInstances";

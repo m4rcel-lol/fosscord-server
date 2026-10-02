@@ -585,6 +585,33 @@ export interface InteractionModalCreateEvent extends Event {
     };
 }
 
+export interface EmbeddedActivityLocation {
+    id: string;
+    kind: "gc" | "pc";
+    channel_id: Snowflake;
+    guild_id?: Snowflake;
+}
+
+export interface EmbeddedActivityParticipant {
+    user_id: Snowflake;
+    session_id: string;
+    nonce?: string;
+    member?: object;
+}
+
+export interface EmbeddedActivityInstance {
+    application_id: Snowflake;
+    launch_id: Snowflake;
+    composite_instance_id: string;
+    location: EmbeddedActivityLocation;
+    participants: EmbeddedActivityParticipant[];
+}
+
+export interface EmbeddedActivityUpdateV2Event extends Event {
+    event: "EMBEDDED_ACTIVITY_UPDATE_V2";
+    data: EmbeddedActivityInstance & { guild_id?: Snowflake };
+}
+
 export interface GuildApplicationCommandIndexUpdateEvent extends Event {
     event: "GUILD_APPLICATION_COMMAND_INDEX_UPDATE";
     data: {
@@ -912,6 +939,7 @@ export type EVENT =
     | "INTERACTION_SUCCESS"
     | "INTERACTION_FAILURE"
     | "INTERACTION_MODAL_CREATE"
+    | "EMBEDDED_ACTIVITY_UPDATE_V2"
     | "APPLICATION_COMMAND_AUTOCOMPLETE_RESPONSE"
     | "GUILD_APPLICATION_COMMAND_INDEX_UPDATE"
     | "APPLICATION_COMMAND_PERMISSIONS_UPDATE"
