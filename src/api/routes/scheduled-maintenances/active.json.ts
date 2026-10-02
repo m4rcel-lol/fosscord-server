@@ -18,6 +18,7 @@
 
 import { Router, Request, Response } from "express";
 import { route } from "@spacebar/api/middlewares";
+import { getStatusSummary } from "@spacebar/api/util";
 const router = Router({ mergeParams: true });
 
 router.get(
@@ -26,11 +27,9 @@ router.get(
         spacebarOnly: false, // not part of public openapi
         authentication: "never",
     }),
-    (req: Request, res: Response) => {
-        res.json({
-            page: {},
-            scheduled_maintenances: [],
-        });
+    async (req: Request, res: Response) => {
+        const { page, scheduled_maintenances } = await getStatusSummary();
+        res.json({ page, scheduled_maintenances: scheduled_maintenances.filter((m) => m.status !== "scheduled") });
     },
 );
 
