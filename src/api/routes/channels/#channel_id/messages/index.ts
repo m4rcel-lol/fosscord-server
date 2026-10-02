@@ -329,7 +329,8 @@ router.post(
                 const count = await Message.count({
                     where: {
                         channel_id,
-                        timestamp: MoreThan(new Date(Date.now() - limits.absoluteRate.sendMessage.window)),
+                        author_id: req.user_id,
+                        id: MoreThan((BigInt(Date.now() - limits.absoluteRate.sendMessage.window - Snowflake.EPOCH) << 22n).toString()),
                     },
                 });
 

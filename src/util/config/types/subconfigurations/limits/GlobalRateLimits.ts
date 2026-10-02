@@ -20,7 +20,7 @@ export class GlobalRateLimits {
     register: GlobalRateLimit = {
         limit: 25,
         window: 60 * 60 * 1000,
-        enabled: true,
+        enabled: false,
     };
     sendMessage: GlobalRateLimit = {
         limit: 200,
