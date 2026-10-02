@@ -691,13 +691,23 @@
                 ]
             },
             "accent_color": {
-                "type": "integer"
+                "type": [
+                    "null",
+                    "integer"
+                ]
             },
             "theme_colors": {
-                "type": "array",
-                "items": {
-                    "type": "integer"
-                }
+                "anyOf": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
             },
             "popout_animation_particle_type": {
                 "type": [
@@ -715,6 +725,19 @@
                 "type": [
                     "null",
                     "string"
+                ]
+            },
+            "collectibles_sku_ids": {
+                "anyOf": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
                 ]
             }
         },
@@ -1552,7 +1575,10 @@
                 "type": "number"
             },
             "topic": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "icon": {
                 "type": [
@@ -1609,7 +1635,10 @@
                 }
             },
             "parent_id": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "id": {
                 "type": "string"
@@ -1618,12 +1647,40 @@
                 "type": "boolean"
             },
             "rtc_region": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "default_auto_archive_duration": {
-                "type": "integer"
+                "type": [
+                    "null",
+                    "integer"
+                ]
             },
             "default_reaction_emoji": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/DefaultReaction"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "default_sort_order": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "default_forum_layout": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "default_tag_setting": {
                 "type": [
                     "null",
                     "string"
@@ -1675,14 +1732,59 @@
                             ]
                         },
                         "id": {
-                            "type": "string"
+                            "type": [
+                                "null",
+                                "string"
+                            ]
                         }
                     },
                     "required": [
-                        "id",
                         "name"
                     ]
                 }
+            },
+            "template": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "icon_emoji": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            },
+                            "name": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            }
+                        },
+                        "additionalProperties": false
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "theme_color": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "application_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
             }
         },
         "additionalProperties": false,
@@ -2122,6 +2224,9 @@
     "GuildSubscriptionSchema": {
         "type": "object",
         "properties": {
+            "activities": {
+                "type": "boolean"
+            },
             "channels": {
                 "type": "object",
                 "additionalProperties": {
@@ -2133,9 +2238,6 @@
                         }
                     }
                 }
-            },
-            "activities": {
-                "type": "boolean"
             },
             "threads": {
                 "type": "boolean"
@@ -4175,11 +4277,26 @@
             "pronouns": {
                 "type": "string"
             },
+            "avatar_decoration_data": {
+                "$ref": "#/definitions/AvatarDecorationData"
+            },
+            "collectibles": {
+                "$ref": "#/definitions/Collectibles"
+            },
+            "display_name_styles": {
+                "$ref": "#/definitions/DisplayNameStyle"
+            },
             "username": {
                 "type": "string"
             },
             "discriminator": {
                 "type": "string"
+            },
+            "global_name": {
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "public_flags": {
                 "type": "integer"
@@ -4198,15 +4315,6 @@
                 "items": {
                     "type": "string"
                 }
-            },
-            "avatar_decoration_data": {
-                "$ref": "#/definitions/AvatarDecorationData"
-            },
-            "display_name_styles": {
-                "$ref": "#/definitions/DisplayNameStyle"
-            },
-            "collectibles": {
-                "$ref": "#/definitions/Collectibles"
             },
             "primary_guild": {
                 "$ref": "#/definitions/PrimaryGuild"
@@ -4458,7 +4566,7 @@
         "properties": {
             "instanceName": {
                 "type": "string",
-                "default": "Spacebar Instance"
+                "default": "Fosscord"
             },
             "serverName": {
                 "type": [
@@ -4999,26 +5107,72 @@
                 ]
             },
             "nick": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "bio": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "pronouns": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "theme_colors": {
-                "items": [
+                "anyOf": [
                     {
-                        "type": "integer"
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
                     },
                     {
-                        "type": "integer"
+                        "type": "null"
                     }
-                ],
-                "type": "array",
-                "minItems": 2,
-                "maxItems": 2
+                ]
+            },
+            "accent_color": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "profile_effect_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "collectibles_sku_ids": {
+                "anyOf": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "popout_animation_particle_type": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "emoji_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
             }
         },
         "additionalProperties": false,
@@ -5034,7 +5188,10 @@
                 }
             },
             "nick": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "avatar": {
                 "type": [
@@ -5055,6 +5212,97 @@
                 "type": [
                     "null",
                     "string"
+                ]
+            },
+            "avatar_description": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "avatar_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "avatar_decoration_sku_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "collectibles": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "nameplate": {
+                                "anyOf": [
+                                    {
+                                        "type": "object",
+                                        "properties": {
+                                            "sku_id": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "additionalProperties": false,
+                                        "required": [
+                                            "sku_id"
+                                        ]
+                                    },
+                                    {
+                                        "type": "null"
+                                    }
+                                ]
+                            }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                            "nameplate"
+                        ]
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "display_name_font_id": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "display_name_effect_id": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "display_name_colors": {
+                "anyOf": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "vad_colors": {
+                "anyOf": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
                 ]
             }
         },
@@ -5300,6 +5548,16 @@
             },
             "interaction_metadata": {
                 "$ref": "#/definitions/MessageInteractionSchema"
+            },
+            "encrypted": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/E2eeEnvelope"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
             }
         },
         "additionalProperties": false,
@@ -5537,6 +5795,16 @@
             },
             "interaction_metadata": {
                 "$ref": "#/definitions/MessageInteractionSchema"
+            },
+            "encrypted": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/E2eeEnvelope"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
             }
         },
         "additionalProperties": false,
@@ -5581,6 +5849,104 @@
         "required": [
             "name",
             "tags"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "SoundboardSoundCreateSchema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "minLength": 2,
+                "maxLength": 32,
+                "type": "string"
+            },
+            "sound": {
+                "type": "string"
+            },
+            "volume": {
+                "type": "number",
+                "format": "float",
+                "minimum": 0,
+                "maximum": 1
+            },
+            "emoji_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "emoji_name": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "name",
+            "sound"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "SoundboardSoundModifySchema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "minLength": 2,
+                "maxLength": 32,
+                "type": "string"
+            },
+            "volume": {
+                "type": "number",
+                "format": "float",
+                "minimum": 0,
+                "maximum": 1
+            },
+            "emoji_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "emoji_name": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "SendSoundboardSoundSchema": {
+        "type": "object",
+        "properties": {
+            "sound_id": {
+                "type": "string"
+            },
+            "source_guild_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "emoji_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "emoji_name": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "sound_id"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -6182,6 +6548,13 @@
                 "minLength": 2,
                 "type": "string"
             },
+            "global_name": {
+                "maxLength": 32,
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
             "avatar": {
                 "type": [
                     "null",
@@ -6230,57 +6603,148 @@
                 "maxLength": 4,
                 "type": "string"
             },
+            "avatar_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "email_token": {
+                "type": "string"
+            },
+            "legacy_username": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "date_of_birth": {
+                "type": "string"
+            },
+            "flags": {
+                "type": "integer"
+            },
             "display_name_colors": {
-                "type": "array",
-                "items": {
-                    "type": "integer"
-                }
+                "anyOf": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
             },
             "display_name_effect_id": {
-                "enum": [
-                    0,
-                    1,
-                    1001,
-                    1002,
-                    1003,
-                    1004,
-                    2,
-                    3,
-                    4,
-                    5,
-                    6,
-                    7,
-                    8
-                ],
-                "type": "number"
+                "anyOf": [
+                    {
+                        "enum": [
+                            0,
+                            1,
+                            1001,
+                            1002,
+                            1003,
+                            1004,
+                            2,
+                            3,
+                            4,
+                            5,
+                            6,
+                            7,
+                            8
+                        ],
+                        "type": "number"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
             },
             "display_name_font_id": {
-                "enum": [
-                    0,
-                    1,
-                    10,
-                    11,
-                    12,
-                    13,
-                    14,
-                    15,
-                    16,
-                    2,
-                    3,
-                    4,
-                    5,
-                    6,
-                    7,
-                    8,
-                    9
-                ],
-                "type": "number"
+                "anyOf": [
+                    {
+                        "enum": [
+                            0,
+                            1,
+                            10,
+                            11,
+                            12,
+                            13,
+                            14,
+                            15,
+                            16,
+                            2,
+                            3,
+                            4,
+                            5,
+                            6,
+                            7,
+                            8,
+                            9
+                        ],
+                        "type": "number"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "avatar_decoration_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "avatar_decoration_sku_id": {
                 "type": [
                     "null",
                     "string"
                 ]
+            },
+            "nameplate_sku_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "primary_guild_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "vad_colors": {
+                "anyOf": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "typing_indicator_style": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "push_provider": {
+                "type": "string"
+            },
+            "push_token": {
+                "type": "string"
+            },
+            "push_voip_provider": {
+                "type": "string"
+            },
+            "push_voip_token": {
+                "type": "string"
             }
         },
         "additionalProperties": false,
@@ -6691,6 +7155,7 @@
             },
             "type": {
                 "enum": [
+                    10,
                     11,
                     12
                 ],
@@ -6888,6 +7353,12 @@
                     "string"
                 ]
             },
+            "template": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
             "nsfw": {
                 "type": "boolean"
             },
@@ -6898,7 +7369,10 @@
                 }
             },
             "topic": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "bitrate": {
                 "type": "integer"
@@ -6943,15 +7417,46 @@
                 }
             },
             "parent_id": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "rtc_region": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "default_auto_archive_duration": {
-                "type": "integer"
+                "type": [
+                    "null",
+                    "integer"
+                ]
             },
             "default_reaction_emoji": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/DefaultReaction"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "default_sort_order": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "default_forum_layout": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "default_tag_setting": {
                 "type": [
                     "null",
                     "string"
@@ -6971,6 +7476,43 @@
             },
             "locked": {
                 "type": "boolean"
+            },
+            "icon_emoji": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            },
+                            "name": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            }
+                        },
+                        "additionalProperties": false
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "theme_color": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "application_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
             }
         },
         "additionalProperties": false,
@@ -7459,6 +8001,238 @@
             "id",
             "name",
             "type"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eePrekeySchema": {
+        "type": "object",
+        "properties": {
+            "id": {
+                "type": "integer"
+            },
+            "public_key": {
+                "type": "string"
+            },
+            "signature": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "id",
+            "public_key",
+            "signature"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeIdentityUpdateSchema": {
+        "type": "object",
+        "properties": {
+            "public_key": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "public_key"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeDeviceCreateSchema": {
+        "type": "object",
+        "properties": {
+            "device_id": {
+                "type": "string"
+            },
+            "signing_key": {
+                "type": "string"
+            },
+            "identity_signature": {
+                "type": "string"
+            },
+            "name": {
+                "type": "string"
+            },
+            "prekey": {
+                "$ref": "#/definitions/E2eePrekeySchema"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "device_id",
+            "prekey",
+            "signing_key"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeKeysQuerySchema": {
+        "type": "object",
+        "properties": {
+            "user_ids": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "channel_id": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "ChannelE2eeUpdateSchema": {
+        "type": "object",
+        "properties": {
+            "enabled": {
+                "type": "boolean"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "enabled"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeDeviceResponse": {
+        "type": "object",
+        "properties": {
+            "device_id": {
+                "type": "string"
+            },
+            "signing_key": {
+                "type": "string"
+            },
+            "identity_signature": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "status": {
+                "$ref": "#/definitions/E2eeDeviceStatus"
+            },
+            "name": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "prekey": {
+                "$ref": "#/definitions/E2eePrekeySchema"
+            },
+            "created_at": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "created_at",
+            "device_id",
+            "identity_signature",
+            "name",
+            "prekey",
+            "signing_key",
+            "status"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeUserKeysResponse": {
+        "type": "object",
+        "properties": {
+            "identity_key": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "devices": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/E2eeDeviceResponse"
+                }
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "devices",
+            "identity_key"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeKeysQueryResponse": {
+        "type": "object",
+        "properties": {
+            "users": {
+                "type": "object",
+                "additionalProperties": {
+                    "$ref": "#/definitions/E2eeUserKeysResponse"
+                }
+            },
+            "channel_members": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "users"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeStateResponse": {
+        "type": "object",
+        "properties": {
+            "identity_key": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "devices": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/E2eeDeviceResponse"
+                }
+            },
+            "channels": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "channels",
+            "devices",
+            "identity_key"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "ChannelE2eeResponse": {
+        "type": "object",
+        "properties": {
+            "channel_id": {
+                "type": "string"
+            },
+            "enabled": {
+                "type": "boolean"
+            },
+            "enabled_at": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "channel_id",
+            "enabled",
+            "enabled_at"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -8645,6 +9419,9 @@
             },
             "v": {
                 "type": "integer"
+            },
+            "qos_token": {
+                "type": "string"
             }
         },
         "additionalProperties": false,
@@ -9615,6 +10392,15 @@
                     }
                 ]
             },
+            "avatar_decoration_data": {
+                "$ref": "#/definitions/AvatarDecorationData"
+            },
+            "collectibles": {
+                "$ref": "#/definitions/Collectibles"
+            },
+            "display_name_styles": {
+                "$ref": "#/definitions/DisplayNameStyle"
+            },
             "user": {
                 "$ref": "#/definitions/PublicUser"
             },
@@ -9641,85 +10427,6 @@
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
-    "PublicUser": {
-        "type": "object",
-        "properties": {
-            "id": {
-                "description": "A Twitter-like snowflake, except the epoch is 2015-01-01T00:00:00.000Z\n```\nIf we have a snowflake '266241948824764416' we can represent it as binary:\n\n64                                          22     17     12          0\n 000000111011000111100001101001000101000000  00001  00000  000000000000\n      number of ms since Discord epoch       worker  pid    increment\n```",
-                "type": "string"
-            },
-            "premium_since": {
-                "type": "string",
-                "format": "date-time"
-            },
-            "avatar": {
-                "type": "string"
-            },
-            "banner": {
-                "type": "string"
-            },
-            "bio": {
-                "type": "string"
-            },
-            "theme_colors": {
-                "type": "array",
-                "items": {
-                    "type": "integer"
-                }
-            },
-            "pronouns": {
-                "type": "string"
-            },
-            "username": {
-                "type": "string"
-            },
-            "discriminator": {
-                "type": "string"
-            },
-            "public_flags": {
-                "type": "integer"
-            },
-            "accent_color": {
-                "type": "integer"
-            },
-            "bot": {
-                "type": "boolean"
-            },
-            "premium_type": {
-                "type": "integer"
-            },
-            "badge_ids": {
-                "type": "array",
-                "items": {
-                    "type": "string"
-                }
-            },
-            "avatar_decoration_data": {
-                "$ref": "#/definitions/AvatarDecorationData"
-            },
-            "display_name_styles": {
-                "$ref": "#/definitions/DisplayNameStyle"
-            },
-            "collectibles": {
-                "$ref": "#/definitions/Collectibles"
-            },
-            "primary_guild": {
-                "$ref": "#/definitions/PrimaryGuild"
-            }
-        },
-        "additionalProperties": false,
-        "required": [
-            "bio",
-            "bot",
-            "discriminator",
-            "id",
-            "premium_since",
-            "premium_type",
-            "public_flags",
-            "username"
-        ],
-        "$schema": "http://json-schema.org/draft-07/schema#"
-    },
     "AvatarDecorationData": {
         "type": "object",
         "properties": {
@@ -9742,30 +10449,6 @@
             "asset",
             "expires_at",
             "sku_id"
-        ],
-        "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "DisplayNameStyle": {
-        "type": "object",
-        "properties": {
-            "font_id": {
-                "type": "integer"
-            },
-            "effect_id": {
-                "type": "integer"
-            },
-            "colors": {
-                "type": "array",
-                "items": {
-                    "type": "integer"
-                }
-            }
-        },
-        "additionalProperties": false,
-        "required": [
-            "colors",
-            "effect_id",
-            "font_id"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -9819,6 +10502,115 @@
             "label",
             "palette",
             "sku_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "DisplayNameStyle": {
+        "type": "object",
+        "properties": {
+            "font_id": {
+                "type": "integer"
+            },
+            "effect_id": {
+                "type": "integer"
+            },
+            "colors": {
+                "type": "array",
+                "items": {
+                    "type": "integer"
+                }
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "colors",
+            "effect_id",
+            "font_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "PublicUser": {
+        "type": "object",
+        "properties": {
+            "id": {
+                "description": "A Twitter-like snowflake, except the epoch is 2015-01-01T00:00:00.000Z\n```\nIf we have a snowflake '266241948824764416' we can represent it as binary:\n\n64                                          22     17     12          0\n 000000111011000111100001101001000101000000  00001  00000  000000000000\n      number of ms since Discord epoch       worker  pid    increment\n```",
+                "type": "string"
+            },
+            "premium_since": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "avatar": {
+                "type": "string"
+            },
+            "banner": {
+                "type": "string"
+            },
+            "bio": {
+                "type": "string"
+            },
+            "theme_colors": {
+                "type": "array",
+                "items": {
+                    "type": "integer"
+                }
+            },
+            "pronouns": {
+                "type": "string"
+            },
+            "avatar_decoration_data": {
+                "$ref": "#/definitions/AvatarDecorationData"
+            },
+            "collectibles": {
+                "$ref": "#/definitions/Collectibles"
+            },
+            "display_name_styles": {
+                "$ref": "#/definitions/DisplayNameStyle"
+            },
+            "username": {
+                "type": "string"
+            },
+            "discriminator": {
+                "type": "string"
+            },
+            "global_name": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "public_flags": {
+                "type": "integer"
+            },
+            "accent_color": {
+                "type": "integer"
+            },
+            "bot": {
+                "type": "boolean"
+            },
+            "premium_type": {
+                "type": "integer"
+            },
+            "badge_ids": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "primary_guild": {
+                "$ref": "#/definitions/PrimaryGuild"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "bio",
+            "bot",
+            "discriminator",
+            "id",
+            "premium_since",
+            "premium_type",
+            "public_flags",
+            "username"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -10462,7 +11254,46 @@
                 "$ref": "#/definitions/ThreadMetadata"
             },
             "member": {
-                "$ref": "#/definitions/ThreadMember"
+                "type": "object",
+                "properties": {
+                    "member": {
+                        "$ref": "#/definitions/PublicMember"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "user_id": {
+                        "type": "string"
+                    },
+                    "join_timestamp": {
+                        "type": "string"
+                    },
+                    "flags": {
+                        "$ref": "#/definitions/ThreadMemberFlags"
+                    },
+                    "muted": {
+                        "type": "boolean"
+                    },
+                    "mute_config": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/definitions/ThreadMemberMuteConfig"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    }
+                },
+                "additionalProperties": false,
+                "required": [
+                    "flags",
+                    "id",
+                    "join_timestamp",
+                    "mute_config",
+                    "muted",
+                    "user_id"
+                ]
             },
             "default_auto_archive_duration": {
                 "type": [
@@ -10492,13 +11323,20 @@
                 }
             },
             "default_reaction_emoji": {
-                "type": [
-                    "null",
-                    "string"
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/DefaultReaction"
+                    },
+                    {
+                        "type": "null"
+                    }
                 ]
             },
             "default_forum_layout": {
-                "type": "integer"
+                "type": [
+                    "null",
+                    "integer"
+                ]
             },
             "default_sort_order": {
                 "type": [
@@ -10507,7 +11345,10 @@
                 ]
             },
             "default_tag_setting": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "is_message_request": {
                 "type": "boolean"
@@ -10651,48 +11492,69 @@
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
-    "ThreadMember": {
+    "ThreadMemberFlags": {
+        "type": "number",
+        "enum": [
+            0,
+            1,
+            2,
+            4,
+            8
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "ThreadMemberMuteConfig": {
         "type": "object",
         "properties": {
-            "index": {
-                "type": "string"
+            "end_time": {
+                "type": "string",
+                "format": "date-time"
             },
-            "id": {
+            "selected_time_window": {
+                "type": "integer"
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "Tag": {
+        "type": "object",
+        "properties": {
+            "channel_id": {
                 "type": "string"
             },
             "channel": {
                 "$ref": "#/definitions/Channel"
             },
-            "member_idx": {
+            "name": {
                 "type": "string"
             },
-            "member": {
-                "$ref": "#/definitions/Member"
+            "moderated": {
+                "type": "boolean",
+                "default": false
             },
-            "join_timestamp": {
-                "type": "string",
-                "format": "date-time"
+            "emoji_id": {
+                "type": "string"
             },
-            "muted": {
-                "type": "boolean"
+            "emoji_name": {
+                "type": "string"
             },
-            "mute_config": {
-                "$ref": "#/definitions/ThreadMemberMuteConfig"
+            "position": {
+                "type": "integer",
+                "default": 0
             },
-            "flags": {
-                "$ref": "#/definitions/ThreadMemberFlags"
+            "id": {
+                "type": "string"
             }
         },
         "additionalProperties": false,
         "required": [
             "channel",
-            "flags",
+            "channel_id",
             "id",
-            "index",
-            "join_timestamp",
-            "member",
-            "member_idx",
-            "muted"
+            "moderated",
+            "name",
+            "position"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -10763,7 +11625,10 @@
                 ]
             },
             "default_auto_archive_duration": {
-                "type": "integer"
+                "type": [
+                    "null",
+                    "integer"
+                ]
             },
             "permission_overwrites": {
                 "type": "array",
@@ -10788,7 +11653,10 @@
                 "type": "integer"
             },
             "topic": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "invites": {
                 "type": "array",
@@ -10861,6 +11729,45 @@
                     "string"
                 ]
             },
+            "e2ee_enabled_at": {
+                "anyOf": [
+                    {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "default_reaction_emoji": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/DefaultReaction"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "default_sort_order": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "default_forum_layout": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "default_tag_setting": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
             "position": {
                 "description": "Must be calculated Channel.calculatePosition",
                 "type": "integer"
@@ -10900,6 +11807,17 @@
             "closed": {
                 "type": "boolean"
             },
+            "message_request_timestamp": {
+                "anyOf": [
+                    {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
             "id": {
                 "type": "string"
             }
@@ -10923,6 +11841,12 @@
             },
             "discriminator": {
                 "type": "string"
+            },
+            "global_name": {
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "avatar": {
                 "type": "string"
@@ -11100,6 +12024,32 @@
             "primary_guild": {
                 "$ref": "#/definitions/PrimaryGuild"
             },
+            "profile_collectibles": {
+                "anyOf": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/definitions/ProfileCollectible"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "recent_avatars": {
+                "anyOf": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/definitions/RecentAvatar"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
             "avatar_decoration": {
                 "$ref": "#/definitions/AvatarDecoration"
             },
@@ -11170,6 +12120,9 @@
                 "type": "object",
                 "properties": {
                     "platform": {
+                        "type": "string"
+                    },
+                    "browser": {
                         "type": "string"
                     },
                     "os": {
@@ -11716,6 +12669,56 @@
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
+    "ProfileCollectible": {
+        "type": "object",
+        "properties": {
+            "sku_id": {
+                "description": "A Twitter-like snowflake, except the epoch is 2015-01-01T00:00:00.000Z\n```\nIf we have a snowflake '266241948824764416' we can represent it as binary:\n\n64                                          22     17     12          0\n 000000111011000111100001101001000101000000  00001  00000  000000000000\n      number of ms since Discord epoch       worker  pid    increment\n```",
+                "type": "string"
+            },
+            "type": {
+                "type": "integer"
+            },
+            "expires_at": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "expires_at",
+            "sku_id",
+            "type"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "RecentAvatar": {
+        "type": "object",
+        "properties": {
+            "id": {
+                "description": "A Twitter-like snowflake, except the epoch is 2015-01-01T00:00:00.000Z\n```\nIf we have a snowflake '266241948824764416' we can represent it as binary:\n\n64                                          22     17     12          0\n 000000111011000111100001101001000101000000  00001  00000  000000000000\n      number of ms since Discord epoch       worker  pid    increment\n```",
+                "type": "string"
+            },
+            "storage_hash": {
+                "type": "string"
+            },
+            "description": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "description",
+            "id",
+            "storage_hash"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
     "AvatarDecoration": {
         "type": "object",
         "properties": {
@@ -11767,6 +12770,232 @@
             "public",
             "uploader",
             "uploader_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "ThreadMember": {
+        "type": "object",
+        "properties": {
+            "index": {
+                "type": "string"
+            },
+            "id": {
+                "type": "string"
+            },
+            "channel": {
+                "$ref": "#/definitions/Channel"
+            },
+            "member_idx": {
+                "type": "string"
+            },
+            "member": {
+                "$ref": "#/definitions/Member"
+            },
+            "user_id": {
+                "type": "string"
+            },
+            "join_timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "muted": {
+                "type": "boolean"
+            },
+            "mute_config": {
+                "$ref": "#/definitions/ThreadMemberMuteConfig"
+            },
+            "flags": {
+                "$ref": "#/definitions/ThreadMemberFlags"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "channel",
+            "flags",
+            "id",
+            "index",
+            "join_timestamp",
+            "member",
+            "member_idx",
+            "muted",
+            "user_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "Member": {
+        "type": "object",
+        "properties": {
+            "index": {
+                "type": "string"
+            },
+            "id": {
+                "type": "string"
+            },
+            "user": {
+                "$ref": "#/definitions/User"
+            },
+            "guild_id": {
+                "type": "string"
+            },
+            "guild": {
+                "$ref": "#/definitions/Guild"
+            },
+            "nick": {
+                "type": "string"
+            },
+            "roles": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/Role"
+                }
+            },
+            "joined_at": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "premium_since": {
+                "type": "integer"
+            },
+            "deaf": {
+                "type": "boolean"
+            },
+            "mute": {
+                "type": "boolean"
+            },
+            "pending": {
+                "type": "boolean"
+            },
+            "source_invite_code": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "join_source_type": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "inviter_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "onboarding_responses": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "onboarding_responses": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "onboarding_prompts_seen": {
+                                "$ref": "#/definitions/Record%3Cstring%2Cnumber%3E"
+                            },
+                            "onboarding_responses_seen": {
+                                "$ref": "#/definitions/Record%3Cstring%2Cnumber%3E"
+                            }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                            "onboarding_prompts_seen",
+                            "onboarding_responses",
+                            "onboarding_responses_seen"
+                        ]
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "settings": {
+                "$ref": "#/definitions/UserGuildSettings"
+            },
+            "last_message_id": {
+                "type": "string"
+            },
+            "joined_by": {
+                "type": "string"
+            },
+            "avatar": {
+                "type": "string"
+            },
+            "banner": {
+                "type": "string"
+            },
+            "bio": {
+                "type": "string"
+            },
+            "theme_colors": {
+                "type": "array",
+                "items": {
+                    "type": "integer"
+                }
+            },
+            "pronouns": {
+                "type": "string"
+            },
+            "communication_disabled_until": {
+                "anyOf": [
+                    {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "avatar_decoration_data": {
+                "$ref": "#/definitions/AvatarDecorationData"
+            },
+            "display_name_styles": {
+                "$ref": "#/definitions/DisplayNameStyle"
+            },
+            "collectibles": {
+                "$ref": "#/definitions/Collectibles"
+            },
+            "profile_collectibles": {
+                "anyOf": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/definitions/ProfileCollectible"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "flags": {
+                "type": "integer",
+                "default": 0
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "banner",
+            "bio",
+            "communication_disabled_until",
+            "deaf",
+            "flags",
+            "guild",
+            "guild_id",
+            "id",
+            "index",
+            "joined_at",
+            "joined_by",
+            "mute",
+            "pending",
+            "roles",
+            "settings",
+            "user"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -12158,170 +13387,6 @@
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
-    "Member": {
-        "type": "object",
-        "properties": {
-            "index": {
-                "type": "string"
-            },
-            "id": {
-                "type": "string"
-            },
-            "user": {
-                "$ref": "#/definitions/User"
-            },
-            "guild_id": {
-                "type": "string"
-            },
-            "guild": {
-                "$ref": "#/definitions/Guild"
-            },
-            "nick": {
-                "type": "string"
-            },
-            "roles": {
-                "type": "array",
-                "items": {
-                    "$ref": "#/definitions/Role"
-                }
-            },
-            "joined_at": {
-                "type": "string",
-                "format": "date-time"
-            },
-            "premium_since": {
-                "type": "integer"
-            },
-            "deaf": {
-                "type": "boolean"
-            },
-            "mute": {
-                "type": "boolean"
-            },
-            "pending": {
-                "type": "boolean"
-            },
-            "source_invite_code": {
-                "type": [
-                    "null",
-                    "string"
-                ]
-            },
-            "join_source_type": {
-                "type": [
-                    "null",
-                    "integer"
-                ]
-            },
-            "inviter_id": {
-                "type": [
-                    "null",
-                    "string"
-                ]
-            },
-            "onboarding_responses": {
-                "anyOf": [
-                    {
-                        "type": "object",
-                        "properties": {
-                            "onboarding_responses": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string"
-                                }
-                            },
-                            "onboarding_prompts_seen": {
-                                "$ref": "#/definitions/Record%3Cstring%2Cnumber%3E"
-                            },
-                            "onboarding_responses_seen": {
-                                "$ref": "#/definitions/Record%3Cstring%2Cnumber%3E"
-                            }
-                        },
-                        "additionalProperties": false,
-                        "required": [
-                            "onboarding_prompts_seen",
-                            "onboarding_responses",
-                            "onboarding_responses_seen"
-                        ]
-                    },
-                    {
-                        "type": "null"
-                    }
-                ]
-            },
-            "settings": {
-                "$ref": "#/definitions/UserGuildSettings"
-            },
-            "last_message_id": {
-                "type": "string"
-            },
-            "joined_by": {
-                "type": "string"
-            },
-            "avatar": {
-                "type": "string"
-            },
-            "banner": {
-                "type": "string"
-            },
-            "bio": {
-                "type": "string"
-            },
-            "theme_colors": {
-                "type": "array",
-                "items": {
-                    "type": "integer"
-                }
-            },
-            "pronouns": {
-                "type": "string"
-            },
-            "communication_disabled_until": {
-                "anyOf": [
-                    {
-                        "type": "string",
-                        "format": "date-time"
-                    },
-                    {
-                        "type": "null"
-                    }
-                ]
-            },
-            "avatar_decoration_data": {
-                "$ref": "#/definitions/AvatarDecorationData"
-            },
-            "display_name_styles": {
-                "$ref": "#/definitions/DisplayNameStyle"
-            },
-            "collectibles": {
-                "$ref": "#/definitions/Collectibles"
-            },
-            "flags": {
-                "type": "integer",
-                "default": 0
-            }
-        },
-        "additionalProperties": false,
-        "required": [
-            "banner",
-            "bio",
-            "communication_disabled_until",
-            "deaf",
-            "flags",
-            "guild",
-            "guild_id",
-            "id",
-            "index",
-            "joined_at",
-            "joined_by",
-            "mute",
-            "pending",
-            "roles",
-            "settings",
-            "user"
-        ],
-        "$schema": "http://json-schema.org/draft-07/schema#"
-    },
     "Role": {
         "type": "object",
         "properties": {
@@ -12416,133 +13481,6 @@
         "additionalProperties": false,
         "required": [
             "primary_color"
-        ],
-        "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "UserGuildSettings": {
-        "type": "object",
-        "properties": {
-            "channel_overrides": {
-                "anyOf": [
-                    {
-                        "type": "object",
-                        "additionalProperties": {
-                            "$ref": "#/definitions/ChannelOverride"
-                        }
-                    },
-                    {
-                        "type": "null"
-                    }
-                ]
-            },
-            "message_notifications": {
-                "type": "integer"
-            },
-            "mobile_push": {
-                "type": "boolean"
-            },
-            "mute_config": {
-                "anyOf": [
-                    {
-                        "$ref": "#/definitions/MuteConfig"
-                    },
-                    {
-                        "type": "null"
-                    }
-                ]
-            },
-            "muted": {
-                "type": "boolean"
-            },
-            "suppress_everyone": {
-                "type": "boolean"
-            },
-            "suppress_roles": {
-                "type": "boolean"
-            },
-            "version": {
-                "type": "integer"
-            },
-            "guild_id": {
-                "type": [
-                    "null",
-                    "string"
-                ]
-            },
-            "flags": {
-                "type": "integer"
-            },
-            "mute_scheduled_events": {
-                "type": "boolean"
-            },
-            "hide_muted_channels": {
-                "type": "boolean"
-            },
-            "notify_highlights": {
-                "type": "integer",
-                "const": 0
-            }
-        },
-        "additionalProperties": false,
-        "required": [
-            "channel_overrides",
-            "flags",
-            "guild_id",
-            "hide_muted_channels",
-            "message_notifications",
-            "mobile_push",
-            "mute_config",
-            "mute_scheduled_events",
-            "muted",
-            "notify_highlights",
-            "suppress_everyone",
-            "suppress_roles",
-            "version"
-        ],
-        "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "ChannelOverride": {
-        "type": "object",
-        "properties": {
-            "message_notifications": {
-                "type": "integer"
-            },
-            "mute_config": {
-                "$ref": "#/definitions/MuteConfig"
-            },
-            "muted": {
-                "type": "boolean"
-            },
-            "channel_id": {
-                "type": [
-                    "null",
-                    "string"
-                ]
-            }
-        },
-        "additionalProperties": false,
-        "required": [
-            "channel_id",
-            "message_notifications",
-            "mute_config",
-            "muted"
-        ],
-        "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "MuteConfig": {
-        "type": "object",
-        "properties": {
-            "end_time": {
-                "type": "integer"
-            },
-            "selected_time_window": {
-                "type": "integer"
-            }
-        },
-        "additionalProperties": false,
-        "required": [
-            "end_time",
-            "selected_time_window"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -12998,6 +13936,9 @@
             "format_type": {
                 "$ref": "#/definitions/StickerFormatType"
             },
+            "sort_value": {
+                "type": "integer"
+            },
             "id": {
                 "type": "string"
             }
@@ -13029,6 +13970,9 @@
                 "items": {
                     "$ref": "#/definitions/Sticker"
                 }
+            },
+            "sku_id": {
+                "type": "string"
             },
             "cover_sticker_id": {
                 "type": "string"
@@ -13934,6 +14878,133 @@
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
+    "UserGuildSettings": {
+        "type": "object",
+        "properties": {
+            "channel_overrides": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "additionalProperties": {
+                            "$ref": "#/definitions/ChannelOverride"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "message_notifications": {
+                "type": "integer"
+            },
+            "mobile_push": {
+                "type": "boolean"
+            },
+            "mute_config": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/MuteConfig"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "muted": {
+                "type": "boolean"
+            },
+            "suppress_everyone": {
+                "type": "boolean"
+            },
+            "suppress_roles": {
+                "type": "boolean"
+            },
+            "version": {
+                "type": "integer"
+            },
+            "guild_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "flags": {
+                "type": "integer"
+            },
+            "mute_scheduled_events": {
+                "type": "boolean"
+            },
+            "hide_muted_channels": {
+                "type": "boolean"
+            },
+            "notify_highlights": {
+                "type": "integer",
+                "const": 0
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "channel_overrides",
+            "flags",
+            "guild_id",
+            "hide_muted_channels",
+            "message_notifications",
+            "mobile_push",
+            "mute_config",
+            "mute_scheduled_events",
+            "muted",
+            "notify_highlights",
+            "suppress_everyone",
+            "suppress_roles",
+            "version"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "ChannelOverride": {
+        "type": "object",
+        "properties": {
+            "message_notifications": {
+                "type": "integer"
+            },
+            "mute_config": {
+                "$ref": "#/definitions/MuteConfig"
+            },
+            "muted": {
+                "type": "boolean"
+            },
+            "channel_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "channel_id",
+            "message_notifications",
+            "mute_config",
+            "muted"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "MuteConfig": {
+        "type": "object",
+        "properties": {
+            "end_time": {
+                "type": "integer"
+            },
+            "selected_time_window": {
+                "type": "integer"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "end_time",
+            "selected_time_window"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
     "Message": {
         "type": "object",
         "properties": {
@@ -14190,6 +15261,16 @@
                     "$ref": "#/definitions/MessageSnapshot"
                 }
             },
+            "encrypted": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/E2eeEnvelope"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
             "isWebhook": {
                 "type": "boolean"
             },
@@ -14427,6 +15508,9 @@
             },
             "width": {
                 "type": "integer"
+            },
+            "content_type": {
+                "type": "string"
             }
         },
         "additionalProperties": false,
@@ -14442,6 +15526,18 @@
                 "$ref": "#/definitions/PartialEmoji"
             },
             "user_ids": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "burst_user_ids": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "burst_colors": {
                 "type": "array",
                 "items": {
                     "type": "string"
@@ -15307,6 +16403,9 @@
             "allow_multiselect": {
                 "type": "boolean"
             },
+            "layout_type": {
+                "type": "integer"
+            },
             "results": {
                 "$ref": "#/definitions/PollResult"
             }
@@ -15644,6 +16743,78 @@
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
+    "E2eeEnvelope": {
+        "type": "object",
+        "properties": {
+            "v": {
+                "type": "integer"
+            },
+            "alg": {
+                "type": "string"
+            },
+            "sender_device": {
+                "type": "string"
+            },
+            "mid": {
+                "type": "string"
+            },
+            "iv": {
+                "type": "string"
+            },
+            "ct": {
+                "type": "string"
+            },
+            "keys": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/E2eeEnvelopeKey"
+                }
+            },
+            "sig": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "alg",
+            "ct",
+            "iv",
+            "keys",
+            "sender_device",
+            "sig",
+            "v"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeEnvelopeKey": {
+        "type": "object",
+        "properties": {
+            "user_id": {
+                "type": "string"
+            },
+            "device_id": {
+                "type": "string"
+            },
+            "prekey_id": {
+                "type": "integer"
+            },
+            "enc": {
+                "type": "string"
+            },
+            "wrapped": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "device_id",
+            "enc",
+            "prekey_id",
+            "user_id",
+            "wrapped"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
     "ReadState": {
         "type": "object",
         "properties": {
@@ -15724,64 +16895,26 @@
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
-    "Tag": {
+    "DefaultReaction": {
         "type": "object",
         "properties": {
-            "channel_id": {
-                "type": "string"
-            },
-            "channel": {
-                "$ref": "#/definitions/Channel"
-            },
-            "name": {
-                "type": "string"
-            },
-            "moderated": {
-                "type": "boolean",
-                "default": false
-            },
             "emoji_id": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "emoji_name": {
-                "type": "string"
-            },
-            "id": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             }
         },
         "additionalProperties": false,
         "required": [
-            "channel",
-            "channel_id",
-            "id",
-            "moderated",
-            "name"
-        ],
-        "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "ThreadMemberMuteConfig": {
-        "type": "object",
-        "properties": {
-            "end_time": {
-                "type": "string",
-                "format": "date-time"
-            },
-            "selected_time_window": {
-                "type": "integer"
-            }
-        },
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "ThreadMemberFlags": {
-        "type": "number",
-        "enum": [
-            0,
-            1,
-            2,
-            4,
-            8
+            "emoji_id",
+            "emoji_name"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -17712,7 +18845,7 @@
             "reactions": {
                 "type": "array",
                 "items": {
-                    "$ref": "#/definitions/Reaction"
+                    "$ref": "#/definitions/PublicReaction"
                 }
             },
             "nonce": {
@@ -17793,6 +18926,9 @@
             },
             "webhook": {
                 "$ref": "#/definitions/PublicMessageWebhook"
+            },
+            "encrypted": {
+                "$ref": "#/definitions/E2eeEnvelope"
             }
         },
         "additionalProperties": false,
@@ -17814,6 +18950,55 @@
             "tts",
             "type",
             "webhook"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "PublicReaction": {
+        "type": "object",
+        "properties": {
+            "count": {
+                "type": "integer"
+            },
+            "count_details": {
+                "type": "object",
+                "properties": {
+                    "burst": {
+                        "type": "integer"
+                    },
+                    "normal": {
+                        "type": "integer"
+                    }
+                },
+                "additionalProperties": false,
+                "required": [
+                    "burst",
+                    "normal"
+                ]
+            },
+            "emoji": {
+                "$ref": "#/definitions/PartialEmoji"
+            },
+            "me": {
+                "type": "boolean"
+            },
+            "me_burst": {
+                "type": "boolean"
+            },
+            "burst_colors": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "burst_colors",
+            "count",
+            "count_details",
+            "emoji",
+            "me",
+            "me_burst"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -19075,6 +20260,15 @@
             "id",
             "name"
         ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeDeviceStatus": {
+        "enum": [
+            "active",
+            "pending",
+            "revoked"
+        ],
+        "type": "string",
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "AuditLogEntry": {
