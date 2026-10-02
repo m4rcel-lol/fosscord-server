@@ -17,10 +17,9 @@
 */
 
 import { Request, Response, Router } from "express";
-import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
 import { AuditLog, Channel, Guild, Member } from "@spacebar/database";
-import { DiscordApiErrors, GuildUpdateEvent, Permissions, emitEvent, getPermission, getRights, handleFile } from "@spacebar/util";
+import { ApiError, DiscordApiErrors, GuildUpdateEvent, Permissions, emitEvent, getPermission, getRights, handleFile } from "@spacebar/util";
 import { AuditLogEvents, GuildCreateResponse, GuildUpdateSchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
@@ -32,7 +31,7 @@ router.get(
             "200": {
                 body: "APIGuildWithJoinedAt",
             },
-            401: {
+            403: {
                 body: "APIErrorResponse",
             },
             404: {
@@ -44,7 +43,7 @@ router.get(
         const { guild_id } = req.params as { [key: string]: string };
 
         const [guild, member] = await Promise.all([Guild.findOneOrFail({ where: { id: guild_id } }), Member.findOne({ where: { guild_id: guild_id, id: req.user_id } })]);
-        if (!member) throw new HTTPError("You are not a member of the guild you are trying to access", 401);
+        if (!member) throw new ApiError("Missing Access", 50001, 403);
 
         return res.send({
             ...guild,
