@@ -81,6 +81,7 @@ export async function setupListener(this: WebSocket) {
             user: { id: this.user_id, roles: member.roles.map((x) => x.id), communication_disabled_until: member.communication_disabled_until ?? null, flags: user?.flags ?? 0 },
             guild: { id: guild.id, owner_id: guild.owner_id!, roles: member.roles },
         });
+        permission.cache = { roles: member.roles, user_id: this.user_id };
         this.permissions[guild.id] = permission;
         guildIds.push(guild.id);
 
