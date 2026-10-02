@@ -8615,6 +8615,12 @@
             "created_at": {
                 "type": "string"
             },
+            "revoked_at": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
             "session": {
                 "anyOf": [
                     {
@@ -8672,6 +8678,12 @@
         "type": "object",
         "properties": {
             "identity_key": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "identity_created_at": {
                 "type": [
                     "null",
                     "string"
@@ -8737,6 +8749,12 @@
         "type": "object",
         "properties": {
             "identity_key": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "identity_created_at": {
                 "type": [
                     "null",
                     "string"
@@ -17048,6 +17066,7 @@
             61,
             62,
             63,
+            1000,
             255
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
@@ -21811,6 +21830,7 @@
             "approve",
             "cancel",
             "deny",
+            "invite",
             "offer",
             "request",
             "reveal"

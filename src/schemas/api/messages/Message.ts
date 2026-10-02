@@ -86,6 +86,7 @@ export enum MessageType {
     REPORT_TO_MOD_BAN_USER = 61,
     REPORT_TO_MOD_CLOSED_REPORT = 62,
     EMOJI_ADDED = 63,
+    E2EE_ENABLED = 1000,
     UNHANDLED = 255,
 }
 
