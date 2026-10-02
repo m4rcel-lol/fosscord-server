@@ -23,6 +23,7 @@ import { route } from "@spacebar/api/middlewares";
 import { getBurstColors, handleAppealVote } from "@spacebar/api/util";
 import { Channel, Emoji, Member, Message, User } from "@spacebar/database";
 import {
+    DiscordApiErrors,
     emitEvent,
     getPermission,
     MessageReactionAddEvent,
@@ -65,19 +66,19 @@ async function removeReaction(req: Request, res: Response, type: ReactionType) {
     const emoji = getEmoji(req.params.emoji as string);
 
     const channel = await Channel.findOneOrFail({ where: { id: channel_id } });
-    const message = await Message.findOneOrFail({ where: { id: message_id, channel_id } });
 
     if (user_id === "@me") user_id = req.user_id;
     else if (user_id !== req.user_id) (await getPermission(req.user_id, undefined, channel_id)).hasThrow("MANAGE_MESSAGES");
 
-    const reaction = findReaction(message.reactions, emoji);
-    const users = reaction && usersOf(reaction, type);
-    if (!reaction || !users?.includes(user_id)) throw new HTTPError("Reaction not found", 404);
-
-    users.splice(users.indexOf(user_id), 1);
-    if (!recount(reaction)) message.reactions.splice(message.reactions.indexOf(reaction), 1);
-
-    await Message.update({ id: message.id, channel_id }, { reactions: message.reactions });
+    const reaction = await Message.mutate({ id: message_id, channel_id }, (message) => {
+        if (!message) throw DiscordApiErrors.UNKNOWN_MESSAGE;
+        const reaction = findReaction(message.reactions, emoji);
+        const users = reaction && usersOf(reaction, type);
+        if (!reaction || !users?.includes(user_id)) throw new HTTPError("Reaction not found", 404);
+        users.splice(users.indexOf(user_id), 1);
+        if (!recount(reaction)) message.reactions.splice(message.reactions.indexOf(reaction), 1);
+        return reaction;
+    });
 
     await emitEvent({
         event: "MESSAGE_REACTION_REMOVE",
@@ -149,27 +150,24 @@ router.delete(
         const { message_id, channel_id } = req.params as { [key: string]: string };
         const emoji = getEmoji(req.params.emoji as string);
 
-        const message = await Message.findOneOrFail({
-            where: { id: message_id, channel_id },
+        const { reaction, guild_id } = await Message.mutate({ id: message_id, channel_id }, (message) => {
+            if (!message) throw DiscordApiErrors.UNKNOWN_MESSAGE;
+            const reaction = findReaction(message.reactions, emoji);
+            if (!reaction) throw new HTTPError("Reaction not found", 404);
+            message.reactions.splice(message.reactions.indexOf(reaction), 1);
+            return { reaction, guild_id: message.guild_id };
         });
 
-        const reaction = findReaction(message.reactions, emoji);
-        if (!reaction) throw new HTTPError("Reaction not found", 404);
-        message.reactions.splice(message.reactions.indexOf(reaction), 1);
-
-        await Promise.all([
-            Message.update({ id: message.id, channel_id }, { reactions: message.reactions }),
-            emitEvent({
-                event: "MESSAGE_REACTION_REMOVE_EMOJI",
+        await emitEvent({
+            event: "MESSAGE_REACTION_REMOVE_EMOJI",
+            channel_id,
+            data: {
                 channel_id,
-                data: {
-                    channel_id,
-                    message_id,
-                    guild_id: message.guild_id,
-                    emoji: reaction.emoji,
-                },
-            } satisfies MessageReactionRemoveEmojiEvent),
-        ]);
+                message_id,
+                guild_id,
+                emoji: reaction.emoji,
+            },
+        } satisfies MessageReactionRemoveEmojiEvent);
 
         res.sendStatus(204);
     },
@@ -239,33 +237,30 @@ router.put(
         const channel = await Channel.findOneOrFail({
             where: { id: channel_id },
         });
-        const message = await Message.findOneOrFail({
-            where: { id: message_id, channel_id },
-        });
-        let reaction = findReaction(message.reactions, emoji);
-
-        if (!reaction) req.permission?.hasThrow("ADD_REACTIONS");
-
-        if (emoji.id) {
-            const external_emoji = await Emoji.findOneOrFail({
-                where: { id: emoji.id },
-            });
-            if (!reaction && channel.guild_id != external_emoji.guild_id) req.permission?.hasThrow("USE_EXTERNAL_EMOJIS");
+        const external_emoji = emoji.id ? await Emoji.findOneOrFail({ where: { id: emoji.id } }) : undefined;
+        if (external_emoji) {
             emoji.animated = external_emoji.animated;
             emoji.name = external_emoji.name;
         }
 
-        if (!reaction) {
-            reaction = { count: 0, emoji, user_ids: [], burst_user_ids: [], burst_colors: [] };
-            message.reactions.push(reaction);
-        }
-        const users = usersOf(reaction, type);
-        if (users.includes(req.user_id)) return res.sendStatus(204);
-        users.push(req.user_id);
-        recount(reaction);
-        if (type === ReactionType.burst && !reaction.burst_colors?.length) reaction.burst_colors = await getBurstColors(reaction.emoji);
-
-        await Message.update({ id: message.id, channel_id }, { reactions: message.reactions });
+        const added = await Message.mutate({ id: message_id, channel_id }, async (message) => {
+            if (!message) throw DiscordApiErrors.UNKNOWN_MESSAGE;
+            let reaction = findReaction(message.reactions, emoji);
+            if (!reaction) {
+                req.permission?.hasThrow("ADD_REACTIONS");
+                if (external_emoji && channel.guild_id != external_emoji.guild_id) req.permission?.hasThrow("USE_EXTERNAL_EMOJIS");
+                reaction = { count: 0, emoji, user_ids: [], burst_user_ids: [], burst_colors: [] };
+                message.reactions.push(reaction);
+            }
+            const users = usersOf(reaction, type);
+            if (users.includes(req.user_id)) return undefined;
+            users.push(req.user_id);
+            recount(reaction);
+            if (type === ReactionType.burst && !reaction.burst_colors?.length) reaction.burst_colors = await getBurstColors(reaction.emoji);
+            return { reaction, author_id: message.author_id };
+        });
+        if (!added) return res.sendStatus(204);
+        const { reaction } = added;
 
         const member = channel.guild_id
             ? (
@@ -296,13 +291,13 @@ router.put(
                 member,
                 burst: type === ReactionType.burst,
                 burst_colors: type === ReactionType.burst ? (reaction.burst_colors ?? []) : [],
-                message_author_id: message.author_id,
+                message_author_id: added.author_id,
                 type,
             },
         } satisfies MessageReactionAddEvent);
 
         // staff voting on an appeal review the appeals account sent them
-        handleAppealVote(message.id, req.user_id, reaction.emoji.name ?? "").catch((e) => console.error("[Safety] appeal vote failed", e));
+        handleAppealVote(message_id, req.user_id, reaction.emoji.name ?? "").catch((e) => console.error("[Safety] appeal vote failed", e));
 
         res.sendStatus(204);
     },

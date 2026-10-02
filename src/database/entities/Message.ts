@@ -302,6 +302,15 @@ export class Message extends BaseClass {
         return this.webhook_id != null && this.webhook != null;
     }
 
+    static async mutate<T>(where: { id: string; channel_id?: string }, fn: (message: Message | null) => T | Promise<T>): Promise<T> {
+        return Message.getRepository().manager.transaction(async (manager) => {
+            const message = await manager.findOne(Message, { where, lock: { mode: "pessimistic_write" } });
+            const result = await fn(message);
+            if (message) await manager.update(Message, { id: message.id }, { reactions: message.reactions, poll: message.poll });
+            return result;
+        });
+    }
+
     static async fillReplies(messages: Message[]) {
         const ms = messages
             .filter((msg) => msg.message_reference && !msg.referenced_message?.id && msg.message_reference.message_id)

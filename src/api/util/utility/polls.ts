@@ -66,12 +66,14 @@ export function generatePollResultsMessage(message: Message): MessageOptions {
 
 export async function finalizePoll(messageId: string) {
     pendingPolls.delete(messageId);
+    const finalized = await Message.mutate({ id: messageId }, (message) => {
+        if (!message?.poll || message.poll.results?.is_finalized) return false;
+        message.poll.results = { answer_counts: [], ...message.poll.results, is_finalized: true };
+        if (new Date(message.poll.expiry) > new Date()) message.poll.expiry = new Date();
+        return true;
+    });
     const message = await Message.findOne({ where: { id: messageId }, relations: { author: true } });
-    if (!message?.poll || message.poll.results?.is_finalized) return message;
-
-    message.poll.results = { answer_counts: [], ...message.poll.results, is_finalized: true };
-    if (new Date(message.poll.expiry) > new Date()) message.poll.expiry = new Date();
-    await Message.update({ id: message.id, channel_id: message.channel_id }, { poll: message.poll });
+    if (!finalized || !message) return message;
 
     await emitEvent({
         event: "MESSAGE_UPDATE",
