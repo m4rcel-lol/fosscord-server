@@ -34,7 +34,7 @@ const router: Router = Router({ mergeParams: true });
 
 // https://discord.com/developers/docs/resources/guild#get-guild-widget
 const expiryTime = 1000 * 60 * 5; // 5 minutes
-const jsonDataCache = new Map<string, { data: Promise<GuildWidgetJsonResponse>; expiry: Date }>();
+const jsonDataCache = new Map<string, { data: Promise<GuildWidgetJsonResponse>; expiry: Date; settings: string }>();
 
 router.get(
     "/",
@@ -52,14 +52,18 @@ router.get(
     async (req: Request, res: Response) => {
         const { guild_id } = req.params as { [key: string]: string };
 
+        const current = await Guild.findOneOrFail({ where: { id: guild_id }, select: { id: true, widget_enabled: true, widget_channel_id: true, name: true } });
+        const settings = `${current.widget_enabled}:${current.widget_channel_id}:${current.name}`;
         let cacheEntry = jsonDataCache.get(guild_id);
-        if (!cacheEntry || cacheEntry.expiry.getTime() < Date.now()) {
+        if (!cacheEntry || cacheEntry.expiry.getTime() < Date.now() || cacheEntry.settings !== settings) {
             // Create new cache entry
             const dataPromise = getWidgetJsonData(guild_id);
             cacheEntry = {
                 data: dataPromise,
                 expiry: new Date(Date.now() + expiryTime),
+                settings,
             };
+            dataPromise.catch(() => jsonDataCache.delete(guild_id));
             console.log("[Widget] Caching widget data for guild", guild_id);
             jsonDataCache.set(guild_id, cacheEntry);
         }
@@ -126,6 +130,7 @@ async function getWidgetJsonData(guild_id: string) {
     // Fetch members
     // TODO: Understand how Discord's max 100 random member sample works, and apply to here (see top of this file)
     const members = await Member.find({ where: { guild_id: guild_id }, relations: { user: { sessions: true } } });
+    const cdn = (Config.get().cdn.endpointPublic ?? "").replace(/\/+$/, "");
     const minLastSeen = Date.now() - 1000 * 60 * 5;
     const onlineMembers = members.filter((m) => m.user.sessions.filter((s) => (s.last_seen?.getTime() ?? 0) > minLastSeen).length > 0);
     const memberData = onlineMembers
@@ -136,10 +141,10 @@ async function getWidgetJsonData(guild_id: string) {
             avatar: null,
             status: "online", // TODO
             avatar_url: x.avatar
-                ? `${Config.get().cdn.endpointPublic}/guilds/${guild_id}/users/${x.id}/avatars/${x.avatar}.png`
+                ? `${cdn}/guilds/${guild_id}/users/${x.id}/avatars/${x.avatar}.png`
                 : x.user.avatar
-                  ? `${Config.get().cdn.endpointPublic}/avatars/${x.id}/${x.user.avatar}.png`
-                  : `${Config.get().cdn.endpointPublic}/embed/avatars/${BigInt(x.id) % 6n}.png`,
+                  ? `${cdn}/avatars/${x.id}/${x.user.avatar}.png`
+                  : `${cdn}/embed/avatars/${BigInt(x.id) % 6n}.png`,
         }))
         .sort((a, b) => Number(BigInt(a.id) - BigInt(b.id)));
 
