@@ -150,7 +150,7 @@ export const checkToken = (
         };
 
         const dec = jwt.decode(token, { complete: true });
-        if (!dec) return void rejectAndLog(reject, 500, "Failed to decode token");
+        if (!dec) return void rejectAndLog(reject, 401, "Failed to decode token");
         logAuth("Decoded token: " + JSON.stringify(dec));
 
         if (dec.header.alg == "HS256" && dec.header.kid === "c") {
@@ -160,7 +160,7 @@ export const checkToken = (
             jwt.verify(token, Config.get().security.jwtSecret!, { algorithms: ["HS256"] }, validateUser);
         } else if (dec.header.alg == "ES512") {
             jwt.verify(token, JwtKeypairManager.keypair.publicKey, { algorithms: ["ES512"] }, validateUser);
-        } else return void rejectAndLog(reject, 400, "Unsupported token algorithm: " + dec.header.alg);
+        } else return void rejectAndLog(reject, 401, "Unsupported token algorithm: " + dec.header.alg);
     });
 
 const compactTokenSecret = () =>
