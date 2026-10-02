@@ -18,8 +18,21 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { AuditLog, Emoji, Guild, Member, Role, Sticker, VoiceChannels } from "@spacebar/database";
-import { CollectibleItemType, Collectibles, Config, DiscordApiErrors, emitEvent, FieldErrors, getPermission, getRights, GuildMemberUpdateEvent, handleFile } from "@spacebar/util";
+import { AuditLog, Ban, Emoji, Guild, Member, PublicGuildRelations, Role, Sticker, VoiceChannels } from "@spacebar/database";
+import {
+    CollectibleItemType,
+    Collectibles,
+    Config,
+    DiscordApiErrors,
+    emitEvent,
+    FieldErrors,
+    getPermission,
+    getRights,
+    GuildCreateEvent,
+    GuildMemberUpdateEvent,
+    handleFile,
+    ReadyGuildDTO,
+} from "@spacebar/util";
 import { AuditLogEvents, MemberChangeSchema, PublicMemberProjection, PublicUserProjection } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
@@ -241,8 +254,6 @@ router.put(
         },
     }),
     async (req: Request, res: Response) => {
-        // TODO: Lurker mode
-
         const rights = await getRights(req.user_id);
 
         const { guild_id } = req.params as { [key: string]: string };
@@ -278,6 +289,34 @@ router.put(
         const stickers = await Sticker.find({
             where: { guild_id: guild_id },
         });
+
+        if (!alreadyMember && req.query.lurker === "true") {
+            if (await Ban.exists({ where: { guild_id, user_id: member_id } })) throw DiscordApiErrors.USER_BANNED;
+            const full = await Guild.findOneOrFail({
+                where: { id: guild_id },
+                relations: Object.fromEntries(PublicGuildRelations.map((i) => [i, true])),
+                relationLoadStrategy: "query",
+            });
+            const sessionId = typeof req.query.session_id === "string" ? req.query.session_id : undefined;
+            await emitEvent({
+                event: "GUILD_CREATE",
+                data: {
+                    ...new ReadyGuildDTO(full).toJSON(),
+                    members: [],
+                    member_count: full.member_count,
+                    guild_hashes: {},
+                    guild_scheduled_events: [],
+                    joined_at: null,
+                    presences: [],
+                    stage_instances: [],
+                    threads: [],
+                    embedded_activities: [],
+                    voice_states: full.voice_states.map((x) => x.toPublicVoiceState()),
+                },
+                ...(sessionId ? { session_id: sessionId } : { user_id: member_id }),
+            } satisfies GuildCreateEvent);
+            return res.send({ ...guild, emojis: emoji, roles: roles, stickers: stickers, approximate_presence_count: await Guild.countOnlineMembers(guild_id) });
+        }
 
         if (!alreadyMember) await Member.addToGuild(member_id, guild_id);
         res.send({ ...guild, emojis: emoji, roles: roles, stickers: stickers });

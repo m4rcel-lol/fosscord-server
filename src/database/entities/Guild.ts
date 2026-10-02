@@ -380,6 +380,14 @@ export class Guild extends BaseClass {
         this.premium_features = { features: GuildPowerupFeatures, additional_emoji_slots: 200, additional_sticker_slots: 55, additional_sound_slots: 40 };
     }
 
+    static async countOnlineMembers(guild_id: string): Promise<number> {
+        const [{ count }] = await Guild.query(
+            `SELECT COUNT(DISTINCT m.id)::int AS count FROM members m JOIN sessions s ON s.user_id = m.id WHERE m.guild_id = $1 AND s.status IN ('online', 'idle', 'dnd')`,
+            [guild_id],
+        );
+        return count;
+    }
+
     async toDiscoverableGuild(): Promise<DiscoverableGuild | null> {
         if (!this.features.includes("DISCOVERABLE")) {
             return null;
@@ -401,7 +409,7 @@ export class Guild extends BaseClass {
             /*await Member.countBy({
                 guild_id: this.id,
             }),*/
-            approximate_presence_count: this.presence_count ?? 0,
+            approximate_presence_count: await Guild.countOnlineMembers(this.id),
             /* await Member.countBy({
                 guild_id: this.id,
                 user: {

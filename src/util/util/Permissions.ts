@@ -6,7 +6,7 @@ import { Channel, Guild, Member, Role, User } from "../../database/entities";
 import { BitField, BitFieldResolvable, BitFlag } from "./BitField";
 import { HTTPError } from "lambert-server/HTTPError";
 import { ChannelPermissionOverwrite, ChannelPermissionOverwriteType, ChannelType, UserFlags } from "@spacebar/schemas";
-import { FindOneOptions } from "typeorm";
+import { ArrayContains, EntityNotFoundError, FindOneOptions } from "typeorm";
 import { OrmUtils } from "@spacebar/util";
 
 export type PermissionResolvable = bigint | number | Permissions | PermissionResolvable[] | PermissionString;
@@ -256,6 +256,7 @@ export async function getPermission(
     let channel: Channel | undefined;
     let member: Member | undefined;
     let guild: Guild | undefined;
+    let lurkerRoles: Role[] | undefined;
     const user = await User.findOneOrFail({
         where: { id: user_id },
         select: { id: true, flags: true },
@@ -297,16 +298,15 @@ export async function getPermission(
         }
         if (guild!.owner_id === user_id) return new Permissions(Permissions.FLAGS.ADMINISTRATOR);
 
-        member = await Member.findOneOrFail({
-            where: { guild_id: guild!.id, id: user_id },
-            relations: OrmUtils.keysToObject(["roles", ...(opts.member_relations || [])]), // TODO: clean up
-            // select: [
-            // "id",		// TODO: Bug in typeorm? adding these selects breaks the query.
-            // "roles",
-            // "communication_disabled_until",
-            // ...(opts.member_select || []),
-            // ],
-        });
+        member =
+            (await Member.findOne({
+                where: { guild_id: guild!.id, id: user_id },
+                relations: OrmUtils.keysToObject(["roles", ...(opts.member_relations || [])]), // TODO: clean up
+            })) ?? undefined;
+        if (!member) {
+            if (!(await Guild.existsBy({ id: guild!.id, features: ArrayContains(["DISCOVERABLE"]) }))) throw new EntityNotFoundError(Member, { guild_id: guild!.id, id: user_id });
+            lurkerRoles = await Role.find({ where: { id: guild!.id, guild_id: guild!.id } });
+        }
     }
 
     let recipient_ids = channel?.recipients?.map((x) => x.user_id);
@@ -316,14 +316,14 @@ export async function getPermission(
     const permission = Permissions.finalPermission({
         user: {
             id: user_id,
-            roles: member?.roles.map((x) => x.id) || [],
+            roles: (member?.roles ?? lurkerRoles ?? []).map((x) => x.id),
             communication_disabled_until: member?.communication_disabled_until ?? null,
             flags: user.flags,
         },
         guild: {
             id: guild?.id || "",
             owner_id: guild?.owner_id || "",
-            roles: member?.roles || [],
+            roles: member?.roles ?? lurkerRoles ?? [],
         },
         channel: {
             overwrites: channel?.permission_overwrites,
@@ -332,7 +332,7 @@ export async function getPermission(
         },
     });
 
-    const obj = new Permissions(permission);
+    const obj = new Permissions(lurkerRoles ? permission.bitfield & (Permissions.FLAGS.VIEW_CHANNEL | Permissions.FLAGS.READ_MESSAGE_HISTORY) : permission);
 
     // pass cache to permission for possible future getPermission calls
     obj.cache = { guild, member, channel, roles: member?.roles, user_id };

@@ -20,7 +20,7 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
 import { Guild, Member } from "@spacebar/database";
-import { Config, getPermission } from "@spacebar/util";
+import { Config, DiscordApiErrors, emitEvent, getPermission, GuildDeleteEvent } from "@spacebar/util";
 
 const router: Router = Router({ mergeParams: true });
 
@@ -50,7 +50,7 @@ router.get(
                     owner: guild.owner_id === req.user_id,
                     permissions: (await getPermission(req.user_id, guild.id)).bitfield.toString(),
                     features: guild.features,
-                    ...(withCounts && { approximate_member_count: guild.member_count ?? 0, approximate_presence_count: guild.presence_count ?? 0 }),
+                    ...(withCounts && { approximate_member_count: guild.member_count ?? 0, approximate_presence_count: await Guild.countOnlineMembers(guild.id) }),
                 })),
             ),
         );
@@ -80,6 +80,11 @@ router.delete(
         });
 
         if (!guild) throw new HTTPError("Guild doesn't exist", 404);
+        if (!(await Member.existsBy({ id: req.user_id, guild_id }))) {
+            if (!req.body?.lurking) throw DiscordApiErrors.UNKNOWN_MEMBER;
+            await emitEvent({ event: "GUILD_DELETE", data: { id: guild_id }, user_id: req.user_id } satisfies GuildDeleteEvent);
+            return res.sendStatus(204);
+        }
         if (guild.owner_id === req.user_id) throw new HTTPError("You can't leave your own guild", 400);
         if (autoJoin.enabled && autoJoin.guilds.includes(guild_id) && !autoJoin.canLeave) {
             throw new HTTPError("You can't leave instance auto join guilds", 400);

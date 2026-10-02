@@ -78,6 +78,8 @@ async function main() {
         );
     }
 
+    if (Config.get().client.useTestClient) app.get("/", (req, res) => res.redirect("/app"));
+
     await new Promise((resolve) => void server.listen({ port }, () => resolve(undefined)));
     const httpsPort = Number(process.env.HTTPS_PORT) || port;
     if (process.env.TLS_CERT && process.env.TLS_KEY) {

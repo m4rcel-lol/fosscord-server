@@ -249,12 +249,16 @@ async function consume(this: WebSocket, opts: EventOpts): Promise<void> {
             break;
         case "RELATIONSHIP_REMOVE":
         case "CHANNEL_DELETE":
-        case "GUILD_DELETE":
-            this.events[id]?.();
-            delete this.events[id];
+        case "GUILD_DELETE": {
+            const target = typeof data?.id === "string" ? data.id : id;
+            if (target !== this.user_id && target !== this.session_id) {
+                this.events[target]?.();
+                delete this.events[target];
+            }
+            if (event === "GUILD_DELETE") delete this.permissions[target];
             if (event === "GUILD_DELETE" && this.ipAddress) {
                 const ban = await Ban.findOne({
-                    where: { guild_id: id, user_id: this.user_id },
+                    where: { guild_id: target, user_id: this.user_id },
                 });
 
                 if (ban) {
@@ -263,6 +267,7 @@ async function consume(this: WebSocket, opts: EventOpts): Promise<void> {
                 }
             }
             break;
+        }
         case "CHANNEL_CREATE":
             if (!permission.overwriteChannel(data.permission_overwrites).has("VIEW_CHANNEL")) return;
             if (!this.events[data.id]) this.events[data.id] = await listenEvent(data.id, consumer, listenOpts);
@@ -277,14 +282,16 @@ async function consume(this: WebSocket, opts: EventOpts): Promise<void> {
         case "RELATIONSHIP_ADD":
             this.events[data.user.id] = await listenEvent(data.user.id, handlePresenceUpdate.bind(this), this.listen_options);
             break;
-        case "GUILD_CREATE":
-            await Promise.all([
-                ...data.channels.map(async ({ id }: { id: string }) => {
-                    this.events[id] = await listenEvent(id, consumer, listenOpts);
-                }),
-                listenEvent(id, consumer, listenOpts).then((ret) => (this.events[id] = ret)),
-            ]);
+        case "GUILD_CREATE": {
+            const guildPermission = await getPermission(this.user_id, data.id).catch(() => undefined);
+            if (guildPermission) this.permissions[data.id] = guildPermission;
+            const subscribe = async (target: string) => {
+                if (this.events[target]) return;
+                this.events[target] = await listenEvent(target, consumer, listenOpts);
+            };
+            await Promise.all([...data.channels.map(({ id }: { id: string }) => subscribe(id)), subscribe(data.id)]);
             break;
+        }
         case "CHANNEL_UPDATE": {
             const exists = this.events[id];
             if (permission.overwriteChannel(data.permission_overwrites).has("VIEW_CHANNEL")) {

@@ -77,3 +77,11 @@ export interface DiscoveryNsfwProperties {
     description?: string;
     description_banned_keywords?: string[];
 }
+
+export interface DiscoverableGuildsSearchResponse {
+    guilds: DiscoverableGuild[];
+    total_count: number;
+    offset: number;
+    limit: number;
+    categories?: { id: number; count: number }[];
+}

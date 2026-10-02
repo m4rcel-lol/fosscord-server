@@ -96,7 +96,7 @@ router.get(
         }
         await invite.loadGroupRecipients();
 
-        await invite.guild.withPresenceCount();
+        await invite.guild?.withPresenceCount();
         res.status(200).send(invite.toPublicJSON());
     },
 );
@@ -173,6 +173,7 @@ router.post(
         }).catch(() => null);
         if (!invite) return res.json({ code: invite_code, guild_id, new_member });
 
+        await invite.guild?.withPresenceCount();
         res.json({ ...invite.toPublicJSON(), new_member });
     },
 );
