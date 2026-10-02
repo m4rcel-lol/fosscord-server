@@ -30,7 +30,15 @@ li:has(> div > a[href="/store"]),
 li:has(> div > a[href="/shop"]),
 li:has(> div > a[href="/quest-home"]),
 [role="tab"]:has(${quest}),
-div[class^="listItem__"]:has([data-list-item-id="guildsnav___app-download-button"]) {
+div[class^="listItem__"]:has([data-list-item-id="guildsnav___app-download-button"]),
+li:has(> div > [data-list-item-id^="channels___skill-trees-"]),
+#guild-header-popout-premium-subscribe,
+li:has(> ul > li[data-settings-sidebar-item="billing_panel"]),
+.container__5287f,
+.emptyState__70126,
+.container__8279f,
+[role="button"]:has(> img[src="/assets/eea7561d0cfcff41.svg"]),
+[role="button"]:has(> img[src*="/bc3217e772906510d881b75ebefea754b9c3ba903ddf6f994e46e5c5a85770a3."]) {
     display: none !important;
 }
 `;
