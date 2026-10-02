@@ -17,8 +17,7 @@
 */
 
 import { route } from "@spacebar/api/middlewares";
-import { User } from "@spacebar/database";
-import { Collectibles } from "@spacebar/util";
+import { listCollectiblePurchases } from "@spacebar/api/util";
 import { Request, Response, Router } from "express";
 
 const router = Router({ mergeParams: true });
@@ -40,9 +39,7 @@ router.get(
         },
     }),
     async (req: Request, res: Response) => {
-        const { created_at } = await User.findOneOrFail({ where: { id: req.user_id }, select: { created_at: true } });
-        const purchased_at = created_at.toISOString();
-        res.json((await Collectibles.owned()).map((product) => ({ ...product, purchased_at, purchase_type: 0, expires_at: null })));
+        res.json(await listCollectiblePurchases(req.user_id));
     },
 );
 
