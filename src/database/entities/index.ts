@@ -73,3 +73,4 @@ export * from "./Tag";
 export * from "./StageInstance";
 export * from "./StatusComponent";
 export * from "./StatusIncident";
+export * from "./GuildScheduledEvent";

@@ -643,10 +643,10 @@ export const DiscordApiErrors = {
         return new ApiError("Unknown Guild Welcome Screen", 10069);
     },
     get UNKNOWN_GUILD_SCHEDULED_EVENT() {
-        return new ApiError("Unknown Guild Scheduled Event", 10070);
+        return new ApiError("Unknown Guild Scheduled Event", 10070, 404);
     },
     get UNKNOWN_GUILD_SCHEDULED_EVENT_USER() {
-        return new ApiError("Unknown Guild Scheduled Event User", 10071);
+        return new ApiError("Unknown Guild Scheduled Event User", 10071, 404);
     },
     get BOT_PROHIBITED_ENDPOINT() {
         return new ApiError("Bots cannot use this endpoint", 20001);

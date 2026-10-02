@@ -16,13 +16,15 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import "reflect-metadata";
+import { Request, Response, Router } from "express";
+import { route } from "@spacebar/api/middlewares";
+import { Member } from "@spacebar/database";
 
-export * from "./Database";
-export * from "./entities/index";
+const router = Router({ mergeParams: true });
 
-export * from "./voice/PrivateCalls";
-export * from "./voice/VoiceChannels";
-export * from "./voice/StreamPreviews";
-export * from "./voice/StageInstances";
-export * from "./voice/ScheduledEvents";
+router.post("/:read_state_type/:entity_id", route({ responses: { 204: {}, 403: { body: "APIErrorResponse" } } }), async (req: Request, res: Response) => {
+    await Member.IsInGuildOrFail(req.user_id, req.params.guild_id as string);
+    res.sendStatus(204);
+});
+
+export default router;

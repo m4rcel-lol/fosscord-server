@@ -37,6 +37,7 @@ import {
     Sticker,
     ThreadMember,
     StageInstance,
+    ScheduledEvents,
     UserSettings,
     UserSettingsProtos,
     VoiceState,
@@ -388,6 +389,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
         { result: threadMembers, elapsed: threadMemberTime },
         { result: allThreadsRaw, elapsed: queryThreadsTime },
         stageInstances,
+        scheduledEvents,
     ] = await Promise.all([
         timePromise(() =>
             Guild.find({
@@ -447,6 +449,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
             }),
         ),
         memberGuildIds.length ? StageInstance.find({ where: { guild_id: In(memberGuildIds) } }) : [],
+        ScheduledEvents.forGuilds(memberGuildIds),
     ]);
 
     const [{ elapsed: sessionSaveTime }, { result: friendPresenceMap, elapsed: friendPresenceSessionsQueryTime }, { guildPresenceMembers, guildPresenceMap }] = await Promise.all([
@@ -462,6 +465,8 @@ export async function onIdentify(this: WebSocket, data: Payload) {
 
     const guildPresenceMembersByGuild = arrayGroupBy(guildPresenceMembers, (m) => m.guild_id);
     const stageInstancesByGuild = arrayGroupBy(stageInstances, (i) => i.guild_id);
+    const scheduledEventCounts = await ScheduledEvents.userCounts(scheduledEvents.map((e) => e.id));
+    const scheduledEventsByGuild = arrayGroupBy(scheduledEvents, (e) => e.guild_id);
     const threadMemberMap = new Map(threadMembers.map((member) => [member.id, member] as const));
     const allThreads = allThreadsRaw.filter(({ id, thread_metadata }) => thread_metadata?.archived === false && threadMemberMap.has(id));
 
@@ -600,7 +605,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
                     member,
                 };
             }),
-            guild_scheduled_events: [],
+            guild_scheduled_events: (scheduledEventsByGuild.get(member.guild_id) ?? []).map((e) => e.toJSON(scheduledEventCounts.get(e.id) ?? 0)),
             stage_instances: (stageInstancesByGuild.get(member.guild_id) ?? []).map((i) => i.toJSON()),
             presences: prioritizedReady
                 ? []

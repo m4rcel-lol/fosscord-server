@@ -40,6 +40,7 @@ import { Guild, PublicGuildRelations } from "./Guild";
 import { Message } from "./Message";
 import { Role } from "./Role";
 import { User } from "./User";
+import { ScheduledEvents } from "../voice/ScheduledEvents";
 
 export const MemberPrivateProjection: (keyof Member)[] = [
     "id",
@@ -439,6 +440,8 @@ export class Member extends BaseClassWithoutId {
 
         const user = await User.getPublicUser(user_id);
         logTrace("Get user");
+        const scheduledEvents = isRegistration ? [] : await ScheduledEvents.forGuilds([guild_id]);
+        const scheduledEventCounts = await ScheduledEvents.userCounts(scheduledEvents.map((e) => e.id));
 
         await Promise.all([
             newMember.save(), // TODO: can we somehow insert the roles manually? We have no entity for this... Would skip a few select's
@@ -462,7 +465,7 @@ export class Member extends BaseClassWithoutId {
                           members: [...memberPreview, { ...newMember.toPublicMember(), user }],
                           member_count: memberCount + 1,
                           guild_hashes: {},
-                          guild_scheduled_events: [],
+                          guild_scheduled_events: scheduledEvents.map((e) => e.toJSON(scheduledEventCounts.get(e.id) ?? 0)),
                           joined_at: newMember.joined_at,
                           presences: [],
                           stage_instances: [],

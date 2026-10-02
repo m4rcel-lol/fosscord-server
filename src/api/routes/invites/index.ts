@@ -17,7 +17,7 @@
 */
 
 import { route } from "@spacebar/api/middlewares";
-import { AuditLog, Ban, Guild, Invite, PublicInviteRelation } from "@spacebar/database";
+import { AuditLog, Ban, Guild, GuildScheduledEvent, Invite, PublicInviteRelation, ScheduledEvents } from "@spacebar/database";
 import { Config, DiscordApiErrors, emitEvent, getPermission, InviteDeleteEvent } from "@spacebar/util";
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
@@ -51,7 +51,12 @@ router.get(
             throw DiscordApiErrors.UNKNOWN_INVITE;
         }
 
-        res.status(200).send(invite.toPublicJSON());
+        const eventId = req.query.guild_scheduled_event_id ?? req.query.event;
+        const event =
+            typeof eventId === "string" && /^\d+$/.test(eventId)
+                ? await GuildScheduledEvent.findOne({ where: { id: eventId, guild_id: invite.guild.id }, relations: { creator: true } })
+                : null;
+        res.status(200).send({ ...invite.toPublicJSON(), ...(event ? { guild_scheduled_event: await ScheduledEvents.serialize(event) } : {}) });
     },
 );
 

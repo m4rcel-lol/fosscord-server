@@ -18,6 +18,7 @@
 
 import { emitEvent } from "@spacebar/util/util";
 import { StageInstance } from "../entities/StageInstance";
+import { ScheduledEvents } from "./ScheduledEvents";
 
 export class StageInstances {
     static get(channelId: string) {
@@ -33,6 +34,7 @@ export class StageInstances {
             guild_scheduled_event_id: scheduledEventId,
         }).save();
         await emitEvent({ event: "STAGE_INSTANCE_CREATE", guild_id: guildId, data: instance.toJSON() });
+        await ScheduledEvents.stageStarted(scheduledEventId, guildId, instance.id);
         return instance.toJSON();
     }
 
@@ -50,6 +52,7 @@ export class StageInstances {
         if (!instance) return;
         await StageInstance.delete({ id: instance.id });
         await emitEvent({ event: "STAGE_INSTANCE_DELETE", guild_id: instance.guild_id, data: instance.toJSON() });
+        await ScheduledEvents.channelEnded(channelId);
     }
 
     static async clear() {
