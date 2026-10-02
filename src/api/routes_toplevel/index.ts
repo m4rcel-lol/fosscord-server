@@ -31,7 +31,7 @@ router.get(
     }),
     (req: Request, res: Response) => {
         res.set("Cache-Control", "public, max-age=21600");
-        return res.sendFile(path.join(PUBLIC_ASSETS_FOLDER, "index.html"));
+        return res.sendFile(path.join(PUBLIC_ASSETS_FOLDER, "index.html"), { dotfiles: "allow" });
     },
 );
 

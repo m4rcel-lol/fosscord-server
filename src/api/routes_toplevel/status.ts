@@ -32,7 +32,7 @@ router.get(
     }),
     (req: Request, res: Response) => {
         res.set("Cache-Control", "no-cache");
-        return res.sendFile(path.join(PAGE_FOLDER, "index.html"));
+        return res.sendFile(path.join(PAGE_FOLDER, "index.html"), { dotfiles: "allow" });
     },
 );
 

@@ -60,7 +60,7 @@ for (const type of Object.values(ReportMenuTypeNames)) {
         (req: Request, res: Response) => {
             // TODO: implement
             // res.send([] as ReportingMenuResponseSchema);
-            res.sendFile(path.join(__dirname, "..", "..", "..", "..", "assets", "temp_report_menu_responses", `${type}.json`));
+            res.sendFile(path.join(__dirname, "..", "..", "..", "..", "assets", "temp_report_menu_responses", `${type}.json`), { dotfiles: "allow" });
         },
     );
     if (process.env.LOG_ROUTES !== "false") console.log(`[Server] Route /reporting/menu/${type} registered (reports).`);
