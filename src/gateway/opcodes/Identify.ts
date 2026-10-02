@@ -306,6 +306,8 @@ export async function onIdentify(this: WebSocket, data: Payload) {
                 where: { user_id: this.user_id, closed: false },
                 relations: { channel: { recipients: { user: true } } },
                 select: {
+                    id: true,
+                    message_request_timestamp: true,
                     channel: {
                         id: true,
                         flags: true,
@@ -648,6 +650,8 @@ export async function onIdentify(this: WebSocket, data: Payload) {
                 icon: channel.icon,
                 name: channel.name,
                 is_spam: false, // TODO
+                is_message_request: !!r.message_request_timestamp,
+                is_message_request_timestamp: r.message_request_timestamp?.toISOString() ?? null,
                 owner_id: channel.owner_id || undefined,
             };
         });

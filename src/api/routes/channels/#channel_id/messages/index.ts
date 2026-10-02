@@ -35,6 +35,8 @@ import {
     uploadFile,
     ThreadMembersUpdateEvent,
     ThreadCreateEvent,
+    ChannelCreateEvent,
+    ChannelUpdateEvent,
 } from "@spacebar/util";
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
@@ -42,6 +44,7 @@ import multer from "multer";
 import { FindManyOptions, FindOperator, LessThan, MoreThan, MoreThanOrEqual } from "typeorm";
 import {
     AcknowledgeDeleteSchema,
+    ChannelType,
     isTextChannel,
     MessageCreateAttachment,
     MessageCreateCloudAttachment,
@@ -237,6 +240,12 @@ router.get(
     },
 );
 
+const isMessageRequest = async (channelId: string, recipientId: string, senderId: string) => {
+    const friends = await Relationship.exists({ where: { from_id: recipientId, to_id: senderId, type: RelationshipType.FRIEND } });
+    if (friends) return false;
+    return !(await Message.exists({ where: { channel_id: channelId, author_id: recipientId } }));
+};
+
 // TODO: config max upload size
 export const messageUpload = multer({
     limits: {
@@ -424,25 +433,39 @@ router.post(
 
         if (channel.isDm()) {
             const channel_dto = await DmChannelDTO.from(channel);
+            const sender = channel.recipients?.find((recipient) => recipient.user_id === req.user_id);
+            if (sender?.message_request_timestamp) {
+                sender.message_request_timestamp = null;
+                await Promise.all([
+                    sender.save(),
+                    emitEvent({
+                        event: "CHANNEL_UPDATE",
+                        data: { ...channel_dto.excludedRecipients([req.user_id]), is_message_request: false, is_message_request_timestamp: null, is_spam: false },
+                        user_id: req.user_id,
+                    } as ChannelUpdateEvent),
+                ]);
+            }
 
             // Only one recipients should be closed here, since in group DMs the recipient is deleted not closed
             await Promise.all(
                 channel.recipients
-                    ?.map((recipient) => {
-                        if (recipient.closed) {
-                            recipient.closed = false;
-                            return Promise.all([
-                                recipient.save(),
-                                emitEvent({
-                                    event: "CHANNEL_CREATE",
-                                    data: channel_dto.excludedRecipients([recipient.user_id]),
-                                    user_id: recipient.user_id,
-                                }),
-                            ]);
-                        }
-                        return null;
-                    })
-                    .filter((x) => x !== null) || [],
+                    ?.filter((recipient) => recipient.closed)
+                    .map(async (recipient) => {
+                        recipient.closed = false;
+                        if (channel.type === ChannelType.DM && (await isMessageRequest(channel.id, recipient.user_id, req.user_id)))
+                            recipient.message_request_timestamp = new Date();
+                        await recipient.save();
+                        await emitEvent({
+                            event: "CHANNEL_CREATE",
+                            data: {
+                                ...channel_dto.excludedRecipients([recipient.user_id]),
+                                is_message_request: !!recipient.message_request_timestamp,
+                                is_message_request_timestamp: recipient.message_request_timestamp?.toISOString() ?? null,
+                                is_spam: false,
+                            },
+                            user_id: recipient.user_id,
+                        } as ChannelCreateEvent);
+                    }) ?? [],
             );
         }
 

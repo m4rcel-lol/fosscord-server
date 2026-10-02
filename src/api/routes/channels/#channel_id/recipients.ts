@@ -19,10 +19,83 @@
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { Channel, Recipient, User } from "@spacebar/database";
-import { ChannelRecipientAddEvent, DiscordApiErrors, DmChannelDTO, emitEvent } from "@spacebar/util";
+import { ChannelDeleteEvent, ChannelRecipientAddEvent, ChannelUpdateEvent, DiscordApiErrors, DmChannelDTO, emitEvent } from "@spacebar/util";
 import { ChannelType, PublicUserProjection } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
+
+const ConsentStatus = { UNSPECIFIED: 0, PENDING: 1, ACCEPTED: 2, REJECTED: 3 };
+
+const ownRecipient = async (channel_id: string, user_id: string) => {
+    const channel = await Channel.findOneOrFail({ where: { id: channel_id }, relations: { recipients: true } });
+    const recipient = channel.recipients?.find((r) => r.user_id === user_id);
+    if (!recipient) throw DiscordApiErrors.UNKNOWN_CHANNEL;
+    return { channel, recipient };
+};
+
+const requestState = (recipient: Recipient) => ({
+    is_message_request: !!recipient.message_request_timestamp,
+    is_message_request_timestamp: recipient.message_request_timestamp?.toISOString() ?? null,
+    is_spam: false,
+});
+
+router.put(
+    "/@me",
+    route({
+        responses: {
+            204: {},
+            404: {},
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const { channel_id } = req.params as { [key: string]: string };
+        const { channel, recipient } = await ownRecipient(channel_id, req.user_id);
+        const consent = Number(req.body?.consent_status ?? ConsentStatus.ACCEPTED);
+
+        if (consent === ConsentStatus.ACCEPTED || consent === ConsentStatus.UNSPECIFIED) recipient.message_request_timestamp = null;
+        else if (consent === ConsentStatus.PENDING) recipient.message_request_timestamp ??= new Date();
+        recipient.closed = false;
+        await recipient.save();
+
+        await emitEvent({
+            event: "CHANNEL_UPDATE",
+            data: { ...(await DmChannelDTO.from(channel, [req.user_id])), ...requestState(recipient) },
+            user_id: req.user_id,
+        } as ChannelUpdateEvent);
+
+        return res.sendStatus(204);
+    },
+);
+
+router.delete(
+    "/@me",
+    route({
+        responses: {
+            204: {},
+            404: {},
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const { channel_id } = req.params as { [key: string]: string };
+        const { channel, recipient } = await ownRecipient(channel_id, req.user_id);
+
+        if (channel.type === ChannelType.GROUP_DM) {
+            await Channel.removeRecipientFromChannel(channel, req.user_id);
+            return res.sendStatus(204);
+        }
+
+        recipient.closed = true;
+        recipient.message_request_timestamp = null;
+        await recipient.save();
+        await emitEvent({
+            event: "CHANNEL_DELETE",
+            data: await DmChannelDTO.from(channel, [req.user_id]),
+            user_id: req.user_id,
+        } as ChannelDeleteEvent);
+
+        return res.sendStatus(204);
+    },
+);
 
 router.put(
     "/:user_id",
