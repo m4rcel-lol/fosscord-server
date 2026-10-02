@@ -54,5 +54,5 @@ export async function onSelectProtocol(this: WebRtcWebSocket, payload: VoicePayl
         await Send(this, { op: VoiceOPCodes.CLIENT_PLATFORM, d: { user_id: client.user_id, platform: client.websocket.clientPlatform ?? 0 } });
     }
 
-    if (this.daveVersion > 0) await DaveSession.get(voiceRoomId).join(this);
+    if (this.daveVersion > 0) await DaveSession.get(voiceRoomId, this.channel_id ?? voiceRoomId).join(this);
 }

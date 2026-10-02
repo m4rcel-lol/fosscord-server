@@ -54,13 +54,16 @@ export class DaveSession {
     private transitions = new Map<number, Transition>();
     private nextTransitionId = 1;
 
-    private constructor(readonly roomId: string) {
-        this.groupId = tls.u64(BigInt(roomId));
+    private constructor(
+        readonly roomId: string,
+        channelId: string,
+    ) {
+        this.groupId = tls.u64(BigInt(channelId));
     }
 
-    static get(roomId: string) {
+    static get(roomId: string, channelId: string) {
         let session = sessions.get(roomId);
-        if (!session) sessions.set(roomId, (session = new DaveSession(roomId)));
+        if (!session) sessions.set(roomId, (session = new DaveSession(roomId, channelId)));
         return session;
     }
 

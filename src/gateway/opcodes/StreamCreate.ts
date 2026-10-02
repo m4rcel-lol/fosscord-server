@@ -92,6 +92,7 @@ export async function onStreamCreate(this: WebSocket, data: Payload) {
         data: {
             stream_key: streamKey,
             rtc_server_id: stream.id, // for voice connections in guilds it is guild_id, for dm voice calls it seems to be DM channel id, for GoLive streams a generated number
+            rtc_channel_id: (BigInt(stream.id) - 1n).toString(),
             viewer_ids: [],
             region: guildRegion.name,
             paused: false,

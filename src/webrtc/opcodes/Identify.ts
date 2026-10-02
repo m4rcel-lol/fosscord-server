@@ -81,6 +81,7 @@ export async function onIdentify(this: WebRtcWebSocket, data: VoicePayload) {
     this.maxDaveVersion = max_dave_protocol_version ?? max_secure_frames_version ?? 0;
 
     const voiceRoomId = type === "stream" ? server_id : voiceState!.channel_id;
+    this.channel_id = type === "stream" ? (BigInt(server_id) - 1n).toString() : voiceState!.channel_id;
     try {
         this.webRtcClient = await mediaServer.join(voiceRoomId, this.user_id, this, type!);
     } catch (e) {

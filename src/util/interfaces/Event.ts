@@ -487,6 +487,7 @@ export interface StreamCreateEvent extends Event {
     data: {
         stream_key: string;
         rtc_server_id: string;
+        rtc_channel_id?: string;
         viewer_ids: string[];
         region: string;
         paused: boolean;
