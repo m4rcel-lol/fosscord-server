@@ -17,7 +17,7 @@
 */
 
 import { Request, Response, Router } from "express";
-import { emitUserUpdate, readTicket, verifyCaptcha } from "@spacebar/api/util";
+import { emitUserUpdate, readTicket, checkCaptcha } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
 import { User } from "@spacebar/database";
 import { Config, FieldErrors, generateToken } from "@spacebar/util";
@@ -42,26 +42,8 @@ router.post(
 
         const config = Config.get();
 
-        if (config.register.requireCaptcha && config.security.captcha.enabled) {
-            const { sitekey, service } = config.security.captcha;
-
-            if (!captcha_key) {
-                return res.status(400).json({
-                    captcha_key: ["captcha-required"],
-                    captcha_sitekey: sitekey,
-                    captcha_service: service,
-                });
-            }
-
-            const verify = await verifyCaptcha(captcha_key, req.ip);
-            if (!verify.success) {
-                return res.status(400).json({
-                    captcha_key: verify["error-codes"],
-                    captcha_sitekey: sitekey,
-                    captcha_service: service,
-                });
-            }
-        }
+        const captcha = await checkCaptcha(config.register.requireCaptcha, captcha_key, req.ip);
+        if (captcha) return res.status(400).json(captcha);
 
         const invalid = () =>
             FieldErrors({

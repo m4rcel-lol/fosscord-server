@@ -18,7 +18,7 @@
 
 import bcrypt from "bcrypt";
 import { Request, Response, Router } from "express";
-import { loginMfaResponse, verifyCaptcha } from "@spacebar/api/util";
+import { loginMfaResponse, checkCaptcha } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
 import { User } from "@spacebar/database";
 import { Config, FieldErrors, generateToken } from "@spacebar/util";
@@ -45,26 +45,8 @@ router.post(
 
         const config = Config.get();
 
-        if (config.login.requireCaptcha && config.security.captcha.enabled) {
-            const { sitekey, service } = config.security.captcha;
-            if (!captcha_key) {
-                return res.status(400).json({
-                    captcha_key: ["captcha-required"],
-                    captcha_sitekey: sitekey,
-                    captcha_service: service,
-                });
-            }
-
-            const ip = req.ip;
-            const verify = await verifyCaptcha(captcha_key, ip);
-            if (!verify.success) {
-                return res.status(400).json({
-                    captcha_key: verify["error-codes"],
-                    captcha_sitekey: sitekey,
-                    captcha_service: service,
-                });
-            }
-        }
+        const captcha = await checkCaptcha(config.login.requireCaptcha, captcha_key, req.ip);
+        if (captcha) return res.status(400).json(captcha);
 
         const user = await User.findOneOrFail({
             where: [{ phone: login }, { email: login }],

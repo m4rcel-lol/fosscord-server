@@ -21,7 +21,7 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import crypto from "node:crypto";
 import { ILike, MoreThan } from "typeorm";
-import { verifyCaptcha } from "@spacebar/api/util";
+import { checkCaptcha } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
 import { Invite, User, ValidRegistrationToken } from "@spacebar/database";
 import { Config, FieldErrors, generateToken, IpDataClient, AbuseIpDbClient } from "@spacebar/util";
@@ -59,7 +59,7 @@ router.post(
         };
 
         const body = req.body as RegisterSchema;
-        const { register, security, limits } = Config.get();
+        const { register, limits } = Config.get();
         const ip = req.ip!;
 
         // Reg tokens
@@ -109,25 +109,8 @@ router.post(
             });
         }
 
-        if (!regTokenUsed && register.requireCaptcha && security.captcha.enabled) {
-            const { sitekey, service } = security.captcha;
-            if (!body.captcha_key) {
-                return res?.status(400).json({
-                    captcha_key: ["captcha-required"],
-                    captcha_sitekey: sitekey,
-                    captcha_service: service,
-                });
-            }
-
-            const verify = await verifyCaptcha(body.captcha_key, ip);
-            if (!verify.success) {
-                return res.status(400).json({
-                    captcha_key: verify["error-codes"],
-                    captcha_sitekey: sitekey,
-                    captcha_service: service,
-                });
-            }
-        }
+        const captcha = await checkCaptcha(!regTokenUsed && register.requireCaptcha, body.captcha_key, ip);
+        if (captcha) return res.status(400).json(captcha);
 
         if (!regTokenUsed && !register.allowMultipleAccounts) {
             // TODO: check if fingerprint was eligible generated

@@ -16,8 +16,11 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-export interface CaptchaRequiredResponse {
-    captcha_key: string[];
-    captcha_sitekey: string;
-    captcha_service: string;
+export interface CaptchaConfigResponse {
+    service: "recaptcha" | "hcaptcha" | "cap" | null;
+    sitekey: string | null;
+    endpoint: string | null;
+    register: boolean;
+    login: boolean;
+    password_reset: boolean;
 }
