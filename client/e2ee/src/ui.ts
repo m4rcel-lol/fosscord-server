@@ -92,6 +92,25 @@ const currentChannel = () => /^\/channels\/@me\/(\d+)/.exec(location.pathname)?.
 
 const memberName = (m: ChannelMember) => m.global_name || m.username;
 
+const UNLOCK_SNOOZE_KEY = "fe2ee-unlock-snoozed-until";
+const UNLOCK_SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
+
+const unlockSnoozed = () => {
+    try {
+        return Number(localStorage.getItem(UNLOCK_SNOOZE_KEY)) > Date.now();
+    } catch {
+        return false;
+    }
+};
+
+const snoozeUnlock = () => {
+    try {
+        localStorage.setItem(UNLOCK_SNOOZE_KEY, String(Date.now() + UNLOCK_SNOOZE_MS));
+    } catch {
+        return;
+    }
+};
+
 export interface UiOptions {
     engine: Engine;
     states: Map<string, { state: MessageState; reason?: string }>;
@@ -355,6 +374,7 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword }
             body.closest("dialog")?.addEventListener("close", () => {
                 stop();
                 unlockOpen = null;
+                if (engine.locked) snoozeUnlock();
             });
             actions.append(button("Not now", "secondary", done));
             render();
@@ -673,6 +693,7 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword }
         refresh,
         showError,
         showUnlock,
+        unlockSnoozed,
         showApproval,
         dismissApproval,
         showSettings,

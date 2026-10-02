@@ -68,7 +68,7 @@ The new device repeats its request every 10 seconds for 5 minutes, so a device t
 
 ### What the user sees
 
-Messages that are waiting for keys show "Decrypting…" and fill in on their own through a local `MESSAGE_UPDATE` once the keys arrive. A message this browser can't decrypt shows "Sent before this browser was set up" with an Unlock button that opens the unlock dialog: the password or recovery code field, plus the approval status and code. A locked browser still never sends plaintext into an encrypted conversation. The send fails with a banner that has the same Unlock button.
+Messages that are waiting for keys show "Decrypting…" and fill in on their own through a local `MESSAGE_UPDATE` once the keys arrive. A message this browser can't decrypt shows "Sent before this browser was set up" with an Unlock button that opens the unlock dialog: the password or recovery code field, plus the approval status and code. A locked browser still never sends plaintext into an encrypted conversation. The send fails with a banner that has the same Unlock button. Closing the unlock dialog with Not now or Escape stops it from opening on its own in that browser for seven days. The Unlock buttons and the Unlock this browser button in the encryption settings still open it.
 
 ## Message format
 

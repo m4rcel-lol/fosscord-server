@@ -165,7 +165,7 @@ const start = async (userId: string) => {
         initialized = true;
         engine.onUnlock(() => hooks.retryAll());
         ui.refresh();
-        if (engine.locked) {
+        if (engine.locked && !ui.unlockSnoozed()) {
             link.request().catch((error) => console.error("[e2ee] link request failed", error));
             ui.showUnlock();
         }
