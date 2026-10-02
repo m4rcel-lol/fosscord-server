@@ -22,4 +22,5 @@ export class ClientConfiguration {
     icon: string | null = null;
     logo: string | null = null;
     helpUrl: string | null = null;
+    activityApplicationHost: string | null = null;
 }

@@ -41,6 +41,7 @@ import {
     UserSettingsProtos,
     VoiceState,
     PrivateCalls,
+    ActivityInstances,
 } from "@spacebar/database";
 import {
     Activity,
@@ -891,6 +892,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
         }),
     );
 
+    const activityInstances = await ActivityInstances.forGuilds(guilds.filter((guild) => "voice_states" in guild).map((guild) => guild.id));
     const readySupplementalGuilds = guilds.map((guild) => {
         if (!("voice_states" in guild)) return { id: guild.id };
 
@@ -900,7 +902,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
             voice_states: availableGuild.voice_states.map((state) => VoiceState.prototype.toPublicVoiceState.apply(state)),
             // embedded_activities is the older name for the same field, kept for clients that still read it
             embedded_activities: [],
-            activity_instances: [],
+            activity_instances: activityInstances.get(availableGuild.id) ?? [],
         };
     });
 

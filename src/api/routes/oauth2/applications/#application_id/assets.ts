@@ -16,14 +16,18 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import "reflect-metadata";
+import { Request, Response, Router } from "express";
+import { route } from "@spacebar/api/middlewares";
+import { Application, EmbeddedActivity } from "@spacebar/database";
+import { DiscordApiErrors } from "@spacebar/util";
 
-export * from "./Database";
-export * from "./entities/index";
+const router = Router({ mergeParams: true });
 
-export * from "./voice/PrivateCalls";
-export * from "./voice/VoiceChannels";
-export * from "./voice/StreamPreviews";
-export * from "./voice/StageInstances";
-export * from "./voice/ScheduledEvents";
-export * from "./voice/ActivityInstances";
+router.get("/", route({}), async (req: Request, res: Response) => {
+    const applicationId = req.params.application_id as string;
+    if (!(await Application.exists({ where: { id: applicationId } }))) throw DiscordApiErrors.UNKNOWN_APPLICATION;
+    const activity = await EmbeddedActivity.findOne({ where: { application_id: applicationId } });
+    res.json(activity?.assets ?? []);
+});
+
+export default router;

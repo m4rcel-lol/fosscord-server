@@ -16,14 +16,17 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import "reflect-metadata";
+import { Request, Response, Router } from "express";
+import { route } from "@spacebar/api/middlewares";
+import { ActivityInstances } from "@spacebar/database";
 
-export * from "./Database";
-export * from "./entities/index";
+const router = Router({ mergeParams: true });
 
-export * from "./voice/PrivateCalls";
-export * from "./voice/VoiceChannels";
-export * from "./voice/StreamPreviews";
-export * from "./voice/StageInstances";
-export * from "./voice/ScheduledEvents";
-export * from "./voice/ActivityInstances";
+router.post("/", route({}), async (req: Request, res: Response) => {
+    const instance = await ActivityInstances.find(req.params.application_id as string, req.params.instance_id as string);
+    const { session_id } = (req.body ?? {}) as { session_id?: string };
+    if (instance) await ActivityInstances.leave(instance, req.user_id, typeof session_id === "string" ? session_id : undefined);
+    res.sendStatus(204);
+});
+
+export default router;

@@ -138,6 +138,7 @@ const ENDPOINT_KEYS = [
     "RTC_LATENCY_ENDPOINT",
     "MIGRATION_SOURCE_ORIGIN",
     "MIGRATION_DESTINATION_ORIGIN",
+    "ACTIVITY_APPLICATION_HOST",
 ];
 
 const stripScheme = (url: string) => url.replace(/^(https?|wss?):\/\//, "").replace(/\/$/, "");
@@ -186,6 +187,7 @@ const buildHtml = () => {
         RTC_LATENCY_ENDPOINT: \`//\${host}/rtc\`,
         MIGRATION_SOURCE_ORIGIN: location.origin,
         MIGRATION_DESTINATION_ORIGIN: location.origin,
+        ACTIVITY_APPLICATION_HOST: ${json(client.activityApplicationHost ?? "")} || \`//\${host}\`,
         INSTANCE_NAME: ${json(client.instanceName)},
         INSTANCE_ICON: ${json(images.icon)},
         INSTANCE_LOGO: ${json(images.logo)},

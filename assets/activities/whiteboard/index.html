@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Whiteboard</title>
+        <link rel="stylesheet" href="style.css" />
+    </head>
+    <body>
+        <main class="stage" id="stage">
+            <div class="board" id="board">
+                <canvas id="canvas" aria-label="Shared whiteboard"></canvas>
+                <div class="cursors" id="cursors" aria-hidden="true"></div>
+            </div>
+        </main>
+
+        <header class="people" id="people" aria-label="People drawing"></header>
+
+        <nav class="toolbar" aria-label="Drawing tools">
+            <div class="group" role="radiogroup" aria-label="Color" id="colors"></div>
+            <div class="group" role="radiogroup" aria-label="Brush size" id="sizes"></div>
+            <div class="group">
+                <button type="button" class="tool" id="eraser" aria-pressed="false" aria-label="Eraser" title="Eraser">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M15.5 4.5 20 9a1.5 1.5 0 0 1 0 2.1L12.6 18.5H8.4L4 14.1a1.5 1.5 0 0 1 0-2.1L13.4 4.5a1.5 1.5 0 0 1 2.1 0Z" />
+                        <path d="M9 9.5 15 15.5M12.6 18.5H20" />
+                    </svg>
+                </button>
+                <button type="button" class="tool" id="undo" aria-label="Undo your last stroke" title="Undo (Ctrl+Z)">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M9 14 4 9l5-5" />
+                        <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+                    </svg>
+                </button>
+                <button type="button" class="tool" id="clear" aria-label="Clear the board for everyone" title="Clear the board">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+                    </svg>
+                </button>
+            </div>
+        </nav>
+
+        <div class="notice" id="notice" role="status" hidden></div>
+
+        <script src="app.js"></script>
+    </body>
+</html>

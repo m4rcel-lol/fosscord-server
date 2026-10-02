@@ -26,6 +26,7 @@ import { PrivateCalls } from "./PrivateCalls";
 import { GoLiveStreams } from "./StreamPreviews";
 import { StageInstances } from "./StageInstances";
 import { ScheduledEvents } from "./ScheduledEvents";
+import { ActivityInstances } from "./ActivityInstances";
 
 export class VoiceChannels {
     static async startTime(channelId: string) {
@@ -40,7 +41,10 @@ export class VoiceChannels {
 
     static async occupancyChanged(guildId: string | null | undefined, channelId: string | null | undefined, userId: string, joined: boolean) {
         if (!channelId) return;
-        if (!joined) await GoLiveStreams.end(userId);
+        if (!joined) {
+            await GoLiveStreams.end(userId);
+            await ActivityInstances.userLeftChannel(channelId, userId);
+        }
         if (!guildId) return joined ? PrivateCalls.join(channelId, userId) : PrivateCalls.leave(channelId);
 
         const voiceStartTime = await VoiceChannels.startTime(channelId);

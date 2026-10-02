@@ -25,7 +25,9 @@ import {
     InteractionSchema,
     InteractionType,
     ApplicationCommandType,
+    ApplicationCommandHandlerType,
     ChannelType,
+    InteractionFailureReason,
     MessageCreateCloudAttachment,
     PublicAttachment,
 } from "@spacebar/schemas";
@@ -37,13 +39,15 @@ import {
     emitEvent,
     getPermission,
     InteractionCreateEvent,
+    InteractionSuccessEvent,
     PendingInteraction,
     pendingInteractions,
     Permissions,
     Snowflake,
     storeInteraction,
 } from "@spacebar/util";
-import { buildResolved, emitInteractionFailure, fetchInteractionMessage, processInteractionCallback } from "@spacebar/api/util/handlers/Interaction";
+import { buildResolved, emitInteractionFailure, fetchInteractionMessage, interactionTarget, processInteractionCallback } from "@spacebar/api/util/handlers/Interaction";
+import { launchActivity } from "@spacebar/api/activities";
 import { ensureInteractionKeys, postSignedInteraction } from "@spacebar/api/util/handlers/Application";
 import { convertCloudAttachmentToAttachment } from "@spacebar/api/util";
 import { canUseCommand } from "@spacebar/api/util/handlers/ApplicationCommands";
@@ -72,6 +76,37 @@ function deliverOverHttp(applicationId: string, url: string, interaction: Pendin
 router.post("/", route({}), async (req: Request, res: Response) => {
     const body = req.body as InteractionSchema & { data: Record<string, unknown> };
     const data = (body.data ?? {}) as Record<string, unknown> & { options?: { type: number; value?: unknown }[] };
+
+    if (body.type === InteractionType.ApplicationCommand && typeof data.id === "string") {
+        const entryPoint = await ApplicationCommand.findOne({
+            where: {
+                id: data.id,
+                application_id: body.application_id,
+                type: ApplicationCommandType.PRIMARY_ENTRY_POINT,
+                handler: ApplicationCommandHandlerType.DISCORD_LAUNCH_ACTIVITY,
+            },
+        });
+        if (entryPoint) {
+            const interaction = { id: Snowflake.generate(), nonce: body.nonce, userId: req.user_id, sessionId: body.session_id };
+            const target = interactionTarget(interaction);
+            await emitEvent({ event: "INTERACTION_CREATE", ...target, data: { id: interaction.id, nonce: body.nonce } } satisfies InteractionCreateEvent);
+            try {
+                await launchActivity({ userId: req.user_id, applicationId: entryPoint.application_id, channelId: body.channel_id, sessionId: body.session_id, nonce: body.nonce });
+            } catch (error) {
+                const code = (error as { code?: number }).code;
+                const reasons: Record<number, InteractionFailureReason> = {
+                    10002: InteractionFailureReason.ACTIVITY_LAUNCH_UNKNOWN_APPLICATION,
+                    10003: InteractionFailureReason.ACTIVITY_LAUNCH_UNKNOWN_CHANNEL,
+                    50013: InteractionFailureReason.ACTIVITY_LAUNCH_INVALID_USER_PERMISSIONS,
+                    50024: InteractionFailureReason.ACTIVITY_LAUNCH_INVALID_CHANNEL_TYPE,
+                };
+                await emitInteractionFailure(interaction, (code && reasons[code]) || InteractionFailureReason.ACTIVITY_LAUNCH_FAILED_TO_LAUNCH);
+                return res.sendStatus(204);
+            }
+            await emitEvent({ event: "INTERACTION_SUCCESS", ...target, data: { id: interaction.id, nonce: body.nonce ?? "" } } satisfies InteractionSuccessEvent);
+            return res.sendStatus(204);
+        }
+    }
 
     const application = await Application.findOne({ where: { id: body.application_id }, relations: { bot: true } });
     if (!application?.bot) throw DiscordApiErrors.UNKNOWN_APPLICATION;
