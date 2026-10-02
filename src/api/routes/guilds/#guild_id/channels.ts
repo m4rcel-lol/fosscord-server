@@ -20,7 +20,8 @@ import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { Channel, Guild } from "@spacebar/database";
 import { ChannelUpdateEvent, emitEvent } from "@spacebar/util";
-import { ChannelCreateSchema, ChannelReorderSchema } from "@spacebar/schemas";
+import { ChannelCreateSchema, ChannelReorderSchema, ChannelType } from "@spacebar/schemas";
+import { In, Not } from "typeorm";
 
 const router = Router({ mergeParams: true });
 
@@ -35,11 +36,15 @@ router.get(
     }),
     async (req: Request, res: Response) => {
         const { guild_id } = req.params as { [key: string]: string };
-        const channels = await Channel.find({ where: { guild_id } });
+        const [channels, guild] = await Promise.all([
+            Channel.find({
+                where: { guild_id, type: Not(In([ChannelType.GUILD_NEWS_THREAD, ChannelType.GUILD_PUBLIC_THREAD, ChannelType.GUILD_PRIVATE_THREAD])) },
+                relations: { available_tags: true },
+            }),
+            Guild.findOneOrFail({ where: { id: guild_id }, select: { channel_ordering: true, id: true } }),
+        ]);
 
-        for await (const channel of channels) {
-            channel.position = await Channel.calculatePosition(channel.id, guild_id, channel.guild);
-        }
+        for (const channel of channels) channel.position = guild.channel_ordering.indexOf(channel.id);
         channels.sort((a, b) => a.position - b.position);
 
         res.json(channels);

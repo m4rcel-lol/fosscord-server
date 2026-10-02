@@ -272,7 +272,7 @@ export async function getPermission(
     while (channel?.isThread() && channel.parent_id) {
         const parent = await Channel.findOneOrFail({ where: { id: channel.parent_id }, ...query });
         if (channel.type === ChannelType.GUILD_PRIVATE_THREAD) {
-            if (!parent.thread_members!.find(({ member }) => member.id === user_id)) {
+            if (!channel.thread_members?.find((m) => (m.user_id ?? m.member?.id) === user_id)) {
                 const perms: Permissions = await getPermission(user_id, guild_id, parent, opts);
                 if (!perms.has("MANAGE_THREADS")) {
                     return new Permissions(0);

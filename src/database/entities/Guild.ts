@@ -427,7 +427,7 @@ export class Guild extends BaseClass {
             managed: false,
             mentionable: false,
             name: "@everyone",
-            permissions: "2251804225",
+            permissions: "2248473465835073",
             position: 0,
             icon: undefined,
             unicode_emoji: undefined,

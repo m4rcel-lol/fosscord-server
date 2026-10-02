@@ -444,7 +444,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
         timePromise(() =>
             Channel.find({
                 where: {
-                    type: In([ChannelType.GUILD_NEWS_THREAD, ChannelType.GUILD_PUBLIC_THREAD]),
+                    type: In([ChannelType.GUILD_NEWS_THREAD, ChannelType.GUILD_PUBLIC_THREAD, ChannelType.GUILD_PRIVATE_THREAD]),
                     guild_id: In(memberGuildIds),
                 },
             }),
@@ -453,8 +453,8 @@ export async function onIdentify(this: WebSocket, data: Payload) {
 
     const guildIds = memberGuilds.map((g) => g.id);
 
-    const allThreads = allThreadsRaw.filter(({ thread_metadata }) => thread_metadata?.archived === false);
     const threadMemberMap = new Map(threadMembers.map((member) => [member.id, member] as const));
+    const allThreads = allThreadsRaw.filter(({ id, thread_metadata }) => thread_metadata?.archived === false && threadMemberMap.has(id));
 
     const { result: channelsByGuild, elapsed: groupChannelsTime } = timeFunction(() => arrayGroupBy(memberGuildChannels, (c) => c.guild_id!));
     const { result: emojisByGuild, elapsed: groupEmojisTime } = timeFunction(() => arrayGroupBy(memberGuildEmojis, (e) => e.guild_id!));

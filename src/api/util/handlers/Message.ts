@@ -341,14 +341,17 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
     }
 
     const ephermal = (message.flags & (1 << 6)) !== 0;
-    if (!ephermal && channel.type === ChannelType.GUILD_PUBLIC_THREAD) {
+    const isNew = !opts.edited_timestamp;
+    if (isNew && !ephermal && channel.isThread() && message.type !== MessageType.THREAD_STARTER_MESSAGE && message.id !== channel.id) {
         const rep = Channel.getRepository();
         await rep.increment({ id: channel.id }, "message_count", 1);
         await rep.increment({ id: channel.id }, "total_message_sent", 1);
+        channel.message_count = (channel.message_count ?? 0) + 1;
+        channel.total_message_sent = (channel.total_message_sent ?? 0) + 1;
     }
-    if (!ephermal) {
+    if (isNew && !ephermal) {
         channel.last_message_id = message.id;
-        await channel.save();
+        await Channel.update({ id: channel.id }, { last_message_id: message.id });
     }
 
     // TODO: Removed cloud attachment handling being inline - handle components!

@@ -17,6 +17,7 @@
 */
 
 import murmur from "murmurhash-js/murmurhash3_gc";
+import { syncThreadList } from "../util/ThreadSync";
 import { getDatabase, Member, Role, Session, User, Channel } from "@spacebar/database";
 import { arrayPartition, Stopwatch } from "@spacebar/extensions";
 import { WebSocket, Payload, handlePresenceUpdate, OPCODES, Send, handleOffloadedGatewayRequest } from "@spacebar/gateway";
@@ -156,7 +157,9 @@ export async function onLazyRequest(this: WebSocket, { d }: Payload) {
     // TODO: check data
     check.call(this, LazyRequestSchema, d);
     // noinspection JSUnusedLocalSymbols - TODO: implement typing/activities subscriptions
-    const { guild_id, typing, channels, activities, members } = d as LazyRequestSchema;
+    const { guild_id, typing, channels, activities, members, threads } = d as LazyRequestSchema;
+
+    if (threads) await syncThreadList.call(this, guild_id);
 
     if (Config.get().offload.gateway.lazyRequestUrl !== null) {
         if (await handleOffloadedGatewayRequest(this, Config.get().offload.gateway.lazyRequestUrl!, d)) return;

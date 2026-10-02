@@ -16,12 +16,12 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { ChannelPermissionOverwriteType, ChannelType, TagCreateSchema } from "@spacebar/schemas";
+import { ChannelPermissionOverwriteType, ChannelType, DefaultReaction, TagCreateSchema } from "@spacebar/schemas";
 
 export interface ChannelModifySchema {
     name?: string;
     type?: ChannelType;
-    topic?: string;
+    topic?: string | null;
     icon?: string | null;
     bitrate?: number;
     user_limit?: number;
@@ -35,17 +35,20 @@ export interface ChannelModifySchema {
         deny: string;
     }[];
     applied_tags?: string[];
-    parent_id?: string;
+    parent_id?: string | null;
     id?: string; // is not used (only for guild create)
     nsfw?: boolean;
-    rtc_region?: string;
-    default_auto_archive_duration?: number;
-    default_reaction_emoji?: string | null;
+    rtc_region?: string | null;
+    default_auto_archive_duration?: number | null;
+    default_reaction_emoji?: DefaultReaction | null;
+    default_sort_order?: number | null;
+    default_forum_layout?: number | null;
+    default_tag_setting?: string | null;
     flags?: number;
     default_thread_rate_limit_per_user?: number;
     video_quality_mode?: number;
     auto_archive_duration?: number;
     archived?: boolean;
     locked?: boolean;
-    available_tags?: (TagCreateSchema & { id: string })[];
+    available_tags?: (TagCreateSchema & { id?: string | null })[];
 }

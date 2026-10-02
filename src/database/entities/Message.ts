@@ -69,7 +69,7 @@ export class Message extends BaseClass {
 
     @JoinColumn({ name: "thread_id", foreignKeyConstraintName: "FK_message_thread_id" })
     @ManyToOne(() => Channel, {
-        onDelete: "CASCADE",
+        onDelete: "SET NULL",
     })
     @JsonRemoveEmpty
     thread?: Channel;

@@ -17,7 +17,7 @@
 */
 
 import { HTTPError } from "lambert-server/HTTPError";
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId } from "typeorm";
+import { Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, RelationId } from "typeorm";
 import { DmChannelDTO } from "../../util/dtos";
 import { ChannelCreateEvent, ChannelRecipientRemoveEvent, ThreadCreateEvent, ThreadMembersUpdateEvent } from "../../util/interfaces";
 import { InvisibleCharacters, Snowflake, emitEvent, getPermission, Permissions, Config, DiscordApiErrors } from "@spacebar/util/util";
@@ -32,7 +32,7 @@ import { User } from "./User";
 import { VoiceState } from "./VoiceState";
 import { Webhook } from "./Webhook";
 import { Member } from "./Member";
-import { ChannelPermissionOverwrite, ChannelType, PublicChannel, PublicUserProjection, ThreadMetadata, WebhookChannel } from "@spacebar/schemas";
+import { ChannelPermissionOverwrite, ChannelType, DefaultReaction, PublicChannel, PublicUserProjection, ThreadMetadata, WebhookChannel } from "@spacebar/schemas";
 import { OrmUtils } from "../../util/imports";
 import { ThreadMember } from "./ThreadMember";
 import { trimSpecial } from "@spacebar/extensions";
@@ -80,11 +80,12 @@ export class Channel extends BaseClass {
     guild?: Guild;
 
     @Column({ nullable: true })
+    @Index("IDX_channels_parent_id")
     @RelationId((channel: Channel) => channel.parent)
     parent_id: string | null;
 
     @JoinColumn({ name: "parent_id", foreignKeyConstraintName: "FK_channel_parent_id" })
-    @ManyToOne(() => Channel)
+    @ManyToOne(() => Channel, { onDelete: "CASCADE" })
     parent?: Channel;
 
     // for group DMs and owned custom channel types
@@ -99,8 +100,8 @@ export class Channel extends BaseClass {
     @Column({ nullable: true, type: "timestamp with time zone" })
     last_pin_timestamp?: Date | null; // ISO8601
 
-    @Column({ nullable: true })
-    default_auto_archive_duration?: number;
+    @Column({ type: "int", nullable: true })
+    default_auto_archive_duration?: number | null;
 
     @Column({ type: "jsonb", nullable: true })
     permission_overwrites?: ChannelPermissionOverwrite[];
@@ -120,8 +121,8 @@ export class Channel extends BaseClass {
     @Column({ nullable: true })
     rate_limit_per_user?: number;
 
-    @Column({ nullable: true })
-    topic?: string;
+    @Column({ type: "varchar", nullable: true })
+    topic?: string | null;
 
     @OneToMany(() => Invite, (invite: Invite) => invite.channel, {
         cascade: true,
@@ -187,6 +188,18 @@ export class Channel extends BaseClass {
     @Column("text", { nullable: true })
     status?: string | null;
 
+    @Column({ type: "jsonb", nullable: true })
+    default_reaction_emoji?: DefaultReaction | null;
+
+    @Column({ type: "int", nullable: true })
+    default_sort_order?: number | null;
+
+    @Column({ type: "int", nullable: true })
+    default_forum_layout?: number | null;
+
+    @Column({ type: "varchar", nullable: true })
+    default_tag_setting?: string | null;
+
     /** Must be calculated Channel.calculatePosition */
     position: number;
 
@@ -241,38 +254,36 @@ export class Channel extends BaseClass {
         }
 
         switch (channel.type) {
-            // TODO: should threads even be routed through this function instead of createThreadChannel?
-            case ChannelType.GUILD_PUBLIC_THREAD:
-            case ChannelType.GUILD_PRIVATE_THREAD:
-            case ChannelType.GUILD_NEWS_THREAD:
             case ChannelType.GUILD_TEXT:
             case ChannelType.GUILD_FORUM:
             case ChannelType.GUILD_MEDIA:
             case ChannelType.GUILD_NEWS:
             case ChannelType.GUILD_VOICE:
+            case ChannelType.GUILD_STAGE_VOICE:
+            case ChannelType.GUILD_DIRECTORY:
                 if (channel.parent_id && !opts?.skipExistsCheck) {
-                    const exists = await Channel.findOneOrFail({
+                    const exists = await Channel.findOne({
                         where: { id: channel.parent_id },
                     });
-                    if (!exists) throw new HTTPError("Parent id channel doesn't exist", 400);
+                    if (!exists || exists.type !== ChannelType.GUILD_CATEGORY) throw new HTTPError("Parent id channel doesn't exist", 400);
                     if (exists.guild_id !== channel.guild_id) throw new HTTPError("The category channel needs to be in the guild");
                 }
                 break;
             case ChannelType.GUILD_CATEGORY:
             case ChannelType.UNHANDLED:
+                channel.parent_id = null;
                 break;
             case ChannelType.DM:
             case ChannelType.GROUP_DM:
                 throw new HTTPError("You can't create a dm channel in a guild");
-            case ChannelType.GUILD_STORE:
             default:
-                throw new HTTPError("Not yet supported");
+                throw DiscordApiErrors.CANNOT_EXECUTE_ON_THIS_CHANNEL_TYPE;
         }
 
         if (!channel.permission_overwrites) channel.permission_overwrites = [];
         // TODO: eagerly auto generate position of all guild channels
 
-        const position = (channel.type === ChannelType.UNHANDLED ? 0 : channel.position) || 0;
+        const position = channel.type === ChannelType.UNHANDLED ? 0 : (channel.position ?? guild.channel_ordering?.length ?? 0);
 
         channel = {
             ...channel,
@@ -304,128 +315,6 @@ export class Channel extends BaseClass {
     }
     threadOnly() {
         return this.type === ChannelType.GUILD_FORUM || this.type === ChannelType.GUILD_MEDIA;
-    }
-
-    static async createThreadChannel(
-        channel: Partial<Channel>,
-        metadata: Partial<ThreadMetadata>,
-        user_id: string = "0",
-        opts?: {
-            keepId?: boolean;
-            skipExistsCheck?: boolean;
-            skipParentExistsCheck?: boolean;
-            skipPermissionCheck?: boolean;
-            skipEventEmit?: boolean;
-            skipNameChecks?: boolean;
-        },
-    ): Promise<Channel> {
-        channel = {
-            // set the default type to private
-            type: ChannelType.GUILD_PRIVATE_THREAD,
-            ...channel,
-            ...(!opts?.keepId && { id: Snowflake.generate() }),
-            created_at: new Date(),
-            position: 0, // TODO:
-            message_count: 0,
-            member_count: 1,
-            total_message_sent: 0,
-        };
-
-        const exists = await Channel.findOne({
-            where: {
-                id: channel.id,
-            },
-        });
-
-        const guild = await Guild.findOneOrFail({ where: { id: channel.guild_id } });
-
-        if (!opts?.skipExistsCheck && !guild.features.includes("ALLOW_EXISTING_THREAD_FOR_MESSAGE") && exists) throw DiscordApiErrors.THREAD_ALREADY_CREATED_FOR_THIS_MESSAGE;
-
-        if (!channel.parent_id) throw new HTTPError("Parent id not set", 400);
-        const parent = await Channel.findOneOrFail({ where: { id: channel.parent_id } });
-
-        if (!opts?.skipPermissionCheck) {
-            // Always check if user has permission first
-            const permissions = await getPermission(user_id, parent.guild_id);
-            permissions.hasThrow(channel.type === ChannelType.GUILD_PRIVATE_THREAD ? "CREATE_PRIVATE_THREADS" : "CREATE_PUBLIC_THREADS");
-        }
-
-        channel = {
-            ...channel,
-            permission_overwrites: parent.permission_overwrites,
-            nsfw: parent.nsfw,
-            owner_id: user_id,
-            guild_id: parent.guild_id,
-            thread_metadata: {
-                create_timestamp: new Date().toISOString(),
-                archive_timestamp: new Date().toISOString(),
-                archived: false,
-                auto_archive_duration: 0,
-                invitable: channel.type === ChannelType.GUILD_NEWS_THREAD || channel.type === ChannelType.GUILD_PUBLIC_THREAD ? Config.get().guild.publicThreadsInvitable : false,
-                locked: false,
-                ...metadata,
-            },
-        };
-
-        if (!opts?.skipParentExistsCheck) {
-            if (!parent) throw new HTTPError("Parent channel doesn't exist", 400);
-            if (parent.guild_id !== channel.guild_id) throw new HTTPError("The category channel needs to be in the guild");
-        }
-
-        if (!opts?.skipNameChecks) {
-            const guild = await Guild.findOneOrFail({ where: { id: channel.guild_id } });
-            if (!guild.features.includes("ALLOW_INVALID_CHANNEL_NAMES") && channel.name) {
-                for (const character of InvisibleCharacters) if (channel.name.includes(character)) throw new HTTPError("Channel name cannot include invalid characters", 403);
-
-                channel.name = channel.name.trim(); //category names are trimmed client side on discord.com
-            }
-
-            if (!guild.features.includes("ALLOW_UNNAMED_CHANNELS")) {
-                if (!channel.name) throw new HTTPError("Channel name cannot be empty.", 403);
-            }
-        }
-
-        // TODO: eagerly auto generate position of all guild channels
-
-        const thread = await OrmUtils.mergeDeep(new Channel(), channel).save();
-
-        const member = {
-            id: thread.id,
-            user_id,
-            join_timestamp: new Date(),
-            muted: false,
-            mute_config: null,
-            flags: 0,
-        };
-        if (channel.member_count) channel.member_count++;
-
-        const threadMember = await OrmUtils.mergeDeep(new ThreadMember(), member).save();
-
-        if (!opts?.skipEventEmit) {
-            await Promise.all([
-                emitEvent({
-                    event: "THREAD_CREATE",
-                    data: {
-                        ...thread,
-                        newly_created: true,
-                    },
-                    guild_id: channel.guild_id,
-                } satisfies ThreadCreateEvent),
-                emitEvent({
-                    event: "THREAD_MEMBERS_UPDATE",
-                    data: {
-                        guild_id: channel.guild_id!, // TODO: is this the right fix?
-                        id: thread.id,
-                        member_count: channel.member_count ?? 0, //TODO: is this the right fix?
-                        added_members: [threadMember],
-                        removed_member_ids: [],
-                    },
-                    guild_id: channel.guild_id,
-                } satisfies ThreadMembersUpdateEvent),
-            ]);
-        }
-
-        return thread;
     }
 
     static async createDMChannel(recipients: string[], creator_user_id: string, name?: string) {

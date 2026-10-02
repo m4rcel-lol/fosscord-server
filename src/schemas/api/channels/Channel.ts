@@ -17,7 +17,7 @@
 */
 
 // TODO: remove entity imports
-import { Channel, Recipient, Tag, ThreadMember } from "@spacebar/database";
+import { Channel, Recipient, Tag, PublicThreadMember } from "@spacebar/database";
 import { HTTPError } from "lambert-server/HTTPError";
 import { Snowflake } from "../../Identifiers";
 import { PartialUser, PublicMember } from "../users";
@@ -64,6 +64,22 @@ export interface ThreadMetadata {
     locked: boolean;
     invitable?: boolean;
     create_timestamp: string; //Discord docs say this is optional, but it's only for after a certain date so it's not
+}
+
+export interface DefaultReaction {
+    emoji_id: string | null;
+    emoji_name: string | null;
+}
+
+export enum ForumSortOrder {
+    LATEST_ACTIVITY = 0,
+    CREATION_DATE = 1,
+}
+
+export enum ForumLayout {
+    DEFAULT = 0,
+    LIST = 1,
+    GRID = 2,
 }
 
 export interface DMChannel extends Omit<Channel, "type" | "recipients"> {
@@ -127,17 +143,17 @@ export interface PublicChannel {
     member_count?: number;
     member_ids_preview?: Snowflake[];
     thread_metadata?: ThreadMetadata;
-    member?: ThreadMember;
+    member?: PublicThreadMember;
     default_auto_archive_duration?: number | null;
     default_thread_rate_limit_per_user?: number;
     permissions?: string;
     flags?: number;
     available_tags?: Tag[];
     applied_tags?: Snowflake[];
-    default_reaction_emoji?: string | null; // DefaultReaction type..? this is supposed to be an object apparently
-    default_forum_layout?: number;
+    default_reaction_emoji?: DefaultReaction | null;
+    default_forum_layout?: number | null;
     default_sort_order?: number | null;
-    default_tag_setting?: string;
+    default_tag_setting?: string | null;
     // icon_emoji?: IconEmoji | null; // TODO
     is_message_request?: boolean;
     is_message_request_timestamp?: string | null;

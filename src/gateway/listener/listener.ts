@@ -18,10 +18,10 @@
 
 import { Channel as AMQChannel } from "amqplib";
 import { bgRedBright } from "picocolors";
-import { Ban, Member, Message, Recipient, Relationship } from "@spacebar/database";
+import { Ban, Member, Message, Recipient, Relationship, ThreadMember } from "@spacebar/database";
 import { EVENTEnum, EventOpts, getPermission, listenEvent, ListenEventOpts, NewUrlUserSignatureData, Permissions, RabbitMQ } from "@spacebar/util";
 import { WebSocket } from "@spacebar/gateway";
-import { PublicMember, RelationshipType } from "@spacebar/schemas";
+import { ChannelType, PublicMember, RelationshipType } from "@spacebar/schemas";
 import { CLOSECODES, OPCODES, Send } from "../util";
 
 // TODO: close connection on Invalidated Token
@@ -45,7 +45,7 @@ export function handlePresenceUpdate(this: WebSocket, { event, acknowledge, data
 
 // TODO: use already queried guilds/channels of Identify and don't fetch them again
 export async function setupListener(this: WebSocket) {
-    const [members, recipients, relationships] = await Promise.all([
+    const [members, recipients, relationships, threadMembers] = await Promise.all([
         Member.find({
             where: { id: this.user_id },
             relations: { guild: { channels: true } },
@@ -60,7 +60,9 @@ export async function setupListener(this: WebSocket) {
                 type: RelationshipType.FRIEND,
             },
         }),
+        ThreadMember.find({ where: { user_id: this.user_id }, select: { id: true } }),
     ]);
+    const joinedThreads = new Set(threadMembers.map((m) => m.id));
 
     const guilds = members.map((x) => x.guild);
     const dm_channels = recipients.map((x) => x.channel);
@@ -110,11 +112,15 @@ export async function setupListener(this: WebSocket) {
                 this.permissions[guild.id] = permission;
                 this.events[guild.id] = await listenEvent(guild.id, consumer, opts);
 
+                const byId = new Map(guild.channels.map((channel) => [channel.id, channel]));
                 await Promise.all(
                     guild.channels.map(async (channel) => {
-                        if (permission.overwriteChannel(channel.permission_overwrites ?? []).has("VIEW_CHANNEL")) {
-                            this.events[channel.id] = await listenEvent(channel.id, consumer, opts);
-                        }
+                        const source = channel.isThread() ? byId.get(channel.parent_id!) : channel;
+                        if (!source) return;
+                        const perms = permission.overwriteChannel(source.permission_overwrites ?? []);
+                        if (!perms.has("VIEW_CHANNEL")) return;
+                        if (channel.type === ChannelType.GUILD_PRIVATE_THREAD && !joinedThreads.has(channel.id) && !perms.has("MANAGE_THREADS")) return;
+                        this.events[channel.id] = await listenEvent(channel.id, consumer, opts);
                     }),
                 );
             }),
@@ -256,6 +262,13 @@ async function consume(this: WebSocket, opts: EventOpts) {
         case "CHANNEL_CREATE":
             if (!permission.overwriteChannel(data.permission_overwrites).has("VIEW_CHANNEL")) return;
             this.events[id] = await listenEvent(id, consumer, listenOpts);
+            break;
+        case "THREAD_CREATE":
+            if (!this.events[data.id]) this.events[data.id] = await listenEvent(data.id, consumer, listenOpts);
+            break;
+        case "THREAD_DELETE":
+            this.events[data.id]?.();
+            delete this.events[data.id];
             break;
         case "RELATIONSHIP_ADD":
             this.events[data.user.id] = await listenEvent(data.user.id, handlePresenceUpdate.bind(this), this.listen_options);
