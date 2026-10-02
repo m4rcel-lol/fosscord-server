@@ -17,10 +17,10 @@
 */
 
 import { Request, Response, Router } from "express";
-import { In, LessThan, FindOptionsWhere } from "typeorm";
+import { In } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
 import { Message, Member, Channel, Attachment } from "@spacebar/database";
-import { Snowflake, Permissions, NewUrlUserSignatureData } from "@spacebar/util";
+import { Snowflake, Permissions, NewUrlUserSignatureData, FieldErrors } from "@spacebar/util";
 import { Stopwatch } from "@spacebar/extensions";
 
 const router: Router = Router({ mergeParams: true });
@@ -39,9 +39,10 @@ router.get(
     }),
     // AFAICT this endpoint doesn't list DMs
     async (req: Request, res: Response) => {
-        const limit = req.query.limit && !isNaN(Number(req.query.limit)) ? Number(req.query.limit) : 25;
-        const everyone = req.query.everyone !== undefined ? Boolean(req.query.everyone) : true;
-        const roles = req.query.roles !== undefined ? Boolean(req.query.roles) : true;
+        const limit = req.query.limit !== undefined ? Number(req.query.limit) : 25;
+        if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw FieldErrors({ limit: { code: "NUMBER_TYPE_MAX", message: "int value should be between 1 and 100." } });
+        const everyone = `${req.query.everyone}` !== "false";
+        const roles = `${req.query.roles}` !== "false";
         const before = req.query.before !== undefined ? String(req.query.before as string) : undefined;
         const guild_id = req.query.guild_id !== undefined ? req.query.guild_id : undefined;
 
@@ -90,33 +91,30 @@ router.get(
             return acc;
         }, [] as Snowflake[]);
 
-        const whereQuery: FindOptionsWhere<Message>[] = [
-            {
-                channel_id: In(visibleChannelIds),
-                mentions: { id: user.id },
-                id: before ? LessThan(before) : undefined,
-            },
-        ];
-        if (everyone) {
-            whereQuery.push({
-                channel_id: In(visibleChannelIds),
-                mention_everyone: true,
-                id: before ? LessThan(before) : undefined,
-            });
-        }
-        if (roles) {
-            whereQuery.push({
-                channel_id: In(visibleChannelIds),
-                mention_roles: { id: In(ownedMentionableRoleIds) },
-                id: before ? LessThan(before) : undefined,
-            });
-        }
+        const ids: string[] = visibleChannelIds.length
+            ? (
+                  await Message.getRepository().query(
+                      `SELECT id FROM (
+                          (SELECT m.id FROM message_user_mentions u JOIN messages m ON m.id = u.message_id
+                           WHERE u.user_id = $1 AND m.channel_id = ANY($2::bigint[]) AND ($3::bigint IS NULL OR u.message_id < $3) ORDER BY u.message_id DESC LIMIT $4)
+                          UNION
+                          (SELECT id FROM messages WHERE $5 AND mention_everyone AND channel_id = ANY($2::bigint[]) AND ($3::bigint IS NULL OR id < $3) ORDER BY id DESC LIMIT $4)
+                          UNION
+                          (SELECT m.id FROM message_role_mentions r JOIN messages m ON m.id = r.message_id
+                           WHERE $6 AND r.role_id = ANY($7::bigint[]) AND m.channel_id = ANY($2::bigint[]) AND ($3::bigint IS NULL OR r.message_id < $3) ORDER BY r.message_id DESC LIMIT $4)
+                      ) mentioned ORDER BY id DESC LIMIT $4`,
+                      [user.id, visibleChannelIds, before ?? null, limit, everyone, roles, ownedMentionableRoleIds],
+                  )
+              ).map((row: { id: string }) => `${row.id}`)
+            : [];
+        if (!ids.length) return res.json([]);
 
         const sw = Stopwatch.startNew();
         const finalMessages = (
             await Message.find({
-                where: whereQuery,
-                order: { timestamp: "DESC" },
+                where: { id: In(ids) },
+                order: { id: "DESC" },
+                relationLoadStrategy: "query",
                 relations: {
                     author: true,
                     webhook: true,
@@ -137,7 +135,6 @@ router.get(
                         attachments: true,
                     },
                 },
-                take: limit,
             })
         ).map((m) => ({
             ...m.toJSON(),
