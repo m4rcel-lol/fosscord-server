@@ -17,11 +17,10 @@
 */
 
 import { Request, Response, Router } from "express";
-import { HTTPError } from "lambert-server/HTTPError";
 import multer from "multer";
 import { route } from "@spacebar/api/middlewares";
-import { Webhook, Message } from "@spacebar/database";
-import { Config, DiscordApiErrors, emitEvent, handleFile, ValidateName, WebhooksUpdateEvent } from "@spacebar/util";
+import { Webhook } from "@spacebar/database";
+import { Config, DiscordApiErrors, emitEvent, WebhooksUpdateEvent } from "@spacebar/util";
 import { applyWebhookUpdate, executeWebhook, webhookToJSON } from "@spacebar/api/util/handlers/Webhook";
 import type { WebhookUpdateSchema } from "@spacebar/schemas";
 
@@ -135,7 +134,6 @@ router.delete(
         if (webhook.token !== webhook_token) throw DiscordApiErrors.INVALID_WEBHOOK_TOKEN_PROVIDED;
 
         const channel_id = webhook.channel_id;
-        await Message.delete({ channel_id, webhook_id });
         await Webhook.delete({ id: webhook_id });
 
         await emitEvent({

@@ -112,8 +112,8 @@ export class Message extends BaseClass {
     @JsonRemoveEmpty
     webhook_id?: string;
 
-    @JoinColumn({ name: "webhook_id", foreignKeyConstraintName: "FK_message_webhook_id" })
-    @ManyToOne(() => Webhook)
+    @JoinColumn({ name: "webhook_id" })
+    @ManyToOne(() => Webhook, { createForeignKeyConstraints: false })
     webhook?: Webhook;
 
     @Column({ nullable: true })

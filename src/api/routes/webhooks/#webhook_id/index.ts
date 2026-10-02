@@ -17,11 +17,9 @@
 */
 
 import { Request, Response, Router } from "express";
-import { HTTPError } from "lambert-server/HTTPError";
-import { In } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
-import { Webhook, Channel, Message } from "@spacebar/database";
-import { DiscordApiErrors, getPermission, WebhooksUpdateEvent, emitEvent, handleFile, ValidateName, MessageDeleteBulkEvent } from "@spacebar/util";
+import { Webhook } from "@spacebar/database";
+import { DiscordApiErrors, getPermission, WebhooksUpdateEvent, emitEvent } from "@spacebar/util";
 import type { WebhookUpdateSchema } from "@spacebar/schemas";
 import { applyWebhookUpdate, webhookToJSON } from "@spacebar/api/util/handlers/Webhook";
 
@@ -81,25 +79,6 @@ router.delete(
         } else if (webhook.user_id != req.user_id) throw DiscordApiErrors.UNKNOWN_WEBHOOK;
 
         const channel_id = webhook.channel_id;
-        const channel = await Channel.findOneOrFail({ where: { id: channel_id } });
-
-        // work around foreign key constraint
-        while (await Message.count({ where: { webhook_id, channel_id } })) {
-            const ids = (await Message.find({ where: { webhook_id, channel_id }, select: { id: true }, order: { id: "asc" }, take: 100 })).map((x) => x.id);
-            await Message.delete({ id: In(ids) });
-            await emitEvent({
-                event: "MESSAGE_DELETE_BULK",
-                channel_id,
-                origin: "webhook delete",
-                data: {
-                    channel_id,
-                    guild_id: channel.guild_id,
-                    ids,
-                },
-            } satisfies MessageDeleteBulkEvent);
-        }
-
-        await Message.delete({ channel_id, webhook_id });
         await Webhook.delete({ id: webhook_id });
 
         await emitEvent({
@@ -149,7 +128,11 @@ router.patch(
         await applyWebhookUpdate(webhook, body, true);
         const channel_id = webhook.channel_id;
         if (previousChannelId !== channel_id)
-            await emitEvent({ event: "WEBHOOKS_UPDATE", channel_id: previousChannelId, data: { channel_id: previousChannelId, guild_id: webhook.guild_id! } } satisfies WebhooksUpdateEvent);
+            await emitEvent({
+                event: "WEBHOOKS_UPDATE",
+                channel_id: previousChannelId,
+                data: { channel_id: previousChannelId, guild_id: webhook.guild_id! },
+            } satisfies WebhooksUpdateEvent);
 
         await Promise.all([
             webhook.save(),
