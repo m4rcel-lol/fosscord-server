@@ -22,10 +22,14 @@ import { validateSchema, VoiceIdentifySchema } from "@spacebar/schemas";
 import { generateSsrc, mediaServer, Send, VoiceOPCodes, VoicePayload, WebRtcWebSocket } from "@spacebar/webrtc";
 import { SSRCs } from "@spacebarchat/spacebar-webrtc-types";
 import { subscribeToProducers } from "./Video";
+import { VoiceSessions } from "../util/VoiceSessions";
 
 export async function onIdentify(this: WebRtcWebSocket, data: VoicePayload) {
     clearTimeout(this.readyTimeout);
-    const { server_id, user_id, session_id, token, streams, max_dave_protocol_version, max_secure_frames_version } = validateSchema("VoiceIdentifySchema", data.d) as VoiceIdentifySchema;
+    const { server_id, user_id, session_id, token, streams, max_dave_protocol_version, max_secure_frames_version } = validateSchema(
+        "VoiceIdentifySchema",
+        data.d,
+    ) as VoiceIdentifySchema;
 
     // server_id can be one of the following: a unique id for a GO Live stream, a channel id for a DM voice call, or a guild id for a guild voice channel
     // not sure if there's a way to determine whether a snowflake is a channel id or a guild id without checking if it exists in db
@@ -63,10 +67,12 @@ export async function onIdentify(this: WebRtcWebSocket, data: VoicePayload) {
             streamSession.used = true;
             await streamSession.save();
 
-            this.once("close", async () => {
-                await streamSession.remove();
-                await GoLiveStreams.publishUpdate(server_id);
-            });
+            this.sessionCleanups = [
+                async () => {
+                    await streamSession.remove();
+                    await GoLiveStreams.publishUpdate(server_id);
+                },
+            ];
         }
     }
 
@@ -83,16 +89,13 @@ export async function onIdentify(this: WebRtcWebSocket, data: VoicePayload) {
 
     const voiceRoomId = type === "stream" ? server_id : voiceState!.channel_id;
     this.channel_id = type === "stream" ? (BigInt(server_id) - 1n).toString() : voiceState!.channel_id;
+    this.lastActivity = Date.now();
+    await VoiceSessions.register(this);
     try {
         this.webRtcClient = await mediaServer.join(voiceRoomId, this.user_id, this, type!);
     } catch (e) {
         return this.close(4013);
     }
-
-    this.on("close", () => {
-        // ice-lite media server relies on this to know when the peer went away
-        mediaServer.onClientClose(this.webRtcClient!);
-    });
 
     // once connected subscribe to tracks from other users
     this.webRtcClient.emitter.once("connected", async () => {

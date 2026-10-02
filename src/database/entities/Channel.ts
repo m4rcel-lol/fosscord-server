@@ -493,17 +493,31 @@ export class Channel extends BaseClass {
     }
 
     static async deleteChannel(channel: Channel) {
+        const references = ["afk_channel_id", "system_channel_id", "rules_channel_id", "public_updates_channel_id", "widget_channel_id"] as const;
+        const guild = channel.guild_id
+            ? await Guild.findOneOrFail({
+                  where: { id: channel.guild_id },
+                  select: {
+                      id: true,
+                      channel_ordering: true,
+                      afk_channel_id: true,
+                      system_channel_id: true,
+                      rules_channel_id: true,
+                      public_updates_channel_id: true,
+                      widget_channel_id: true,
+                  },
+              })
+            : null;
+        const cleared = Object.fromEntries(references.filter((key) => guild?.[key] === channel.id).map((key) => [key, null]));
+        if (guild && Object.keys(cleared).length) await Guild.update({ id: guild.id }, cleared);
+
         // TODO Delete attachments from the CDN for messages in the channel
         await Channel.delete({ id: channel.id });
 
-        if (channel.guild_id) {
-            const guild = await Guild.findOneOrFail({
-                where: { id: channel.guild_id },
-                select: { channel_ordering: true },
-            });
-
+        if (guild) {
             const updatedOrdering = guild.channel_ordering.filter((id) => id != channel.id);
-            await Guild.update({ id: channel.guild_id }, { channel_ordering: updatedOrdering });
+            await Guild.update({ id: guild.id }, { channel_ordering: updatedOrdering });
+            if (Object.keys(cleared).length) await Guild.emitUpdate(guild.id);
         }
     }
 

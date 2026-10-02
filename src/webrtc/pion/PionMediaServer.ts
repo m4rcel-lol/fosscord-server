@@ -46,7 +46,7 @@ class PionClient implements WebRtcClient<unknown> {
     constructor(
         readonly user_id: string,
         readonly voiceRoomId: string,
-        readonly websocket: unknown,
+        public websocket: unknown,
         readonly server: PionMediaServer,
     ) {}
 
@@ -103,7 +103,7 @@ class PionClient implements WebRtcClient<unknown> {
         if (type === "audio") ssrcs.audio_ssrc = ssrc;
         else {
             ssrcs.video_ssrc = ssrc;
-            ssrcs.rtx_ssrc = declared.rtx_ssrc;
+            ssrcs.rtx_ssrc = (ssrc + 1) >>> 0;
             for (const delay of [250, 1000]) setTimeout(() => publisher.requestKeyframe(), delay);
         }
         this.outgoing.set(userId, ssrcs);
@@ -152,10 +152,17 @@ export class PionMediaServer implements SignalingDelegate {
     }
 
     private spawn(socketPath: string) {
-        const child = spawn(process.env.PION_SFU_BIN!, ["-port", String(this._port), "-ip", this._ip, "-ipc", socketPath, ...(process.env.PION_SFU_VERBOSE ? ["-verbose"] : [])], {
-            stdio: ["ignore", "pipe", "pipe"],
-        });
-        const log = (data: Buffer) => process.env.PION_SFU_VERBOSE && console.log(`[Pion SFU] ${data.toString().trimEnd()}`);
+        const extraArgs = process.env.PION_SFU_ARGS?.split(/\s+/).filter(Boolean) ?? [];
+        const child = spawn(
+            process.env.PION_SFU_BIN!,
+            ["-port", String(this._port), "-ip", this._ip, "-ipc", socketPath, ...(process.env.PION_SFU_VERBOSE ? ["-verbose"] : []), ...extraArgs],
+            {
+                stdio: ["ignore", "pipe", "pipe"],
+            },
+        );
+        const log = (data: Buffer) => {
+            if (process.env.PION_SFU_VERBOSE || process.env.PION_SFU_LOG) for (const line of data.toString().trimEnd().split("\n")) console.log(`[Pion SFU] ${line}`);
+        };
         child.stdout?.on("data", log);
         child.stderr?.on("data", log);
         child.once("exit", (code) => {
@@ -241,6 +248,8 @@ export class PionMediaServer implements SignalingDelegate {
             "a=sendrecv",
             ...extmap(AUDIO_EXTENSIONS),
             `a=rtpmap:${opus} opus/48000/2`,
+            `a=rtcp-fb:${opus} transport-cc`,
+            `a=rtcp-fb:${opus} nack`,
             `a=fmtp:${opus} minptime=10;usedtx=1;useinbandfec=1`,
             `m=video 9 UDP/TLS/RTP/SAVPF ${videoPayload} ${rtxPayload}`,
             "c=IN IP4 0.0.0.0",
@@ -249,6 +258,7 @@ export class PionMediaServer implements SignalingDelegate {
             "a=sendrecv",
             ...extmap(VIDEO_EXTENSIONS),
             `a=rtpmap:${videoPayload} H264/90000`,
+            ...["ccm fir", "nack", "nack pli", "goog-remb", "transport-cc"].map((feedback) => `a=rtcp-fb:${videoPayload} ${feedback}`),
             `a=fmtp:${videoPayload} level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f;x-google-max-bitrate=2500`,
             `a=rtpmap:${rtxPayload} rtx/90000`,
             `a=fmtp:${rtxPayload} apt=${videoPayload}`,

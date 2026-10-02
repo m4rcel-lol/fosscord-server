@@ -26,6 +26,7 @@ import { ProcessLifecycle, SystemdLifecycle } from "../util/util/ProcessLifecycl
 import { Monitoring } from "../util/monitoring/Monitoring";
 import { Connection } from "./events/Connection";
 import { DaveSession } from "./dave/DaveSession";
+import { AfkMover } from "./util/AfkMover";
 import { loadWebRtcLibrary, mediaServer, WRTC_PORT_MAX, WRTC_PORT_MIN, WRTC_PUBLIC_IP } from "./util";
 
 export class WebrtcServer {
@@ -80,6 +81,7 @@ export class WebrtcServer {
         try {
             await loadWebRtcLibrary();
             await mediaServer.start(WRTC_PUBLIC_IP, WRTC_PORT_MIN, WRTC_PORT_MAX);
+            AfkMover.start();
             DaveSession.onTransitionExecuted((roomId) => {
                 for (const delay of [300, 1500])
                     setTimeout(() => {
@@ -106,6 +108,7 @@ export class WebrtcServer {
 
     async stop() {
         await ProcessLifecycle.Shutdown();
+        AfkMover.stop();
         if (!this.noServer) this.server.close();
         await mediaServer?.stop();
         await ProcessLifecycle.Finalize();

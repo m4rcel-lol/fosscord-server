@@ -20,6 +20,7 @@ import { VoiceOPCodes, VoicePayload, WebRtcWebSocket } from "../util";
 import { onBackendVersion } from "./BackendVersion";
 import { onHeartbeat } from "./Heartbeat";
 import { onIdentify } from "./Identify";
+import { onResume } from "./Resume";
 import { onSelectProtocol } from "./SelectProtocol";
 import { onSpeaking } from "./Speaking";
 import { onVideo } from "./Video";
@@ -36,9 +37,7 @@ export default {
     [VoiceOPCodes.VIDEO]: onVideo,
     [VoiceOPCodes.SPEAKING]: onSpeaking,
     [VoiceOPCodes.SELECT_PROTOCOL]: onSelectProtocol,
-    [VoiceOPCodes.RESUME]: async function (this: WebRtcWebSocket) {
-        this.close(4006, "Session no longer valid");
-    },
+    [VoiceOPCodes.RESUME]: onResume,
     [VoiceOPCodes.SESSION_UPDATE]: ignore,
     [VoiceOPCodes.MEDIA_SINK_WANTS]: ignore,
     [VoiceOPCodes.NO_ROUTE]: ignore,

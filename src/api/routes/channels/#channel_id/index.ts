@@ -20,7 +20,7 @@ import { Request, Response, Router } from "express";
 import { Not } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
 import { AUTO_ARCHIVE_DURATION_ERROR, AUTO_ARCHIVE_DURATIONS, emitThreadUpdate, sendMessage, setThreadArchived } from "@spacebar/api/util";
-import { Channel, Recipient, Tag, ThreadMember } from "@spacebar/database";
+import { Channel, Recipient, Tag, ThreadMember, VoiceChannels } from "@spacebar/database";
 import {
     ChannelDeleteEvent,
     ChannelFlags,
@@ -141,6 +141,7 @@ router.delete(
                 }
             }
 
+            if (channel.guild_id && [ChannelType.GUILD_VOICE, ChannelType.GUILD_STAGE_VOICE].includes(channel.type)) await VoiceChannels.evict(channel.guild_id, channel_id);
             await Channel.deleteChannel(channel);
             await emitEvent({
                 event: "CHANNEL_DELETE",
