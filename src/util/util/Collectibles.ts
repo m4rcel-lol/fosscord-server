@@ -87,6 +87,7 @@ const parse = (raw: string): Catalog => {
         );
         product.unpublished_at = null;
         product.premium_type = 2;
+        product.hide_badge = true;
         if (!products.has(product.sku_id) || product.items?.some((x) => x.asset || x.effects)) products.set(product.sku_id, product);
         for (const item of product.items ?? []) {
             const known = items.get(item.sku_id);
