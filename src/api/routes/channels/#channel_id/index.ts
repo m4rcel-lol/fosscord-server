@@ -280,6 +280,13 @@ router.patch(
                 emoji_name: payload.default_reaction_emoji.emoji_id ? null : (payload.default_reaction_emoji.emoji_name ?? null),
             };
 
+        if (![ChannelType.GUILD_VOICE, ChannelType.GUILD_STAGE_VOICE].includes(channel.type)) {
+            delete payload.bitrate;
+            delete payload.user_limit;
+            delete payload.rtc_region;
+            delete payload.video_quality_mode;
+        }
+        if (payload.topic === "") payload.topic = null;
         const columns = new Set(Channel.getRepository().metadata.columns.map((c) => c.propertyName));
         const update = Object.fromEntries(Object.entries(payload).filter(([key, value]) => columns.has(key) && key !== "id" && value !== undefined));
         Object.assign(channel, update);
