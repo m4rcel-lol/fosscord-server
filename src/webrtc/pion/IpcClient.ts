@@ -16,8 +16,8 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-
 import { randomUUID } from "node:crypto";
+import { setTimeout as sleep } from "node:timers/promises";
 import net from "node:net";
 
 export interface IpcPayload {
@@ -44,6 +44,7 @@ export class IpcClient {
     constructor(
         readonly socketPath: string,
         private readonly onEvent: (payload: IpcPayload) => void,
+        private readonly onClose?: () => void,
     ) {}
 
     get connected() {
@@ -58,7 +59,7 @@ export class IpcClient {
                 return;
             } catch (error) {
                 if (Date.now() > deadline) throw error;
-                await new Promise((resolve) => setTimeout(resolve, 250));
+                await sleep(250);
             }
         }
     }
@@ -70,7 +71,11 @@ export class IpcClient {
                 this.socket = socket;
                 this.buffer = Buffer.alloc(0);
                 socket.on("data", (chunk: Buffer) => this.onData(chunk));
-                socket.on("close", () => this.rejectAll(new Error("IPC connection closed")));
+                socket.on("close", () => {
+                    this.rejectAll(new Error("IPC connection closed"));
+                    if (this.socket === socket) this.socket = undefined;
+                    this.onClose?.();
+                });
                 resolve();
             });
             socket.once("error", (error) => {
@@ -106,7 +111,10 @@ export class IpcClient {
 
     request(payload: IpcPayload, timeoutMs = 10000) {
         return new Promise<IpcPayload>((resolve, reject) => {
-            if (!this.connected) return reject(new Error("SFU IPC socket is not connected"));
+            if (!this.connected) {
+                reject(new Error("SFU IPC socket is not connected"));
+                return;
+            }
             const id = randomUUID();
             const timeout = setTimeout(() => {
                 this.pending.delete(id);
