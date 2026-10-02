@@ -51,4 +51,8 @@ export interface ChannelModifySchema {
     archived?: boolean;
     locked?: boolean;
     available_tags?: (TagCreateSchema & { id?: string | null })[];
+    template?: string | null;
+    icon_emoji?: { id?: string | null; name?: string | null } | null;
+    theme_color?: number | null;
+    application_id?: string | null;
 }

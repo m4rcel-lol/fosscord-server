@@ -54,6 +54,7 @@ router.post(
             moderated: body.moderated || false,
             emoji_id: body.emoji_id || undefined,
             emoji_name: body.emoji_name || undefined,
+            position: Math.max(-1, ...(channel.available_tags ?? []).map((t) => t.position)) + 1,
         });
         channel.available_tags?.push(tag);
 

@@ -621,7 +621,7 @@ export class Channel extends BaseClass {
             total_message_sent: this.total_message_sent ?? undefined,
             applied_tags: this.isThread() ? (this.applied_tags ?? []) : undefined,
             permission_overwrites: this.isThread() ? undefined : this.permission_overwrites,
-            available_tags: this.isForum() ? [...(this.available_tags ?? [])].sort((a, b) => (BigInt(a.id) < BigInt(b.id) ? -1 : 1)) : undefined,
+            available_tags: this.isForum() ? [...(this.available_tags ?? [])].sort((a, b) => a.position - b.position || (BigInt(a.id) < BigInt(b.id) ? -1 : 1)) : undefined,
             default_reaction_emoji: this.isForum() ? (this.default_reaction_emoji ?? null) : undefined,
             default_sort_order: this.isForum() ? (this.default_sort_order ?? null) : undefined,
             default_forum_layout: this.isForum() ? (this.default_forum_layout ?? 0) : undefined,

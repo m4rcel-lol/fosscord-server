@@ -258,8 +258,9 @@ router.patch(
             const existing = new Map((channel.available_tags ?? []).map((tag) => [tag.id, tag]));
             const keep = new Set<string>();
             const tags: Tag[] = [];
-            for (const input of payload.available_tags) {
+            for (const [position, input] of payload.available_tags.entries()) {
                 const tag = (input.id && existing.get(input.id)) || Tag.create({ channel_id: channel.id });
+                tag.position = position;
                 tag.name = input.name.slice(0, 20);
                 tag.moderated = !!input.moderated;
                 tag.emoji_id = input.emoji_id ?? undefined;

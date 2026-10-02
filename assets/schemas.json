@@ -1702,6 +1702,49 @@
                         "name"
                     ]
                 }
+            },
+            "template": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "icon_emoji": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            },
+                            "name": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            }
+                        },
+                        "additionalProperties": false
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "theme_color": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "application_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
             }
         },
         "additionalProperties": false,
@@ -6752,6 +6795,12 @@
                     "string"
                 ]
             },
+            "template": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
             "nsfw": {
                 "type": "boolean"
             },
@@ -6869,6 +6918,43 @@
             },
             "locked": {
                 "type": "boolean"
+            },
+            "icon_emoji": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            },
+                            "name": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            }
+                        },
+                        "additionalProperties": false
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "theme_color": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "application_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
             }
         },
         "additionalProperties": false,
@@ -10362,6 +10448,10 @@
             "emoji_name": {
                 "type": "string"
             },
+            "position": {
+                "type": "integer",
+                "default": 0
+            },
             "id": {
                 "type": "string"
             }
@@ -10372,7 +10462,8 @@
             "channel_id",
             "id",
             "moderated",
-            "name"
+            "name",
+            "position"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },

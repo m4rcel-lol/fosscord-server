@@ -1616,6 +1616,43 @@
                                 "name"
                             ]
                         }
+                    },
+                    "template": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "icon_emoji": {
+                        "anyOf": [
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "id": {
+                                        "type": [
+                                            "null",
+                                            "string"
+                                        ]
+                                    },
+                                    "name": {
+                                        "type": [
+                                            "null",
+                                            "string"
+                                        ]
+                                    }
+                                },
+                                "additionalProperties": false
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "theme_color": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "application_id": {
+                        "type": "string",
+                        "nullable": true
                     }
                 }
             },
@@ -6283,6 +6320,10 @@
                         "type": "string",
                         "nullable": true
                     },
+                    "template": {
+                        "type": "string",
+                        "nullable": true
+                    },
                     "nsfw": {
                         "type": "boolean"
                     },
@@ -6386,6 +6427,39 @@
                     },
                     "locked": {
                         "type": "boolean"
+                    },
+                    "icon_emoji": {
+                        "anyOf": [
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "id": {
+                                        "type": [
+                                            "null",
+                                            "string"
+                                        ]
+                                    },
+                                    "name": {
+                                        "type": [
+                                            "null",
+                                            "string"
+                                        ]
+                                    }
+                                },
+                                "additionalProperties": false
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "theme_color": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "application_id": {
+                        "type": "string",
+                        "nullable": true
                     }
                 }
             },
@@ -9645,6 +9719,10 @@
                     "emoji_name": {
                         "type": "string"
                     },
+                    "position": {
+                        "type": "integer",
+                        "default": 0
+                    },
                     "id": {
                         "type": "string"
                     }
@@ -9654,7 +9732,8 @@
                     "channel_id",
                     "id",
                     "moderated",
-                    "name"
+                    "name",
+                    "position"
                 ]
             },
             "Channel": {

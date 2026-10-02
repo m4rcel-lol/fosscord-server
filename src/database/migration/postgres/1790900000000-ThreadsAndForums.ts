@@ -11,6 +11,7 @@ export class ThreadsAndForums1790900000000 implements MigrationInterface {
         await queryRunner.query(`ALTER TABLE "channels" ADD "default_sort_order" integer`);
         await queryRunner.query(`ALTER TABLE "channels" ADD "default_forum_layout" integer`);
         await queryRunner.query(`ALTER TABLE "channels" ADD "default_tag_setting" character varying`);
+        await queryRunner.query(`ALTER TABLE "tags" ADD "position" integer NOT NULL DEFAULT 0`);
         await queryRunner.query(`CREATE INDEX "IDX_channels_parent_id" ON "channels" ("parent_id")`);
         await queryRunner.query(`ALTER TABLE "channels" DROP CONSTRAINT "FK_channel_parent_id"`);
         await queryRunner.query(
@@ -43,6 +44,7 @@ export class ThreadsAndForums1790900000000 implements MigrationInterface {
             `ALTER TABLE "channels" ADD CONSTRAINT "FK_channel_parent_id" FOREIGN KEY ("parent_id") REFERENCES "channels"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
         );
         await queryRunner.query(`DROP INDEX "IDX_channels_parent_id"`);
+        await queryRunner.query(`ALTER TABLE "tags" DROP COLUMN "position"`);
         await queryRunner.query(`ALTER TABLE "channels" DROP COLUMN "default_tag_setting"`);
         await queryRunner.query(`ALTER TABLE "channels" DROP COLUMN "default_forum_layout"`);
         await queryRunner.query(`ALTER TABLE "channels" DROP COLUMN "default_sort_order"`);

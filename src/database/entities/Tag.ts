@@ -45,13 +45,16 @@ export class Tag extends BaseClass {
     @Column({ nullable: true })
     emoji_name?: string;
 
+    @Column({ type: "int", default: 0 })
+    position: number = 0;
+
     toJSON() {
         return {
             name: this.name,
             id: this.id,
             moderated: this.moderated,
-            emoji_id: this.emoji_id,
-            emoji_name: this.emoji_name,
+            emoji_id: this.emoji_id ?? null,
+            emoji_name: this.emoji_name ?? null,
         };
     }
 }
