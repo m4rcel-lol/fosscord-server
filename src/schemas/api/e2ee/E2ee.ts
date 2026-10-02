@@ -152,6 +152,24 @@ export interface E2eeDeviceResponse {
     name: string | null;
     prekey: E2eePrekeySchema;
     created_at: string;
+    session?: E2eeDeviceSession | null;
+}
+
+export interface E2eeDeviceSession {
+    signed_in: boolean;
+    last_seen: string | null;
+    os: string | null;
+    browser: string | null;
+    location: string | null;
+}
+
+export interface E2eePasswordSchema {
+    password: string;
+}
+
+export interface E2eeResetSchema {
+    password: string;
+    public_key: string;
 }
 
 export interface E2eeUserKeysResponse {

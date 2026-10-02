@@ -19,9 +19,21 @@
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
-import { decodeKey, e2eeDeviceId, e2eeDeviceMessage, E2eeErrors, e2eePrekeyMessage, e2eeRateLimit, e2eeUserKeys, emitE2eeUserEvent, verifyEd25519 } from "@spacebar/api/util";
-import { E2eeDevice, E2eeIdentity } from "@spacebar/database";
+import {
+    decodeKey,
+    e2eeDeviceId,
+    e2eeDeviceMessage,
+    E2eeErrors,
+    e2eePrekeyMessage,
+    e2eeRateLimit,
+    e2eeUserKeys,
+    emitE2eeUserEvent,
+    revokeE2eeDevices,
+    verifyEd25519,
+} from "@spacebar/api/util";
+import { E2eeDevice, E2eeIdentity, Session } from "@spacebar/database";
 import { E2eeDeviceCreateSchema, E2eePrekeySchema } from "@spacebar/schemas";
+import { emitEvent, Event } from "@spacebar/util";
 
 const router: Router = Router({ mergeParams: true });
 
@@ -71,6 +83,7 @@ router.post(
         device.prekey_public = body.prekey.public_key;
         device.prekey_signature = body.prekey.signature;
         device.prekey_updated_at = now;
+        device.session_id = req.session?.session_id ?? existing?.session_id ?? null;
         await device.save();
         await emitE2eeUserEvent("E2EE_DEVICES_UPDATE", req.user_id);
         res.json(device.toPublic());
@@ -112,9 +125,13 @@ router.delete(
         const { device_id } = req.params as { [key: string]: string };
         const device = await E2eeDevice.findOne({ where: { id: device_id, user_id: req.user_id } });
         if (!device) throw new HTTPError("Unknown device", 404);
-        device.status = "revoked";
-        device.revoked_at = new Date();
-        await device.save();
+        await revokeE2eeDevices([device]);
+        const session =
+            device.session_id && device.session_id !== req.session?.session_id ? await Session.findOne({ where: { session_id: device.session_id, user_id: req.user_id } }) : null;
+        if (session) {
+            await emitEvent({ session_id: session.session_id, event: "SB_SESSION_REMOVE", origin: "E2EE device removed" } as Event);
+            await session.remove();
+        }
         await emitE2eeUserEvent("E2EE_DEVICES_UPDATE", req.user_id);
         res.sendStatus(204);
     },

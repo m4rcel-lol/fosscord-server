@@ -8530,6 +8530,16 @@
             },
             "created_at": {
                 "type": "string"
+            },
+            "session": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/E2eeDeviceSession"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
             }
         },
         "additionalProperties": false,
@@ -8541,6 +8551,36 @@
             "prekey",
             "signing_key",
             "status"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eePasswordSchema": {
+        "type": "object",
+        "properties": {
+            "password": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "password"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeResetSchema": {
+        "type": "object",
+        "properties": {
+            "password": {
+                "type": "string"
+            },
+            "public_key": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "password",
+            "public_key"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -21444,6 +21484,47 @@
             "revoked"
         ],
         "type": "string",
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeDeviceSession": {
+        "type": "object",
+        "properties": {
+            "signed_in": {
+                "type": "boolean"
+            },
+            "last_seen": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "os": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "browser": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "location": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "browser",
+            "last_seen",
+            "location",
+            "os",
+            "signed_in"
+        ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "E2eeSignedKey": {

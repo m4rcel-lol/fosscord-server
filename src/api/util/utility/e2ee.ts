@@ -19,9 +19,9 @@
 import { createHash, createPublicKey, verify } from "node:crypto";
 import { NextFunction, Request, Response } from "express";
 import { In, IsNull, Not } from "typeorm";
-import { Channel, E2eeDevice, E2eeIdentity, E2eeKeyBackup, Message, Recipient, Relationship } from "@spacebar/database";
+import { Channel, E2eeDevice, E2eeIdentity, E2eeKeyBackup, Message, Recipient, Relationship, Session } from "@spacebar/database";
 import { ApiError, Config, emitEvent, MessageFlags } from "@spacebar/util";
-import { ChannelType, E2eeEnvelope, E2eeUserKeysResponse, MessageType } from "@spacebar/schemas";
+import { ChannelType, E2eeDeviceResponse, E2eeEnvelope, E2eeUserKeysResponse, MessageType } from "@spacebar/schemas";
 import { MessageOptions } from "@spacebar/util/dtos/MessageOptions";
 import rateLimit from "../../middlewares/RateLimit";
 
@@ -29,6 +29,7 @@ export const E2EE_FALLBACK_CONTENT = "🔒 Encrypted message";
 export const E2EE_ALGORITHM = "x25519-hpke-aes256gcm-ed25519";
 export const E2EE_MAX_ENVELOPE_BYTES = 64 * 1024;
 export const E2EE_MAX_DEVICES = 256;
+export const E2EE_PENDING_TTL_MS = 7 * 24 * 3600 * 1000;
 
 export const E2eeErrors = {
     DEVICE_MISMATCH: new ApiError("E2EE_DEVICE_MISMATCH", 90001, 409),
@@ -90,6 +91,48 @@ export async function e2eeUserKeys(ids: string[]) {
         };
     }
     return users;
+}
+
+export async function revokeE2eeDevices(devices: E2eeDevice[]) {
+    if (!devices.length) return;
+    const now = new Date();
+    for (const device of devices) {
+        device.status = "revoked";
+        device.revoked_at = now;
+    }
+    await E2eeDevice.save(devices);
+}
+
+export async function pruneE2eeDevices(userId: string) {
+    const pending = await E2eeDevice.find({ where: { user_id: userId, status: "pending" } });
+    if (!pending.length) return false;
+    const sessions = await Session.find({ where: { user_id: userId }, select: { session_id: true } });
+    const live = new Set(sessions.map((s) => s.session_id));
+    const cutoff = Date.now() - E2EE_PENDING_TTL_MS;
+    const stale = pending.filter((d) => (d.session_id && !live.has(d.session_id)) || d.created_at.getTime() < cutoff);
+    await revokeE2eeDevices(stale);
+    return stale.length > 0;
+}
+
+export async function withE2eeSessions(userId: string, devices: E2eeDeviceResponse[]) {
+    const rows = await E2eeDevice.find({ where: { user_id: userId, status: Not("revoked") }, select: { id: true, session_id: true } });
+    const ids = rows.map((r) => r.session_id).filter((id): id is string => !!id);
+    const sessions = ids.length ? await Session.find({ where: { user_id: userId, session_id: In(ids) } }) : [];
+    return devices.map((device) => {
+        const sessionId = rows.find((r) => r.id === device.device_id)?.session_id;
+        if (!sessionId) return { ...device, session: null };
+        const session = sessions.find((s) => s.session_id === sessionId);
+        return {
+            ...device,
+            session: {
+                signed_in: !!session,
+                last_seen: (session?.last_seen ?? session?.created_at)?.toISOString() ?? null,
+                os: session?.client_info?.os ?? null,
+                browser: session?.client_info?.browser ?? null,
+                location: session?.last_seen_location ?? null,
+            },
+        };
+    });
 }
 
 export const verifyEd25519 = (publicKey: string, message: string, signature: string) => {

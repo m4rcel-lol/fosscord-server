@@ -19,7 +19,7 @@
 import { Request, Response, Router } from "express";
 import { In, Not } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
-import { decodeKey, E2eeErrors, e2eeRateLimit } from "@spacebar/api/util";
+import { decodeKey, E2eeErrors, e2eeRateLimit, emitE2eeUserEvent, revokeE2eeDevices } from "@spacebar/api/util";
 import { E2eeDevice } from "@spacebar/database";
 import { E2eeLinkSchema } from "@spacebar/schemas";
 import { emitEvent } from "@spacebar/util";
@@ -51,7 +51,7 @@ router.post(
         if (body.name !== undefined && (typeof body.name !== "string" || body.name.length > 64)) throw E2eeErrors.INVALID_LINK;
 
         const ids = [...new Set([body.device_id, body.to_device].filter((id): id is string => typeof id === "string"))];
-        const devices = await E2eeDevice.find({ where: { id: In(ids), user_id: req.user_id, status: Not("revoked") }, select: { id: true, name: true } });
+        const devices = await E2eeDevice.find({ where: { id: In(ids), user_id: req.user_id, status: Not("revoked") } });
         if (devices.length !== ids.length) throw E2eeErrors.UNKNOWN_DEVICE;
 
         const sender = devices.find((d) => d.id === body.device_id)!;
@@ -67,6 +67,11 @@ router.post(
             ct: body.ct ?? null,
         };
         await emitEvent({ event: body.stage === "request" ? "E2EE_LINK_REQUEST" : "E2EE_LINK_RESPONSE", user_id: req.user_id, data });
+        const denied = body.stage === "deny" ? devices.find((d) => d.id === body.to_device && d.status === "pending") : undefined;
+        if (denied) {
+            await revokeE2eeDevices([denied]);
+            await emitE2eeUserEvent("E2EE_DEVICES_UPDATE", req.user_id);
+        }
         res.sendStatus(204);
     },
 );
