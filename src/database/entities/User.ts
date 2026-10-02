@@ -219,7 +219,7 @@ export class User extends BaseClass {
 
     // TODO: I don't like this method?
     validate() {
-        if (this.discriminator) {
+        if (this.discriminator && this.discriminator !== "0") {
             const discrim = Number(this.discriminator);
             if (isNaN(discrim) || !Number.isInteger(discrim) || discrim <= 0 || discrim >= 10000)
                 throw FieldErrors({
@@ -326,10 +326,7 @@ export class User extends BaseClass {
     }
 
     public get tag(): string {
-        //const { uniqueUsernames } = Config.get().general;
-        const uniqueUsernames = false;
-
-        return uniqueUsernames ? this.username : `${this.username}#${this.discriminator}`;
+        return this.discriminator === "0" ? this.username : `${this.username}#${this.discriminator}`;
     }
 
     static async register({
@@ -358,7 +355,12 @@ export class User extends BaseClass {
         // trim special utf8 control characters -> Backspace, Newline, ...
         username = trimSpecial(username);
 
-        const discriminator = await User.generateDiscriminator(username);
+        const pomelo =
+            Config.get().register.uniqueUsernames &&
+            /^[a-z0-9_.]{2,32}$/.test(username) &&
+            !username.includes("..") &&
+            !(await User.findOne({ where: { username, discriminator: "0" }, select: { id: true } }));
+        const discriminator = pomelo ? "0" : await User.generateDiscriminator(username);
         if (!discriminator) {
             // We've failed to generate a valid and unused discriminator
             throw FieldErrors({

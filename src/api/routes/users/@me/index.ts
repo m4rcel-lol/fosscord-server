@@ -19,7 +19,7 @@
 import bcrypt from "bcrypt";
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { EmailChange } from "@spacebar/api/util";
+import { EmailChange, Pomelo } from "@spacebar/api/util";
 import { AvatarDecoration, User } from "@spacebar/database";
 import { CollectibleItemType, Collectibles, Config, emitEvent, FieldErrors, generateToken, handleFile, Snowflake, UserUpdateEvent } from "@spacebar/util";
 import { PrivateUserProjection, UserFlags, UserModifySchema } from "@spacebar/schemas";
@@ -136,7 +136,13 @@ router.patch(
                 });
             await checkPassword();
 
-            if (await User.findOne({ where: { username, discriminator: body.discriminator || user.discriminator }, select: { id: true } })) {
+            if (user.discriminator === "0") {
+                Pomelo.validate(username);
+                if (await Pomelo.taken(username, user.id))
+                    throw FieldErrors({
+                        username: { code: "USERNAME_ALREADY_TAKEN", message: "Username is unavailable. Try adding numbers, letters, underscores _ , or periods." },
+                    });
+            } else if (await User.findOne({ where: { username, discriminator: body.discriminator || user.discriminator }, select: { id: true } })) {
                 const discriminator = await User.generateDiscriminator(username);
                 if (!discriminator)
                     throw FieldErrors({
