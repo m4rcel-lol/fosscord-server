@@ -57,12 +57,11 @@ router.get(
     "/",
     route({
         spacebarOnly: true,
-        responses: { 200: { body: "E2eeBackupResponse" }, 404: { body: "APIErrorResponse" } },
+        responses: { 200: { body: "E2eeBackupResponse" } },
     }),
     async (req: Request, res: Response) => {
         const backup = await E2eeKeyBackup.findOne({ where: { user_id: req.user_id } });
-        if (!backup) throw E2eeErrors.NO_BACKUP;
-        res.json(backup.toPublic());
+        res.json(backup?.toPublic() ?? null);
     },
 );
 

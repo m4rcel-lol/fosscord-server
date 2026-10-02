@@ -52,7 +52,7 @@
   var randomBytes = (length) => crypto.getRandomValues(new Uint8Array(length));
   var sha256 = async (data) => new Uint8Array(await crypto.subtle.digest("SHA-256", data));
 
-  // node_modules/@hpke/common/esm/src/errors.js
+  // ../../../node_modules/@hpke/common/esm/src/errors.js
   var HpkeError = class extends Error {
     constructor(e) {
       let message;
@@ -90,7 +90,7 @@
   var NotSupportedError = class extends HpkeError {
   };
 
-  // node_modules/@hpke/common/esm/_dnt.shims.js
+  // ../../../node_modules/@hpke/common/esm/_dnt.shims.js
   var dntGlobals = {};
   var dntGlobalThis = createMergeProxy(globalThis, dntGlobals);
   function createMergeProxy(baseObj, extObj) {
@@ -147,7 +147,7 @@
     });
   }
 
-  // node_modules/@hpke/common/esm/src/algorithm.js
+  // ../../../node_modules/@hpke/common/esm/src/algorithm.js
   async function loadSubtleCrypto() {
     if (dntGlobalThis !== void 0 && globalThis.crypto !== void 0) {
       return globalThis.crypto.subtle;
@@ -176,7 +176,7 @@
     }
   };
 
-  // node_modules/@hpke/common/esm/src/identifiers.js
+  // ../../../node_modules/@hpke/common/esm/src/identifiers.js
   var Mode = {
     Base: 0,
     Psk: 1,
@@ -216,13 +216,13 @@
     ExportOnly: 65535
   };
 
-  // node_modules/@hpke/common/esm/src/consts.js
+  // ../../../node_modules/@hpke/common/esm/src/consts.js
   var INPUT_LENGTH_LIMIT = 8192;
   var INFO_LENGTH_LIMIT = 268435456;
   var MINIMUM_PSK_LENGTH = 32;
   var EMPTY = /* @__PURE__ */ new Uint8Array(0);
 
-  // node_modules/@hpke/common/esm/src/interfaces/kemInterface.js
+  // ../../../node_modules/@hpke/common/esm/src/interfaces/kemInterface.js
   var SUITE_ID_HEADER_KEM = /* @__PURE__ */ new Uint8Array([
     75,
     69,
@@ -231,7 +231,7 @@
     0
   ]);
 
-  // node_modules/@hpke/common/esm/src/kdfs/hkdf.js
+  // ../../../node_modules/@hpke/common/esm/src/kdfs/hkdf.js
   var HPKE_VERSION = /* @__PURE__ */ new Uint8Array([
     72,
     80,
@@ -401,7 +401,7 @@
     }
   };
 
-  // node_modules/@hpke/common/esm/src/utils/misc.js
+  // ../../../node_modules/@hpke/common/esm/src/utils/misc.js
   var isCryptoKeyPair = (x) => typeof x === "object" && x !== null && typeof x.privateKey === "object" && typeof x.publicKey === "object";
   function i2Osp(n, w) {
     if (w <= 0) {
@@ -443,7 +443,7 @@
     return buf;
   }
 
-  // node_modules/@hpke/common/esm/src/kems/dhkem.js
+  // ../../../node_modules/@hpke/common/esm/src/kems/dhkem.js
   var LABEL_EAE_PRK = /* @__PURE__ */ new Uint8Array([
     101,
     97,
@@ -626,7 +626,7 @@
     }
   };
 
-  // node_modules/@hpke/common/esm/src/interfaces/dhkemPrimitives.js
+  // ../../../node_modules/@hpke/common/esm/src/interfaces/dhkemPrimitives.js
   var KEM_USAGES = ["deriveBits"];
   var LABEL_DKP_PRK = /* @__PURE__ */ new Uint8Array([
     100,
@@ -639,7 +639,7 @@
   ]);
   var LABEL_SK = /* @__PURE__ */ new Uint8Array([115, 107]);
 
-  // node_modules/@hpke/common/esm/src/kems/dhkemPrimitives/ec.js
+  // ../../../node_modules/@hpke/common/esm/src/kems/dhkemPrimitives/ec.js
   var EC_P_521_PARAMS = {
     p: (1n << 521n) - 1n,
     b: 0x0051953eb9618e1c9a1f929a21a0b68540eea2da725b99b315f3b8b489918ef109e156193951ec7e937b1652c0bd3bb1bf073573df883d2c34f1ef451fd46b503f00n,
@@ -648,10 +648,10 @@
     coordinateSize: 66
   };
 
-  // node_modules/@hpke/common/esm/src/interfaces/aeadEncryptionContext.js
+  // ../../../node_modules/@hpke/common/esm/src/interfaces/aeadEncryptionContext.js
   var AEAD_USAGES = ["encrypt", "decrypt"];
 
-  // node_modules/@hpke/common/esm/src/utils/noble.js
+  // ../../../node_modules/@hpke/common/esm/src/utils/noble.js
   function isBytes(a) {
     return a instanceof Uint8Array || ArrayBuffer.isView(a) && a.constructor.name === "Uint8Array";
   }
@@ -689,7 +689,7 @@
   var _endianTestBytes = /* @__PURE__ */ new Uint8Array(_endianTestBuffer.buffer);
   var isLE = _endianTestBytes[0] === 68;
 
-  // node_modules/@hpke/common/esm/src/hash/hash.js
+  // ../../../node_modules/@hpke/common/esm/src/hash/hash.js
   function ahash(h) {
     if (typeof h !== "function" || typeof h.create !== "function") {
       throw new Error("Hash must wrapped by utils.createHasher");
@@ -698,7 +698,7 @@
     anumber(h.blockLen);
   }
 
-  // node_modules/@hpke/common/esm/src/hash/hmac.js
+  // ../../../node_modules/@hpke/common/esm/src/hash/hmac.js
   var _HMAC = class {
     constructor(hash, key) {
       Object.defineProperty(this, "oHash", {
@@ -800,7 +800,7 @@
   var hmac = (hash, key, message) => new _HMAC(hash, key).update(message).digest();
   hmac.create = (hash, key) => new _HMAC(hash, key);
 
-  // node_modules/@hpke/common/esm/src/hash/u64.js
+  // ../../../node_modules/@hpke/common/esm/src/hash/u64.js
   var U32_MASK64 = 0xffffffffn;
   var _32n = 32n;
   function fromBig(n, le = false) {
@@ -823,7 +823,7 @@
     return [Ah, Al];
   }
 
-  // node_modules/@hpke/common/esm/src/hash/sha3.js
+  // ../../../node_modules/@hpke/common/esm/src/hash/sha3.js
   var _0n = 0n;
   var _1n = 1n;
   var _2n = 2n;
@@ -849,7 +849,7 @@
   var SHA3_IOTA_H = IOTAS[0];
   var SHA3_IOTA_L = IOTAS[1];
 
-  // node_modules/@hpke/core/esm/src/aeads/aesGcm.js
+  // ../../../node_modules/@hpke/core/esm/src/aeads/aesGcm.js
   var AesGcmContext = class extends NativeAlgorithm {
     constructor(key) {
       super();
@@ -962,14 +962,14 @@
     }
   };
 
-  // node_modules/@hpke/core/esm/src/utils/emitNotSupported.js
+  // ../../../node_modules/@hpke/core/esm/src/utils/emitNotSupported.js
   function emitNotSupported() {
     return new Promise((_resolve, reject) => {
       reject(new NotSupportedError("Not supported"));
     });
   }
 
-  // node_modules/@hpke/core/esm/src/exporterContext.js
+  // ../../../node_modules/@hpke/core/esm/src/exporterContext.js
   var LABEL_SEC = new Uint8Array([115, 101, 99]);
   var ExporterContextImpl = class {
     constructor(api2, kdf, exporterSecret) {
@@ -1029,7 +1029,7 @@
     }
   };
 
-  // node_modules/@hpke/core/esm/src/encryptionContext.js
+  // ../../../node_modules/@hpke/core/esm/src/encryptionContext.js
   var EncryptionContextImpl = class extends ExporterContextImpl {
     constructor(api2, kdf, params) {
       super(api2, kdf, params.exporterSecret);
@@ -1090,7 +1090,7 @@
     }
   };
 
-  // node_modules/@hpke/core/esm/src/mutex.js
+  // ../../../node_modules/@hpke/core/esm/src/mutex.js
   var __classPrivateFieldGet = function(receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
@@ -1120,7 +1120,7 @@
   };
   _Mutex_locked = /* @__PURE__ */ new WeakMap();
 
-  // node_modules/@hpke/core/esm/src/recipientContext.js
+  // ../../../node_modules/@hpke/core/esm/src/recipientContext.js
   var __classPrivateFieldGet2 = function(receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
@@ -1155,7 +1155,7 @@
   };
   _RecipientContextImpl_mutex = /* @__PURE__ */ new WeakMap();
 
-  // node_modules/@hpke/core/esm/src/senderContext.js
+  // ../../../node_modules/@hpke/core/esm/src/senderContext.js
   var __classPrivateFieldGet3 = function(receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
@@ -1197,7 +1197,7 @@
   };
   _SenderContextImpl_mutex = /* @__PURE__ */ new WeakMap();
 
-  // node_modules/@hpke/core/esm/src/cipherSuiteNative.js
+  // ../../../node_modules/@hpke/core/esm/src/cipherSuiteNative.js
   var LABEL_BASE_NONCE = new Uint8Array([
     98,
     97,
@@ -1470,13 +1470,13 @@
     }
   };
 
-  // node_modules/@hpke/core/esm/src/native.js
+  // ../../../node_modules/@hpke/core/esm/src/native.js
   var CipherSuite = class extends CipherSuiteNative {
   };
   var HkdfSha256 = class extends HkdfSha256Native {
   };
 
-  // node_modules/@hpke/core/esm/src/kems/dhkemPrimitives/x25519.js
+  // ../../../node_modules/@hpke/core/esm/src/kems/dhkemPrimitives/x25519.js
   var ALG_NAME = "X25519";
   var PKCS8_ALG_ID_X25519 = new Uint8Array([
     48,
@@ -1692,7 +1692,7 @@
     }
   };
 
-  // node_modules/@hpke/core/esm/src/kems/dhkemX25519.js
+  // ../../../node_modules/@hpke/core/esm/src/kems/dhkemX25519.js
   var DhkemX25519HkdfSha256 = class extends Dhkem {
     constructor() {
       const kdf = new HkdfSha256Native();
@@ -1730,7 +1730,7 @@
     }
   };
 
-  // node_modules/@hpke/core/esm/src/kems/dhkemPrimitives/x448.js
+  // ../../../node_modules/@hpke/core/esm/src/kems/dhkemPrimitives/x448.js
   var PKCS8_ALG_ID_X448 = new Uint8Array([
     48,
     70,
@@ -1827,7 +1827,7 @@ ${deviceId}
 ${prekeyId}
 ${publicKey}`;
 
-  // node_modules/hash-wasm/dist/index.esm.js
+  // ../../../node_modules/hash-wasm/dist/index.esm.js
   function __awaiter(thisArg, _arguments, P, generator) {
     function adopt(value) {
       return value instanceof P ? value : new P(function(resolve) {
@@ -4382,7 +4382,7 @@ ${approver}`;
     }
   };
   var startWhenReady = () => {
-    if (started || !http || Date.now() - lastProbe < 1e4) return;
+    if (started || !http || !targets.gateway?.getSocket()?.isSessionEstablished?.() || Date.now() - lastProbe < 1e4) return;
     lastProbe = Date.now();
     api.request("get", "/users/@me").then(
       (me) => start(me.id),

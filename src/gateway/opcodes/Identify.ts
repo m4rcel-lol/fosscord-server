@@ -679,6 +679,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
 
     // From user relationships ( friends ), also append to `users` list
     user.relationships.forEach((x) => addUser(x.to.toPublicUser()));
+    guildPresenceMembers.filter((m) => guildPresenceMap.has(m.id)).forEach((m) => addUser(m.user.toPublicUser()));
     const appendRelationshipsTime = taskSw.getElapsedAndReset();
 
     const allSessions = sessions.concat(this.session!).map((x) => x.toPrivateGatewayDeviceInfo());

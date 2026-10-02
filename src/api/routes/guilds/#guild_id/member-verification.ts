@@ -18,7 +18,6 @@
 
 import { route } from "@spacebar/api/middlewares";
 import { Guild } from "@spacebar/database";
-import { emitEvent, GuildUpdateEvent } from "@spacebar/util";
 import { GuildMemberVerificationModifySchema } from "@spacebar/schemas";
 import { Request, Response, Router } from "express";
 
@@ -69,7 +68,7 @@ router.patch("/", route({ requestBody: "GuildMemberVerificationModifySchema", pe
     }
     await guild.save();
 
-    if (body.enabled !== undefined) await emitEvent({ event: "GUILD_UPDATE", data: guild.toJSON() as unknown as GuildUpdateEvent["data"], guild_id } satisfies GuildUpdateEvent);
+    if (body.enabled !== undefined) await Guild.emitUpdate(guild_id);
 
     res.json(guild.member_verification);
 });

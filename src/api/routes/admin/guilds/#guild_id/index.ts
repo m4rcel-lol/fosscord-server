@@ -20,8 +20,8 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
 import { Channel, Guild, Member, User } from "@spacebar/database";
-import { Config, emitEvent, GuildDeleteEvent, GuildUpdateEvent } from "@spacebar/util";
-import { AdminGuildUpdateSchema, GuildCreateResponse } from "@spacebar/schemas";
+import { Config, emitEvent, GuildDeleteEvent } from "@spacebar/util";
+import { AdminGuildUpdateSchema } from "@spacebar/schemas";
 import { pickOwner } from "../index";
 
 const router = Router({ mergeParams: true });
@@ -86,20 +86,7 @@ router.patch(
         if (body.features !== undefined) guild.features = [...new Set(body.features.map((f) => f.trim().toUpperCase()).filter(Boolean))];
 
         await guild.save();
-
-        const data = guild.toJSON();
-        delete data.template_id;
-        await emitEvent({
-            event: "GUILD_UPDATE",
-            data: {
-                ...data,
-                afk_channel_id: data.afk_channel_id ?? undefined,
-                public_updates_channel_id: data.public_updates_channel_id ?? undefined,
-                rules_channel_id: data.rules_channel_id ?? undefined,
-                system_channel_id: data.system_channel_id ?? undefined,
-            } satisfies GuildCreateResponse,
-            guild_id,
-        } satisfies GuildUpdateEvent);
+        await Guild.emitUpdate(guild_id);
 
         res.json(await describeGuild(guild_id));
     },

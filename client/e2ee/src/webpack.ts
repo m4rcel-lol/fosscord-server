@@ -49,6 +49,7 @@ export interface DispatchHandler {
 
 export interface GatewaySocket {
     dispatcher: { getDispatchHandler: ((type: string) => DispatchHandler | undefined) | null };
+    isSessionEstablished?: () => boolean;
 }
 
 export interface GatewayStore {

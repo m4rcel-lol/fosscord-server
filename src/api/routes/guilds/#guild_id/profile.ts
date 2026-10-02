@@ -20,7 +20,7 @@ import crypto from "node:crypto";
 import { route } from "@spacebar/api/middlewares";
 import { Guild, User } from "@spacebar/database";
 import { Raw } from "typeorm";
-import { DiscordApiErrors, emitEvent, GuildUpdateEvent, handleFile } from "@spacebar/util";
+import { DiscordApiErrors, handleFile } from "@spacebar/util";
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { GuildProfileModifySchema } from "@spacebar/schemas";
@@ -94,11 +94,7 @@ router.patch(
             }
         }
 
-        await emitEvent({
-            event: "GUILD_UPDATE",
-            data: guild.toJSON() as unknown as GuildUpdateEvent["data"],
-            guild_id,
-        } satisfies GuildUpdateEvent);
+        await Guild.emitUpdate(guild_id);
 
         res.json((await guild.withPresenceCount()).toGuildProfile());
     },

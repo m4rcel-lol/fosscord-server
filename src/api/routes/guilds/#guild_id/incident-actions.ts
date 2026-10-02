@@ -19,7 +19,7 @@
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { Guild } from "@spacebar/database";
-import { emitEvent, FieldErrors, GuildUpdateEvent } from "@spacebar/util";
+import { FieldErrors } from "@spacebar/util";
 
 const router = Router({ mergeParams: true });
 
@@ -59,7 +59,7 @@ router.put(
             lockdown_duration_hours: invites_disabled_until || dms_disabled_until ? (body.lockdown_duration_hours ?? null) : null,
         };
         await guild.save();
-        await emitEvent({ event: "GUILD_UPDATE", data: guild.toJSON() as unknown as GuildUpdateEvent["data"], guild_id } satisfies GuildUpdateEvent);
+        await Guild.emitUpdate(guild_id);
 
         return res.json(guild.incidents_data);
     },

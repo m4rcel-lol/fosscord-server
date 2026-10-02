@@ -20,7 +20,7 @@ The test client is Discord's own web client, cached in `assets/cache` by `npm ru
 
 The default set leaves out every plugin that talks to a third-party service on load or on use (ReviewDB, Decor, Translate, USRBG, ClearURLs, Dearrow and similar), so with the defaults the client only ever contacts this instance. `client/vencord-patches/no-donor-badges.patch` removes the one request core Vencord makes on its own, the donor badge list from `badges.vencord.dev`.
 
-`vencord.js` starts with a small script that seeds the default plugin set from the `plugins` and `settings` keys of `client/vencord.json`. A default is applied once per browser and recorded in the `FosscordVencordSeeded` localStorage key, so a user who turns a plugin off keeps it off, and a plugin added to the defaults later still reaches existing users. Our own plugins are `required`, so they can't be turned off.
+`vencord.js` starts with a small script that seeds the default plugin set from the `plugins` and `settings` keys of `client/vencord.json`. A default is applied once per browser and recorded in the `FosscordVencordSeeded` localStorage key, so a user who turns a plugin off keeps it off, and a plugin added to the defaults later still reaches existing users. A plugin's default can also be an object of plugin settings, such as `{ "enabled": true, "isEnabled": false }`. Each distinct object is applied once, so changing it reaches existing users one more time. Our own plugins are `required`, so they can't be turned off.
 
 To move to a newer Vencord, change `commit` in `client/vencord.json`, rebuild and run the check below.
 
