@@ -19,7 +19,8 @@
 import bcrypt from "bcrypt";
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
-import { MoreThan } from "typeorm";
+import crypto from "node:crypto";
+import { ILike, MoreThan } from "typeorm";
 import { verifyCaptcha } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
 import { Invite, User, ValidRegistrationToken } from "@spacebar/database";
@@ -353,6 +354,19 @@ router.post(
         }
         logTrace("Absolute register rate checks");
 
+        if (!body.username) {
+            const base =
+                (body.global_name ?? "")
+                    .normalize("NFKD")
+                    .toLowerCase()
+                    .replace(/[^a-z0-9_.]/g, "")
+                    .replace(/\.{2,}/g, ".")
+                    .slice(0, 24) || "user";
+            let candidate = base.length < 2 ? `${base}_` : base;
+            while (await User.exists({ where: { username: ILike(candidate.replace(/[\\%_]/g, "\\$&")) } })) candidate = `${base}${crypto.randomInt(1000, 100000)}`;
+            body.username = candidate;
+        }
+
         const { maxUsername } = Config.get().limits.user;
         if (body.username.length > maxUsername) {
             throw FieldErrors({
@@ -363,7 +377,7 @@ router.post(
             });
         }
 
-        const user = await User.register({ ...body, req });
+        const user = await User.register({ ...body, username: body.username, req });
         logTrace("Register user");
 
         if (body.invite) {
