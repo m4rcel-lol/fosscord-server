@@ -19,7 +19,7 @@
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import multer from "multer";
-import { checkAutomod, handleMessage, postHandleMessage } from "@spacebar/api/util";
+import { checkAutomod, handleMessage, postHandleMessage, syncCrosspostCopies } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
 import { Attachment, Channel, Message } from "@spacebar/database";
 import {
@@ -144,6 +144,7 @@ router.patch(
         } satisfies MessageUpdateEvent);
 
         postHandleMessage(new_message).catch((e) => console.error("[Message] post-message handler failed", e));
+        await syncCrosspostCopies(new_message);
 
         return res.json(new_message.toPublicJSON(req.user_id));
     },
@@ -334,6 +335,7 @@ router.delete(
                 guild_id: channel.guild_id,
             },
         } satisfies MessageDeleteEvent);
+        await syncCrosspostCopies(message, true);
 
         res.sendStatus(204);
     },
