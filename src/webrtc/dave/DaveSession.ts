@@ -31,7 +31,7 @@ interface PendingProposal {
     userId: string;
     kind: "add" | "remove";
     leaf?: number;
-    keyPackage?: Buffer;
+    sentTo: Set<string>;
 }
 
 interface Transition {
@@ -83,11 +83,6 @@ export class DaveSession {
         return this.leaves.flatMap((userId) => (userId && this.sockets.has(userId) ? [userId] : []));
     }
 
-    private pendingUsers() {
-        const members = new Set(this.leaves);
-        return [...this.sockets.keys()].filter((userId) => !members.has(userId));
-    }
-
     private send(userId: string, op: VoiceOPCodes, payload: Buffer) {
         const socket = this.sockets.get(userId);
         if (socket) return SendBinary(socket, op, payload);
@@ -101,10 +96,6 @@ export class DaveSession {
     async join(socket: WebRtcWebSocket) {
         this.sockets.set(socket.user_id, socket);
         await SendBinary(socket, VoiceOPCodes.MLS_EXTERNAL_SENDER_PACKAGE, externalSender.package);
-
-        if (this.established) return;
-        const inFlight = this.proposals.filter((p) => p.kind === "add" && p.userId !== socket.user_id);
-        if (inFlight.length) await this.send(socket.user_id, VoiceOPCodes.MLS_PROPOSALS, this.encodeAppend(inFlight));
     }
 
     async leave(userId: string, socket?: WebRtcWebSocket) {
@@ -124,11 +115,11 @@ export class DaveSession {
         if (!this.established) {
             const revoked = this.proposals.filter((p) => p.userId === userId);
             this.proposals = this.proposals.filter((p) => p.userId !== userId);
-            if (revoked.length) await this.broadcast(this.pendingUsers(), this.encodeRevoke(revoked.map((p) => p.ref)));
+            for (const proposal of revoked) for (const recipient of proposal.sentTo) await this.send(recipient, VoiceOPCodes.MLS_PROPOSALS, this.encodeRevoke([proposal.ref]));
             return;
         }
 
-        if (this.members().length <= 1) return this.reset();
+        if (this.members().length <= 1) await this.reset();
         await this.update();
     }
 
@@ -153,19 +144,23 @@ export class DaveSession {
 
         this.sockets.set(socket.user_id, socket);
         this.keyPackages.set(socket.user_id, keyPackage.raw);
-        this.proposals = this.proposals.filter((p) => !(p.kind === "add" && p.userId === socket.user_id));
+        const stale = this.proposals.filter((p) => p.kind === "add" && p.userId === socket.user_id);
+        this.proposals = this.proposals.filter((p) => !stale.includes(p));
+        for (const proposal of stale) for (const recipient of proposal.sentTo) await this.send(recipient, VoiceOPCodes.MLS_PROPOSALS, this.encodeRevoke([proposal.ref]));
         await this.update();
     }
 
     private async update() {
         if (!this.established) {
             const proposed = new Set(this.proposals.map((p) => p.userId));
-            for (const [userId, keyPackage] of this.keyPackages) {
-                if (proposed.has(userId)) continue;
-                const proposal = { ...externalSender.add(this.groupId, this.epoch, keyPackage), userId, kind: "add" as const, keyPackage };
-                this.proposals.push(proposal);
-                const recipients = [...this.keyPackages.keys()].filter((id) => id !== userId);
-                await this.broadcast(recipients, this.encodeAppend([proposal]));
+            for (const [userId, keyPackage] of this.keyPackages)
+                if (!proposed.has(userId)) this.proposals.push({ ...externalSender.add(this.groupId, this.epoch, keyPackage), userId, kind: "add", sentTo: new Set() });
+
+            for (const recipient of this.keyPackages.keys()) {
+                const unsent = this.proposals.filter((p) => p.userId !== recipient && !p.sentTo.has(recipient));
+                if (!unsent.length) continue;
+                for (const proposal of unsent) proposal.sentTo.add(recipient);
+                await this.send(recipient, VoiceOPCodes.MLS_PROPOSALS, this.encodeAppend(unsent));
             }
             return;
         }
@@ -177,18 +172,20 @@ export class DaveSession {
         this.leaves.forEach((userId, leaf) => {
             if (userId === null || proposedRemovals.has(leaf)) return;
             if (this.sockets.has(userId) && !this.keyPackages.has(userId)) return;
-            fresh.push({ ...externalSender.remove(this.groupId, this.epoch, leaf), userId, kind: "remove", leaf });
+            fresh.push({ ...externalSender.remove(this.groupId, this.epoch, leaf), userId, kind: "remove", leaf, sentTo: new Set() });
         });
 
         for (const [userId, keyPackage] of this.keyPackages) {
             if (proposedAdds.has(userId)) continue;
-            fresh.push({ ...externalSender.add(this.groupId, this.epoch, keyPackage), userId, kind: "add", keyPackage });
+            fresh.push({ ...externalSender.add(this.groupId, this.epoch, keyPackage), userId, kind: "add", sentTo: new Set() });
         }
 
         if (!fresh.length) return;
         this.proposals.push(...fresh);
         this.log(`proposing ${fresh.map((p) => `${p.kind} ${p.userId}`).join(", ")} at epoch ${this.epoch}`);
-        await this.broadcast(this.members(), this.encodeAppend(fresh));
+        const recipients = this.members();
+        for (const proposal of fresh) for (const recipient of recipients) proposal.sentTo.add(recipient);
+        await this.broadcast(recipients, this.encodeAppend(fresh));
     }
 
     async onCommitWelcome(socket: WebRtcWebSocket, data: Buffer) {
@@ -199,6 +196,8 @@ export class DaveSession {
         if (!commit.groupId.equals(this.groupId)) throw new Error("Commit is for another group");
         if (commit.epoch !== this.epoch) return this.log(`ignoring commit from ${socket.user_id} for epoch ${commit.epoch}, current epoch is ${this.epoch}`);
         if (commit.senderType !== SenderType.Member) throw new Error("Commit sender must be a member");
+        if (this.established ? this.leaves[commit.senderIndex] !== socket.user_id : commit.senderIndex !== 0)
+            throw new Error("Commit sender does not match the authenticated user");
         if (commit.inlineProposals > 0) throw new Error("Commit contains inline proposals");
         if (!this.established && this.leaves.length === 0 && this.keyPackages.has(socket.user_id) === false) throw new Error("Committer has no pending group");
 
@@ -258,7 +257,7 @@ export class DaveSession {
         if (this.leaves.includes(userId)) {
             const leaf = this.leaves.indexOf(userId);
             if (!this.proposals.some((p) => p.kind === "remove" && p.leaf === leaf)) {
-                const proposal = { ...externalSender.remove(this.groupId, this.epoch, leaf), userId, kind: "remove" as const, leaf };
+                const proposal = { ...externalSender.remove(this.groupId, this.epoch, leaf), userId, kind: "remove" as const, leaf, sentTo: new Set<string>() };
                 this.proposals.push(proposal);
                 await this.broadcast(
                     this.members().filter((id) => id !== userId),
