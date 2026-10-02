@@ -5479,6 +5479,104 @@
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
+    "SoundboardSoundCreateSchema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "minLength": 2,
+                "maxLength": 32,
+                "type": "string"
+            },
+            "sound": {
+                "type": "string"
+            },
+            "volume": {
+                "type": "number",
+                "format": "float",
+                "minimum": 0,
+                "maximum": 1
+            },
+            "emoji_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "emoji_name": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "name",
+            "sound"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "SoundboardSoundModifySchema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "minLength": 2,
+                "maxLength": 32,
+                "type": "string"
+            },
+            "volume": {
+                "type": "number",
+                "format": "float",
+                "minimum": 0,
+                "maximum": 1
+            },
+            "emoji_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "emoji_name": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "SendSoundboardSoundSchema": {
+        "type": "object",
+        "properties": {
+            "sound_id": {
+                "type": "string"
+            },
+            "source_guild_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "emoji_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "emoji_name": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "sound_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
     "PasswordResetSchema": {
         "type": "object",
         "properties": {
@@ -12408,6 +12506,9 @@
             "format_type": {
                 "$ref": "#/definitions/StickerFormatType"
             },
+            "sort_value": {
+                "type": "integer"
+            },
             "id": {
                 "type": "string"
             }
@@ -12439,6 +12540,9 @@
                 "items": {
                     "$ref": "#/definitions/Sticker"
                 }
+            },
+            "sku_id": {
+                "type": "string"
             },
             "cover_sticker_id": {
                 "type": "string"
@@ -13259,6 +13363,12 @@
                 "$ref": "#/definitions/PartialEmoji"
             },
             "user_ids": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "burst_user_ids": {
                 "type": "array",
                 "items": {
                     "type": "string"

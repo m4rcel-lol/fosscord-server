@@ -39,7 +39,8 @@ export class StickerPack extends BaseClass {
     })
     stickers: Sticker[];
 
-    // sku_id: string
+    @Column({ type: "int8", nullable: true })
+    sku_id?: string;
 
     @Column({ nullable: true })
     @RelationId((pack: StickerPack) => pack.cover_sticker)

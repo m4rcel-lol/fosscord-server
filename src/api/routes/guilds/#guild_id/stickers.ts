@@ -21,7 +21,7 @@ import { HTTPError } from "lambert-server/HTTPError";
 import multer from "multer";
 import { route } from "@spacebar/api/middlewares";
 import { Member, Sticker } from "@spacebar/database";
-import { GuildStickersUpdateEvent, Snowflake, emitEvent, uploadFile, Config, DiscordApiErrors } from "@spacebar/util";
+import { GuildStickersUpdateEvent, Snowflake, emitEvent, uploadFile, deleteFile, Config, DiscordApiErrors } from "@spacebar/util";
 import { ModifyGuildStickerSchema, StickerFormatType, StickerType } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
@@ -42,7 +42,7 @@ router.get(
         const { guild_id } = req.params as { [key: string]: string };
         await Member.IsInGuildOrFail(req.user_id, guild_id);
 
-        res.json(await Sticker.find({ where: { guild_id } }));
+        res.json(await Sticker.find({ where: { guild_id }, relations: { user: true } }));
     },
 );
 
@@ -87,22 +87,23 @@ router.post(
 
         if (sticker_count >= maxStickers) throw DiscordApiErrors.MAXIMUM_STICKERS.withParams(maxStickers);
 
-        const [sticker] = await Promise.all([
-            Sticker.create({
-                ...body,
-                guild_id,
-                id,
-                type: StickerType.GUILD,
-                format_type: getStickerFormat(req.file.mimetype),
-                available: true,
-                user_id: req.user_id,
-            }).save(),
-            uploadFile(`/stickers/${id}`, req.file),
-        ]);
+        const { content_type } = await uploadFile(`/stickers/${id}`, req.file);
+
+        await Sticker.create({
+            name: body.name,
+            description: body.description,
+            tags: body.tags,
+            guild_id,
+            id,
+            type: StickerType.GUILD,
+            format_type: getStickerFormat(content_type ?? req.file.mimetype),
+            available: true,
+            user_id: req.user_id,
+        }).save();
 
         await sendStickerUpdateEvent(guild_id);
 
-        res.json(sticker);
+        res.json(await Sticker.findOneOrFail({ where: { id }, relations: { user: true } }));
     },
 );
 
@@ -113,11 +114,12 @@ function getStickerFormat(mime_type: string) {
         case "application/json":
             return StickerFormatType.LOTTIE;
         case "image/png":
+        case "image/webp":
             return StickerFormatType.PNG;
         case "image/gif":
             return StickerFormatType.GIF;
         default:
-            throw new HTTPError("invalid sticker format: must be png, apng or lottie");
+            throw new HTTPError("invalid sticker format: must be png, apng, gif or lottie");
     }
 }
 
@@ -137,11 +139,9 @@ router.get(
         const { guild_id, sticker_id } = req.params as { [key: string]: string };
         await Member.IsInGuildOrFail(req.user_id, guild_id);
 
-        res.json(
-            await Sticker.findOneOrFail({
-                where: { guild_id, id: sticker_id },
-            }),
-        );
+        const sticker = await Sticker.findOne({ where: { guild_id, id: sticker_id }, relations: { user: true } });
+        if (!sticker) throw DiscordApiErrors.UNKNOWN_STICKER;
+        res.json(sticker);
     },
 );
 
@@ -166,11 +166,13 @@ router.patch(
         const { guild_id, sticker_id } = req.params as { [key: string]: string };
         const body = req.body as ModifyGuildStickerSchema;
 
-        const sticker = await Sticker.create({
-            ...body,
-            guild_id,
-            id: sticker_id,
-        }).save();
+        const sticker = await Sticker.findOne({ where: { guild_id, id: sticker_id }, relations: { user: true } });
+        if (!sticker) throw DiscordApiErrors.UNKNOWN_STICKER;
+
+        if (body.name !== undefined) sticker.name = body.name;
+        if (body.description !== undefined) sticker.description = body.description;
+        if (body.tags !== undefined) sticker.tags = body.tags;
+        await sticker.save();
         await sendStickerUpdateEvent(guild_id);
 
         return res.json(sticker);
@@ -202,7 +204,11 @@ router.delete(
     async (req: Request, res: Response) => {
         const { guild_id, sticker_id } = req.params as { [key: string]: string };
 
+        const sticker = await Sticker.findOne({ where: { guild_id, id: sticker_id } });
+        if (!sticker) throw DiscordApiErrors.UNKNOWN_STICKER;
+
         await Sticker.delete({ guild_id, id: sticker_id });
+        await deleteFile(`/stickers/${sticker_id}`).catch(() => undefined);
         await sendStickerUpdateEvent(guild_id);
 
         return res.sendStatus(204);

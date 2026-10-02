@@ -399,6 +399,9 @@ export interface MessageReactionAddEvent extends Event {
         member?: PublicMember;
         emoji: PartialEmoji;
         type: ReactionType;
+        burst?: boolean;
+        burst_colors?: string[];
+        message_author_id?: string;
     };
 }
 
@@ -411,6 +414,7 @@ export interface MessageReactionRemoveEvent extends Event {
         guild_id?: string;
         emoji: PartialEmoji;
         type: ReactionType;
+        burst?: boolean;
     };
 }
 
@@ -807,6 +811,12 @@ export type EVENT =
     | "GUILD_BAN_REMOVE"
     | "GUILD_EMOJIS_UPDATE"
     | "GUILD_STICKERS_UPDATE"
+    | "GUILD_SOUNDBOARD_SOUND_CREATE"
+    | "GUILD_SOUNDBOARD_SOUND_UPDATE"
+    | "GUILD_SOUNDBOARD_SOUND_DELETE"
+    | "GUILD_SOUNDBOARD_SOUNDS_UPDATE"
+    | "SOUNDBOARD_SOUNDS"
+    | "VOICE_CHANNEL_EFFECT_SEND"
     | "GUILD_INTEGRATIONS_UPDATE"
     | "GUILD_MEMBER_ADD"
     | "GUILD_MEMBER_REMOVE"
