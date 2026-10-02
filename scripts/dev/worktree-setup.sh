@@ -6,6 +6,7 @@ db="${2:?usage: worktree-setup.sh <port> <db-name>}"
 main="$(git worktree list --porcelain | awk 'NR==1{print $2}')"
 [ -e node_modules ] || ln -s "$main/node_modules" node_modules
 [ -e assets/cache ] || ln -s "$main/assets/cache" assets/cache
+[ -e assets/cache_compressed ] || [ ! -d "$main/assets/cache_compressed" ] || ln -s "$main/assets/cache_compressed" assets/cache_compressed
 cat > .env <<ENV
 DATABASE=postgres://$USER@localhost:5432/$db
 PORT=$port

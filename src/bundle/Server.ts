@@ -30,7 +30,7 @@ import { Config } from "@spacebar/util";
 import { WebrtcServer } from "@spacebar/webrtc";
 import { ProcessLifecycle } from "../util/util/ProcessLifecycle";
 import { Monitoring } from "../util/monitoring/Monitoring";
-import TestClient from "./TestClient";
+import TestClient, { TestClientAssets } from "./TestClient";
 
 const app = express();
 const server = http.createServer();
@@ -59,6 +59,7 @@ ProcessLifecycle.eventEmitter.on("stopping", async () => {
 async function main() {
     await Monitoring.init();
     Monitoring.attach(app);
+    TestClientAssets(app);
     await initDatabase();
     await Config.init();
 

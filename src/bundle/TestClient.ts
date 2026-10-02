@@ -16,16 +16,80 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import express, { Application } from "express";
+import express, { Application, Request, Response, NextFunction } from "express";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import zlib from "node:zlib";
+import { createHash } from "node:crypto";
+import { pipeline } from "node:stream/promises";
 import { Config } from "@spacebar/util";
 
 const ASSET_FOLDER_PATH = path.join(__dirname, "..", "..", "assets");
 const CACHE_PATH = path.join(ASSET_FOLDER_PATH, "cache");
+const COMPRESSED_PATH = process.env.CLIENT_COMPRESSED_PATH ? path.resolve(process.env.CLIENT_COMPRESSED_PATH) : path.join(ASSET_FOLDER_PATH, "cache_compressed");
 const PATCH_PATH = path.join(ASSET_FOLDER_PATH, "client_patches");
 const UPSTREAM = "https://discord.com";
+const DEVELOPMENT = process.env.NODE_ENV === "development";
+const HASHED = /(?:^|[.-])[0-9a-f]{8,32}\.\w+$/;
+const COMPRESSIBLE = /\.(js|css|json|svg|wasm)$/;
+const PRECOMPRESSED: Record<string, string> = { br: "br", gzip: "gz" };
+
+const acceptedEncodings = (header = "") => {
+    const weights = new Map<string, number>();
+    for (const part of header.toLowerCase().split(",")) {
+        const [name, ...params] = part.split(";").map((x) => x.trim());
+        const q = params.find((x) => x.startsWith("q="));
+        if (name) weights.set(name, q ? Number(q.slice(2)) : 1);
+    }
+    const weight = (encoding: string) => weights.get(encoding) ?? weights.get("*") ?? 0;
+    return ["br", "zstd", "gzip"].filter((x) => weight(x) > 0).sort((a, b) => weight(b) - weight(a));
+};
+
+const compressor = (encoding: string) => {
+    if (encoding === "zstd") return zlib.createZstdCompress({ params: { [zlib.constants.ZSTD_c_compressionLevel]: 6 } });
+    if (encoding === "br") return zlib.createBrotliCompress({ params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 5 } });
+    return zlib.createGzip({ level: 6 });
+};
+
+const stat = (file: string) => fs.promises.stat(file).catch(() => null);
+
+const serveAsset = async (req: Request, res: Response, next: NextFunction) => {
+    const file = req.params.file as string;
+    if (!/^\w[\w.-]*$/.test(file)) return next();
+    const source = path.join(CACHE_PATH, file);
+    const sourceStat = await stat(source);
+    if (!sourceStat?.isFile()) return next();
+
+    res.set("Cache-Control", DEVELOPMENT || !HASHED.test(file) ? "no-cache" : "public, max-age=31536000, immutable");
+    res.set("Access-Control-Allow-Origin", "*");
+    if (!COMPRESSIBLE.test(file)) return res.sendFile(source, { cacheControl: false, dotfiles: "allow" });
+
+    res.vary("Accept-Encoding");
+    res.type(path.extname(file));
+    const encodings = acceptedEncodings(req.headers["accept-encoding"]);
+    for (const encoding of encodings) {
+        if (!PRECOMPRESSED[encoding]) continue;
+        const compressed = path.join(COMPRESSED_PATH, `${file}.${PRECOMPRESSED[encoding]}`);
+        const compressedStat = await stat(compressed);
+        if (!compressedStat || compressedStat.mtimeMs < Math.floor(sourceStat.mtimeMs)) continue;
+        res.set("Content-Encoding", encoding);
+        return res.sendFile(compressed, { cacheControl: false, acceptRanges: false, dotfiles: "allow" });
+    }
+
+    if (!encodings.length || sourceStat.size < 1024) return res.sendFile(source, { cacheControl: false, dotfiles: "allow" });
+    res.set("Content-Encoding", encodings[0]);
+    res.set("ETag", `W/"${sourceStat.size.toString(16)}-${Math.floor(sourceStat.mtimeMs).toString(16)}-${encodings[0]}"`);
+    res.set("Last-Modified", sourceStat.mtime.toUTCString());
+    if (req.fresh) return res.status(304).end();
+    if (req.method === "HEAD") return res.end();
+    await pipeline(fs.createReadStream(source), compressor(encodings[0]), res).catch(() => res.destroy());
+};
+
+export function TestClientAssets(app: Application) {
+    app.use("/assets", express.static(path.join(ASSET_FOLDER_PATH, "public")));
+    app.get("/assets/:file", (req, res, next) => void serveAsset(req, res, next).catch(next));
+}
 
 const ENDPOINT_KEYS = [
     "API_ENDPOINT",
@@ -116,16 +180,20 @@ const buildHtml = () => {
         .replace(/<title>[^<]*<\/title>/, `<title>${client.instanceName}</title>`);
 };
 
-export default function TestClient(app: Application) {
-    app.use("/assets", express.static(path.join(ASSET_FOLDER_PATH, "public")));
-    app.use(
-        "/assets",
-        express.static(CACHE_PATH, process.env.NODE_ENV === "development" ? { setHeaders: (res) => res.set("Cache-Control", "no-cache") } : { immutable: true, maxAge: "30d" }),
-    );
+const renderPage = () => {
+    const body = Buffer.from(buildHtml());
+    return {
+        body,
+        etag: `"${createHash("sha1").update(body).digest("base64url")}"`,
+        br: zlib.brotliCompressSync(body, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 11, [zlib.constants.BROTLI_PARAM_MODE]: zlib.constants.BROTLI_MODE_TEXT } }),
+        gzip: zlib.gzipSync(body, { level: 9 }),
+    };
+};
 
+export default function TestClient(app: Application) {
     if (!Config.get().client.useTestClient || !fs.existsSync(path.join(CACHE_PATH, "index.html"))) return;
 
-    let html = buildHtml();
+    let page = renderPage();
     const missLog = path.join(ASSET_FOLDER_PATH, "cacheMisses");
 
     app.get("/assets/:file", async (req, res) => {
@@ -139,25 +207,21 @@ export default function TestClient(app: Application) {
         res.send(Buffer.from(await upstream.arrayBuffer()));
     });
 
-    if (process.env.NODE_ENV === "development") {
-        const sourceStamp = () =>
-            [path.join(CACHE_PATH, "index.html"), PATCH_PATH, ...(fs.existsSync(PATCH_PATH) ? fs.readdirSync(PATCH_PATH).map((x) => path.join(PATCH_PATH, x)) : [])]
-                .map((x) => fs.statSync(x, { throwIfNoEntry: false })?.mtimeMs ?? 0)
-                .join();
-        let stamp = sourceStamp();
-        app.use((req, res, next) => {
-            const current = sourceStamp();
-            if (current !== stamp) {
-                stamp = current;
-                html = buildHtml();
-            }
-            next();
-        });
-    }
+    const sourceStamp = () =>
+        [path.join(CACHE_PATH, "index.html"), PATCH_PATH, ...(fs.existsSync(PATCH_PATH) ? fs.readdirSync(PATCH_PATH).map((x) => path.join(PATCH_PATH, x)) : [])]
+            .map((x) => fs.statSync(x, { throwIfNoEntry: false })?.mtimeMs ?? 0)
+            .join();
+    let stamp = DEVELOPMENT ? sourceStamp() : "";
 
     app.get("/{*splat}", (req, res, next) => {
         if (/^\/(api|cdn|attachments|avatars|icons|banners|emojis|stickers|imageproxy)\b/.test(req.path)) return next();
-        res.set("Cache-Control", "no-cache");
-        res.type("html").send(html);
+        if (DEVELOPMENT && stamp !== (stamp = sourceStamp())) page = renderPage();
+        res.set({ "Cache-Control": "no-cache", ETag: page.etag });
+        res.vary("Accept-Encoding");
+        res.type("html");
+        if (req.fresh) return res.status(304).end();
+        const encoding = acceptedEncodings(req.headers["accept-encoding"]).find((x) => x === "br" || x === "gzip") as "br" | "gzip" | undefined;
+        if (encoding) res.set("Content-Encoding", encoding);
+        res.send(encoding ? page[encoding] : page.body);
     });
 }

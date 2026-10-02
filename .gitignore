@@ -6,6 +6,7 @@ database.db
 tsconfig.tsbuildinfo
 files/
 assets/cache
+assets/cache_compressed
 .env
 config.json
 assets/cacheMisses
