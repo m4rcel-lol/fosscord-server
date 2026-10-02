@@ -20,7 +20,7 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
 import { Member, SoundboardSound } from "@spacebar/database";
-import { FieldErrors, Snowflake, deleteFile, emitEvent, getPermission, handleFile } from "@spacebar/util";
+import { DiscordApiErrors, FieldErrors, Snowflake, deleteFile, emitEvent, getPermission, handleFile } from "@spacebar/util";
 import { SoundboardSoundCreateSchema, SoundboardSoundModifySchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
@@ -92,7 +92,7 @@ router.post(
     async (req: Request, res: Response) => {
         const { guild_id } = req.params as { [key: string]: string };
         const body = req.body as SoundboardSoundCreateSchema;
-        if (!(await canManage(req))) throw new HTTPError("Missing Permissions", 403);
+        if (!(await canManage(req))) throw DiscordApiErrors.MISSING_PERMISSIONS;
 
         if ((await SoundboardSound.count({ where: { guild_id } })) >= MAX_SOUNDS) throw new HTTPError(`Maximum number of soundboard sounds reached (${MAX_SOUNDS})`, 400);
 
@@ -140,7 +140,7 @@ router.patch(
         const { guild_id, sound_id } = req.params as { [key: string]: string };
         const body = req.body as SoundboardSoundModifySchema;
         const sound = await findSound(guild_id, sound_id);
-        if (!(await canManage(req, sound))) throw new HTTPError("Missing Permissions", 403);
+        if (!(await canManage(req, sound))) throw DiscordApiErrors.MISSING_PERMISSIONS;
 
         if (body.name !== undefined) sound.name = body.name;
         if (body.volume !== undefined) sound.volume = body.volume ?? 1;
@@ -171,7 +171,7 @@ router.delete(
     async (req: Request, res: Response) => {
         const { guild_id, sound_id } = req.params as { [key: string]: string };
         const sound = await findSound(guild_id, sound_id);
-        if (!(await canManage(req, sound))) throw new HTTPError("Missing Permissions", 403);
+        if (!(await canManage(req, sound))) throw DiscordApiErrors.MISSING_PERMISSIONS;
 
         await SoundboardSound.delete({ id: sound_id, guild_id });
         await deleteFile(`/soundboard-sounds/${sound_id}`).catch(() => undefined);

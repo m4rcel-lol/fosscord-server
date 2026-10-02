@@ -763,7 +763,7 @@ export const DiscordApiErrors = {
         return new ApiError("The connection has been revoked", 40012, 400);
     },
     get TARGET_USER_IS_NOT_CONNECTED_TO_VOICE() {
-        return new ApiError("Target user is not connected to voice", 40032);
+        return new ApiError("Target user is not connected to voice.", 40032);
     },
     get ALREADY_CROSSPOSTED() {
         return new ApiError("This message has already been crossposted", 40033);

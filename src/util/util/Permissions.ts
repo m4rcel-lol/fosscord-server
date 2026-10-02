@@ -5,10 +5,10 @@
 import { Channel, Guild, Member, Role, User } from "../../database/entities";
 import { BitField, BitFieldResolvable, BitFlag } from "./BitField";
 import { HTTPError } from "lambert-server/HTTPError";
+import { DiscordApiErrors } from "./Constants";
 import { ChannelPermissionOverwrite, ChannelPermissionOverwriteType, ChannelType, UserFlags } from "@spacebar/schemas";
 import { ArrayContains, EntityNotFoundError, FindOneOptions } from "typeorm";
 import { OrmUtils } from "@spacebar/util";
-import { DiscordApiErrors } from "./Constants";
 
 export type PermissionResolvable = bigint | number | Permissions | PermissionResolvable[] | PermissionString;
 

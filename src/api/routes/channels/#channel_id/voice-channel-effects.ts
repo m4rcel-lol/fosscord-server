@@ -18,7 +18,7 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { VoiceState } from "@spacebar/database";
+import { Emoji, VoiceState } from "@spacebar/database";
 import { emitEvent } from "@spacebar/util";
 import { HTTPError } from "lambert-server";
 
@@ -30,6 +30,7 @@ router.post("/", route({ responses: { 204: {}, 400: {} } }), async (req: Request
     if (!voiceState) throw new HTTPError("You must be connected to this voice channel", 400);
     const { emoji_id, emoji_name, animation_type, animation_id } = req.body ?? {};
     if (!emoji_id && !emoji_name) throw new HTTPError("emoji_id or emoji_name is required", 400);
+    const emoji = emoji_id ? await Emoji.findOne({ where: { id: String(emoji_id) }, select: { id: true, name: true, animated: true } }) : null;
 
     await emitEvent({
         event: "VOICE_CHANNEL_EFFECT_SEND",
@@ -39,7 +40,7 @@ router.post("/", route({ responses: { 204: {}, 400: {} } }), async (req: Request
             channel_id,
             guild_id: voiceState.guild_id ?? undefined,
             user_id: req.user_id,
-            emoji: { id: emoji_id ?? null, name: emoji_name ?? null, animated: false },
+            emoji: { id: emoji_id ?? null, name: emoji_name ?? emoji?.name ?? null, animated: emoji?.animated ?? false },
             animation_type: animation_type ?? 0,
             animation_id: animation_id ?? Math.floor(Math.random() * 20),
         },

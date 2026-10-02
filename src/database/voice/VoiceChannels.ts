@@ -45,7 +45,7 @@ export class VoiceChannels {
 
         const voiceStartTime = await VoiceChannels.startTime(channelId);
         await emitEvent({ event: "VOICE_CHANNEL_START_TIME_UPDATE", guild_id: guildId, data: { id: channelId, guild_id: guildId, voice_start_time: voiceStartTime } });
-        if (voiceStartTime !== null) return;
+        if (voiceStartTime !== null) return StageInstances.speakersChanged(channelId);
         await StageInstances.delete(channelId);
         await ScheduledEvents.channelEnded(channelId);
 

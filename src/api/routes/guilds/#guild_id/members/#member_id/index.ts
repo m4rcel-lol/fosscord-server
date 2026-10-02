@@ -18,7 +18,8 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { AuditLog, Ban, Emoji, Guild, Member, PublicGuildRelations, Role, Sticker, VoiceChannels } from "@spacebar/database";
+import { AuditLog, Ban, Emoji, Guild, Member, PublicGuildRelations, Role, Sticker, VoiceChannels, VoiceState } from "@spacebar/database";
+import { IsNull, Not } from "typeorm";
 import {
     CollectibleItemType,
     Collectibles,
@@ -149,6 +150,7 @@ router.patch(
         if ("channel_id" in body) {
             permission.hasThrow("MOVE_MEMBERS");
             if (voiceChannelId && !(await getPermission(member_id, guild_id, voiceChannelId)).has("CONNECT")) throw DiscordApiErrors.MISSING_PERMISSIONS.withParams("CONNECT");
+            if (!(await VoiceState.exists({ where: { user_id: member_id, guild_id, channel_id: Not(IsNull()) } }))) throw DiscordApiErrors.TARGET_USER_IS_NOT_CONNECTED_TO_VOICE;
         }
 
         if (changes.avatar) changes.avatar = await handleFile(`/guilds/${guild_id}/users/${member_id}/avatars`, changes.avatar);
