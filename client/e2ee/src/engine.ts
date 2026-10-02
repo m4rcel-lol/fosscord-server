@@ -92,6 +92,7 @@ export interface ServerDevice {
     name: string | null;
     prekey: { id: number; public_key: string; signature: string };
     created_at?: string;
+    session?: { signed_in: boolean; last_seen: string | null; os: string | null; browser: string | null; location: string | null } | null;
 }
 
 interface SignedKey {
@@ -181,7 +182,22 @@ const signedPayload = (channelId: string, senderId: string, bind: string, env: O
 
 export const deviceName = () => {
     const ua = navigator.userAgent;
-    const browser = /Edg\//.test(ua) ? "Edge" : /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "a browser";
+    const brave = !!(navigator as Navigator & { brave?: unknown }).brave;
+    const browser = brave
+        ? "Brave"
+        : /Edg\//.test(ua)
+          ? "Edge"
+          : /OPR\//.test(ua)
+            ? "Opera"
+            : /Vivaldi\//.test(ua)
+              ? "Vivaldi"
+              : /Firefox\//.test(ua)
+                ? "Firefox"
+                : /Chrome\//.test(ua)
+                  ? "Chrome"
+                  : /Safari\//.test(ua)
+                    ? "Safari"
+                    : "a browser";
     const os = /Windows/.test(ua)
         ? "Windows"
         : /Mac OS X|Macintosh/.test(ua)
@@ -226,6 +242,7 @@ export class Engine {
     private lookupTimer: ReturnType<typeof setTimeout> | null = null;
     private storedKeys = new Map<string, EnvelopeBackupKey>();
     private backfilling = false;
+    private freshIdentity: OkpJwk | null = null;
 
     constructor(private api: Api) {}
 
@@ -411,10 +428,25 @@ export class Engine {
         this.password = null;
     }
 
+    private async wipeLocal(keepTrust: boolean) {
+        const store = this.store!;
+        for (const name of ["identity", "device", "prekeys", "backup-secret", ...(keepTrust ? [] : ["trusted-identity"])]) await store.del(name);
+        this.identity = null;
+        this.device = null;
+        this.prekeys = [];
+        this.secret = null;
+        this.backupKeyPair = null;
+        this.linked = false;
+        if (!keepTrust) this.trustedKey = null;
+    }
+
     private async ensureKeys() {
         const store = this.store!;
         const userId = this.userId;
-        let state = await this.api.request<ServerState>("get", "/users/@me/e2ee");
+        this.device = (await store.get<StoredDevice>("device")) ?? null;
+        let state = await this.api.request<ServerState>("get", `/users/@me/e2ee${this.device ? `?device_id=${encodeURIComponent(this.device.deviceId)}` : ""}`);
+        const revoked = this.device && state.devices.find((d) => d.device_id === this.device!.deviceId)?.status === "revoked" ? this.device.deviceId : null;
+        if (revoked && (await store.get<StoredDevice>("device"))?.deviceId === revoked) await this.wipeLocal(true);
         this.encryptedChannels = new Set(state.channels);
         this.identity = (await store.get<StoredIdentity>("identity")) ?? null;
         this.trustedKey = (await store.get<string>("trusted-identity")) ?? null;
@@ -422,7 +454,8 @@ export class Engine {
         this.prekeys = (await store.get<StoredPrekey[]>("prekeys")) ?? [];
         this.secret = (await store.get<Bytes>("backup-secret")) ?? null;
         this.backup = await this.fetchBackup();
-        let identityJwk: OkpJwk | null = null;
+        let identityJwk: OkpJwk | null = this.freshIdentity;
+        this.freshIdentity = null;
 
         if (!state.identity_key) {
             identityJwk = await generateExportable("Ed25519");
@@ -552,6 +585,20 @@ export class Engine {
             });
         });
         this.emit();
+    }
+
+    async reset(password: string) {
+        await this.serialized(async () => {
+            const identityJwk = await generateExportable("Ed25519");
+            await this.api.request("post", "/users/@me/e2ee/reset", { password, public_key: identityJwk.x });
+            await this.wipeLocal(false);
+            await this.adoptIdentity(identityJwk);
+            this.freshIdentity = identityJwk;
+            this.backup = null;
+            this.password = { value: password, at: Date.now() };
+            this.directory.clear();
+        });
+        await this.refresh();
     }
 
     async removeDevice(deviceId: string) {

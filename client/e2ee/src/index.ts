@@ -27,6 +27,10 @@ import { HttpClient, scan, Targets } from "./webpack";
 interface LoaderState {
     reqs: { c?: Record<string, { exports: unknown }> }[];
     status?: () => unknown;
+    isEncrypted?: (channelId: string) => boolean;
+    beforeSend?: (channelId: string, extras: { hasAttachments?: boolean; hasStickers?: boolean }) => boolean;
+    mountSettings?: (container: HTMLElement) => () => void;
+    openSettings?: () => void;
 }
 
 declare global {
@@ -62,16 +66,38 @@ const api: Api = {
 
 const engine = new Engine(api);
 
-const link = createLink(engine, api, {
-    onPrompt: (prompt) => ui.showApproval(prompt),
-    onChange: () => ui.renderUnlock(),
-    onDismiss: (requestId) => ui.dismissApproval(requestId),
-});
-
 const apiBase = () => {
     const env = (window as unknown as { GLOBAL_ENV?: { API_ENDPOINT?: string; API_VERSION?: number } }).GLOBAL_ENV;
     return `${env?.API_ENDPOINT ?? "/api"}/v${env?.API_VERSION ?? 9}`;
 };
+
+const storedToken = () => {
+    try {
+        const value = JSON.parse(localStorage.getItem("token") ?? "null") as unknown;
+        return typeof value === "string" ? value : null;
+    } catch {
+        return null;
+    }
+};
+
+const link = createLink(engine, api, {
+    onPrompt: (prompt) => ui.showApproval(prompt),
+    onChange: () => ui.renderUnlock(),
+    onDismiss: (requestId) => ui.dismissApproval(requestId),
+    onPeerUnlock: () => {
+        if (initialized && engine.locked) engine.refresh().catch((error) => console.error("[e2ee] refresh failed", error));
+    },
+    beacon: (body) => {
+        const token = storedToken();
+        if (!token) return;
+        fetch(`${apiBase()}/users/@me/e2ee/link`, {
+            method: "POST",
+            keepalive: true,
+            headers: { "content-type": "application/json", authorization: token },
+            body: JSON.stringify(body),
+        }).catch(() => {});
+    },
+});
 
 const tokenApi = (token: string): Api => ({
     async request<T>(method: "get" | "post" | "put" | "patch" | "del", url: string, body?: unknown) {
@@ -87,12 +113,13 @@ const tokenApi = (token: string): Api => ({
 });
 
 const verifyPassword = async (password: string) => {
-    const me = await api.request<{ email?: string | null }>("get", "/users/@me");
-    const base = apiBase();
-    const res = await fetch(`${base}/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ login: me.email, password }) });
-    const body = (await res.json().catch(() => null)) as { token?: string; ticket?: string } | null;
-    if (body?.token) await fetch(`${base}/auth/logout`, { method: "POST", headers: { "content-type": "application/json", authorization: body.token }, body: "{}" }).catch(() => {});
-    return res.ok && !!(body?.token || body?.ticket);
+    try {
+        await api.request("post", "/users/@me/e2ee/password", { password });
+        return true;
+    } catch (error) {
+        if ((error as { status?: number })?.status === 400) return false;
+        throw error;
+    }
 };
 
 const ui = createUi({
@@ -100,6 +127,7 @@ const ui = createUi({
     states,
     link,
     verifyPassword,
+    reset: (password) => engine.reset(password),
     enableChannel: async (channelId) => {
         await api.request("put", `/channels/${channelId}/e2ee`, { enabled: true });
         engine.setChannelEncrypted(channelId);
@@ -163,12 +191,16 @@ const start = async (userId: string) => {
         await engine.init(userId);
         await selfTest();
         initialized = true;
-        engine.onUnlock(() => hooks.retryAll());
+        link.start(userId);
+        engine.onUnlock(() => {
+            hooks.retryAll();
+            if (engine.linked) {
+                link.cancel();
+                link.unlocked();
+            }
+        });
         ui.refresh();
-        if (engine.locked) {
-            link.request().catch((error) => console.error("[e2ee] link request failed", error));
-            ui.showUnlock();
-        }
+        if (engine.locked) ui.showUnlock();
     } catch (error) {
         fail(`Self-test failed: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -278,5 +310,10 @@ loader.status = () => ({
     states: Object.fromEntries(states),
     received: { ...received },
 });
+
+loader.isEncrypted = (channelId) => engine.isEncrypted(channelId);
+loader.beforeSend = (channelId, extras) => ui.beforeSend(channelId, extras);
+loader.mountSettings = (container) => ui.mountSettings(container);
+loader.openSettings = () => ui.showSettings();
 
 tick();

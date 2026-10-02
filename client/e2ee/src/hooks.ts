@@ -19,10 +19,22 @@
 import { E2eeError, Engine, FALLBACK_CONTENT, RawMessage } from "./engine";
 import { DispatchHandler, Dispatcher, FluxAction, GatewayStore, HttpCall, HttpClient, HttpMethod, HttpOptions, HttpResponse } from "./webpack";
 
-export type MessageState = "decrypted" | "pending" | "missing" | "failed";
+export type MessageState = "decrypted" | "pending" | "locked" | "missing" | "failed";
 
 export const DECRYPTING_CONTENT = "Decrypting…";
 export const MISSING_CONTENT = "Sent before this browser was set up";
+export const LOCKED_CONTENT = "Unlock this browser to read this message";
+
+const SEARCH_URL = /^\/channels\/(\d+)\/messages\/search(\/tabs)?$/;
+const SEARCH_PAGES = 10;
+
+interface SearchQuery {
+    content?: string;
+    author_id?: string | string[];
+    offset?: number | string;
+    limit?: number | string;
+    sort_order?: string;
+}
 
 export interface HookContext {
     engine: Engine;
@@ -63,8 +75,16 @@ export const createHooks = (ctx: HookContext) => {
     const inflight = new Map<string, Promise<void>>();
 
     const retry = new Map<string, RawMessage>();
+    const readable = new Map<string, Map<string, RawMessage>>();
+    const searched = new Map<string, number>();
     let dispatcher: Dispatcher | null = null;
     const clone = (message: RawMessage) => JSON.parse(JSON.stringify(message)) as RawMessage;
+
+    const remember = (message: RawMessage) => {
+        let channel = readable.get(message.channel_id);
+        if (!channel) readable.set(message.channel_id, (channel = new Map()));
+        channel.set(message.id, clone(message));
+    };
 
     const decryptOne = (message: RawMessage) => {
         const key = `${message.id}:${message.encrypted?.sig}`;
@@ -73,6 +93,7 @@ export const createHooks = (ctx: HookContext) => {
             message.content = sync;
             states.set(message.id, { state: "decrypted" });
             retry.delete(message.id);
+            remember(message);
             return Promise.resolve();
         }
         if (!ctx.isReady()) {
@@ -95,12 +116,14 @@ export const createHooks = (ctx: HookContext) => {
                     states.set(message.id, { state: "decrypted" });
                     retry.delete(message.id);
                     message.content = content;
+                    remember(message);
                 } catch (error) {
                     const code = error instanceof E2eeError ? error.code : null;
                     if (code === "LOCKED" || code === "NO_KEY") {
-                        states.set(message.id, { state: "missing", reason: error instanceof Error ? error.message : String(error) });
+                        const locked = code === "LOCKED";
+                        states.set(message.id, { state: locked ? "locked" : "missing", reason: error instanceof Error ? error.message : String(error) });
                         retry.set(message.id, original);
-                        message.content = MISSING_CONTENT;
+                        message.content = locked ? LOCKED_CONTENT : MISSING_CONTENT;
                     } else {
                         states.set(message.id, { state: "failed", reason: error instanceof Error ? error.message : String(error) });
                         message.content = FALLBACK_CONTENT;
@@ -113,7 +136,7 @@ export const createHooks = (ctx: HookContext) => {
         return pending.then(() => {
             const again = engine.cached(message);
             const state = states.get(message.id)?.state;
-            message.content = again ?? (state === "missing" ? MISSING_CONTENT : state === "failed" ? FALLBACK_CONTENT : message.content);
+            message.content = again ?? (state === "missing" ? MISSING_CONTENT : state === "locked" ? LOCKED_CONTENT : state === "failed" ? FALLBACK_CONTENT : message.content);
             ctx.onState();
         });
     };
@@ -157,6 +180,45 @@ export const createHooks = (ctx: HookContext) => {
         return { ...opts, body };
     };
 
+    const searchLocally = async (originals: HttpClient, channelId: string, queries: SearchQuery[]) => {
+        if (Date.now() - (searched.get(channelId) ?? 0) > 60000) {
+            let before = "";
+            for (let page = 0; page < SEARCH_PAGES; page++) {
+                const res = await originals
+                    .get({ url: `/channels/${channelId}/messages`, query: { limit: 100, ...(before && { before }) }, rejectWithError: false })
+                    .catch(() => null);
+                const batch = (res?.ok ? res.body : []) as RawMessage[];
+                await decryptAll(batch);
+                if (batch.length < 100) break;
+                before = batch[batch.length - 1].id;
+            }
+            searched.set(channelId, Date.now());
+        }
+        const all = [...(readable.get(channelId)?.values() ?? [])].filter((m) => states.get(m.id)?.state === "decrypted").sort((a, b) => (BigInt(b.id) > BigInt(a.id) ? 1 : -1));
+        return queries.map((query) => {
+            const words = String(query.content ?? "")
+                .toLowerCase()
+                .split(/\s+/)
+                .filter(Boolean);
+            const authors = [query.author_id ?? []].flat().map(String);
+            const hits = all.filter((m) => {
+                const text = String(m.content ?? "").toLowerCase();
+                return words.every((w) => text.includes(w)) && (!authors.length || authors.includes(String(m.author?.id)));
+            });
+            if (query.sort_order === "asc") hits.reverse();
+            const offset = Number(query.offset ?? 0) || 0;
+            const limit = Number(query.limit ?? 25) || 25;
+            return {
+                analytics_id: null,
+                doing_deep_historical_index: false,
+                total_results: hits.length,
+                messages: hits.slice(offset, offset + limit).map((m) => [{ ...m, hit: true }]),
+                threads: [],
+                members: [],
+            };
+        });
+    };
+
     const wrapHttp = (http: HttpClient) => {
         const originals = { ...http };
         for (const method of ["get", "post", "put", "patch", "del"] as HttpMethod[]) {
@@ -176,7 +238,37 @@ export const createHooks = (ctx: HookContext) => {
                 }
                 const relevant = url.startsWith("/channels/") || url.startsWith("/users/@me/mentions") || url.includes("/messages");
                 if (!relevant) return original(input, callback);
-                return (async () => {
+                const search = SEARCH_URL.exec(path);
+                if (search && engine.isEncrypted(search[1]) && (method === "get" || (method === "post" && search[2]))) {
+                    const [, channelId, tabs] = search;
+                    return (async () => {
+                        const params = new URLSearchParams(url.split("?")[1] ?? "");
+                        const extra = opts.query;
+                        if (typeof extra === "string") new URLSearchParams(extra).forEach((value, name) => params.append(name, value));
+                        else if (extra && typeof extra === "object")
+                            Object.entries(extra).forEach(([name, value]) => [value].flat().forEach((v) => v != null && params.append(name, String(v))));
+                        const query: SearchQuery = {
+                            content: params.get("content") ?? undefined,
+                            author_id: params.getAll("author_id"),
+                            offset: params.get("offset") ?? undefined,
+                            limit: params.get("limit") ?? undefined,
+                            sort_order: params.get("sort_order") ?? undefined,
+                        };
+                        const named = tabs ? Object.entries(((opts.body ?? {}) as { tabs?: Record<string, SearchQuery> }).tabs ?? {}) : [];
+                        const results = await searchLocally(originals, channelId, tabs ? named.map(([, q]) => q) : [query]);
+                        const body = tabs
+                            ? {
+                                  tabs: Object.fromEntries(named.map(([name], i) => [name, { ...results[i], cursor: null }])),
+                                  analytics_id: null,
+                                  doing_deep_historical_index: false,
+                              }
+                            : results[0];
+                        const response = { ok: true, status: 200, body, headers: {} };
+                        callback?.({ ...response, hasErr: false });
+                        return response;
+                    })();
+                }
+                const pending = (async () => {
                     let prepared: HttpOptions;
                     try {
                         prepared = await encryptBody(method, opts);
@@ -207,6 +299,8 @@ export const createHooks = (ctx: HookContext) => {
                         }
                     }
                 })();
+                pending.catch(() => {});
+                return pending;
             };
             http[method] = wrapped;
         }
