@@ -106,7 +106,21 @@ Encrypted messages carry a new `encrypted` field. `content` holds a fallback str
 
 The AEAD additional data binds the channel id, the sender, the sender device and the nonce, so a ciphertext can't be moved to another channel or replayed. Encrypted messages never get link embeds. Reactions, pins, typing, read states and reply structure stay in plaintext.
 
-Attachments, stickers and polls aren't encrypted yet, so the server rejects them in encrypted channels. In an encrypted DM the client hides the sticker button, disables "Upload a File" and "Create Poll" in the attach menu, and refuses a send that still has staged files with a notice, keeping the files and the text in the composer. The plan is still to give each attachment its own key and upload it as an opaque `.bin` file, with a service worker serving the decrypted bytes on a virtual path, because Discord's image components append query strings that break `blob:` URLs.
+The encrypted payload is JSON with `content` and, when the message has them, `attachments` and `stickers`. Polls and clips aren't encrypted, so the attach menu disables "Create Poll" and clips in an encrypted DM and the server rejects them there.
+
+### Attachments
+
+Files go through Discord's normal cloud upload flow, and the client rewrites each step in the HTTP client hook:
+
+1. `POST /channels/:id/attachments` gets a random `.bin` file name, the ciphertext size, `application/octet-stream` as the content type and no `X-Discord-Original-MD5` header. The client remembers the upload by its `upload_url` and `upload_filename`.
+2. The `PUT` to the upload URL carries the file encrypted with a fresh AES-256-GCM key and nonce. The file is cut into 64 KiB chunks, each sealed with the nonce XORed with the chunk index and an AAD that names the index and marks the last chunk, so chunks can't be reordered or dropped. Before encrypting, the client reads the width and height of images and the size and duration of videos.
+3. The message send replaces each attachment with `{ id, filename, uploaded_filename }`, where `filename` is the `.bin` name. The real file name, content type, size, dimensions, alt text, spoiler flag, voice message duration and waveform, and the key and nonce go into the encrypted payload. Stickers move from `sticker_ids` into the payload as `{ id, name, format_type }`.
+
+The server only accepts attachments in an encrypted channel when the stored name matches `[a-z0-9]+.bin`, the content type is `application/octet-stream`, there are no dimensions and the request carries no alt text, title, waveform, duration, spoiler or clip fields. It answers anything else with `E2EE_PLAINTEXT_ATTACHMENT`.
+
+After decrypting a message, the client matches each payload entry to the server attachment with the same `.bin` name and rewrites the attachment with the real metadata and a virtual URL, `/e2ee/attachments/<channel>/<attachment>/<name>`, as both `url` and `proxy_url`. A service worker registered at `/e2ee-sw.js` with root scope answers those URLs. On a miss it asks the open tabs over a `MessageChannel` for the real CDN URL and the key, downloads the ciphertext, decrypts it and keeps up to 256 MiB of plaintext in memory. It ignores the query strings Discord appends, answers `Range` requests so videos and voice messages can seek, and serves only images, video, audio and PDF with their own type. Text types are served as `text/plain`, everything else as an `application/octet-stream` download, and every response carries `nosniff` and a sandboxing CSP, so a hostile file can't run script on the instance's origin. Discord asks for video thumbnails with `?format=`, and the worker answers those with the first frame, which the tab that asked renders on a canvas. Encryption waits for the worker to control the page, for up to 8 seconds, before it reports ready. The server answers `/e2ee/attachments/*` with a 404, so a page without the worker shows a broken file instead of the app.
+
+Edits keep the attachments of the decrypted original in the new payload. Removing one attachment sends a `PATCH` with only the kept attachment ids and `.bin` names and re-encrypts the payload without the removed entry. A message whose decrypted content is empty, such as a sticker or a voice message, is refreshed through Vencord's `updateMessage` after a local `MESSAGE_UPDATE`, because Discord's partial message update ignores empty content and sticker changes.
 
 Search in an encrypted DM never reaches the server. The client answers `GET /channels/:id/messages/search` and `POST /channels/:id/messages/search/tabs` itself from the decrypted copies of the last 1000 messages, matching every word of the query and the author filter.
 
@@ -119,7 +133,7 @@ A small loader in `assets/client_patches/10-e2ee-loader.js` pushes a fake chunk 
 - the HTTP client object with `get`, `post`, `put`, `patch` and `del`, to decrypt REST responses,
 - the message queue's `drain`, to encrypt sends and edits.
 
-The heavy code is bundled with esbuild into `assets/public/e2ee/e2ee.js`. The `fosscordE2ee` Vencord plugin connects it to Discord's own UI: a pre-send hook that keeps a refused message in the composer, the sticker and attach menu changes, and the Encryption page in User Settings. When the loader can't find a hook it shows an "E2EE unavailable in this client build" banner and refuses to send in encrypted channels. It never falls back to plaintext. `scripts/e2ee-anchors.js` checks the anchor strings after every `npm run generate:client`.
+The heavy code is bundled with esbuild into `assets/public/e2ee/e2ee.js`. The `fosscordE2ee` Vencord plugin connects it to Discord's own UI: a pre-send hook that keeps a refused message in the composer, the attach menu changes, a message re-render hook for decrypted messages, and the Encryption page in User Settings. When the loader can't find a hook it shows an "E2EE unavailable in this client build" banner and refuses to send in encrypted channels. It never falls back to plaintext. `scripts/e2ee-anchors.js` checks the anchor strings after every `npm run generate:client`.
 
 The UI adds a lock after each decrypted message, a lock button in the DM header that turns encryption on (one way, so it can't be downgraded) and shows a check once every member is verified, safety numbers with a QR code and a verify button, key-change notices, and an Encryption page in User Settings for the key backup, the recovery code and the device list.
 
@@ -127,7 +141,7 @@ The UI adds a lock after each decrypted message, a lock button in the DM header 
 
 - Entities `E2eeIdentity` and `E2eeDevice`, a channel encryption state, and a nullable `encrypted` jsonb column on messages, plus a migration.
 - Routes under `users/@me/e2ee` for the identity, devices and prekeys, `POST /e2ee/keys/query` limited to users who share a channel or relationship, and `PUT /channels/:id/e2ee`.
-- `handleMessage` validates envelopes. It checks the shape, a 64 KiB size limit, that the sender device belongs to the sender and isn't revoked, and that no recipient device is missing. Then it forces the fallback content, empty embeds and the suppress-embeds flag. It also rejects plaintext sends into encrypted channels, and rejects forwards, polls, stickers and components there.
+- `handleMessage` validates envelopes. It checks the shape, a 64 KiB size limit, that the sender device belongs to the sender and isn't revoked, and that no recipient device is missing. Then it forces the fallback content, empty embeds and the suppress-embeds flag. It also rejects plaintext sends into encrypted channels, and rejects forwards, polls, plaintext stickers, attachments that aren't opaque `.bin` files, and components there.
 - Gateway events `E2EE_DEVICES_UPDATE`, `E2EE_IDENTITY_UPDATE`, `CHANNEL_E2EE_UPDATE` and `E2EE_LINK_REQUEST`/`E2EE_LINK_RESPONSE`.
 - `POST /users/@me/e2ee/password` to check the account password and `POST /users/@me/e2ee/reset` to start over with a new identity. `PUT /channels/:id/e2ee` answers `E2EE_RECIPIENT_NO_DEVICES` with the `user_ids` that have no active device, so the client can name them.
 - Rate limits for key queries, device registration, prekey rotation, password checks and resets.
@@ -135,7 +149,7 @@ The UI adds a lock after each decrypted message, a lock button in the DM header 
 
 ## What it doesn't protect
 
-The server ships the client JavaScript, so a malicious operator can ship a client that leaks keys. That is the limit of any E2EE on the web. Publishing the patch bundle hash and a pinning extension or desktop wrapper reduce it. Metadata is visible to the server: who talks to whom, when, sizes, reactions and read state. Contacts are trusted on first use until their safety numbers are compared. Discord's own analytics and Sentry code runs in the same page, so their payloads need auditing to keep plaintext out.
+The server ships the client JavaScript, so a malicious operator can ship a client that leaks keys. That is the limit of any E2EE on the web. Publishing the patch bundle hash and a pinning extension or desktop wrapper reduce it. Metadata is visible to the server: who talks to whom, when, sizes, reactions and read state. For files that includes the number of attachments, each ciphertext size, which is the file size plus 16 bytes per 64 KiB, and the voice message flag. Sticker images still load from the instance's CDN, so the server sees which sticker a client renders. Contacts are trusted on first use until their safety numbers are compared. Discord's own analytics and Sentry code runs in the same page, so their payloads need auditing to keep plaintext out.
 
 Password mode trades some of that protection for convenience. Whoever holds a copy of the database has the salt and the sealed secret, so they can guess passwords offline, at the cost of one 64 MiB Argon2id run per guess. A weak or reused password makes the encryption about as strong as that password. Recovery-code mode avoids this, because 160 random bits can't be guessed, but losing the code and every signed-in device means losing the history. The backup secret also sits in each unlocked browser's IndexedDB, so malware with access to the profile can read it there.
 
@@ -143,7 +157,7 @@ Password mode trades some of that protection for convenience. Whoever holds a co
 
 0. Spikes: hook proof of concept with armored content, and a WebCrypto/HPKE proof of concept across Chrome, Firefox and Safari.
 1. MVP for DMs and group DMs: server data, server API, message pipeline, client crypto core, client hooks, client UI.
-2. Device linking. Done. Encrypted attachments aren't built yet.
+2. Device linking and encrypted attachments, stickers and voice messages. Done.
 3. Key backup with password and recovery-code modes, device approval and history on new devices. Done.
 4. Hardening: React-level UI patches, bundle hash pinning, analytics audit, fuzzing, a cross-browser test matrix.
 5. MLS for group DMs, then opt-in encrypted guild channels.

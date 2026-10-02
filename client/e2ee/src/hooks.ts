@@ -16,7 +16,9 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+import { Attachments, UploadRef } from "./attachments";
 import { E2eeError, Engine, FALLBACK_CONTENT, RawMessage } from "./engine";
+import { Payload, StickerMeta } from "./files";
 import { DispatchHandler, Dispatcher, FluxAction, GatewayStore, HttpCall, HttpClient, HttpMethod, HttpOptions, HttpResponse } from "./webpack";
 
 export type MessageState = "decrypted" | "pending" | "locked" | "missing" | "failed";
@@ -38,11 +40,14 @@ interface SearchQuery {
 
 export interface HookContext {
     engine: Engine;
+    attachments: Attachments;
+    sticker: (id: string) => StickerMeta | null;
     ready: Promise<boolean>;
     states: Map<string, { state: MessageState; reason?: string }>;
     failClosed: () => boolean;
     isReady: () => boolean;
     onState: () => void;
+    updateRecord: (message: RawMessage) => void;
     onCredentials: (path: string, body: { password?: unknown; new_password?: unknown }, response: unknown) => void;
     onError: (error: unknown, channelId: string) => void;
 }
@@ -50,6 +55,8 @@ export interface HookContext {
 const AUTH_URL = /^\/auth\/(login|register)$/;
 
 const MESSAGE_URL = /^\/channels\/(\d+)\/messages(?:\/(\d+))?$/;
+
+const CREATE_ATTACHMENTS_URL = /^\/channels\/(\d+)\/attachments$/;
 
 const isEncryptedMessage = (value: unknown): value is RawMessage & { encrypted: NonNullable<RawMessage["encrypted"]> } => {
     const message = value as RawMessage | null;
@@ -77,6 +84,7 @@ export const createHooks = (ctx: HookContext) => {
     const retry = new Map<string, RawMessage>();
     const readable = new Map<string, Map<string, RawMessage>>();
     const searched = new Map<string, number>();
+    const payloads = new Map<string, Payload>();
     let dispatcher: Dispatcher | null = null;
     const clone = (message: RawMessage) => JSON.parse(JSON.stringify(message)) as RawMessage;
 
@@ -86,11 +94,16 @@ export const createHooks = (ctx: HookContext) => {
         channel.set(message.id, clone(message));
     };
 
+    const show = (message: RawMessage, payload: Payload) => {
+        ctx.attachments.apply(message, payload);
+        payloads.set(message.id, payload);
+    };
+
     const decryptOne = (message: RawMessage) => {
         const key = `${message.id}:${message.encrypted?.sig}`;
         const sync = engine.cached(message);
         if (sync !== undefined) {
-            message.content = sync;
+            show(message, sync);
             states.set(message.id, { state: "decrypted" });
             retry.delete(message.id);
             remember(message);
@@ -112,10 +125,10 @@ export const createHooks = (ctx: HookContext) => {
             const original = clone(message);
             pending = (async () => {
                 try {
-                    const content = await engine.decrypt(message);
+                    const payload = await engine.decrypt(message);
                     states.set(message.id, { state: "decrypted" });
                     retry.delete(message.id);
-                    message.content = content;
+                    show(message, payload);
                     remember(message);
                 } catch (error) {
                     const code = error instanceof E2eeError ? error.code : null;
@@ -136,9 +149,15 @@ export const createHooks = (ctx: HookContext) => {
         return pending.then(() => {
             const again = engine.cached(message);
             const state = states.get(message.id)?.state;
-            message.content = again ?? (state === "missing" ? MISSING_CONTENT : state === "locked" ? LOCKED_CONTENT : state === "failed" ? FALLBACK_CONTENT : message.content);
+            if (again) show(message, again);
+            else message.content = state === "missing" ? MISSING_CONTENT : state === "locked" ? LOCKED_CONTENT : state === "failed" ? FALLBACK_CONTENT : message.content;
             ctx.onState();
         });
+    };
+
+    const redispatch = (copy: RawMessage) => {
+        dispatcher?.dispatch({ type: "MESSAGE_UPDATE", message: copy, e2eeLocal: true });
+        if (states.get(copy.id)?.state === "decrypted") ctx.updateRecord(copy);
     };
 
     const retryAll = () => {
@@ -150,7 +169,7 @@ export const createHooks = (ctx: HookContext) => {
             decryptOne(copy).then(() => {
                 const after = states.get(copy.id)?.state;
                 if (after === before && after !== "pending") return;
-                dispatcher?.dispatch({ type: "MESSAGE_UPDATE", message: copy, e2eeLocal: true });
+                redispatch(copy);
                 ctx.onState();
             });
         }
@@ -170,12 +189,37 @@ export const createHooks = (ctx: HookContext) => {
         if (ctx.failClosed()) throw new E2eeError("NOT_READY", "Encryption is unavailable in this client build");
         if (!(await ctx.ready)) throw new E2eeError("NOT_READY", "Encryption is unavailable in this client build");
         const body = { ...((opts.body ?? {}) as Record<string, unknown>) };
-        if (method === "patch" && body.content === undefined) return opts;
-        if (opts.attachments?.length || (body.attachments as unknown[] | undefined)?.length || (body.sticker_ids as unknown[] | undefined)?.length || body.poll)
-            throw new E2eeError("UNSUPPORTED", "Attachments, stickers and polls can't be sent in encrypted conversations yet");
+        if (method === "patch" && body.content === undefined && body.attachments === undefined) return opts;
+        if (body.poll) throw new E2eeError("UNSUPPORTED", "Polls can't be sent in encrypted conversations yet");
+        if (opts.attachments?.length) throw new E2eeError("UNSUPPORTED", "This file couldn't be encrypted");
         const nonce = method === "post" ? String(body.nonce ?? `${Date.now()}${Math.floor(Math.random() * 1000)}`) : undefined;
         if (nonce) body.nonce = nonce;
-        body.encrypted = await engine.encrypt(channelId, String(body.content ?? ""), { nonce, mid: method === "patch" ? messageId : undefined });
+        const payload: Payload = { content: String(body.content ?? "") };
+        const refs = Array.isArray(body.attachments) ? (body.attachments as UploadRef[]) : [];
+        if (method === "post") {
+            const metas = refs.map((ref) => ctx.attachments.metaFor(ref));
+            if (metas.some((meta) => !meta)) throw new E2eeError("UNSUPPORTED", "A file wasn't encrypted before it was uploaded");
+            if (metas.length) {
+                payload.attachments = metas.map((meta) => meta!);
+                body.attachments = refs.map((ref, i) => ({ id: ref.id, filename: metas[i]!.name, uploaded_filename: ref.uploaded_filename }));
+            }
+            const stickers = Array.isArray(body.sticker_ids) ? body.sticker_ids.map(String) : [];
+            if (stickers.length) payload.stickers = stickers.map((id) => ctx.sticker(id) ?? { id, name: "", format_type: 1 });
+            delete body.sticker_ids;
+        } else {
+            const previous = payloads.get(messageId);
+            if (!previous) throw new E2eeError("NOT_READY", "This message isn't decrypted in this browser yet");
+            if (body.content === undefined) payload.content = previous.content;
+            let kept = previous.attachments;
+            if (Array.isArray(body.attachments)) {
+                const names = refs.map((ref) => ctx.attachments.nameOf(String(ref.id)));
+                kept = kept?.filter((meta) => names.includes(meta.name));
+                body.attachments = refs.map((ref, i) => ({ id: ref.id, filename: names[i] ?? "file.bin" }));
+            }
+            if (kept?.length) payload.attachments = kept;
+            if (previous.stickers?.length) payload.stickers = previous.stickers;
+        }
+        body.encrypted = await engine.encrypt(channelId, payload, { nonce, mid: method === "patch" ? messageId : undefined });
         body.content = FALLBACK_CONTENT;
         return { ...opts, body };
     };
@@ -236,6 +280,33 @@ export const createHooks = (ctx: HookContext) => {
                     );
                     return result;
                 }
+                if (method === "put" && ctx.attachments.isUpload(url)) {
+                    const upload = (async () => {
+                        const prepared = await ctx.attachments.prepareUpload(opts as HttpOptions & { headers?: Record<string, string> });
+                        const result = await original(prepared, callback);
+                        if (result?.ok) ctx.attachments.uploaded(url);
+                        return result;
+                    })();
+                    upload.catch(() => {});
+                    return upload;
+                }
+                const create = method === "post" ? CREATE_ATTACHMENTS_URL.exec(path) : null;
+                if (create && engine.isEncrypted(create[1])) {
+                    const created = (async () => {
+                        if (ctx.failClosed() || !(await ctx.ready)) {
+                            const error = new E2eeError("NOT_READY", "Encryption is unavailable in this client build");
+                            ctx.onError(error, create[1]);
+                            throw error;
+                        }
+                        const { body, track } = ctx.attachments.prepareCreate((opts.body ?? {}) as { files?: Record<string, unknown>[] });
+                        const headers = Object.fromEntries(Object.entries((opts.headers ?? {}) as Record<string, string>).filter(([name]) => !/md5/i.test(name)));
+                        const result = await original({ ...opts, body, headers }, callback);
+                        if (result?.ok) track(result.body);
+                        return result;
+                    })();
+                    created.catch(() => {});
+                    return created;
+                }
                 const relevant = url.startsWith("/channels/") || url.startsWith("/users/@me/mentions") || url.includes("/messages");
                 if (!relevant) return original(input, callback);
                 const search = SEARCH_URL.exec(path);
@@ -282,6 +353,8 @@ export const createHooks = (ctx: HookContext) => {
                         let response: (HttpResponse & { hasErr?: boolean }) | undefined;
                         try {
                             const result = await original(prepared, (res) => (response = res));
+                            if (prepared !== opts && result?.ok)
+                                ctx.attachments.sent(((opts.body as { attachments?: UploadRef[] } | undefined)?.attachments ?? []).filter(Boolean));
                             await decryptAll(result?.body);
                             callback?.(response ?? { ...result, hasErr: false });
                             return result;
@@ -349,15 +422,14 @@ export const createHooks = (ctx: HookContext) => {
             for (const message of messages) {
                 const hit = engine.cached(message);
                 if (hit !== undefined) {
-                    message.content = hit;
+                    show(message, hit);
                     states.set(message.id, { state: "decrypted" });
                     continue;
                 }
                 const copy = clone(message);
                 message.content = DECRYPTING_CONTENT;
                 decryptOne(copy).then(() => {
-                    if (states.get(copy.id)?.state === "pending") return;
-                    target.dispatch({ type: "MESSAGE_UPDATE", message: copy, e2eeLocal: true });
+                    if (states.get(copy.id)?.state !== "pending") redispatch(copy);
                 });
             }
             return false;

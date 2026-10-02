@@ -3,6 +3,7 @@ import { homedir, tmpdir } from "node:os";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { crc32, deflateSync } from "node:zlib";
 import { join } from "node:path";
 import assert from "node:assert/strict";
 
@@ -163,6 +164,24 @@ const waitDecrypted = (s, text) =>
         text,
         { timeout: 12000 },
     );
+const png = (width, height) => {
+    const chunk = (type, data) => {
+        const head = Buffer.alloc(8);
+        head.writeUInt32BE(data.length);
+        head.write(type, 4, "ascii");
+        const crc = Buffer.alloc(4);
+        crc.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), data])));
+        return Buffer.concat([head, data, crc]);
+    };
+    const header = Buffer.alloc(13);
+    header.writeUInt32BE(width);
+    header.writeUInt32BE(height, 4);
+    header.set([8, 2, 0, 0, 0], 8);
+    const noise = randomBytes(width * height * 3);
+    const rows = Buffer.concat(Array.from({ length: height }, (_, y) => Buffer.concat([Buffer.from([0]), noise.subarray(y * width * 3, (y + 1) * width * 3)])));
+    return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", header), chunk("IDAT", deflateSync(rows)), chunk("IEND", Buffer.alloc(0))]);
+};
+const encryptedSize = (size) => size + 16 * Math.max(1, Math.ceil(size / 65536));
 const close = async (...sessions) => Promise.all(sessions.map((s) => s.context.close().catch(() => {})));
 const diagnose = async (...sessions) => {
     for (const s of sessions) {
@@ -199,6 +218,12 @@ const second = `reply from friend ${suffix}`;
 const edited = `edited by tester ${suffix}`;
 const fromNewBrowser = `sent from a new browser ${suffix}`;
 const afterRotation = `after rotation from friend ${suffix}`;
+const withFiles = `files from tester ${suffix}`;
+const filesEdited = `files edited by tester ${suffix}`;
+const imageName = `photo-${suffix}.png`;
+const fileName = `notes-${suffix}.zip`;
+const imageBytes = png(160, 90);
+const fileBytes = randomBytes(200 * 1024 + 123);
 
 try {
     await phase("tester logs in through the login form and gets a password backup", async () => {
@@ -318,6 +343,132 @@ try {
         const disable = await call("PUT", `/channels/${dm.id}/e2ee`, tester.token, { enabled: false });
         assert.equal(disable.body.message, "E2EE_CANNOT_DISABLE", "encryption can't be turned off");
         log("server checks passed");
+    });
+
+    await phase("tester sends an image and a file, friend sees the image and downloads the file", async () => {
+        const [a, b] = await launchAll([tester], [friend]);
+        try {
+            await Promise.all([waitReady(a), waitReady(b)]);
+            assert.ok(await a.page.evaluate(() => !!navigator.serviceWorker.controller), "the attachment service worker controls the page");
+            const creates = [];
+            const uploads = [];
+            a.page.on("request", (r) => {
+                if (r.method() === "POST" && r.url().endsWith(`/channels/${dm.id}/attachments`)) creates.push({ body: r.postDataJSON(), headers: r.headers() });
+                if (r.method() === "PUT" && r.url().includes("/attachments/")) uploads.push(r.headers()["content-type"]);
+            });
+            await a.page
+                .locator('input[type="file"]')
+                .first()
+                .setInputFiles([
+                    { name: imageName, mimeType: "image/png", buffer: imageBytes },
+                    { name: fileName, mimeType: "application/zip", buffer: fileBytes },
+                ]);
+            await a.page.locator('[role="textbox"]').first().click();
+            await a.page.keyboard.type(withFiles);
+            await a.page.keyboard.press("Enter");
+            await waitDecrypted(b, withFiles);
+            await waitDecrypted(a, withFiles);
+
+            const message = b.page.locator('[id^="chat-messages-"]', { has: b.page.locator('[id^="message-content-"]', { hasText: withFiles }) }).last();
+            const image = message.locator(`img[src*="/e2ee/attachments/${dm.id}/"]`).first();
+            await image.waitFor({ timeout: 15000 });
+            await b.page.waitForFunction((el) => el.complete && el.naturalWidth > 0, await image.elementHandle(), { timeout: 15000 });
+            assert.deepEqual(await image.evaluate((el) => [el.naturalWidth, el.naturalHeight]), [160, 90], "friend's browser renders the decrypted image");
+            const shown = await b.page.evaluate(async (src) => [...new Uint8Array(await (await fetch(src)).arrayBuffer())], await image.getAttribute("src"));
+            assert.ok(Buffer.from(shown).equals(imageBytes), "the image bytes friend sees match the original");
+            await message.locator("a", { hasText: fileName }).first().waitFor({ timeout: 10000 });
+            await shot(b, "10-friend-sees-files");
+
+            const download = new Promise((resolve, reject) => {
+                b.page.on("download", resolve);
+                b.context.on("page", (popup) => popup.on("download", resolve));
+                setTimeout(() => reject(new Error("timed out waiting for the download")), 15000);
+            });
+            await message.locator(`a[href*="/e2ee/attachments/"][href$="/${fileName}"]`).first().click();
+            await b.page.getByRole("button", { name: "Continue to download" }).click({ timeout: 5000 });
+            const saved = join(profiles, `download-${suffix}`);
+            await (await download).saveAs(saved);
+            assert.ok(readFileSync(saved).equals(fileBytes), "the downloaded file is byte-identical");
+            log("friend saw the image and downloaded the file byte-identical");
+
+            await a.page.locator('[role="textbox"]').first().click();
+            await a.page.keyboard.press("ArrowUp");
+            await a.page.keyboard.press("ControlOrMeta+a");
+            await a.page.keyboard.type(filesEdited);
+            await a.page.keyboard.press("Enter");
+            await waitDecrypted(b, filesEdited);
+            const editedMessage = b.page.locator('[id^="chat-messages-"]', { has: b.page.locator('[id^="message-content-"]', { hasText: filesEdited }) }).last();
+            await editedMessage.locator(`img[src*="/e2ee/attachments/${dm.id}/"]`).first().waitFor({ timeout: 10000 });
+            await editedMessage.locator("a", { hasText: fileName }).first().waitFor({ timeout: 10000 });
+            const patch = a.sent.at(-1);
+            assert.ok(patch.encrypted?.mid, "the edit is encrypted");
+            assert.ok(!JSON.stringify(patch).includes(suffix), "the edit leaks no plaintext");
+            log("the edit kept both encrypted attachments");
+
+            const body = a.sent.find((m) => m.attachments?.length);
+            assert.ok(body, "the message request carries attachments");
+            assert.equal(body.attachments.length, 2);
+            assert.ok(
+                body.attachments.every((x) => /^[a-z0-9]+\.bin$/.test(x.filename) && !x.description && !x.waveform),
+                "message attachments are opaque .bin files",
+            );
+            assert.ok(!JSON.stringify(body).includes(suffix), "no file name or text leaves the browser in the message request");
+            assert.equal(creates.length, 2, "both files went through the cloud upload flow");
+            for (const create of creates) {
+                assert.ok(!Object.keys(create.headers).some((h) => /md5/i.test(h)), "the original MD5 header is stripped");
+                for (const file of create.body.files) {
+                    assert.match(file.filename, /^[a-z0-9]+\.bin$/);
+                    assert.equal(file.original_content_type, "application/octet-stream");
+                }
+            }
+            assert.deepEqual(uploads, ["application/octet-stream", "application/octet-stream"], "both uploads are opaque");
+
+            const history = (await call("GET", `/channels/${dm.id}/messages?limit=10`, friend.token)).body;
+            const stored = history.find((m) => m.attachments?.length);
+            assert.equal(stored.content, FALLBACK);
+            assert.equal(stored.attachments.length, 2);
+            const plain = [imageBytes, fileBytes];
+            for (const attachment of stored.attachments) {
+                assert.match(attachment.filename, /^[a-z0-9]+\.bin$/, "the server only knows a random .bin name");
+                assert.equal(attachment.content_type, "application/octet-stream");
+                assert.ok(!attachment.width && !attachment.height, "the server has no image dimensions");
+                const bytes = Buffer.from(await (await fetch(attachment.url)).arrayBuffer());
+                assert.ok([encryptedSize(imageBytes.length), encryptedSize(fileBytes.length)].includes(bytes.length), "stored file is ciphertext-sized");
+                assert.ok(!bytes.subarray(0, 8).equals(imageBytes.subarray(0, 8)), "stored file doesn't start with the PNG signature");
+                assert.ok(
+                    plain.every((p) => !bytes.includes(p.subarray(4096, 4128))),
+                    "no plaintext run appears in the stored file",
+                );
+            }
+            assert.equal(
+                sql(`select count(*) from attachments where filename like '%${suffix}%' or description like '%${suffix}%'`),
+                "0",
+                "plaintext file names are nowhere in the database",
+            );
+            assert.equal(sql(`select count(*) from cloud_attachments where user_filename like '%${suffix}%'`), "0", "plaintext file names never reached the upload records");
+            log("the server only stores ciphertext");
+
+            const own = a.page.locator('[id^="chat-messages-"]', { has: a.page.locator('[id^="message-content-"]', { hasText: filesEdited }) }).last();
+            await own.locator("img").first().hover({ force: true });
+            await own.locator('[aria-label="Remove Message Attachment"]').first().click({ force: true });
+            await a.page.getByRole("button", { name: "Remove Attachment" }).click();
+            await waitFor("the image to disappear for friend", async () => !(await editedMessage.locator(`img[src*="/e2ee/attachments/"]`).count()), 10000);
+            await editedMessage.locator("a", { hasText: fileName }).first().waitFor({ timeout: 10000 });
+            const removal = a.sent.at(-1);
+            assert.ok(removal.encrypted?.mid, "removing an attachment re-encrypts the message");
+            assert.deepEqual(Object.keys(removal.attachments[0]), ["id", "filename"], "the removal only names the kept attachment");
+            assert.match(removal.attachments[0].filename, /^[a-z0-9]+\.bin$/);
+            assert.ok(!JSON.stringify(removal).includes(suffix), "removing an attachment leaks no plaintext");
+            assert.equal((await call("GET", `/channels/${dm.id}/messages?limit=10`, friend.token)).body.find((m) => m.id === stored.id).attachments.length, 1);
+            log("removing an attachment kept the other one encrypted");
+            assert.deepEqual(a.errors, [], "tester has no e2ee errors");
+            assert.deepEqual(b.errors, [], "friend has no e2ee errors");
+        } catch (error) {
+            await diagnose(a, b);
+            throw error;
+        } finally {
+            await close(a, b);
+        }
     });
 
     await phase("history decrypts after reload, friend replies, safety numbers match", async () => {

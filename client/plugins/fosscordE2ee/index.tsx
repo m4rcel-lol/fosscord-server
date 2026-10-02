@@ -16,6 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+import { updateMessage } from "@api/MessageUpdater";
 import SettingsPlugin from "@plugins/_core/settings";
 import definePlugin, { IconProps } from "@utils/types";
 import { useEffect, useRef, useState } from "@webpack/common";
@@ -24,8 +25,9 @@ import { FosscordAuthor } from "../fosscordCore/shared";
 
 interface E2eeBridge {
     isEncrypted?: (channelId: string) => boolean;
-    beforeSend?: (channelId: string, extras: { hasAttachments?: boolean; hasStickers?: boolean }) => boolean;
+    beforeSend?: (channelId: string) => boolean;
     mountSettings?: (container: HTMLElement) => () => void;
+    updateMessage?: typeof updateMessage;
 }
 
 interface LayoutNode {
@@ -38,6 +40,12 @@ const ENTRY_KEY = "fosscord_encryption_sidebar_item";
 const LOCK_PATH = "M7 10V7a5 5 0 0 1 10 0v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1Zm2 0h6V7a3 3 0 0 0-6 0v3Z";
 
 const bridge = () => (window as unknown as { __fosscordE2ee?: E2eeBridge }).__fosscordE2ee;
+
+const exposeUpdater = () => {
+    const target = bridge();
+    if (target) target.updateMessage = updateMessage;
+    return !!target;
+};
 
 const EncryptionIcon = ({ width = 20, height = 20, className }: IconProps) => (
     <svg viewBox="0 0 24 24" width={width} height={height} className={className} fill="currentColor" aria-hidden="true">
@@ -80,17 +88,10 @@ export default definePlugin({
 
     patches: [
         {
-            find: '"sticker")',
-            replacement: {
-                match: /(\i\.stickers\?\.button!=null)(?=&&null==\i&&\i&&\i&&!\i&&\i\.push\(\(0,\i\.jsx\)\(\i,\{disabled:\i,type:\i,channel:(\i)\},"sticker"\)\))/,
-                replace: "$1&&!$self.isEncrypted($2?.id)",
-            },
-        },
-        {
             find: 'navId:"channel-attach"',
             replacement: {
-                match: /id:"(upload-file|upload-text-as-file|clips|poll)",/g,
-                replace: 'id:"$1",disabled:$self.inEncryptedChannel(),subtext:$self.inEncryptedChannel()?"Not available in encrypted conversations yet":void 0,',
+                match: /id:"(clips|poll)",/g,
+                replace: 'id:"$1",disabled:$self.inEncryptedChannel(),subtext:$self.inEncryptedChannel()?"Not available in encrypted conversations":void 0,',
             },
         },
     ],
@@ -103,16 +104,19 @@ export default definePlugin({
         return this.isEncrypted(/^\/channels\/@me\/(\d+)/.exec(location.pathname)?.[1]);
     },
 
-    onBeforeMessageSend(channelId, message, options, props) {
-        const hasStickers = !!options?.stickerIds?.length || !!props?.hasStickers;
-        if (bridge()?.beforeSend?.(channelId, { hasAttachments: !!props?.hasAttachments, hasStickers })) return { cancel: true };
+    onBeforeMessageSend(channelId) {
+        if (bridge()?.beforeSend?.(channelId)) return { cancel: true };
     },
 
     onBeforeMessageEdit(channelId) {
-        if (bridge()?.beforeSend?.(channelId, {})) return { cancel: true };
+        if (bridge()?.beforeSend?.(channelId)) return { cancel: true };
     },
 
     start() {
+        if (!exposeUpdater()) {
+            const timer = setInterval(() => exposeUpdater() && clearInterval(timer), 250);
+            setTimeout(() => clearInterval(timer), 30000);
+        }
         originalBuildLayout = SettingsPlugin.buildLayout;
         const original = originalBuildLayout;
         SettingsPlugin.buildLayout = function (builder) {
@@ -130,6 +134,8 @@ export default definePlugin({
     },
 
     stop() {
+        const target = bridge();
+        if (target) delete target.updateMessage;
         if (originalBuildLayout) SettingsPlugin.buildLayout = originalBuildLayout;
         originalBuildLayout = null;
     },

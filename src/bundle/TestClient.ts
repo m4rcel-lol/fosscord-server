@@ -105,6 +105,11 @@ export function TestClientAssets(app: Application) {
         if (logo) return res.redirect(302, logo);
         res.type("image/svg+xml").send(branded.svg(await instanceIconDataUri()));
     });
+    app.get("/e2ee-sw.js", (req, res) => {
+        res.set({ "Cache-Control": "no-cache", "Service-Worker-Allowed": "/" });
+        return res.type("js").sendFile(path.join(ASSET_FOLDER_PATH, "public", "e2ee", "sw.js"), { cacheControl: false, dotfiles: "allow" });
+    });
+    app.get("/e2ee/attachments/{*splat}", (req, res) => res.status(404).type("txt").send("This content is no longer available."));
     app.use("/assets", express.static(path.join(ASSET_FOLDER_PATH, "public")));
     app.get("/assets/vencord/:file", (req, res, next) => void serveAsset(req, res, next, VENCORD_PATH, false).catch(next));
     app.use("/assets/vencord", express.static(VENCORD_PATH, noCache));
