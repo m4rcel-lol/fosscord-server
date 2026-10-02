@@ -37,7 +37,7 @@ export async function onStreamDelete(this: WebSocket, data: Payload) {
     try {
         parsedKey = parseStreamKey(body.stream_key);
     } catch (e) {
-        return this.close(4000, "Invalid stream key");
+        return;
     }
 
     // noinspection JSUnusedLocalSymbols - TODO: what is type here?
