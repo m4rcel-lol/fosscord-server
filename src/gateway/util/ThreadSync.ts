@@ -17,8 +17,8 @@
 */
 
 import { In } from "typeorm";
-import { Channel, Message, ThreadMember } from "@spacebar/database";
-import { getPermission, Permissions } from "@spacebar/util";
+import { Channel, Member, Message, Session, ThreadMember } from "@spacebar/database";
+import { getMostRelevantSession, getPermission, Permissions } from "@spacebar/util";
 import { ChannelType } from "@spacebar/schemas";
 import { OPCODES } from "./Constants";
 import { Send } from "./Send";
@@ -65,4 +65,52 @@ export async function syncThreadList(this: WebSocket, guild_id: string) {
             most_recent_messages: recent.map((m) => m.toJSON()),
         },
     });
+}
+
+export async function sendThreadMemberLists(this: WebSocket, guild_id: string, thread_ids: string[]) {
+    for (const thread_id of thread_ids.slice(0, 10)) {
+        const thread = await Channel.findOne({ where: { id: thread_id, guild_id } });
+        if (!thread?.isThread() || !thread.parent_id) continue;
+        const perms = await getPermission(this.user_id, guild_id, thread.parent_id).catch(() => new Permissions(0));
+        if (!perms.has("VIEW_CHANNEL")) continue;
+        if (thread.isPrivateThread() && !perms.has("MANAGE_THREADS") && !(await ThreadMember.existsBy({ id: thread.id, user_id: this.user_id }))) continue;
+
+        const threadMembers = await ThreadMember.find({ where: { id: thread.id }, take: 100 });
+        const userIds = threadMembers.map((m) => m.user_id);
+        const [members, sessions] = await Promise.all([
+            userIds.length ? Member.find({ where: { guild_id, id: In(userIds) }, relations: { user: true, roles: true } }) : Promise.resolve([] as Member[]),
+            userIds.length ? Session.find({ where: { user_id: In(userIds) } }) : Promise.resolve([] as Session[]),
+        ]);
+        const memberById = new Map(members.map((m) => [m.id, m]));
+
+        await Send(this, {
+            op: OPCODES.Dispatch,
+            t: "THREAD_MEMBER_LIST_UPDATE",
+            s: this.sequence++,
+            d: {
+                guild_id,
+                thread_id: thread.id,
+                members: threadMembers.flatMap((tm) => {
+                    const member = memberById.get(tm.user_id);
+                    if (!member) return [];
+                    const session = getMostRelevantSession(sessions.filter((x) => x.user_id === tm.user_id));
+                    return [
+                        {
+                            ...tm.toJSON(),
+                            member: { ...member.toPublicMember(), roles: member.roles.filter((r) => r.id !== guild_id).map((r) => r.id) },
+                            presence: session
+                                ? {
+                                      user: { id: tm.user_id },
+                                      guild_id,
+                                      status: session.getPublicStatus(),
+                                      activities: session.activities ?? [],
+                                      client_status: session.client_status ?? {},
+                                  }
+                                : null,
+                        },
+                    ];
+                }),
+            },
+        });
+    }
 }
