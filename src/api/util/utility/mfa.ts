@@ -320,8 +320,8 @@ export const serializeBackupCodes = (user_id: string, codes: BackupCode[]) => co
 
 export const passwordMismatch = (field = "password") =>
     new ResponseError(400, {
-        message: "Invalid Form Body",
-        code: 50035,
+        message: "Password does not match.",
+        code: 50018,
         errors: { [field]: { _errors: [{ code: "PASSWORD_DOES_NOT_MATCH", message: "Password does not match." }] } },
     });
 
