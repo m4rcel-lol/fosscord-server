@@ -170,6 +170,7 @@ router.get(
             }
 
             messages = await Message.find(query);
+            if (after) messages.reverse();
         }
 
         await Message.fillReplies(messages);
