@@ -24,7 +24,7 @@ import { WebSocket } from "@spacebar/gateway";
 import { ChannelType, PublicMember, RelationshipType } from "@spacebar/schemas";
 import { In, Not } from "typeorm";
 import { CLOSECODES, holdForResume, OPCODES, resolveSocket, Send } from "../util";
-import { scheduleMemberListSync } from "../opcodes/LazyRequest";
+import { markMemberListsStale, resyncMemberList } from "../opcodes/LazyRequest";
 
 // TODO: close connection on Invalidated Token
 // TODO: check intent
@@ -429,7 +429,13 @@ async function consume(this: WebSocket, opts: EventOpts): Promise<void> {
     });
 
     const listGuildId = opts.guild_id ?? data?.guild_id;
-    if (listGuildId && this.member_lists?.[listGuildId] && MemberListEvents.has(event)) scheduleMemberListSync(this, listGuildId);
+    const subscription = listGuildId && this.member_lists?.[listGuildId];
+    if (!subscription || !MemberListEvents.has(event)) return;
+    if (event === "CHANNEL_UPDATE") {
+        if (subscription.channel_id === data?.id) await resyncMemberList(this, listGuildId);
+        return;
+    }
+    markMemberListsStale(listGuildId, event === "PRESENCE_UPDATE" ? "presence" : "members");
 }
 
 const MemberListEvents = new Set([
