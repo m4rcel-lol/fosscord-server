@@ -2,7 +2,7 @@
 
 The test client is Discord's own web client, cached in `assets/cache` by `npm run generate:client`. We change it in three places, and almost everything belongs in the first one.
 
-1. Vencord plugins in `client/plugins`. Vencord is built from a pinned commit and loaded before Discord's bundle, so its patcher rewrites webpack modules as they register. This is where Quests, ads, Nitro and Server Boost upsells, download prompts, the data collection toggles, instance branding and the verified AI tag are handled.
+1. Vencord plugins in `client/plugins`. Vencord is built from a pinned commit and loaded before Discord's bundle, so its patcher rewrites webpack modules as they register. This is where Quests, ads, Nitro and Server Boost upsells, download prompts, the data collection toggles, instance branding, the verified AI tag and the Krisp noise cancellation, which loads its models from Discord's CDN, are handled.
 2. Static rewrites in `scripts/client.js`. They run once over the cached files, and only cover what has to be fixed before any script runs: the `https:` to `location.protocol` URL fixes, the remote auth URL and the guard that stops Discord from deleting `window.localStorage`.
 3. Plain scripts in `assets/client_patches`, injected in name order after Vencord. Only code that doesn't touch Discord's modules lives here: the e2ee loader and the email verification and QR login pages.
 
