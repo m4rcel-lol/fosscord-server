@@ -49,6 +49,22 @@ export interface AccountPreferences {
     consents?: Record<string, boolean>;
     email_categories?: Record<string, boolean>;
     email_settings_initialized?: boolean;
+    harvest?: HarvestRecord;
+}
+
+export interface HarvestRecord {
+    harvest_id: string;
+    user_id: string;
+    email: string;
+    state: string;
+    status: number;
+    created_at: string;
+    completed_at: string | null;
+    polled_at: string | null;
+    updated_at: string;
+    backends: Record<string, string>;
+    shadow_run: boolean;
+    harvest_metadata: { user_is_staff: boolean; sla_email_sent: boolean; bypass_cooldown: boolean; is_provisional: boolean };
 }
 
 @Entity({
