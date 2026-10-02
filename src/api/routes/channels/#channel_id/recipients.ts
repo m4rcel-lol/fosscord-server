@@ -20,7 +20,7 @@ import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { Channel, Recipient, User } from "@spacebar/database";
 import { ChannelDeleteEvent, ChannelRecipientAddEvent, ChannelUpdateEvent, DiscordApiErrors, DmChannelDTO, emitEvent } from "@spacebar/util";
-import { ChannelType, PublicUserProjection } from "@spacebar/schemas";
+import { ChannelType, MessageType, PublicUserProjection } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
 
@@ -125,6 +125,7 @@ router.put(
             if (channel.recipients?.map((r) => r.user_id).includes(user_id)) {
                 throw DiscordApiErrors.INVALID_RECIPIENT; //TODO is this the right error?
             }
+            if ((channel.recipients?.length ?? 0) >= 10) throw DiscordApiErrors.MAXIMUM_NUMBER_OF_RECIPIENTS_REACHED.withDefaultParams();
 
             channel.recipients?.push(Recipient.create({ channel_id: channel_id, user_id: user_id }));
             await channel.save();
@@ -148,6 +149,7 @@ router.put(
                 },
                 channel_id: channel_id,
             } satisfies ChannelRecipientAddEvent);
+            await Channel.sendSystemMessage(channel, req.user_id, MessageType.RECIPIENT_ADD, { mention_ids: [user_id] });
             return res.sendStatus(204);
         }
     },
@@ -173,7 +175,7 @@ router.delete(
             throw DiscordApiErrors.INVALID_RECIPIENT; //TODO is this the right error?
         }
 
-        await Channel.removeRecipientFromChannel(channel, user_id);
+        await Channel.removeRecipientFromChannel(channel, user_id, req.user_id);
 
         return res.sendStatus(204);
     },

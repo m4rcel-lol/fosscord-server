@@ -19,7 +19,7 @@
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
-import { AuditLog, Channel, Invite, PublicInviteRelation } from "@spacebar/database";
+import { AuditLog, Channel, Invite, PublicInviteRelation, Recipient } from "@spacebar/database";
 import { DiscordApiErrors, InviteCreateEvent, emitEvent } from "@spacebar/util";
 import { AuditLogEvents, ChannelType, InviteCreateSchema } from "@spacebar/schemas";
 import { Random } from "@spacebar/extensions";
@@ -51,7 +51,27 @@ router.post(
             where: { id: channel_id },
             select: { id: true, name: true, type: true, guild_id: true },
         });
-        if (channel.type === ChannelType.GUILD_CATEGORY || channel.isThread()) throw DiscordApiErrors.CANNOT_EXECUTE_ON_THIS_CHANNEL_TYPE;
+        if (channel.type === ChannelType.GUILD_CATEGORY || channel.isThread() || channel.type === ChannelType.DM) throw DiscordApiErrors.CANNOT_EXECUTE_ON_THIS_CHANNEL_TYPE;
+
+        if (channel.type === ChannelType.GROUP_DM) {
+            if (!(await Recipient.exists({ where: { channel_id, user_id } }))) throw DiscordApiErrors.UNKNOWN_CHANNEL;
+            const max_age = Math.min(604800, Math.max(1, body.max_age ?? 86400));
+            const invite = await Invite.create({
+                code: Random.getString("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789", 8),
+                temporary: false,
+                uses: 0,
+                max_uses: 0,
+                max_age,
+                expires_at: new Date(max_age * 1000 + Date.now()),
+                created_at: new Date(),
+                channel_id,
+                inviter_id: user_id,
+                flags: 0,
+            }).save();
+            const created = await Invite.findOneOrFail({ where: { code: invite.code }, relations: { inviter: true, channel: true } });
+            await created.loadGroupRecipients();
+            return res.status(201).send(created.toMetadataJSON());
+        }
 
         if (!channel.guild_id) {
             throw new HTTPError("This channel doesn't exist", 404);
@@ -116,6 +136,13 @@ router.get(
         const channel = await Channel.findOneOrFail({
             where: { id: channel_id },
         });
+
+        if (channel.type === ChannelType.GROUP_DM) {
+            const invites = await Invite.find({ where: { channel_id }, relations: { inviter: true, channel: true } });
+            const live = invites.filter((x) => !x.isExpired());
+            await Promise.all(live.map((x) => x.loadGroupRecipients()));
+            return res.status(200).send(live.map((x) => x.toMetadataJSON()) satisfies InviteListResponse);
+        }
 
         if (!channel.guild_id) {
             throw new HTTPError("This channel doesn't exist", 404);

@@ -708,7 +708,33 @@ export interface ThreadMembersUpdateEvent extends Event {
     };
 }
 
+export interface CallPayload {
+    channel_id: string;
+    message_id: string;
+    region: string;
+    ringing: string[];
+    ongoing_rings: Record<string, unknown>;
+}
+
+export interface CallCreateEvent extends Event {
+    event: "CALL_CREATE";
+    data: CallPayload & { voice_states: PublicVoiceState[]; embedded_activities: unknown[] };
+}
+
+export interface CallUpdateEvent extends Event {
+    event: "CALL_UPDATE";
+    data: CallPayload;
+}
+
+export interface CallDeleteEvent extends Event {
+    event: "CALL_DELETE";
+    data: { channel_id: string; unavailable?: boolean };
+}
+
 export type EventData =
+    | CallCreateEvent
+    | CallUpdateEvent
+    | CallDeleteEvent
     | InvalidatedEvent
     | ReadyEvent
     | ChannelCreateEvent

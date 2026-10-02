@@ -500,6 +500,9 @@ export const VerificationLevels = ["NONE", "LOW", "MEDIUM", "HIGH", "VERY_HIGH"]
  * * SERVER_NOT_AVAILABLE_IN_YOUR_LOCATION
  * * SERVER_NEEDS_MONETIZATION_ENABLED
  * * TWO_FACTOR_REQUIRED
+ * * FRIEND_REQUEST_BLOCKED
+ * * CANNOT_FRIEND_SELF
+ * * ALREADY_FRIENDS
  * * NO_USERS_WITH_DISCORDTAG_EXIST
  * * REACTION_BLOCKED
  * * RESOURCE_OVERLOADED
@@ -893,6 +896,15 @@ export const DiscordApiErrors = {
     },
     get TWO_FACTOR_REQUIRED() {
         return new ApiError("Two factor is required for this operation", 60003);
+    },
+    get FRIEND_REQUEST_BLOCKED() {
+        return new ApiError("Friend request blocked", 80001);
+    },
+    get CANNOT_FRIEND_SELF() {
+        return new ApiError("Cannot send friend request to self", 80003);
+    },
+    get ALREADY_FRIENDS() {
+        return new ApiError("You are already friends with this user", 80007);
     },
     get NO_USERS_WITH_DISCORDTAG_EXIST() {
         return new ApiError("No users with DiscordTag exist", 80004);

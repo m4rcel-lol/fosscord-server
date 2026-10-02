@@ -19,7 +19,8 @@
 import { IsNull } from "typeorm";
 import { MessageType } from "@spacebar/schemas";
 import { Config, emitEvent } from "@spacebar/util/util";
-import { MessageCreateEvent, MessageUpdateEvent } from "../../util/interfaces/Event";
+import { DmChannelDTO } from "../../util/dtos/DmChannelDTO";
+import { CallCreateEvent, CallDeleteEvent, CallUpdateEvent, ChannelCreateEvent, MessageCreateEvent, MessageUpdateEvent } from "../../util/interfaces/Event";
 import { Channel } from "../entities/Channel";
 import { Message } from "../entities/Message";
 import { Recipient } from "../entities/Recipient";
@@ -27,6 +28,15 @@ import { VoiceState } from "../entities/VoiceState";
 
 const RING_TIMEOUT = 60_000;
 const rings = new Map<string, Map<string, NodeJS.Timeout>>();
+const queues = new Map<string, Promise<unknown>>();
+
+const serial = <T>(channelId: string, fn: () => Promise<T>): Promise<T> => {
+    const run = (queues.get(channelId) ?? Promise.resolve()).then(fn, fn);
+    const tail = run.catch(() => undefined);
+    queues.set(channelId, tail);
+    tail.then(() => queues.get(channelId) === tail && queues.delete(channelId));
+    return run;
+};
 
 export class PrivateCalls {
     static async endStaleCalls() {
@@ -83,7 +93,31 @@ export class PrivateCalls {
         await emitEvent({ event: "MESSAGE_UPDATE", channel_id: message.channel_id, data: message.toJSON() } satisfies MessageUpdateEvent);
     }
 
-    static async join(channelId: string, userId: string) {
+    static async activeFor(userId: string) {
+        const channelIds = (await Recipient.find({ where: { user_id: userId, closed: false }, select: { channel_id: true } })).map((r) => r.channel_id);
+        if (!channelIds.length) return [];
+        const states = await VoiceState.find({ where: channelIds.map((channel_id) => ({ channel_id, guild_id: IsNull() })), select: { channel_id: true } });
+        const payloads = await Promise.all([...new Set(states.map((state) => state.channel_id))].map((channelId) => PrivateCalls.createPayload(channelId)));
+        return payloads.filter((payload) => payload !== null);
+    }
+
+    private static async reopenForRecipients(channelId: string) {
+        const closed = await Recipient.find({ where: { channel_id: channelId, closed: true } });
+        if (!closed.length) return;
+        const channel = await Channel.findOne({ where: { id: channelId }, relations: { recipients: true } });
+        if (!channel) return;
+        const dto = await DmChannelDTO.from(channel);
+        for (const recipient of closed) {
+            await Recipient.update({ id: recipient.id }, { closed: false });
+            await emitEvent({ event: "CHANNEL_CREATE", user_id: recipient.user_id, data: dto.excludedRecipients([recipient.user_id]) } as ChannelCreateEvent);
+        }
+    }
+
+    static join(channelId: string, userId: string) {
+        return serial(channelId, () => PrivateCalls.joinNow(channelId, userId));
+    }
+
+    private static async joinNow(channelId: string, userId: string) {
         const existing = await PrivateCalls.activeMessage(channelId);
         if (existing) {
             if (!existing.call!.participants.includes(userId)) {
@@ -94,6 +128,7 @@ export class PrivateCalls {
             return;
         }
 
+        await PrivateCalls.reopenForRecipients(channelId);
         const message = Message.create({
             type: MessageType.CALL,
             channel_id: channelId,
@@ -114,10 +149,15 @@ export class PrivateCalls {
         const saved = await Message.findOneOrFail({ where: { id: message.id }, relations: { author: true } });
         await Channel.update({ id: channelId }, { last_message_id: saved.id });
         await emitEvent({ event: "MESSAGE_CREATE", channel_id: channelId, data: saved.toJSON() } satisfies MessageCreateEvent);
-        await emitEvent({ event: "CALL_CREATE", channel_id: channelId, data: await PrivateCalls.createPayload(channelId) });
+        const payload = await PrivateCalls.createPayload(channelId);
+        if (payload) await emitEvent({ event: "CALL_CREATE", channel_id: channelId, data: payload } satisfies CallCreateEvent);
     }
 
-    static async leave(channelId: string) {
+    static leave(channelId: string) {
+        return serial(channelId, () => PrivateCalls.leaveNow(channelId));
+    }
+
+    private static async leaveNow(channelId: string) {
         if ((await PrivateCalls.voiceStates(channelId)).length) return;
         for (const timer of rings.get(channelId)?.values() ?? []) clearTimeout(timer);
         rings.delete(channelId);
@@ -126,12 +166,12 @@ export class PrivateCalls {
             message.call = { ...message.call!, ended_timestamp: new Date().toISOString() };
             await PrivateCalls.updateMessage(message);
         }
-        await emitEvent({ event: "CALL_DELETE", channel_id: channelId, data: { channel_id: channelId } });
+        await emitEvent({ event: "CALL_DELETE", channel_id: channelId, data: { channel_id: channelId } } satisfies CallDeleteEvent);
     }
 
     private static async update(channelId: string) {
         const message = await PrivateCalls.activeMessage(channelId);
-        if (message) await emitEvent({ event: "CALL_UPDATE", channel_id: channelId, data: PrivateCalls.payload(channelId, message) });
+        if (message) await emitEvent({ event: "CALL_UPDATE", channel_id: channelId, data: PrivateCalls.payload(channelId, message) } satisfies CallUpdateEvent);
     }
 
     static async ring(channelId: string, ringerId: string, recipients?: string[] | null) {

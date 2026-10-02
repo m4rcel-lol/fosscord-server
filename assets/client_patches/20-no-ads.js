@@ -15,12 +15,20 @@
 
     const rewrites = [
         [/^https:\/\/cdn\.discordapp\.com\/changelogs\//, () => `${location.protocol}//${window.GLOBAL_ENV?.CDN_HOST || location.host}/changelogs/`],
+        [/^https:\/\/cdn\.discordapp\.com\/bad-domains\//, () => `${location.protocol}//${window.GLOBAL_ENV?.CDN_HOST || location.host}/bad-domains/`],
         [/^https:\/\/status\.discord\.com\/api\/v2\//, () => `${location.origin}/api/v9/`],
     ];
     const open = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function (method, url, ...rest) {
         const target = rewrites.reduce((acc, [pattern, to]) => (pattern.test(acc) ? acc.replace(pattern, to()) : acc), String(url));
         return open.call(this, method, target, ...rest);
+    };
+    const nativeFetch = window.fetch;
+    window.fetch = function (input, init) {
+        const url = input instanceof Request ? input.url : String(input);
+        const target = rewrites.reduce((acc, [pattern, to]) => (pattern.test(acc) ? acc.replace(pattern, to()) : acc), url);
+        if (target === url) return nativeFetch.call(this, input, init);
+        return nativeFetch.call(this, input instanceof Request ? new Request(target, input) : target, init);
     };
 
     const quest = 'path[d^="M7.5 21.7a8.95 8.95 0 0 1 9 0"]';

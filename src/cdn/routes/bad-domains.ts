@@ -21,27 +21,26 @@ import { setCacheControlNotFound } from "../util";
 
 const router = Router({ mergeParams: true });
 
-const FILES: Record<string, string> = {
-    "current_revision.txt": "text/plain",
-    "updated_hashes.json": "application/json",
-    "hashes.json": "application/json",
+const FILES: Record<string, { type: string; fallback: string }> = {
+    "current_revision.txt": { type: "text/plain", fallback: "0" },
+    "updated_hashes.json": { type: "application/json", fallback: "[]" },
+    "hashes.json": { type: "application/json", fallback: "[]" },
 };
 const TTL = 3_600_000;
 const cache = new Map<string, { body: Buffer; expires: number }>();
 
 router.get("/:file", async (req: Request, res: Response) => {
     const file = req.params.file as string;
-    const type = FILES[file];
-    if (!type) return setCacheControlNotFound(req, res);
+    const known = FILES[file];
+    if (!known) return setCacheControlNotFound(req, res);
     let entry = cache.get(file);
     if (!entry || entry.expires < Date.now()) {
         const upstream = await fetch(`https://cdn.discordapp.com/bad-domains/${file}`, { signal: AbortSignal.timeout(10000) }).catch(() => undefined);
         if (upstream?.ok) cache.set(file, (entry = { body: Buffer.from(await upstream.arrayBuffer()), expires: Date.now() + TTL }));
     }
-    if (!entry) return setCacheControlNotFound(req, res);
-    res.set("Content-Type", type);
+    res.set("Content-Type", known.type);
     res.set("Cache-Control", "public, max-age=3600");
-    return res.send(entry.body);
+    return res.send(entry?.body ?? known.fallback);
 });
 
 export default router;

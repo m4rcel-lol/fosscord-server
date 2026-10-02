@@ -27,6 +27,7 @@ import {
     ChannelUpdateEvent,
     Config,
     DiscordApiErrors,
+    DmChannelDTO,
     emitEvent,
     ErrorList,
     FieldError,
@@ -55,9 +56,19 @@ router.get(
 
         const channel = await Channel.findOneOrFail({
             where: { id: channel_id },
-            relations: { available_tags: true },
+            relations: { available_tags: true, recipients: true },
         });
-        if (!channel.guild_id) return res.send(channel);
+        if (channel.isDm()) {
+            const recipient = channel.recipients?.find((r) => r.user_id === req.user_id);
+            return res.send({
+                ...(await DmChannelDTO.from(channel, [req.user_id])),
+                last_pin_timestamp: channel.last_pin_timestamp?.toISOString() ?? undefined,
+                is_spam: false,
+                is_message_request: !!recipient?.message_request_timestamp,
+                is_message_request_timestamp: recipient?.message_request_timestamp?.toISOString() ?? null,
+            });
+        }
+        if (!channel.guild_id) return res.send(channel.toJSON());
         if (channel.isThread()) {
             const member = await ThreadMember.findOne({ where: { id: channel.id, user_id: req.user_id } });
             return res.send({ ...channel.toJSON(), ...(member ? { member: member.toJSON() } : {}) });
@@ -102,6 +113,7 @@ router.delete(
             ]);
         } else if (channel.type === ChannelType.GROUP_DM) {
             await Channel.removeRecipientFromChannel(channel, req.user_id);
+            return res.send(await DmChannelDTO.from(channel));
         } else if (channel.isThread()) {
             req.permission!.hasThrow("MANAGE_THREADS");
             const data = { id: channel_id, guild_id: channel.guild_id, parent_id: channel.parent_id, type: channel.type };
@@ -294,10 +306,19 @@ router.patch(
         if (payload.topic === "") payload.topic = null;
         const columns = new Set(Channel.getRepository().metadata.columns.map((c) => c.propertyName));
         const update = Object.fromEntries(Object.entries(payload).filter(([key, value]) => columns.has(key) && key !== "id" && value !== undefined));
+        const before = { name: channel.name ?? null, icon: channel.icon ?? null };
         Object.assign(channel, update);
         if (Object.keys(update).length) await Channel.update({ id: channel.id }, update);
 
         if (channel.guild_id) channel.position = await Channel.calculatePosition(channel.id, channel.guild_id);
+        if (channel.type === ChannelType.GROUP_DM) {
+            channel.recipients = await Recipient.find({ where: { channel_id } });
+            await Channel.emitPrivateChannelUpdate(channel);
+            if ((channel.name ?? null) !== before.name) await Channel.sendSystemMessage(channel, req.user_id, MessageType.CHANNEL_NAME_CHANGE, { content: channel.name ?? "" });
+            if ((channel.icon ?? null) !== before.icon) await Channel.sendSystemMessage(channel, req.user_id, MessageType.CHANNEL_ICON_CHANGE);
+            return res.send(await DmChannelDTO.from(channel, [req.user_id]));
+        }
+
         await emitEvent({
             event: "CHANNEL_UPDATE",
             data: channel.toJSON(),

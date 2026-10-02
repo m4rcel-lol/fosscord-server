@@ -17,10 +17,10 @@
 */
 
 import { Request, Response, Router } from "express";
-import { In } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
-import { Channel, Message, Sticker, User } from "@spacebar/database";
-import { emitEvent, MessageCreateEvent, Permissions } from "@spacebar/util";
+import { assertCanSendDirectMessage, handleMessage, postHandleMessage, reopenDirectMessage } from "@spacebar/api/util";
+import { Channel, Message, ReadState } from "@spacebar/database";
+import { DiscordApiErrors, emitEvent, MessageCreateEvent } from "@spacebar/util";
 import { GreetRequestSchema, MessageType } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
@@ -46,72 +46,55 @@ router.post(
 
         const channel = await Channel.findOneOrFail({
             where: { id: channel_id },
+            relations: { recipients: true },
         });
 
-        const targetMessage = await Message.findOneOrFail({
-            where: {
-                id: payload.message_reference?.message_id,
-                channel_id: payload.message_reference?.channel_id,
-                guild_id: payload.message_reference?.guild_id,
-            },
-        });
-
-        if (!channel.isDm() && targetMessage.type != MessageType.GUILD_MEMBER_JOIN)
+        if (payload.sticker_ids?.length !== 1)
             return res.status(400).json({
-                code: 400, // TODO: what's the actual error code?
-                message: "Cannot send greet message referencing this message.",
-            });
-
-        if (!(await channel.getUserPermissions({ user_id: req.user_id })).has(Permissions.FLAGS.SEND_MESSAGES)) {
-            return res.status(403).json({
-                code: 403,
-                message: "Missing Permissions: SEND_MESSAGES",
-            });
-        }
-
-        const specCompliant = true; // incase we want to allow clients to add more than one sticker to pick
-        if (specCompliant && payload.sticker_ids.length != 1)
-            return res.status(400).json({
-                code: 400,
+                code: 50035,
                 message: "Must include exactly one sticker.",
             });
 
-        const stickers = await Sticker.find({ where: { id: In(payload.sticker_ids) } });
+        const reference = payload.message_reference?.message_id
+            ? { message_id: payload.message_reference.message_id, channel_id, guild_id: channel.guild_id ?? undefined, type: 0 }
+            : undefined;
 
-        const randomSticker = stickers[Math.floor(Math.random() * stickers.length)];
+        if (reference) {
+            const target = await Message.findOne({ where: { id: reference.message_id, channel_id }, select: { id: true, type: true } });
+            if (!target) throw DiscordApiErrors.UNKNOWN_MESSAGE;
+            if (!channel.isDm() && target.type !== MessageType.GUILD_MEMBER_JOIN) throw DiscordApiErrors.CANNOT_EXECUTE_ON_THIS_CHANNEL_TYPE;
+        } else if (!channel.isDm()) throw DiscordApiErrors.CANNOT_EXECUTE_ON_THIS_CHANNEL_TYPE;
 
-        const message = Message.create({
-            channel_id: channel_id,
+        await assertCanSendDirectMessage(channel, req.user_id);
+
+        const message = await handleMessage({
+            channel_id,
             author_id: req.user_id,
-            type: MessageType.REPLY,
-            message_reference: { ...payload.message_reference, type: 0 },
-            referenced_message: targetMessage,
-            sticker_items: randomSticker ? [{ id: randomSticker.id, name: randomSticker.name, format_type: randomSticker.format_type }] : [],
+            type: MessageType.DEFAULT,
+            sticker_ids: payload.sticker_ids,
+            allowed_mentions: payload.allowed_mentions,
+            message_reference: reference,
             timestamp: new Date(),
-            embeds: [],
-            reactions: [],
-            attachments: [],
-            mentions: [],
-            mention_roles: [],
-            mention_channels: [],
         });
 
-        message.author = await User.findOneOrFail({ where: { id: req.user_id } });
-        message.author.clean_data();
-        channel.last_message_id = message.id;
+        await reopenDirectMessage(channel, req.user_id);
+
+        const readState = (await ReadState.findOne({ where: { user_id: req.user_id, channel_id } })) ?? ReadState.create({ user_id: req.user_id, channel_id });
+        readState.last_message_id = message.id;
+        readState.mention_count = 0;
 
         await message.save();
-        const publicMsg = message.toJSON();
         await Promise.all([
+            readState.save(),
             emitEvent({
                 event: "MESSAGE_CREATE",
-                data: publicMsg,
                 channel_id,
+                data: message.toJSON(),
             } satisfies MessageCreateEvent),
-            channel.save(),
         ]);
+        postHandleMessage(message).catch((e) => console.error("[Greet] post-message handler failed", e));
 
-        res.json(publicMsg);
+        res.json(message.toJSON());
     },
 );
 

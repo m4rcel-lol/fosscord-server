@@ -32,7 +32,7 @@ import { User } from "./User";
 import { VoiceState } from "./VoiceState";
 import { Webhook } from "./Webhook";
 import { Member } from "./Member";
-import { ChannelPermissionOverwrite, ChannelType, DefaultReaction, PublicChannel, PublicUserProjection, ThreadMetadata, WebhookChannel } from "@spacebar/schemas";
+import { ChannelPermissionOverwrite, ChannelType, DefaultReaction, MessageType, PublicChannel, PublicUserProjection, ThreadMetadata, WebhookChannel } from "@spacebar/schemas";
 import { OrmUtils } from "../../util/imports";
 import { ThreadMember } from "./ThreadMember";
 import { trimSpecial } from "@spacebar/extensions";
@@ -405,7 +405,7 @@ export class Channel extends BaseClass {
         else return channel_dto.excludedRecipients([creator_user_id]);
     }
 
-    static async removeRecipientFromChannel(channel: Channel, user_id: string) {
+    static async removeRecipientFromChannel(channel: Channel, user_id: string, actor_id: string = user_id) {
         await Recipient.delete({ channel_id: channel.id, user_id: user_id });
         channel.recipients = channel.recipients?.filter((r) => r.user_id !== user_id);
 
@@ -425,15 +425,8 @@ export class Channel extends BaseClass {
             user_id: user_id,
         });
 
-        //If the owner leave the server user is the new owner
-        if (channel.owner_id === user_id) {
-            channel.owner_id = "1"; // The channel is now owned by the server user
-            await emitEvent({
-                event: "CHANNEL_UPDATE",
-                data: await DmChannelDTO.from(channel, [user_id]),
-                channel_id: channel.id,
-            });
-        }
+        const ownerChanged = channel.owner_id === user_id && !!channel.recipients?.length;
+        if (ownerChanged) channel.owner_id = channel.recipients![0].user_id;
 
         await channel.save();
 
@@ -441,13 +434,69 @@ export class Channel extends BaseClass {
             event: "CHANNEL_RECIPIENT_REMOVE",
             data: {
                 channel_id: channel.id,
-                user: await User.findOneOrFail({
-                    where: { id: user_id },
-                    select: Object.fromEntries(PublicUserProjection.map((i) => [i, true])), //TODO: cleanup
-                }),
+                user: (
+                    await User.findOneOrFail({
+                        where: { id: user_id },
+                        select: Object.fromEntries(PublicUserProjection.map((i) => [i, true])),
+                    })
+                ).toPublicUser(),
             },
             channel_id: channel.id,
         } satisfies ChannelRecipientRemoveEvent);
+
+        if (ownerChanged) await Channel.emitPrivateChannelUpdate(channel);
+
+        if (channel.type === ChannelType.GROUP_DM) await Channel.sendSystemMessage(channel, actor_id, MessageType.RECIPIENT_REMOVE, { mention_ids: [user_id] });
+    }
+
+    static async emitPrivateChannelUpdate(channel: Channel) {
+        const dto = await DmChannelDTO.from(channel);
+        await Promise.all(
+            (channel.recipients ?? []).map((recipient) =>
+                emitEvent({
+                    event: "CHANNEL_UPDATE",
+                    data: dto.excludedRecipients([recipient.user_id]),
+                    user_id: recipient.user_id,
+                }),
+            ),
+        );
+    }
+
+    static async sendSystemMessage(channel: Channel, author_id: string, type: MessageType, opts: { content?: string; mention_ids?: string[] } = {}) {
+        const [author, mentions] = await Promise.all([
+            User.findOneOrFail({ where: { id: author_id }, select: Object.fromEntries(PublicUserProjection.map((i) => [i, true])) }),
+            opts.mention_ids?.length
+                ? User.find({ where: opts.mention_ids.map((id) => ({ id })), select: Object.fromEntries(PublicUserProjection.map((i) => [i, true])) })
+                : Promise.resolve([] as User[]),
+        ]);
+        const message = Message.create({
+            channel_id: channel.id,
+            guild_id: channel.guild_id ?? undefined,
+            author_id,
+            author,
+            type,
+            content: opts.content ?? "",
+            mentions,
+            mention_roles: [],
+            mention_channels: [],
+            attachments: [],
+            embeds: [],
+            reactions: [],
+            sticker_items: [],
+            timestamp: new Date(),
+            pinned: false,
+            tts: false,
+            mention_everyone: false,
+        });
+        await message.save();
+        channel.last_message_id = message.id;
+        await Channel.update({ id: channel.id }, { last_message_id: message.id });
+        await emitEvent({
+            event: "MESSAGE_CREATE",
+            channel_id: channel.id,
+            data: message.toJSON(),
+        });
+        return message;
     }
 
     static async deleteChannel(channel: Channel) {

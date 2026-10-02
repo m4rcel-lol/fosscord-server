@@ -21,7 +21,7 @@ import { ILike } from "typeorm";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
 import { Member, Relationship, User } from "@spacebar/database";
-import { Config, DiscordApiErrors, RelationshipAddEvent, RelationshipRemoveEvent, RelationshipUpdateEvent, emitEvent } from "@spacebar/util";
+import { Config, DiscordApiErrors, PresenceUpdateEvent, RelationshipAddEvent, RelationshipRemoveEvent, RelationshipUpdateEvent, emitEvent, getUserPresence } from "@spacebar/util";
 import { PublicUserProjection, RelationshipType, RelationshipModifySchema, RelationshipListSchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
@@ -221,7 +221,7 @@ router.delete(
 
 async function updateRelationship(req: Request, res: Response, friend: User, type: RelationshipType) {
     const id = friend.id;
-    if (id === req.user_id) throw new HTTPError("You can't add yourself as a friend");
+    if (id === req.user_id) throw DiscordApiErrors.CANNOT_FRIEND_SELF;
 
     const user = await User.findOneOrFail({
         where: { id: req.user_id },
@@ -272,7 +272,7 @@ async function updateRelationship(req: Request, res: Response, friend: User, typ
 
     let isStrangerRequest = true;
     const ownMemberships = (await Member.find({ where: { id: req.user_id }, select: { guild_id: true } })).map((x) => x.guild_id);
-    const targetMemberships = (await Member.find({ where: { id: req.user_id }, select: { guild_id: true } })).map((x) => x.guild_id);
+    const targetMemberships = (await Member.find({ where: { id }, select: { guild_id: true } })).map((x) => x.guild_id);
 
     if (ownMemberships.filter((x) => targetMemberships.includes(x)).length > 0) isStrangerRequest = false;
 
@@ -293,8 +293,8 @@ async function updateRelationship(req: Request, res: Response, friend: User, typ
     });
 
     if (friendRequest) {
-        if (friendRequest.type === RelationshipType.BLOCKED) throw new HTTPError("The user blocked you");
-        if (friendRequest.type === RelationshipType.FRIEND) throw new HTTPError("You are already friends with the user");
+        if (friendRequest.type === RelationshipType.BLOCKED) throw DiscordApiErrors.FRIEND_REQUEST_BLOCKED;
+        if (friendRequest.type === RelationshipType.FRIEND) throw DiscordApiErrors.ALREADY_FRIENDS;
         // accept friend request
         incoming_relationship = friendRequest;
         incoming_relationship.type = RelationshipType.FRIEND;
@@ -303,7 +303,7 @@ async function updateRelationship(req: Request, res: Response, friend: User, typ
     if (relationship) {
         if (relationship.type === RelationshipType.OUTGOING_REQUEST) throw new HTTPError("You already sent a friend request");
         if (relationship.type === RelationshipType.BLOCKED) throw new HTTPError("Unblock the user before sending a friend request");
-        if (relationship.type === RelationshipType.FRIEND) throw new HTTPError("You are already friends with the user");
+        if (relationship.type === RelationshipType.FRIEND) throw DiscordApiErrors.ALREADY_FRIENDS;
         outgoing_relationship = relationship;
         outgoing_relationship.type = RelationshipType.FRIEND;
     }
@@ -325,6 +325,14 @@ async function updateRelationship(req: Request, res: Response, friend: User, typ
             user_id: id,
         } satisfies RelationshipAddEvent),
     ]);
+
+    if (incoming_relationship.type === RelationshipType.FRIEND && outgoing_relationship.type === RelationshipType.FRIEND) {
+        const [ownPresence, friendPresence, ownUser] = await Promise.all([getUserPresence(req.user_id), getUserPresence(id), User.getPublicUser(req.user_id)]);
+        await Promise.all([
+            emitEvent({ event: "PRESENCE_UPDATE", data: { user: friend.toPublicUser(), ...friendPresence }, user_id: req.user_id } satisfies PresenceUpdateEvent),
+            emitEvent({ event: "PRESENCE_UPDATE", data: { user: ownUser, ...ownPresence }, user_id: id } satisfies PresenceUpdateEvent),
+        ]);
+    }
 
     return res.sendStatus(204);
 }

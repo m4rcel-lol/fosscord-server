@@ -41,6 +41,7 @@ import {
     UserSettings,
     UserSettingsProtos,
     VoiceState,
+    PrivateCalls,
 } from "@spacebar/database";
 import {
     Activity,
@@ -953,6 +954,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     const pendingDispatches = this.pendingDispatches;
     this.pendingDispatches = undefined;
     for (const payload of pendingDispatches) await Send(this, { ...payload, s: this.sequence++ });
+    for (const call of await PrivateCalls.activeFor(this.user_id).catch(() => [])) await Send(this, { op: OPCodes.DISPATCH, t: "CALL_CREATE", s: this.sequence++, d: call });
     console.log(
         `[Gateway/${this.user_id}] IDENTIFY ${this.user_id} in ${totalSw.elapsed().totalMilliseconds}ms`,
         process.env.LOG_GATEWAY_TRACES ? JSON.stringify(d._trace, null, 2) : "",

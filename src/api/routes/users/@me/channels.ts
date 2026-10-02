@@ -39,7 +39,16 @@ router.get(
             where: { user_id: req.user_id, closed: false },
             relations: { channel: { recipients: true } },
         });
-        res.json(await Promise.all(recipients.map((r) => DmChannelDTO.from(r.channel, [req.user_id]))));
+        res.json(
+            await Promise.all(
+                recipients.map(async (r) => ({
+                    ...(await DmChannelDTO.from(r.channel, [req.user_id])),
+                    is_spam: false,
+                    is_message_request: !!r.message_request_timestamp,
+                    is_message_request_timestamp: r.message_request_timestamp?.toISOString() ?? null,
+                })),
+            ),
+        );
     },
 );
 

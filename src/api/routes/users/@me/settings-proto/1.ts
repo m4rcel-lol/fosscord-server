@@ -68,7 +68,7 @@ router.patch(
         const { atomic } = req.query;
         const updatedSettings = PreloadedUserSettings.fromBase64(settings);
 
-        const resultObj = await patchUserSettings(req.user_id, updatedSettings, required_data_version, atomic == "true");
+        const resultObj = await UserSettingsProtos.withLock(req.user_id, () => patchUserSettings(req.user_id, updatedSettings, required_data_version, atomic == "true"));
 
         res.json({
             settings: PreloadedUserSettings.toBase64(resultObj.settings),
@@ -120,7 +120,7 @@ router.patch(
         const { atomic } = req.query;
         const updatedSettings = PreloadedUserSettings.fromJson(settings);
 
-        const resultObj = await patchUserSettings(req.user_id, updatedSettings, required_data_version, atomic == "true");
+        const resultObj = await UserSettingsProtos.withLock(req.user_id, () => patchUserSettings(req.user_id, updatedSettings, required_data_version, atomic == "true"));
 
         res.json({
             settings: PreloadedUserSettings.toJson(resultObj.settings),

@@ -21,6 +21,7 @@ import { Channel, User } from "../../database/entities";
 import { PublicUser, PublicUserProjection } from "@spacebar/schemas";
 
 export class DmChannelDTO {
+    flags: number;
     icon: string | null;
     id: string;
     last_message_id: string | null;
@@ -32,6 +33,7 @@ export class DmChannelDTO {
 
     static async from(channel: Channel, excluded_recipients: string[] = [], origin_channel_id?: string) {
         const obj = new DmChannelDTO();
+        obj.flags = channel.flags ?? 0;
         obj.icon = channel.icon || null;
         obj.id = channel.id;
         obj.last_message_id = channel.last_message_id || null;
@@ -41,7 +43,8 @@ export class DmChannelDTO {
         obj.type = channel.type;
         const ids = channel.recipients?.map((r) => r.user_id).filter((id) => !excluded_recipients.includes(id)) ?? [];
         const users = ids.length ? await User.find({ where: { id: In(ids) }, select: Object.fromEntries(PublicUserProjection.map((i) => [i, true])) }) : [];
-        obj.recipients = ids.flatMap((id) => users.find((u) => u.id === id)?.toPublicUser() ?? []);
+        const byId = new Map(users.map((u) => [u.id, u]));
+        obj.recipients = ids.flatMap((id) => byId.get(id)?.toPublicUser() ?? []);
         return obj;
     }
 
