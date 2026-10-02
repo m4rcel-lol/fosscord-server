@@ -87,9 +87,13 @@ const tokenApi = (token: string): Api => ({
 });
 
 const verifyPassword = async (password: string) => {
-    const me = await api.request<{ email?: string | null }>("get", "/users/@me");
+    const me = await api.request<{ email?: string | null; username: string }>("get", "/users/@me");
     const base = apiBase();
-    const res = await fetch(`${base}/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ login: me.email, password }) });
+    const res = await fetch(`${base}/auth/login`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ login: me.email ?? me.username, password }),
+    });
     const body = (await res.json().catch(() => null)) as { token?: string; ticket?: string } | null;
     if (body?.token) await fetch(`${base}/auth/logout`, { method: "POST", headers: { "content-type": "application/json", authorization: body.token }, body: "{}" }).catch(() => {});
     return res.ok && !!(body?.token || body?.ticket);

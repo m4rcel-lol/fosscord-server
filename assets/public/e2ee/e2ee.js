@@ -52,7 +52,7 @@
   var randomBytes = (length) => crypto.getRandomValues(new Uint8Array(length));
   var sha256 = async (data) => new Uint8Array(await crypto.subtle.digest("SHA-256", data));
 
-  // node_modules/@hpke/common/esm/src/errors.js
+  // ../../../node_modules/@hpke/common/esm/src/errors.js
   var HpkeError = class extends Error {
     constructor(e) {
       let message;
@@ -90,7 +90,7 @@
   var NotSupportedError = class extends HpkeError {
   };
 
-  // node_modules/@hpke/common/esm/_dnt.shims.js
+  // ../../../node_modules/@hpke/common/esm/_dnt.shims.js
   var dntGlobals = {};
   var dntGlobalThis = createMergeProxy(globalThis, dntGlobals);
   function createMergeProxy(baseObj, extObj) {
@@ -147,7 +147,7 @@
     });
   }
 
-  // node_modules/@hpke/common/esm/src/algorithm.js
+  // ../../../node_modules/@hpke/common/esm/src/algorithm.js
   async function loadSubtleCrypto() {
     if (dntGlobalThis !== void 0 && globalThis.crypto !== void 0) {
       return globalThis.crypto.subtle;
@@ -176,7 +176,7 @@
     }
   };
 
-  // node_modules/@hpke/common/esm/src/identifiers.js
+  // ../../../node_modules/@hpke/common/esm/src/identifiers.js
   var Mode = {
     Base: 0,
     Psk: 1,
@@ -216,13 +216,13 @@
     ExportOnly: 65535
   };
 
-  // node_modules/@hpke/common/esm/src/consts.js
+  // ../../../node_modules/@hpke/common/esm/src/consts.js
   var INPUT_LENGTH_LIMIT = 8192;
   var INFO_LENGTH_LIMIT = 268435456;
   var MINIMUM_PSK_LENGTH = 32;
   var EMPTY = /* @__PURE__ */ new Uint8Array(0);
 
-  // node_modules/@hpke/common/esm/src/interfaces/kemInterface.js
+  // ../../../node_modules/@hpke/common/esm/src/interfaces/kemInterface.js
   var SUITE_ID_HEADER_KEM = /* @__PURE__ */ new Uint8Array([
     75,
     69,
@@ -231,7 +231,7 @@
     0
   ]);
 
-  // node_modules/@hpke/common/esm/src/kdfs/hkdf.js
+  // ../../../node_modules/@hpke/common/esm/src/kdfs/hkdf.js
   var HPKE_VERSION = /* @__PURE__ */ new Uint8Array([
     72,
     80,
@@ -401,7 +401,7 @@
     }
   };
 
-  // node_modules/@hpke/common/esm/src/utils/misc.js
+  // ../../../node_modules/@hpke/common/esm/src/utils/misc.js
   var isCryptoKeyPair = (x) => typeof x === "object" && x !== null && typeof x.privateKey === "object" && typeof x.publicKey === "object";
   function i2Osp(n, w) {
     if (w <= 0) {
@@ -443,7 +443,7 @@
     return buf;
   }
 
-  // node_modules/@hpke/common/esm/src/kems/dhkem.js
+  // ../../../node_modules/@hpke/common/esm/src/kems/dhkem.js
   var LABEL_EAE_PRK = /* @__PURE__ */ new Uint8Array([
     101,
     97,
@@ -626,7 +626,7 @@
     }
   };
 
-  // node_modules/@hpke/common/esm/src/interfaces/dhkemPrimitives.js
+  // ../../../node_modules/@hpke/common/esm/src/interfaces/dhkemPrimitives.js
   var KEM_USAGES = ["deriveBits"];
   var LABEL_DKP_PRK = /* @__PURE__ */ new Uint8Array([
     100,
@@ -639,7 +639,7 @@
   ]);
   var LABEL_SK = /* @__PURE__ */ new Uint8Array([115, 107]);
 
-  // node_modules/@hpke/common/esm/src/kems/dhkemPrimitives/ec.js
+  // ../../../node_modules/@hpke/common/esm/src/kems/dhkemPrimitives/ec.js
   var EC_P_521_PARAMS = {
     p: (1n << 521n) - 1n,
     b: 0x0051953eb9618e1c9a1f929a21a0b68540eea2da725b99b315f3b8b489918ef109e156193951ec7e937b1652c0bd3bb1bf073573df883d2c34f1ef451fd46b503f00n,
@@ -648,10 +648,10 @@
     coordinateSize: 66
   };
 
-  // node_modules/@hpke/common/esm/src/interfaces/aeadEncryptionContext.js
+  // ../../../node_modules/@hpke/common/esm/src/interfaces/aeadEncryptionContext.js
   var AEAD_USAGES = ["encrypt", "decrypt"];
 
-  // node_modules/@hpke/common/esm/src/utils/noble.js
+  // ../../../node_modules/@hpke/common/esm/src/utils/noble.js
   function isBytes(a) {
     return a instanceof Uint8Array || ArrayBuffer.isView(a) && a.constructor.name === "Uint8Array";
   }
@@ -689,7 +689,7 @@
   var _endianTestBytes = /* @__PURE__ */ new Uint8Array(_endianTestBuffer.buffer);
   var isLE = _endianTestBytes[0] === 68;
 
-  // node_modules/@hpke/common/esm/src/hash/hash.js
+  // ../../../node_modules/@hpke/common/esm/src/hash/hash.js
   function ahash(h) {
     if (typeof h !== "function" || typeof h.create !== "function") {
       throw new Error("Hash must wrapped by utils.createHasher");
@@ -698,7 +698,7 @@
     anumber(h.blockLen);
   }
 
-  // node_modules/@hpke/common/esm/src/hash/hmac.js
+  // ../../../node_modules/@hpke/common/esm/src/hash/hmac.js
   var _HMAC = class {
     constructor(hash, key) {
       Object.defineProperty(this, "oHash", {
@@ -800,7 +800,7 @@
   var hmac = (hash, key, message) => new _HMAC(hash, key).update(message).digest();
   hmac.create = (hash, key) => new _HMAC(hash, key);
 
-  // node_modules/@hpke/common/esm/src/hash/u64.js
+  // ../../../node_modules/@hpke/common/esm/src/hash/u64.js
   var U32_MASK64 = 0xffffffffn;
   var _32n = 32n;
   function fromBig(n, le = false) {
@@ -823,7 +823,7 @@
     return [Ah, Al];
   }
 
-  // node_modules/@hpke/common/esm/src/hash/sha3.js
+  // ../../../node_modules/@hpke/common/esm/src/hash/sha3.js
   var _0n = 0n;
   var _1n = 1n;
   var _2n = 2n;
@@ -849,7 +849,7 @@
   var SHA3_IOTA_H = IOTAS[0];
   var SHA3_IOTA_L = IOTAS[1];
 
-  // node_modules/@hpke/core/esm/src/aeads/aesGcm.js
+  // ../../../node_modules/@hpke/core/esm/src/aeads/aesGcm.js
   var AesGcmContext = class extends NativeAlgorithm {
     constructor(key) {
       super();
@@ -962,14 +962,14 @@
     }
   };
 
-  // node_modules/@hpke/core/esm/src/utils/emitNotSupported.js
+  // ../../../node_modules/@hpke/core/esm/src/utils/emitNotSupported.js
   function emitNotSupported() {
     return new Promise((_resolve, reject) => {
       reject(new NotSupportedError("Not supported"));
     });
   }
 
-  // node_modules/@hpke/core/esm/src/exporterContext.js
+  // ../../../node_modules/@hpke/core/esm/src/exporterContext.js
   var LABEL_SEC = new Uint8Array([115, 101, 99]);
   var ExporterContextImpl = class {
     constructor(api2, kdf, exporterSecret) {
@@ -1029,7 +1029,7 @@
     }
   };
 
-  // node_modules/@hpke/core/esm/src/encryptionContext.js
+  // ../../../node_modules/@hpke/core/esm/src/encryptionContext.js
   var EncryptionContextImpl = class extends ExporterContextImpl {
     constructor(api2, kdf, params) {
       super(api2, kdf, params.exporterSecret);
@@ -1090,7 +1090,7 @@
     }
   };
 
-  // node_modules/@hpke/core/esm/src/mutex.js
+  // ../../../node_modules/@hpke/core/esm/src/mutex.js
   var __classPrivateFieldGet = function(receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
@@ -1120,7 +1120,7 @@
   };
   _Mutex_locked = /* @__PURE__ */ new WeakMap();
 
-  // node_modules/@hpke/core/esm/src/recipientContext.js
+  // ../../../node_modules/@hpke/core/esm/src/recipientContext.js
   var __classPrivateFieldGet2 = function(receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
@@ -1155,7 +1155,7 @@
   };
   _RecipientContextImpl_mutex = /* @__PURE__ */ new WeakMap();
 
-  // node_modules/@hpke/core/esm/src/senderContext.js
+  // ../../../node_modules/@hpke/core/esm/src/senderContext.js
   var __classPrivateFieldGet3 = function(receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
@@ -1197,7 +1197,7 @@
   };
   _SenderContextImpl_mutex = /* @__PURE__ */ new WeakMap();
 
-  // node_modules/@hpke/core/esm/src/cipherSuiteNative.js
+  // ../../../node_modules/@hpke/core/esm/src/cipherSuiteNative.js
   var LABEL_BASE_NONCE = new Uint8Array([
     98,
     97,
@@ -1470,13 +1470,13 @@
     }
   };
 
-  // node_modules/@hpke/core/esm/src/native.js
+  // ../../../node_modules/@hpke/core/esm/src/native.js
   var CipherSuite = class extends CipherSuiteNative {
   };
   var HkdfSha256 = class extends HkdfSha256Native {
   };
 
-  // node_modules/@hpke/core/esm/src/kems/dhkemPrimitives/x25519.js
+  // ../../../node_modules/@hpke/core/esm/src/kems/dhkemPrimitives/x25519.js
   var ALG_NAME = "X25519";
   var PKCS8_ALG_ID_X25519 = new Uint8Array([
     48,
@@ -1692,7 +1692,7 @@
     }
   };
 
-  // node_modules/@hpke/core/esm/src/kems/dhkemX25519.js
+  // ../../../node_modules/@hpke/core/esm/src/kems/dhkemX25519.js
   var DhkemX25519HkdfSha256 = class extends Dhkem {
     constructor() {
       const kdf = new HkdfSha256Native();
@@ -1730,7 +1730,7 @@
     }
   };
 
-  // node_modules/@hpke/core/esm/src/kems/dhkemPrimitives/x448.js
+  // ../../../node_modules/@hpke/core/esm/src/kems/dhkemPrimitives/x448.js
   var PKCS8_ALG_ID_X448 = new Uint8Array([
     48,
     70,
@@ -1827,7 +1827,7 @@ ${deviceId}
 ${prekeyId}
 ${publicKey}`;
 
-  // node_modules/hash-wasm/dist/index.esm.js
+  // ../../../node_modules/hash-wasm/dist/index.esm.js
   function __awaiter(thisArg, _arguments, P, generator) {
     function adopt(value) {
       return value instanceof P ? value : new P(function(resolve) {
@@ -2633,6 +2633,17 @@ ${sig}`;
     get locked() {
       return !!this.userId && !this.linked;
     }
+    get backupNeedsPassword() {
+      if (!this.linked || !this.identity || this.identity.publicKey !== this.serverKey) return false;
+      const backup = this.backup?.identity_key === this.serverKey ? this.backup : null;
+      if (!backup) return true;
+      return backup.mode === "password" && !backup.wrapped_secret && !!this.secret;
+    }
+    async backUpWithPassword(password) {
+      this.password = { value: password, at: Date.now() };
+      await this.refresh();
+      if (this.backupNeedsPassword) throw new E2eeError("BAD_SECRET", "Your keys couldn't be backed up. Try again in a moment.");
+    }
     rememberPassword(value) {
       this.password = { value, at: Date.now() };
       if (this.userId) this.refresh().catch((error) => console.error("[e2ee] password refresh failed", error));
@@ -2728,6 +2739,7 @@ ${sig}`;
       return this.password?.value ?? null;
     }
     async createBackup(state, identityJwk) {
+      if (!this.passwordValue()) return;
       const userId = this.userId;
       let identity = this.identity;
       if (!identityJwk) {
@@ -2744,10 +2756,11 @@ ${sig}`;
         identity = await this.adoptIdentity(identityJwk);
         this.directory.delete(userId);
       }
+      const password = this.passwordValue();
+      if (!password) return;
       const secret = randomBytes(32);
       const backupJwk = await generateExportable("X25519");
-      const password = this.passwordValue();
-      const secretFields = password ? await wrapSecret(userId, "password", password, secret) : { mode: "password", kdf: PASSWORD_KDF, salt: toB64u(randomBytes(16)), wrapped_secret: null };
+      const secretFields = await wrapSecret(userId, "password", password, secret);
       this.backup = await this.api.request("put", "/users/@me/e2ee/backup", {
         version: this.backup?.version ?? 0,
         ...secretFields,
@@ -2757,7 +2770,7 @@ ${sig}`;
         backup_key_signature: await sign(identity.privateKey, backupKeyMessage(userId, backupJwk.x)),
         wrapped_backup_key: await sealJwk(secret, "backup-key", userId, backupJwk)
       });
-      if (password) this.password = null;
+      this.password = null;
       this.secret = secret;
       await this.store.set("backup-secret", secret);
       this.backupKeyPair = { publicKey: backupJwk.x, keyPair: await importAgreementJwk(backupJwk) };
@@ -2875,6 +2888,8 @@ ${sig}`;
     }
     async unlockWith(kind, input) {
       const backup = this.backup = await this.fetchBackup();
+      if (kind === "password" && (!backup || backup.mode === "password" && !backup.wrapped_secret))
+        throw new E2eeError("BAD_SECRET", "Your keys aren't backed up with your password yet.");
       if (!backup?.wrapped_secret || backup.mode !== kind) throw new E2eeError("BAD_SECRET", "There's no backup to unlock with that");
       const secret = await unwrapSecret(this.userId, backup, input).catch(() => null);
       if (!secret) throw new E2eeError("BAD_SECRET", kind === "password" ? "That password didn't unlock your keys" : "That recovery code didn't work");
@@ -3673,6 +3688,7 @@ ${approver}`;
     const approvals = /* @__PURE__ */ new Map();
     let members = null;
     let scheduled = false;
+    let backupPromptDismissed = false;
     const mount = () => {
       if (!style.isConnected) document.head.append(style);
       if (!banners.isConnected && document.body) document.body.append(banners);
@@ -3856,7 +3872,14 @@ ${approver}`;
         const intro = document.createElement("p");
         intro.textContent = "This browser can't read your encrypted messages yet. Bring your keys over with one of these.";
         body.append(intro);
-        if (backup?.wrapped_secret && backup.identity_key === engine2.serverKey) {
+        if (!backup || backup.mode === "password" && !backup.wrapped_secret) {
+          const own = section(
+            "Enter your password",
+            "If your keys aren't backed up with your password yet, open the app on a browser you used before. It asks for your password once, and then it works here too."
+          );
+          own.append(unlockForm("password"));
+          body.append(own);
+        } else if (backup.wrapped_secret && backup.identity_key === engine2.serverKey) {
           const own = section(
             backup.mode === "recovery" ? "Enter your recovery code" : "Enter your password",
             backup.mode === "recovery" ? "Use the code you saved when you switched to a recovery code." : void 0
@@ -3933,6 +3956,40 @@ ${approver}`;
       });
     };
     const dismissApproval = (requestId) => approvals.get(requestId)?.();
+    const backupPasswordForm = (onDone) => {
+      const { wrap, input, row, setError } = field("Account password", "password", "current-password");
+      const save = button("Back up keys", "primary", async () => {
+        if (!input.value) return setError("Enter your password.");
+        save.disabled = true;
+        setError(null);
+        try {
+          if (!await verifyPassword2(input.value)) return setError("That password isn't right.");
+          await engine2.backUpWithPassword(input.value);
+          onDone();
+        } catch (error) {
+          setError(error instanceof Error ? error.message : String(error));
+        } finally {
+          save.disabled = false;
+        }
+      });
+      input.addEventListener("keydown", (event) => event.key === "Enter" && save.click());
+      row.append(save);
+      return wrap;
+    };
+    const showBackupPassword = () => dialog("Back up your encryption keys", (body, actions, close) => {
+      const intro = document.createElement("p");
+      intro.textContent = "Your encryption keys only exist in this browser right now. Enter your account password to lock a backup of them with it, so any browser you sign in to can read your encrypted messages.";
+      body.append(
+        intro,
+        backupPasswordForm(() => {
+          close();
+          transient = { text: "Your encryption keys are backed up.", until: Date.now() + 5e3 };
+          refresh();
+          setTimeout(refresh, 5100);
+        })
+      );
+      actions.append(button("Not now", "secondary", close));
+    });
     const showRecoveryCode = () => dialog("Use a recovery code", (body, actions, close) => {
       const intro = document.createElement("p");
       intro.textContent = "We'll make a code that locks your key backup instead of your password. You'll need it to set up a new browser when no other device is around to approve it. We only show it once.";
@@ -3986,7 +4043,12 @@ ${approver}`;
         clear(backupSection);
         const backup = engine2.backup;
         backupSection.dataset.mode = backup?.mode ?? "none";
-        if (!backup) return describe(backupSection, "Your keys aren't backed up yet. Sign in on a browser that can read your messages to create the backup.");
+        if (engine2.backupNeedsPassword) {
+          describe(backupSection, "Your keys aren't backed up yet, so new browsers can't read your encrypted messages. Enter your account password to back them up.");
+          backupSection.append(backupPasswordForm(renderBackup));
+          return;
+        }
+        if (!backup) return describe(backupSection, "Your keys aren't backed up yet. Open the app on a browser that can read your messages to back them up.");
         if (backup.mode === "recovery")
           describe(backupSection, "Your keys are backed up and locked with a recovery code. New browsers ask for that code, and your password can't unlock them.");
         else if (backup.wrapped_secret)
@@ -3994,7 +4056,11 @@ ${approver}`;
             backupSection,
             "Your keys are backed up and locked with your account password, so new browsers unlock as soon as you sign in. Someone with a copy of the server's database could try to guess a weak password offline."
           );
-        else describe(backupSection, "Your keys are backed up. The password lock gets added the next time you sign in.");
+        else
+          describe(
+            backupSection,
+            "Your keys are backed up, but they aren't locked with your password yet. Open the app on a browser that can read your messages to finish the backup."
+          );
         if (!engine2.hasSecret) return;
         if (backup.mode === "password") {
           backupSection.append(
@@ -4143,6 +4209,16 @@ ${approver}`;
     const decorateBanners = (channelId) => {
       if (failure2) banner("failure", "danger", failure2);
       else dropBanner("failure");
+      if (!failure2 && engine2.backupNeedsPassword && !backupPromptDismissed)
+        banner("backup", "info", "Back up your encryption keys with your password so your other browsers can read your encrypted messages.", {
+          label: "Back up",
+          run: () => {
+            backupPromptDismissed = true;
+            dropBanner("backup");
+            showBackupPassword();
+          }
+        });
+      else dropBanner("backup");
       if (transient && transient.until > Date.now()) banner("transient", "warning", transient.text, transient.action);
       else dropBanner("transient");
       if (channelId && engine2.isEncrypted(channelId) && members?.channelId === channelId) {
@@ -4302,7 +4378,11 @@ ${approver}`;
   var verifyPassword = async (password) => {
     const me = await api.request("get", "/users/@me");
     const base = apiBase();
-    const res = await fetch(`${base}/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ login: me.email, password }) });
+    const res = await fetch(`${base}/auth/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ login: me.email ?? me.username, password })
+    });
     const body = await res.json().catch(() => null);
     if (body?.token) await fetch(`${base}/auth/logout`, { method: "POST", headers: { "content-type": "application/json", authorization: body.token }, body: "{}" }).catch(() => {
     });

@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { BackupMode, BackupRecord, generateRecoveryCode, openJwk, PASSWORD_KDF, sealJwk, unwrapSecret, wrapSecret } from "./backup";
+import { BackupMode, BackupRecord, generateRecoveryCode, openJwk, sealJwk, unwrapSecret, wrapSecret } from "./backup";
 import { Bytes, fromB64u, fromUtf8, randomBytes, toB64u, utf8 } from "./bytes";
 import {
     aesDecrypt,
@@ -251,6 +251,19 @@ export class Engine {
         return !!this.userId && !this.linked;
     }
 
+    get backupNeedsPassword() {
+        if (!this.linked || !this.identity || this.identity.publicKey !== this.serverKey) return false;
+        const backup = this.backup?.identity_key === this.serverKey ? this.backup : null;
+        if (!backup) return true;
+        return backup.mode === "password" && !backup.wrapped_secret && !!this.secret;
+    }
+
+    async backUpWithPassword(password: string) {
+        this.password = { value: password, at: Date.now() };
+        await this.refresh();
+        if (this.backupNeedsPassword) throw new E2eeError("BAD_SECRET", "Your keys couldn't be backed up. Try again in a moment.");
+    }
+
     rememberPassword(value: string) {
         this.password = { value, at: Date.now() };
         if (this.userId) this.refresh().catch((error) => console.error("[e2ee] password refresh failed", error));
@@ -357,6 +370,7 @@ export class Engine {
     }
 
     private async createBackup(state: ServerState, identityJwk: OkpJwk | null) {
+        if (!this.passwordValue()) return;
         const userId = this.userId;
         let identity = this.identity!;
         if (!identityJwk) {
@@ -373,12 +387,11 @@ export class Engine {
             identity = await this.adoptIdentity(identityJwk);
             this.directory.delete(userId);
         }
+        const password = this.passwordValue();
+        if (!password) return;
         const secret = randomBytes(32);
         const backupJwk = await generateExportable("X25519");
-        const password = this.passwordValue();
-        const secretFields = password
-            ? await wrapSecret(userId, "password", password, secret)
-            : { mode: "password" as BackupMode, kdf: PASSWORD_KDF, salt: toB64u(randomBytes(16)), wrapped_secret: null };
+        const secretFields = await wrapSecret(userId, "password", password, secret);
         this.backup = await this.api.request<BackupRecord>("put", "/users/@me/e2ee/backup", {
             version: this.backup?.version ?? 0,
             ...secretFields,
@@ -388,7 +401,7 @@ export class Engine {
             backup_key_signature: await sign(identity.privateKey, backupKeyMessage(userId, backupJwk.x)),
             wrapped_backup_key: await sealJwk(secret, "backup-key", userId, backupJwk),
         });
-        if (password) this.password = null;
+        this.password = null;
         this.secret = secret;
         await this.store!.set("backup-secret", secret);
         this.backupKeyPair = { publicKey: backupJwk.x, keyPair: await importAgreementJwk(backupJwk) };
@@ -518,6 +531,8 @@ export class Engine {
 
     async unlockWith(kind: BackupMode, input: string) {
         const backup = (this.backup = await this.fetchBackup());
+        if (kind === "password" && (!backup || (backup.mode === "password" && !backup.wrapped_secret)))
+            throw new E2eeError("BAD_SECRET", "Your keys aren't backed up with your password yet.");
         if (!backup?.wrapped_secret || backup.mode !== kind) throw new E2eeError("BAD_SECRET", "There's no backup to unlock with that");
         const secret = await unwrapSecret(this.userId, backup, input).catch(() => null);
         if (!secret) throw new E2eeError("BAD_SECRET", kind === "password" ? "That password didn't unlock your keys" : "That recovery code didn't work");

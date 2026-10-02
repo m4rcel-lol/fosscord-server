@@ -111,6 +111,7 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword }
     const approvals = new Map<string, () => void>();
     let members: { channelId: string; list: ChannelMember[] } | null = null;
     let scheduled = false;
+    let backupPromptDismissed = false;
 
     const mount = () => {
         if (!style.isConnected) document.head.append(style);
@@ -309,7 +310,14 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword }
             const intro = document.createElement("p");
             intro.textContent = "This browser can't read your encrypted messages yet. Bring your keys over with one of these.";
             body.append(intro);
-            if (backup?.wrapped_secret && backup.identity_key === engine.serverKey) {
+            if (!backup || (backup.mode === "password" && !backup.wrapped_secret)) {
+                const own = section(
+                    "Enter your password",
+                    "If your keys aren't backed up with your password yet, open the app on a browser you used before. It asks for your password once, and then it works here too.",
+                );
+                own.append(unlockForm("password"));
+                body.append(own);
+            } else if (backup.wrapped_secret && backup.identity_key === engine.serverKey) {
                 const own = section(
                     backup.mode === "recovery" ? "Enter your recovery code" : "Enter your password",
                     backup.mode === "recovery" ? "Use the code you saved when you switched to a recovery code." : undefined,
@@ -394,6 +402,44 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword }
 
     const dismissApproval = (requestId: string) => approvals.get(requestId)?.();
 
+    const backupPasswordForm = (onDone: () => void) => {
+        const { wrap, input, row, setError } = field("Account password", "password", "current-password");
+        const save = button("Back up keys", "primary", async () => {
+            if (!input.value) return setError("Enter your password.");
+            save.disabled = true;
+            setError(null);
+            try {
+                if (!(await verifyPassword(input.value))) return setError("That password isn't right.");
+                await engine.backUpWithPassword(input.value);
+                onDone();
+            } catch (error) {
+                setError(error instanceof Error ? error.message : String(error));
+            } finally {
+                save.disabled = false;
+            }
+        });
+        input.addEventListener("keydown", (event) => event.key === "Enter" && save.click());
+        row.append(save);
+        return wrap;
+    };
+
+    const showBackupPassword = () =>
+        dialog("Back up your encryption keys", (body, actions, close) => {
+            const intro = document.createElement("p");
+            intro.textContent =
+                "Your encryption keys only exist in this browser right now. Enter your account password to lock a backup of them with it, so any browser you sign in to can read your encrypted messages.";
+            body.append(
+                intro,
+                backupPasswordForm(() => {
+                    close();
+                    transient = { text: "Your encryption keys are backed up.", until: Date.now() + 5000 };
+                    refresh();
+                    setTimeout(refresh, 5100);
+                }),
+            );
+            actions.append(button("Not now", "secondary", close));
+        });
+
     const showRecoveryCode = () =>
         dialog("Use a recovery code", (body, actions, close) => {
             const intro = document.createElement("p");
@@ -450,7 +496,12 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword }
                 clear(backupSection);
                 const backup = engine.backup;
                 backupSection.dataset.mode = backup?.mode ?? "none";
-                if (!backup) return describe(backupSection, "Your keys aren't backed up yet. Sign in on a browser that can read your messages to create the backup.");
+                if (engine.backupNeedsPassword) {
+                    describe(backupSection, "Your keys aren't backed up yet, so new browsers can't read your encrypted messages. Enter your account password to back them up.");
+                    backupSection.append(backupPasswordForm(renderBackup));
+                    return;
+                }
+                if (!backup) return describe(backupSection, "Your keys aren't backed up yet. Open the app on a browser that can read your messages to back them up.");
                 if (backup.mode === "recovery")
                     describe(backupSection, "Your keys are backed up and locked with a recovery code. New browsers ask for that code, and your password can't unlock them.");
                 else if (backup.wrapped_secret)
@@ -458,7 +509,11 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword }
                         backupSection,
                         "Your keys are backed up and locked with your account password, so new browsers unlock as soon as you sign in. Someone with a copy of the server's database could try to guess a weak password offline.",
                     );
-                else describe(backupSection, "Your keys are backed up. The password lock gets added the next time you sign in.");
+                else
+                    describe(
+                        backupSection,
+                        "Your keys are backed up, but they aren't locked with your password yet. Open the app on a browser that can read your messages to finish the backup.",
+                    );
                 if (!engine.hasSecret) return;
                 if (backup.mode === "password") {
                     backupSection.append(
@@ -616,6 +671,16 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword }
     const decorateBanners = (channelId: string | null) => {
         if (failure) banner("failure", "danger", failure);
         else dropBanner("failure");
+        if (!failure && engine.backupNeedsPassword && !backupPromptDismissed)
+            banner("backup", "info", "Back up your encryption keys with your password so your other browsers can read your encrypted messages.", {
+                label: "Back up",
+                run: () => {
+                    backupPromptDismissed = true;
+                    dropBanner("backup");
+                    showBackupPassword();
+                },
+            });
+        else dropBanner("backup");
         if (transient && transient.until > Date.now()) banner("transient", "warning", transient.text, transient.action);
         else dropBanner("transient");
 
