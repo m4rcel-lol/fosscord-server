@@ -24,6 +24,7 @@ const commands = [
     { name: "buttons", description: "Sends a message with buttons and a select menu" },
     { name: "secret", description: "Replies with an ephemeral message" },
     { name: "form", description: "Opens a modal" },
+    { name: "survey", description: "Opens a modal with selects" },
     { name: "defer", description: "Defers, then edits the reply and sends a followup" },
     { name: "v2", description: "Sends a Components V2 message" },
     { name: "fruit", description: "Pick a fruit with autocomplete", options: [{ type: 3, name: "name", description: "Fruit name", required: true, autocomplete: true }] },
@@ -158,6 +159,30 @@ const handlers = {
                 ],
             },
         }),
+    survey: (i) =>
+        respond(i, {
+            type: 9,
+            data: {
+                custom_id: "survey",
+                title: "Survey",
+                components: [
+                    {
+                        type: 18,
+                        label: "Pick one",
+                        component: {
+                            type: 3,
+                            custom_id: "pick",
+                            options: [
+                                { label: "Alpha", value: "alpha" },
+                                { label: "Beta", value: "beta" },
+                            ],
+                        },
+                    },
+                    { type: 18, label: "Who", component: { type: 5, custom_id: "who", required: false } },
+                    { type: 18, label: "Note", component: { type: 4, custom_id: "note", style: 1, required: false } },
+                ],
+            },
+        }),
     defer: async (i) => {
         await respond(i, { type: 5 });
         await wait(1500);
@@ -250,6 +275,12 @@ const onInteraction = async (i) => {
     if (i.type === 5 && i.data.custom_id === "rename_modal") {
         const text = i.data.components[0].component.value;
         return respond(i, { type: 7, data: { content: text } });
+    }
+    if (i.type === 5 && i.data.custom_id === "survey") {
+        console.log("survey", JSON.stringify(i.data));
+        const [pick, who, note] = i.data.components.map((label) => label.component);
+        const users = Object.values(i.data.resolved?.users ?? {}).map((user) => user.username);
+        return respond(i, { type: 4, data: { content: `picked ${pick.values.join(", ") || "nothing"}, who: ${users.join(", ") || "nobody"}, note: ${note.value || "none"}` } });
     }
     if (i.type === 5) {
         const fields = Object.fromEntries(i.data.components.flatMap((r) => r.components ?? [r.component]).map((c) => [c.custom_id, c.value]));

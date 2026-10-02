@@ -47,6 +47,7 @@ export interface PendingInteraction {
     responseMessageId?: string;
     responseEphemeral?: boolean;
     responseLoading?: boolean;
+    modalComponents?: unknown[];
 }
 
 export const INTERACTION_TOKEN_LIFETIME = 15 * 60 * 1000;

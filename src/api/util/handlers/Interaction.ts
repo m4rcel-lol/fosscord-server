@@ -49,7 +49,7 @@ import {
     Snowflake,
     uploadFile,
 } from "@spacebar/util";
-import { handleComps, handleMessage, postHandleMessage } from "./Message";
+import { assignComponentIds, handleComps, handleMessage, postHandleMessage } from "./Message";
 import { launchActivity } from "@spacebar/api/activities";
 
 const SETTABLE_FLAGS =
@@ -169,7 +169,10 @@ export async function buildResolved(
                         members.map(async (m) => {
                             const { user, ...rest } = m.toPublicMember();
                             void user;
-                            return [m.id, { ...rest, permissions: (await getPermission(m.id, guildId, channelId)).bitfield.toString() }];
+                            return [
+                                m.id,
+                                { ...rest, roles: rest.roles?.filter((id) => id !== guildId), permissions: (await getPermission(m.id, guildId, channelId)).bitfield.toString() },
+                            ];
                         }),
                     ),
                 );
@@ -389,6 +392,15 @@ export async function processInteractionCallback(interaction: PendingInteraction
                 break;
             case InteractionCallbackType.MODAL: {
                 const application = await Application.findOneOrFail({ where: { id: interaction.applicationId }, relations: { bot: true } });
+                type ModalNode = { type?: number; required?: boolean; components?: ModalNode[]; component?: ModalNode };
+                const requireSelects = (nodes: ModalNode[] = []): void =>
+                    nodes.forEach((node) => {
+                        if (node?.type !== undefined && [3, 5, 6, 7, 8, 19].includes(node.type)) node.required ??= true;
+                        requireSelects([...(node?.components ?? []), ...(node?.component ? [node.component] : [])]);
+                    });
+                requireSelects(body.data.components as ModalNode[]);
+                assignComponentIds(body.data.components);
+                interaction.modalComponents = body.data.components;
                 await emitEvent({
                     event: "INTERACTION_MODAL_CREATE",
                     ...interactionTarget(interaction),

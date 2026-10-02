@@ -210,9 +210,39 @@ router.post("/", route({}), async (req: Request, res: Response) => {
             };
             break;
         }
-        case InteractionType.ModalSubmit:
-            botData = { custom_id: data.custom_id, components: data.components };
+        case InteractionType.ModalSubmit: {
+            type Submitted = { type: number; id?: number; value?: unknown; values?: unknown[] | null; components?: Submitted[]; component?: Submitted };
+            const uploads = (data.attachments ?? []) as MessageCreateCloudAttachment[];
+            const attachments = await Promise.all(
+                uploads.map(async (upload) => {
+                    const id = Snowflake.generate();
+                    const attachment = await convertCloudAttachmentToAttachment(upload, channel.id, id);
+                    attachment.id = id;
+                    return { ...attachment.toJSON(), id };
+                }),
+            );
+            const entityOptionTypes: Record<number, number> = { 5: 6, 6: 8, 7: 9, 8: 7 };
+            const entities: { type: number; value: string }[] = [];
+            const normalise = (submitted: Submitted[] = [], defined: Submitted[] = []): Submitted[] =>
+                submitted.map((component, index) => {
+                    const definition = defined[index]?.type === component.type ? defined[index] : undefined;
+                    const out: Submitted = { ...component, ...(typeof definition?.id === "number" && { id: definition.id }) };
+                    if (component.components) out.components = normalise(component.components, definition?.components);
+                    if (component.component) [out.component] = normalise([component.component], definition?.component && [definition.component]);
+                    if ([3, 5, 6, 7, 8, 19, 22].includes(component.type)) out.values = component.values ?? [];
+                    if (component.type === 4) out.value = component.value ?? "";
+                    if (component.type === 19) out.values = (out.values as number[]).map((index) => attachments[index]?.id).filter(Boolean);
+                    if (entityOptionTypes[component.type]) entities.push(...(out.values as string[]).map((value) => ({ type: entityOptionTypes[component.type], value })));
+                    return out;
+                });
+            const components = normalise(data.components as Submitted[], triggering?.modalComponents as Submitted[]);
+            const resolved = {
+                ...(entities.length ? await buildResolved(entities, guildId, channel.id) : {}),
+                ...(attachments.length ? { attachments: Object.fromEntries(attachments.map((a) => [a.id, a])) } : {}),
+            };
+            botData = { custom_id: data.custom_id, components, ...(Object.keys(resolved).length ? { resolved } : {}) };
             break;
+        }
         default:
             throw new HTTPError("Invalid interaction type", 400);
     }
