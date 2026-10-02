@@ -17,7 +17,7 @@
 */
 
 import { Member, Recipient, Relationship, Session, User } from "@spacebar/database";
-import { Activity, emitEvent, Presence, PresenceUpdateEvent, SessionsReplace } from "@spacebar/util";
+import { Activity, emitEvent, GuildMemberUpdateEvent, Presence, PresenceUpdateEvent, SessionsReplace } from "@spacebar/util";
 import { ClientStatus, PublicStatus, PublicUser, RelationshipType } from "@spacebar/schemas";
 import { In, Not } from "typeorm";
 
@@ -226,4 +226,18 @@ export async function broadcastPresence(userId: string, user?: PublicUser) {
     const dmUserIds = new Set(others.map((x) => x.user_id).filter((id) => !friendIds.has(id)));
     await Promise.all([...dmUserIds].map((id) => emitEvent({ event: "PRESENCE_UPDATE", user_id: id, data } satisfies PresenceUpdateEvent)));
     return presence;
+}
+
+export async function broadcastUserUpdate(userId: string) {
+    const [user, members] = await Promise.all([User.getPublicUser(userId), Member.find({ where: { id: userId }, relations: { roles: true } })]);
+    await Promise.all(
+        members.map((member) =>
+            emitEvent({
+                event: "GUILD_MEMBER_UPDATE",
+                guild_id: member.guild_id,
+                data: { ...member.toPublicMember(), guild_id: member.guild_id, user, roles: member.roles.map((x) => x.id).filter((id) => id !== member.guild_id) },
+            } satisfies GuildMemberUpdateEvent),
+        ),
+    );
+    await broadcastPresence(userId, user);
 }

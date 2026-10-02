@@ -16,11 +16,10 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { Guild, Member, User } from "@spacebar/database";
-import { DiscordApiErrors, emitEvent, UserUpdateEvent } from "@spacebar/util";
+import { broadcastUserUpdate, DiscordApiErrors, emitEvent, UserUpdateEvent } from "@spacebar/util";
 import { HTTPError } from "lambert-server/HTTPError";
 
 const router = Router({ mergeParams: true });
@@ -42,6 +41,7 @@ router.put("/", route({}), async (req: Request, res: Response) => {
 
     const data = user.toPrivateUser();
     await emitEvent({ event: "USER_UPDATE", user_id: req.user_id, data: data as unknown as UserUpdateEvent["data"] } satisfies UserUpdateEvent);
+    await broadcastUserUpdate(req.user_id);
     res.json(data);
 });
 

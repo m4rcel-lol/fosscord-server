@@ -21,7 +21,7 @@ import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { EmailChange, Pomelo } from "@spacebar/api/util";
 import { AvatarDecoration, User } from "@spacebar/database";
-import { CollectibleItemType, Collectibles, Config, emitEvent, FieldErrors, generateToken, handleFile, Snowflake, UserUpdateEvent } from "@spacebar/util";
+import { broadcastUserUpdate, CollectibleItemType, Collectibles, Config, emitEvent, FieldErrors, generateToken, handleFile, Snowflake, UserUpdateEvent } from "@spacebar/util";
 import { PrivateUserProjection, UserFlags, UserModifySchema } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
@@ -69,6 +69,7 @@ router.patch(
             select: Object.fromEntries([...PrivateUserProjection, "data", "recent_avatars"].map((i) => [i, true])), //TODO: cleanup
         });
 
+        const publicBefore = JSON.stringify(user.toPublicUser());
         let newToken: string | undefined;
 
         const checkPassword = async () => {
@@ -253,6 +254,7 @@ router.patch(
             user_id: req.user_id,
             data: updated,
         } satisfies UserUpdateEvent);
+        if (JSON.stringify(user.toPublicUser()) !== publicBefore) await broadcastUserUpdate(req.user_id);
 
         res.json(newToken ? { ...data, token: newToken } : data);
     },
