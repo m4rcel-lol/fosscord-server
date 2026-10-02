@@ -22,6 +22,8 @@ import { mediaServer, VoiceOPCodes, VoicePayload, WebRtcWebSocket, Send } from "
 
 export async function onSpeaking(this: WebRtcWebSocket, data: VoicePayload) {
     if (!this.webRtcClient) return;
+    this.speaking = !!data.d?.speaking;
+    this.lastActivity = Date.now();
 
     await Promise.all(
         Array.from(mediaServer.getClientsForRtcServer<WebRtcWebSocket>(this.webRtcClient.voiceRoomId)).map((client) => {
