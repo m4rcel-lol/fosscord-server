@@ -45,6 +45,33 @@ import {
 } from "@spacebar/schemas";
 import { JsonNumber } from "@spacebar/util/util/Decorators";
 
+export interface AccountPreferences {
+    consents?: Record<string, boolean>;
+    email_categories?: Record<string, boolean>;
+    email_settings_initialized?: boolean;
+    harvest?: HarvestRecord;
+}
+
+export interface ProfileWidget {
+    id: string;
+    data: { type: string; [key: string]: string | number | boolean | null | object };
+}
+
+export interface HarvestRecord {
+    harvest_id: string;
+    user_id: string;
+    email: string;
+    state: string;
+    status: number;
+    created_at: string;
+    completed_at: string | null;
+    polled_at: string | null;
+    updated_at: string;
+    backends: Record<string, string>;
+    shadow_run: boolean;
+    harvest_metadata: { user_is_staff: boolean; sla_email_sent: boolean; bypass_cooldown: boolean; is_provisional: boolean };
+}
+
 @Entity({
     name: "users",
 })
@@ -75,8 +102,8 @@ export class User extends BaseClass {
     @Column({ nullable: true })
     pronouns?: string;
 
-    @Column({ nullable: true, select: false })
-    phone?: string; // phone number of the user
+    @Column({ nullable: true, select: false, type: String })
+    phone?: string | null; // phone number of the user
 
     @Column({ select: false })
     desktop: boolean = false; // if the user has desktop app installed
@@ -211,6 +238,12 @@ export class User extends BaseClass {
 
     @Column({ type: "jsonb", nullable: true, select: false })
     recent_avatars?: RecentAvatar[] | null;
+
+    @Column({ type: "jsonb", nullable: true, select: false })
+    account_preferences?: AccountPreferences | null;
+
+    @Column({ type: "jsonb", nullable: true })
+    profile_widgets?: ProfileWidget[] | null;
 
     @JoinColumn({ name: "avatar_decoration_id", foreignKeyConstraintName: "FK_user_avatar_decoration_id" })
     @OneToOne(() => AvatarDecoration, { onDelete: "SET NULL", nullable: true })

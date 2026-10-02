@@ -19,7 +19,8 @@
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { ConnectedAccount } from "@spacebar/database";
-import { DiscordApiErrors, emitEvent } from "@spacebar/util";
+import { DiscordApiErrors, emitEvent, FieldErrors } from "@spacebar/util";
+import { DomainConnection, ResponseError } from "@spacebar/api/util";
 import { ConnectionUpdateSchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
@@ -38,7 +39,7 @@ router.patch("/", route({ requestBody: "ConnectionUpdateSchema" }), async (req: 
         select: { external_id: true, type: true, name: true, verified: true, visibility: true, show_activity: true, revoked: true, friend_sync: true, integrations: true },
     });
 
-    if (!connection) return DiscordApiErrors.UNKNOWN_CONNECTION;
+    if (!connection) throw DiscordApiErrors.UNKNOWN_CONNECTION;
     // TODO: do we need to do anything if the connection is revoked?
 
     if (typeof body.visibility === "boolean")
@@ -62,6 +63,31 @@ router.patch("/", route({ requestBody: "ConnectionUpdateSchema" }), async (req: 
         connection,
     );
     res.json(connection.toJSON());
+});
+
+router.post("/", route({ responses: { 200: {}, 400: { body: "APIErrorResponse" } } }), async (req: Request, res: Response) => {
+    const { connection_name, connection_id } = req.params as { [key: string]: string };
+    if (connection_name !== "domain") throw DiscordApiErrors.UNKNOWN_CONNECTION;
+
+    const domain = DomainConnection.normalize(decodeURIComponent(connection_id));
+    if (!domain) throw FieldErrors({ domain: { code: "DOMAIN_INVALID", message: "Enter a valid domain, like example.com." } });
+
+    const existing = await ConnectedAccount.findOne({ where: { user_id: req.user_id, type: "domain", external_id: domain } });
+    if (existing) return res.json(existing.toJSON());
+
+    const proof = DomainConnection.proof(req.user_id, domain);
+    if (!(await DomainConnection.verify(domain, proof)))
+        throw new ResponseError(400, {
+            message: "Invalid Form Body",
+            code: 50035,
+            errors: { domain: { _errors: [{ code: "DOMAIN_VERIFICATION_FAILED", message: "We couldn't verify this domain. Check the record and try again in a few minutes." }] } },
+            proof,
+        });
+
+    const account = ConnectedAccount.create({ user_id: req.user_id, type: "domain", external_id: domain, name: domain, verified: true, visibility: 1, metadata_visibility: 1 });
+    await account.save();
+    await emitEvent({ event: "USER_CONNECTIONS_UPDATE", data: { ...account, token_data: undefined }, user_id: req.user_id });
+    res.json(account.toJSON());
 });
 
 router.delete("/", route({}), async (req: Request, res: Response) => {

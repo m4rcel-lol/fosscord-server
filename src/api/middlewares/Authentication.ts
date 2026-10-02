@@ -19,7 +19,7 @@
 import { NextFunction, Request, Response } from "express";
 import { Session, User } from "@spacebar/database";
 import { Random } from "@spacebar/extensions";
-import { checkToken, Rights, UserTokenData } from "@spacebar/util";
+import { checkToken, getClientPlatform, Rights, UserTokenData } from "@spacebar/util";
 import { CORS } from "./CORS";
 
 declare global {
@@ -78,6 +78,22 @@ export async function handleAuthentication(req: Request) {
         req.session = session;
         req.rights = new Rights(Number(user.rights));
         req.isAuthenticated = true;
+
+        const superProperties = req.headers["x-super-properties"];
+        if (session && !session.client_info?.os && typeof superProperties === "string") {
+            const properties = (() => {
+                try {
+                    return JSON.parse(Buffer.from(superProperties, "base64").toString("utf8"));
+                } catch {
+                    return null;
+                }
+            })();
+            if (typeof properties?.os === "string" && properties.os) {
+                const browser = typeof properties.browser === "string" ? properties.browser : undefined;
+                session.client_info = { ...session.client_info, os: properties.os, browser, platform: getClientPlatform({ os: properties.os, browser }) };
+                await Session.update({ session_id: session.session_id }, { client_info: session.client_info });
+            }
+        }
     } catch (e) {
         req.isAuthenticated = false;
         console.error("[Authentication] Token was provided, but was invalid:", e);

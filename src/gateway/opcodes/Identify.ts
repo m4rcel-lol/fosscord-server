@@ -37,6 +37,7 @@ import {
     Sticker,
     ThreadMember,
     StageInstance,
+    User,
     UserSettings,
     UserSettingsProtos,
     VoiceState,
@@ -723,7 +724,10 @@ export async function onIdentify(this: WebSocket, data: Payload) {
         return a + (b as { micros: number }).micros;
     }, 0);
 
-    const authenticator_types = await SecurityKey.authenticatorTypes(this.user_id);
+    const [authenticator_types, preferences] = await Promise.all([
+        SecurityKey.authenticatorTypes(this.user_id),
+        User.findOne({ where: { id: this.user_id }, select: { id: true, account_preferences: true } }),
+    ]);
 
     // const d: ReadyEventData = {
     const { result: d, elapsed: buildReadyEventDataTime } = timeFunction<ReadyEventData>(
@@ -762,7 +766,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
 
                 consents: {
                     personalization: {
-                        consented: false, // TODO
+                        consented: !!preferences?.account_preferences?.consents?.personalization,
                     },
                 },
                 experiments: [],

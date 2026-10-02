@@ -16,7 +16,30 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+import { Response } from "express";
+import { fileTypeFromBuffer } from "file-type";
 import { storage } from "./Storage";
+
+const EXTENSION_TYPES: Record<string, string> = {
+    svg: "image/svg+xml",
+    json: "application/json",
+    lottie: "application/json",
+    riv: "application/octet-stream",
+    webm: "video/webm",
+    mp4: "video/mp4",
+    mp3: "audio/mpeg",
+    ogg: "audio/ogg",
+};
+
+export async function sendAsset(res: Response, data: Buffer, name: string) {
+    const extension = name.split(".").pop()?.toLowerCase() ?? "";
+    const type =
+        (await fileTypeFromBuffer(data))?.mime ??
+        EXTENSION_TYPES[extension] ??
+        (data.subarray(0, 256).toString("utf8").includes("<svg") ? "image/svg+xml" : "application/octet-stream");
+    res.set("Content-Type", type);
+    return res.send(data);
+}
 
 const inflight = new Map<string, Promise<Buffer | null>>();
 

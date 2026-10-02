@@ -24,6 +24,7 @@ const router = Router({ mergeParams: true });
 router.get(
     "/",
     route({
+        authentication: "optional",
         responses: {
             200: {
                 body: "APIConnectionsConfiguration",
@@ -31,14 +32,8 @@ router.get(
         },
     }),
     (req: Request, res: Response) => {
-        const config = ConnectionConfig.get();
-
-        Object.keys(config).forEach((key) => {
-            delete config[key].clientId;
-            delete config[key].clientSecret;
-        });
-
-        res.json(config);
+        const config = ConnectionConfig.get() as Record<string, { enabled?: boolean }>;
+        res.json({ ...Object.fromEntries(Object.entries(config).map(([key, value]) => [key, { enabled: !!value?.enabled }])), domain: { enabled: true } });
     },
 );
 

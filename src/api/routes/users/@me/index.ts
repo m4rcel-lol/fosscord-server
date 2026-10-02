@@ -19,9 +19,9 @@
 import bcrypt from "bcrypt";
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { EmailChange, Pomelo } from "@spacebar/api/util";
+import { EmailChange, Pomelo, authenticatorTypes, revokeSessions } from "@spacebar/api/util";
 import { AvatarDecoration, User } from "@spacebar/database";
-import { CollectibleItemType, Collectibles, Config, emitEvent, FieldErrors, generateToken, handleFile, Snowflake, UserUpdateEvent } from "@spacebar/util";
+import { CollectibleItemType, Collectibles, Config, Email, emitEvent, FieldErrors, generateToken, handleFile, Snowflake, UserUpdateEvent } from "@spacebar/util";
 import { PrivateUserProjection, UserFlags, UserModifySchema } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
@@ -36,12 +36,12 @@ router.get(
         },
     }),
     async (req: Request, res: Response) => {
-        res.json(
-            await User.findOne({
-                select: Object.fromEntries(PrivateUserProjection.map((i) => [i, true])), //TODO: cleanup
-                where: { id: req.user_id },
-            }),
-        );
+        const user = await User.findOneOrFail({
+            select: Object.fromEntries(PrivateUserProjection.map((i) => [i, true])),
+            where: { id: req.user_id },
+            relations: { avatar_decoration: true },
+        });
+        res.json({ ...user.toPrivateUser(), authenticator_types: await authenticatorTypes(req.user_id) });
     },
 );
 
@@ -70,6 +70,7 @@ router.patch(
         });
 
         let newToken: string | undefined;
+        let emailChanged = false;
 
         const checkPassword = async () => {
             if (!body.password)
@@ -105,8 +106,9 @@ router.patch(
 
         if (body.email && body.email !== user.email) {
             await checkPassword();
-            if (body.email_token !== undefined && !EmailChange.consumeToken(req.user_id, body.email_token))
-                throw FieldErrors({ email_token: { code: "INVALID_EMAIL_TOKEN", message: "Invalid email verification token" } });
+            if ((user.verified && user.email) || body.email_token !== undefined)
+                if (!body.email_token || !EmailChange.consumeToken(req.user_id, body.email_token))
+                    throw FieldErrors({ email_token: { code: "INVALID_EMAIL_TOKEN", message: "Invalid email verification token" } });
             if (await User.findOne({ where: { email: body.email }, select: { id: true } }))
                 throw FieldErrors({
                     email: {
@@ -115,13 +117,16 @@ router.patch(
                     },
                 });
             user.email = body.email;
+            user.verified = false;
+            emailChanged = true;
         }
 
         if (body.new_password) {
             await checkPassword();
             user.data.hash = await bcrypt.hash(body.new_password, 12);
             user.data.valid_tokens_since = new Date();
-            newToken = (await generateToken(user.id)) as string;
+            await revokeSessions(user.id, req.session?.session_id);
+            newToken = (await generateToken(user.id, false, undefined, req.session)) as string;
         }
 
         if (body.username && body.username !== user.username) {
@@ -246,13 +251,16 @@ router.patch(
             select: Object.fromEntries(PrivateUserProjection.map((i) => [i, true])),
             relations: { avatar_decoration: true },
         });
-        const data = updated.toPrivateUser();
+        const data = { ...updated.toPrivateUser(), authenticator_types: await authenticatorTypes(req.user_id) };
 
         await emitEvent({
             event: "USER_UPDATE",
             user_id: req.user_id,
-            data: updated,
-        } satisfies UserUpdateEvent);
+            data,
+        } as unknown as UserUpdateEvent);
+
+        if (emailChanged && updated.email)
+            await Email.sendVerifyEmail(updated, updated.email).catch((e) => console.error(`[Email] failed to send verification email to ${updated.id}`, e));
 
         res.json(newToken ? { ...data, token: newToken } : data);
     },

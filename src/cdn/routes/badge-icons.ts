@@ -21,7 +21,7 @@ import { Router, Response, Request } from "express";
 import { fileTypeFromBuffer } from "file-type";
 import { Config } from "@spacebar/util";
 import { HTTPError } from "lambert-server/HTTPError";
-import { storage, multer, setCacheControl } from "../util";
+import { storage, multer, setCacheControl, setCacheControlNotFound, fetchUpstreamAsset } from "../util";
 
 const ALLOWED_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
 
@@ -46,8 +46,8 @@ router.get("/:badge_id", setCacheControl, async (req: Request, res: Response) =>
     const { badge_id } = req.params as { [key: string]: string };
     const path = `badge-icons/${badge_id}`;
 
-    const file = await storage.get(path);
-    if (!file) return res.redirect(`https://cdn.discordapp.com/badge-icons/${encodeURIComponent(badge_id)}`);
+    const file = (await storage.get(path)) ?? (/^[0-9a-f]{32}\.png$/.test(badge_id) ? await fetchUpstreamAsset(path, `https://cdn.discordapp.com/badge-icons/${badge_id}`) : null);
+    if (!file) return setCacheControlNotFound(req, res);
     const type = await fileTypeFromBuffer(file);
 
     res.set("Content-Type", type?.mime);

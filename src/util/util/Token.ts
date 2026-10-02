@@ -83,7 +83,7 @@ export const checkToken = (
             const decoded = out as UserTokenData["decoded"];
             if (err || !decoded) {
                 logAuth("validateUser rejected: " + err);
-                return rejectAndLog(reject, 401, "Invalid Token meow " + err);
+                return rejectAndLog(reject, 401, `Invalid Token: ${err}`);
             }
 
             // eslint-disable-next-line prefer-const
@@ -155,8 +155,14 @@ export const checkToken = (
             return resolve(result);
         };
 
-        const dec = jwt.decode(token, { complete: true });
-        if (!dec) return void rejectAndLog(reject, 500, "Failed to decode token");
+        const dec = (() => {
+            try {
+                return jwt.decode(token, { complete: true });
+            } catch {
+                return null;
+            }
+        })();
+        if (!dec) return void rejectAndLog(reject, 401, "Failed to decode token");
         logAuth("Decoded token: " + JSON.stringify(dec));
 
         let key: string | Buffer | KeyObject;
@@ -165,7 +171,7 @@ export const checkToken = (
             legacyVersion = 1;
             key = Config.get().security.jwtSecret!;
         } else if (dec.header.alg == "ES512") key = JwtKeypairManager.keypair.publicKey;
-        else return void rejectAndLog(reject, 400, "Unsupported token algorithm: " + dec.header.alg);
+        else return void rejectAndLog(reject, 401, "Unsupported token algorithm: " + dec.header.alg);
 
         const verified = verifiedTokens.get(token);
         if (verified?.key === key) return void validateUser(null, verified.decoded);
@@ -202,27 +208,30 @@ export async function generateCompactToken(id: string): Promise<string> {
     });
 }
 
-export async function generateToken(id: string, isAdminSession: boolean = false, scopes: string[] | undefined = undefined): Promise<string | undefined> {
+export async function generateToken(id: string, isAdminSession: boolean = false, scopes: string[] | undefined = undefined, existingSession?: Session): Promise<string | undefined> {
     const iat = Math.floor(Date.now() / 1000);
     const keyPair = JwtKeypairManager.keypair;
 
-    let newSession;
-    do {
-        newSession = Session.create({
-            session_id: Random.getString("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 10), // readable at a glance
-            user_id: id,
-            is_admin_session: isAdminSession,
-            client_status: {},
-            status: "offline", // will be set to online upon IDENTIFY
-            client_info: {},
-            last_seen: new Date(),
-        });
-    } while (await Session.findOne({ where: { session_id: newSession.session_id } }));
-
-    await newSession.save();
+    const session =
+        existingSession ??
+        (await (async () => {
+            let created;
+            do {
+                created = Session.create({
+                    session_id: Random.getString("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 10),
+                    user_id: id,
+                    is_admin_session: isAdminSession,
+                    client_status: {},
+                    status: "offline",
+                    client_info: {},
+                    last_seen: new Date(),
+                });
+            } while (await Session.findOne({ where: { session_id: created.session_id } }));
+            return created.save();
+        })());
 
     return new Promise((res, rej) => {
-        const payload = { id, iat, kid: keyPair.fingerprint, ver: CurrentTokenFormatVersion, did: newSession.session_id, scopes } as UserTokenData["decoded"];
+        const payload = { id, iat, kid: keyPair.fingerprint, ver: CurrentTokenFormatVersion, did: session.session_id, scopes } as UserTokenData["decoded"];
         jwt.sign(
             payload,
             keyPair.privateKey,

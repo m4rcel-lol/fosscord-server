@@ -44,5 +44,6 @@ assets/client_patches/0*-dev*.js
 assets/client_patches/00-debug.js
 server.log
 assets/collectibles.json
+assets/detectable.json
 scripts/dev/.test-bot
 extra/pion-sfu/pion-sfu

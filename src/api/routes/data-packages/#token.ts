@@ -16,23 +16,22 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { route } from "@spacebar/api/middlewares";
-import { HarvestStatus, ResponseError, createHarvest, getHarvest } from "@spacebar/api/util";
 import { Request, Response, Router } from "express";
+import { storage } from "@spacebar/cdn/util/Storage";
+import { route } from "@spacebar/api/middlewares";
+import { harvestPath, readTicket } from "@spacebar/api/util";
+import { HTTPError } from "lambert-server/HTTPError";
 
 const router = Router({ mergeParams: true });
 
-router.get("/", route({ responses: { 200: {}, 204: {} } }), async (req: Request, res: Response) => {
-    const harvest = await getHarvest(req.user_id);
-    if (!harvest) return res.sendStatus(204);
-    res.json(harvest);
-});
-
-router.post("/", route({ responses: { 200: {}, 400: { body: "APIErrorResponse" } } }), async (req: Request, res: Response) => {
-    const previous = await getHarvest(req.user_id);
-    if (previous && [HarvestStatus.QUEUED, HarvestStatus.RUNNING].includes(previous.status as HarvestStatus))
-        throw new ResponseError(400, { message: "You already have a pending data package request.", code: 0 });
-    res.json(await createHarvest(req.user_id, (req.body as { backends?: unknown })?.backends));
+router.get("/", route({ authentication: "never", responses: { 200: {}, 404: { body: "APIErrorResponse" } } }), async (req: Request, res: Response) => {
+    const decoded = readTicket<{ typ: string; uid?: string; hid?: string }>(req.params.token, "harvest");
+    if (!decoded?.uid || !decoded.hid) throw new HTTPError("Unknown data package", 404);
+    const file = await storage.get(harvestPath(decoded.uid, decoded.hid));
+    if (!file) throw new HTTPError("Unknown data package", 404);
+    res.set("Content-Type", "application/zip");
+    res.set("Content-Disposition", `attachment; filename="package-${decoded.hid}.zip"`);
+    res.send(file);
 });
 
 export default router;

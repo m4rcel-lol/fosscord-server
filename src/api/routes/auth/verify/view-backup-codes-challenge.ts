@@ -52,10 +52,10 @@ router.post(
                 },
             });
 
-        let kh: string | undefined;
-        if (Email.transporter && user.email) {
-            const key = crypto.randomBytes(4).toString("hex");
-            kh = hashKey(key);
+        const key = crypto.randomBytes(4).toString("hex");
+        const kh = hashKey(key);
+        if (!Email.transporter || !user.email) console.log(`[Email] no mail provider configured, backup codes verification key for ${user.username} (${user.id}) is ${key}`);
+        else {
             const { instanceName } = Config.get().general;
             await Email.transporter.sendMail({
                 from: Config.get().email.senderAddress || Config.get().general.correspondenceEmail || "noreply@localhost",

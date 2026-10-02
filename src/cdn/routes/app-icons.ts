@@ -21,7 +21,7 @@ import { Router, Response, Request } from "express";
 import { fileTypeFromBuffer } from "file-type";
 import { HTTPError } from "lambert-server/HTTPError";
 import { Config } from "@spacebar/util";
-import { storage, multer, setCacheControl, setCacheControlNotFound } from "../util";
+import { storage, multer, setCacheControl, setCacheControlNotFound, fetchUpstreamAsset } from "../util";
 
 // TODO: check premium and animated pfp are allowed in the config
 // TODO: generate different sizes of icon
@@ -80,7 +80,11 @@ export const getAvatar = async (req: Request, res: Response) => {
     hash = hash.split(".")[0]; // remove .file extension
     const path = `${pathPrefix}/${guild_id}/${hash}`;
 
-    const file = await storage.get(path);
+    const file =
+        (await storage.get(path)) ??
+        (/^\d{16,20}$/.test(guild_id) && /^(a_)?[0-9a-f]{32}$/.test(hash)
+            ? await fetchUpstreamAsset(path, `https://cdn.discordapp.com/app-icons/${guild_id}/${hash}.png?size=1024`)
+            : null);
     if (!file) return setCacheControlNotFound(req, res);
     const type = await fileTypeFromBuffer(file);
 

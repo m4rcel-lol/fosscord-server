@@ -19,6 +19,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { ASSETS_FOLDER } from "./Constants";
+import { Config } from "./Config";
 
 export enum CollectibleItemType {
     AVATAR_DECORATION = 0,
@@ -73,8 +74,14 @@ const REFRESH_MS = Number(process.env.COLLECTIBLES_REFRESH_HOURS || 12) * 3_600_
 let catalog: Promise<Catalog> | undefined;
 let refreshTimer: NodeJS.Timeout | undefined;
 
+const localizeCdn = (raw: string) => {
+    const cdn = Config.get().cdn.endpointPublic?.replace(/\/+$/, "");
+    if (!cdn) return raw;
+    return raw.replaceAll("https://cdn.discordapp.com/assets/content/", `${cdn}/content-assets/`).replaceAll("https://cdn.discordapp.com/media/v1/", `${cdn}/media/v1/`);
+};
+
 const parse = (raw: string): Catalog => {
-    const categories = (JSON.parse(raw) as CollectibleCategory[]).sort((a, b) => (BigInt(b.sku_id) > BigInt(a.sku_id) ? 1 : -1));
+    const categories = (JSON.parse(localizeCdn(raw)) as CollectibleCategory[]).sort((a, b) => (BigInt(b.sku_id) > BigInt(a.sku_id) ? 1 : -1));
     const products = new Map<string, CollectibleProduct>();
     const items = new Map<string, CollectibleItem>();
 
