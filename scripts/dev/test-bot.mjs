@@ -27,6 +27,8 @@ const commands = [
     { name: "defer", description: "Defers, then edits the reply and sends a followup" },
     { name: "v2", description: "Sends a Components V2 message" },
     { name: "fruit", description: "Pick a fruit with autocomplete", options: [{ type: 3, name: "name", description: "Fruit name", required: true, autocomplete: true }] },
+    { name: "selects", description: "Sends user, role, channel and mentionable select menus" },
+    { name: "upload", description: "Echoes an uploaded file", options: [{ type: 11, name: "file", description: "Any file", required: true }] },
     { name: "Wave", type: 2 },
     { name: "Quote", type: 3 },
 ];
@@ -137,6 +139,23 @@ const handlers = {
     },
     v2: (i) => respond(i, { type: 4, data: v2Message }),
     fruit: (i) => respond(i, { type: 4, data: { content: `you picked ${i.data.options[0].value}` } }),
+    selects: (i) =>
+        respond(i, {
+            type: 4,
+            data: {
+                content: "pick some things",
+                components: [
+                    { type: 1, components: [{ type: 5, custom_id: "users", placeholder: "Pick users", max_values: 3 }] },
+                    { type: 1, components: [{ type: 6, custom_id: "roles", placeholder: "Pick a role" }] },
+                    { type: 1, components: [{ type: 8, custom_id: "channels", placeholder: "Pick a channel", channel_types: [0] }] },
+                    { type: 1, components: [{ type: 7, custom_id: "mentionables", placeholder: "Pick anything" }] },
+                ],
+            },
+        }),
+    upload: (i) => {
+        const attachment = Object.values(i.data.resolved?.attachments ?? {})[0];
+        return respond(i, { type: 4, data: { content: attachment ? `got ${attachment.filename} (${attachment.size} bytes) ${attachment.url}` : "no attachment resolved" } });
+    },
     guildonly: (i) => respond(i, { type: 4, data: { content: "guild command works" } }),
     Wave: (i) => respond(i, { type: 4, data: { content: `${who(i).username} waves at <@${i.data.target_id}>` } }),
     Quote: (i) => respond(i, { type: 4, data: { content: `> ${i.data.resolved?.messages?.[i.data.target_id]?.content ?? "(missing message)"}` } }),
@@ -153,6 +172,10 @@ const onInteraction = async (i) => {
     if (i.type === 3) {
         const id = i.data.custom_id;
         if (id.startsWith("count:")) return respond(i, { type: 7, data: buttonsMessage(Number(id.split(":")[1]) + 1) });
+        if (["users", "roles", "channels", "mentionables"].includes(id)) {
+            const names = Object.values({ ...i.data.resolved?.users, ...i.data.resolved?.roles, ...i.data.resolved?.channels }).map((x) => x.username ?? x.name);
+            return respond(i, { type: 4, data: { content: `${id}: ${names.join(", ")}`, flags: 64 } });
+        }
         if (id === "select") return respond(i, { type: 4, data: { content: `you picked ${i.data.values.join(", ")}`, flags: 64 } });
         if (id === "v2press") return respond(i, { type: 4, data: { content: "v2 button pressed", flags: 64 } });
         return respond(i, { type: 6 });

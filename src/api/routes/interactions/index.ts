@@ -19,11 +19,12 @@
 import { randomBytes } from "node:crypto";
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
-import { InteractionSchema, InteractionType, ApplicationCommandType } from "@spacebar/schemas";
+import { InteractionSchema, InteractionType, ApplicationCommandType, MessageCreateCloudAttachment, PublicAttachment } from "@spacebar/schemas";
 import { route } from "@spacebar/api/middlewares";
 import { Application, ApplicationCommand, Channel, Guild, Member, Session } from "@spacebar/database";
 import { Config, DiscordApiErrors, emitEvent, getPermission, InteractionCreateEvent, pendingInteractions, Snowflake, storeInteraction } from "@spacebar/util";
 import { buildResolved, emitInteractionFailure, fetchInteractionMessage } from "@spacebar/api/util/handlers/Interaction";
+import { convertCloudAttachmentToAttachment } from "@spacebar/api/util";
 
 const router = Router({ mergeParams: true });
 
@@ -60,6 +61,20 @@ router.post("/", route({}), async (req: Request, res: Response) => {
             command = await ApplicationCommand.findOne({ where: { id: data.id as string, application_id: application.id } });
             if (!command) throw DiscordApiErrors.UNKNOWN_APPLICATION_COMMAND;
             const targetId = data.target_id as string | undefined;
+            const uploads = (data.attachments ?? []) as MessageCreateCloudAttachment[];
+            const attachments: Record<string, PublicAttachment & { id: string }> = {};
+            for (const upload of uploads) {
+                const id = Snowflake.generate();
+                const attachment = await convertCloudAttachmentToAttachment(upload, channel.id, id);
+                attachment.id = id;
+                attachments[upload.id as string] = { ...attachment.toJSON(), id };
+            }
+            const remap = (options?: { type: number; value?: unknown; options?: unknown[] }[]) =>
+                options?.forEach((o) => {
+                    if (o.type === 11 && attachments[o.value as string]) o.value = attachments[o.value as string].id;
+                    remap(o.options as never);
+                });
+            remap(data.options);
             botData = {
                 id: command.id,
                 name: command.name,
@@ -70,7 +85,9 @@ router.post("/", route({}), async (req: Request, res: Response) => {
                 resolved: await buildResolved(data.options, guildId, channel.id, {
                     users: command.type === ApplicationCommandType.USER && targetId ? [targetId] : [],
                     messages: command.type === ApplicationCommandType.MESSAGE && targetId ? [targetId] : [],
-                }),
+                }).then((resolved) =>
+                    Object.keys(attachments).length ? { ...resolved, attachments: Object.fromEntries(Object.values(attachments).map((a) => [a.id, a])) } : resolved,
+                ),
             };
             break;
         }
