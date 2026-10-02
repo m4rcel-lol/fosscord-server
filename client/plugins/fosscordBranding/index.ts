@@ -56,6 +56,13 @@ export default definePlugin({
             ],
         },
         {
+            find: 'link:"https://discord.com/accessibility"',
+            replacement: {
+                match: /link:"https:\/\/discord\.com\/accessibility"/,
+                replace: "link:location.origin",
+            },
+        },
+        {
             find: 'd:"M19.73 4.87a18.2 18.2 0 0 0-4.6-1.44',
             all: true,
             replacement: {
