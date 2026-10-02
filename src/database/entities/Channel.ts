@@ -70,6 +70,7 @@ export class Channel extends BaseClass {
 
     @Column({ nullable: true })
     @RelationId((channel: Channel) => channel.guild)
+    @Index("IDX_channels_guild_id")
     guild_id?: string;
 
     @JoinColumn({ name: "guild_id", foreignKeyConstraintName: "FK_channel_guild_id" })

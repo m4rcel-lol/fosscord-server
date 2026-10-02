@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, JoinColumn, ManyToOne } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, Index } from "typeorm";
 import { BaseClass } from "./BaseClass";
 import { Channel } from "./Channel";
 
@@ -25,6 +25,7 @@ import { Channel } from "./Channel";
 })
 export class Tag extends BaseClass {
     @Column({ type: "int8" })
+    @Index("IDX_tags_channel_id")
     channel_id: string;
 
     @JoinColumn({ name: "channel_id", foreignKeyConstraintName: "FK_tag_channel_id" })

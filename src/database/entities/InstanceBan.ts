@@ -58,11 +58,19 @@ export class InstanceBan extends BaseClass {
     @OneToOne(() => InstanceBan, { nullable: true, onDelete: "SET NULL" })
     origin_instance_ban?: InstanceBan;
 
-    static async findInstanceBans(opts: { userId?: string; ipAddress?: string; fingerprint?: string; propagateBan?: boolean }) {
+    private static matching(opts: { userId?: string; ipAddress?: string; fingerprint?: string }) {
         const optionalChecks: FindOptionsWhere<InstanceBan>[] = [{ user_id: opts.userId }];
         if (opts?.ipAddress) optionalChecks.push({ ip_address: opts.ipAddress });
         if (opts?.fingerprint) optionalChecks.push({ fingerprint: opts.fingerprint });
-        const instanceBans = await InstanceBan.find({ where: optionalChecks });
+        return optionalChecks;
+    }
+
+    static hasInstanceBans(opts: { userId?: string; ipAddress?: string; fingerprint?: string }) {
+        return InstanceBan.exists({ where: InstanceBan.matching(opts) });
+    }
+
+    static async findInstanceBans(opts: { userId?: string; ipAddress?: string; fingerprint?: string; propagateBan?: boolean }) {
+        const instanceBans = await InstanceBan.find({ where: InstanceBan.matching(opts) });
 
         const banReasons = [];
         for (const ban of instanceBans) {

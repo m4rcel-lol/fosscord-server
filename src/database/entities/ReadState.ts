@@ -43,6 +43,7 @@ export class ReadState extends BaseClass {
 
     @Column({ type: "int8" })
     @RelationId((read_state: ReadState) => read_state.user)
+    @Index("IDX_read_states_user_id")
     user_id: string;
 
     @JoinColumn({ name: "user_id", foreignKeyConstraintName: "FK_read_state_user_id" })

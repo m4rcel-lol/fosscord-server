@@ -38,7 +38,11 @@ export class Monitoring {
         return metric;
     }
 
+    private static attached = new WeakSet<Application>();
+
     public static attach(app: Application) {
+        if (Monitoring.attached.has(app)) return;
+        Monitoring.attached.add(app);
         const http_request_total = this.attachMetric(
             "spacebar_http_request_total",
             new client.Counter({
@@ -63,10 +67,7 @@ export class Monitoring {
         app.use((req, res, next) => {
             const endTimer = http_response_rate_histogram.startTimer();
             res.on("finish", () => {
-                const path = (res.locals.lambertRouteBase ?? req.baseUrl ?? "") + req.route?.path;
-                if (!req.route?.path && req.method !== "OPTIONS") {
-                    console.log("[Monitoring] Request route path was undefined? Request path:", req.path, "Request route:", req.route);
-                }
+                const path = req.route?.path ? (res.locals.lambertRouteBase ?? req.baseUrl ?? "") + req.route.path : req.method === "OPTIONS" ? "" : "unrouted";
                 endTimer({ method: req.method, path, status_code: res.statusCode });
 
                 // OPTIONS requests don't set path due to not being routed... discard unhandled ones

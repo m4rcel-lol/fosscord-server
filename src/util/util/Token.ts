@@ -61,6 +61,9 @@ function rejectAndLog(rejectFunction: (reason?: unknown) => void, httpCode: numb
     rejectFunction(new HTTPError(reason, httpCode ?? 400));
 }
 
+const VERIFIED_TOKEN_CACHE_SIZE = 10000;
+const verifiedTokens = new Map<string, { key: string | Buffer | KeyObject; decoded: UserTokenData["decoded"] }>();
+
 export const checkToken = (
     token: string,
     opts?: {
@@ -84,13 +87,14 @@ export const checkToken = (
             }
 
             // eslint-disable-next-line prefer-const
-            let [user, session] = await Promise.all([
+            let [user, session, banned] = await Promise.all([
                 User.findOne({
                     where: { id: decoded.id },
                     select: OrmUtils.keysToObject([...(opts?.select || []), "id", "bot", "disabled", "deleted", "rights", "data"]), // TODO: clean up
                     relations: !opts?.relations ? undefined : OrmUtils.keysToObject(opts.relations), // TODO: clean up
                 }),
                 decoded.did ? Session.findOne({ where: { session_id: decoded.did, user_id: decoded.id } }) : undefined,
+                InstanceBan.hasInstanceBans({ userId: decoded.id, ipAddress: opts?.ipAddress, fingerprint: opts?.fingerprint }),
             ]);
 
             if (!user) {
@@ -119,7 +123,9 @@ export const checkToken = (
                 return rejectAndLog(reject, 401, "User not found");
             }
 
-            const banReasons = await InstanceBan.findInstanceBans({ userId: user.id, ipAddress: opts?.ipAddress, fingerprint: opts?.fingerprint, propagateBan: true });
+            const banReasons = banned
+                ? await InstanceBan.findInstanceBans({ userId: user.id, ipAddress: opts?.ipAddress, fingerprint: opts?.fingerprint, propagateBan: true })
+                : [];
             if (banReasons.length > 0) {
                 logAuth("validateUser rejected: User banned for reasons: " + banReasons.join(", "));
                 return rejectAndLog(reject, 418, "Invalid Token");
@@ -153,14 +159,23 @@ export const checkToken = (
         if (!dec) return void rejectAndLog(reject, 500, "Failed to decode token");
         logAuth("Decoded token: " + JSON.stringify(dec));
 
-        if (dec.header.alg == "HS256" && dec.header.kid === "c") {
-            jwt.verify(token, compactTokenSecret(), { algorithms: ["HS256"] }, validateUser);
-        } else if (dec.header.alg == "HS256" && Config.get().security.jwtSecret !== null) {
+        let key: string | Buffer | KeyObject;
+        if (dec.header.alg == "HS256" && dec.header.kid === "c") key = compactTokenSecret();
+        else if (dec.header.alg == "HS256" && Config.get().security.jwtSecret !== null) {
             legacyVersion = 1;
-            jwt.verify(token, Config.get().security.jwtSecret!, { algorithms: ["HS256"] }, validateUser);
-        } else if (dec.header.alg == "ES512") {
-            jwt.verify(token, JwtKeypairManager.keypair.publicKey, { algorithms: ["ES512"] }, validateUser);
-        } else return void rejectAndLog(reject, 400, "Unsupported token algorithm: " + dec.header.alg);
+            key = Config.get().security.jwtSecret!;
+        } else if (dec.header.alg == "ES512") key = JwtKeypairManager.keypair.publicKey;
+        else return void rejectAndLog(reject, 400, "Unsupported token algorithm: " + dec.header.alg);
+
+        const verified = verifiedTokens.get(token);
+        if (verified?.key === key) return void validateUser(null, verified.decoded);
+        jwt.verify(token, key, { algorithms: [dec.header.alg] }, (err, out) => {
+            if (!err && out && typeof out === "object") {
+                if (verifiedTokens.size >= VERIFIED_TOKEN_CACHE_SIZE) verifiedTokens.delete(verifiedTokens.keys().next().value!);
+                verifiedTokens.set(token, { key, decoded: out as UserTokenData["decoded"] });
+            }
+            return validateUser(err, out);
+        });
     });
 
 const compactTokenSecret = () =>
