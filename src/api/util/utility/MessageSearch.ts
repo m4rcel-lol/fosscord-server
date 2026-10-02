@@ -18,7 +18,7 @@
 
 import { HTTPError } from "lambert-server/HTTPError";
 import { Brackets, In } from "typeorm";
-import { Channel, Message, Recipient } from "@spacebar/database";
+import { Channel, Message, Recipient, ThreadMember } from "@spacebar/database";
 import { FieldErrors, getPermission } from "@spacebar/util";
 
 export type MessageSearchQuery = Record<string, unknown>;
@@ -41,18 +41,27 @@ const list = (value: unknown): string[] => (value === undefined || value === nul
 const bool = (value: unknown) => (value === undefined ? undefined : value === true || value === "true");
 
 export async function getSearchableChannels(userId: string, guildId: string | undefined, channelIds: string[]) {
-    const candidates = guildId
-        ? await Channel.find({ where: { guild_id: guildId, ...(channelIds.length ? { id: In(channelIds) } : {}) }, select: { id: true, guild_id: true, nsfw: true } })
-        : (await Recipient.find({ where: { user_id: userId, ...(channelIds.length ? { channel_id: In(channelIds) } : {}) }, select: { channel_id: true } })).map(({ channel_id }) =>
-              Channel.create({ id: channel_id }),
-          );
-    const allowed = await Promise.all(
-        candidates.map(async (channel) => {
-            const permission = await getPermission(userId, guildId, channel.id);
-            return permission.has("VIEW_CHANNEL") && permission.has("READ_MESSAGE_HISTORY") ? channel : undefined;
-        }),
-    );
-    return allowed.filter((channel): channel is Channel => !!channel);
+    if (!guildId)
+        return (await Recipient.find({ where: { user_id: userId, ...(channelIds.length ? { channel_id: In(channelIds) } : {}) }, select: { channel_id: true } })).map(
+            ({ channel_id }) => Channel.create({ id: channel_id }),
+        );
+
+    const [permission, channels, threadMemberships] = await Promise.all([
+        getPermission(userId, guildId),
+        Channel.find({ where: { guild_id: guildId }, select: { id: true, guild_id: true, nsfw: true, type: true, parent_id: true, permission_overwrites: true } }),
+        ThreadMember.find({ where: { user_id: userId }, select: { id: true } }),
+    ]);
+    const joinedThreads = new Set(threadMemberships.map((x) => x.id));
+    const byId = new Map(channels.map((channel) => [channel.id, channel]));
+    const requested = channelIds.length ? new Set(channelIds) : undefined;
+    return channels.filter((channel) => {
+        if (requested && !requested.has(channel.id)) return false;
+        const source = channel.isThread() ? byId.get(channel.parent_id!) : channel;
+        if (!source) return false;
+        const perms = permission.overwriteChannel(source.permission_overwrites ?? []);
+        if (!perms.has("VIEW_CHANNEL") || !perms.has("READ_MESSAGE_HISTORY")) return false;
+        return !channel.isPrivateThread() || joinedThreads.has(channel.id) || perms.has("MANAGE_THREADS");
+    });
 }
 
 export async function searchMessages(userId: string, channels: Channel[], query: MessageSearchQuery) {

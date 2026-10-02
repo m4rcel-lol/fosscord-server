@@ -31,7 +31,7 @@ export class DmChannelDTO {
     recipients: PublicUser[];
     type: number;
 
-    static async from(channel: Channel, excluded_recipients: string[] = [], origin_channel_id?: string) {
+    static async from(channel: Channel, excluded_recipients: string[] = [], origin_channel_id?: string, knownUsers?: Map<string, User>) {
         const obj = new DmChannelDTO();
         obj.flags = channel.flags ?? 0;
         obj.icon = channel.icon || null;
@@ -42,10 +42,13 @@ export class DmChannelDTO {
         obj.owner_id = channel.owner_id;
         obj.type = channel.type;
         const ids = channel.recipients?.map((r) => r.user_id).filter((id) => !excluded_recipients.includes(id)) ?? [];
-        const users = ids.length ? await User.find({ where: { id: In(ids) }, select: Object.fromEntries(PublicUserProjection.map((i) => [i, true])) }) : [];
-        const byId = new Map(users.map((u) => [u.id, u]));
+        const byId = knownUsers ?? new Map((ids.length ? await DmChannelDTO.users(ids) : []).map((u) => [u.id, u]));
         obj.recipients = ids.flatMap((id) => byId.get(id)?.toPublicUser() ?? []);
         return obj;
+    }
+
+    static users(ids: string[]) {
+        return User.find({ where: { id: In(ids) }, select: Object.fromEntries(PublicUserProjection.map((i) => [i, true])) });
     }
 
     excludedRecipients(excluded_recipients: string[]): DmChannelDTO {
