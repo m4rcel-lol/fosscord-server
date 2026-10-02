@@ -673,7 +673,7 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword }
     const decorateBanners = (channelId: string | null) => {
         if (failure) banner("failure", "danger", failure);
         else dropBanner("failure");
-        if (!failure && engine.backupNeedsPassword && !backupPromptDismissed)
+        if (!failure && engine.backupNeedsPassword && !backupPromptDismissed && location.pathname.startsWith("/channels/"))
             banner("backup", "info", "Back up your encryption keys with your password so your other browsers can read your encrypted messages.", {
                 label: "Back up",
                 run: () => {

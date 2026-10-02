@@ -4211,7 +4211,7 @@ ${approver}`;
     const decorateBanners = (channelId) => {
       if (failure2) banner("failure", "danger", failure2);
       else dropBanner("failure");
-      if (!failure2 && engine2.backupNeedsPassword && !backupPromptDismissed)
+      if (!failure2 && engine2.backupNeedsPassword && !backupPromptDismissed && location.pathname.startsWith("/channels/"))
         banner("backup", "info", "Back up your encryption keys with your password so your other browsers can read your encrypted messages.", {
           label: "Back up",
           run: () => {
