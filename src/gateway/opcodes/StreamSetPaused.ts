@@ -1,6 +1,6 @@
 /*
 	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
-	Copyright (C) 2026 Spacebar and Spacebar Contributors
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU Affero General Public License as published
@@ -16,11 +16,13 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import "reflect-metadata";
+import { GoLiveStreams, Stream } from "@spacebar/database";
+import { parseStreamKey, Payload, WebSocket } from "@spacebar/gateway";
 
-export * from "./Database";
-export * from "./entities/index";
-
-export * from "./voice/PrivateCalls";
-export * from "./voice/VoiceChannels";
-export * from "./voice/StreamPreviews";
+export async function onStreamSetPaused(this: WebSocket, { d }: Payload) {
+    if (typeof d?.stream_key !== "string") return;
+    const { channelId, userId } = parseStreamKey(d.stream_key);
+    if (userId !== this.user_id) return;
+    const stream = await Stream.findOne({ where: { channel_id: channelId, owner_id: userId } });
+    if (stream) await GoLiveStreams.publishUpdate(stream.id, !!d.paused);
+}

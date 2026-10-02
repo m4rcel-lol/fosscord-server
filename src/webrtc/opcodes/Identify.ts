@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { StreamSession, VoiceState } from "@spacebar/database";
+import { GoLiveStreams, StreamSession, VoiceState } from "@spacebar/database";
 import { CLOSECODES } from "@spacebar/gateway";
 import { validateSchema, VoiceIdentifySchema } from "@spacebar/schemas";
 import { generateSsrc, mediaServer, Send, VoiceOPCodes, VoicePayload, WebRtcWebSocket } from "@spacebar/webrtc";
@@ -65,6 +65,7 @@ export async function onIdentify(this: WebRtcWebSocket, data: VoicePayload) {
 
             this.once("close", async () => {
                 await streamSession.remove();
+                await GoLiveStreams.publishUpdate(server_id);
             });
         }
     }
@@ -106,6 +107,8 @@ export async function onIdentify(this: WebRtcWebSocket, data: VoicePayload) {
         rtx_ssrc: generateSsrc(),
     };
     this.webRtcClient.initIncomingSSRCs(generatedSsrc);
+
+    if (type === "stream") await GoLiveStreams.publishUpdate(server_id);
 
     await Send(this, {
         op: VoiceOPCodes.READY,

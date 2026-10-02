@@ -23,6 +23,7 @@ import { Channel } from "../entities/Channel";
 import { Member } from "../entities/Member";
 import { VoiceState } from "../entities/VoiceState";
 import { PrivateCalls } from "./PrivateCalls";
+import { GoLiveStreams } from "./StreamPreviews";
 
 export class VoiceChannels {
     static async startTime(channelId: string) {
@@ -37,6 +38,7 @@ export class VoiceChannels {
 
     static async occupancyChanged(guildId: string | null | undefined, channelId: string | null | undefined, userId: string, joined: boolean) {
         if (!channelId) return;
+        if (!joined) await GoLiveStreams.end(userId);
         if (!guildId) return joined ? PrivateCalls.join(channelId, userId) : PrivateCalls.leave(channelId);
 
         const voiceStartTime = await VoiceChannels.startTime(channelId);
