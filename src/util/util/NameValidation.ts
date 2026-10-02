@@ -20,7 +20,7 @@ import { Config } from "./Config";
 import { FieldErrors } from "./FieldError";
 import { HTTPError } from "lambert-server/HTTPError";
 
-export function ValidateName(name: string) {
+export function ValidateName(name: string, minLength = 2, maxLength?: number) {
     const check_username = name.replace(/\s/g, "");
     if (!check_username) {
         throw FieldErrors({
@@ -31,12 +31,12 @@ export function ValidateName(name: string) {
         });
     }
     const general = Config.get();
-    const { maxUsername } = general.limits.user;
-    if (check_username.length > maxUsername || check_username.length < 2) {
+    const maxUsername = maxLength ?? general.limits.user.maxUsername;
+    if (check_username.length > maxUsername || check_username.length < minLength) {
         throw FieldErrors({
             username: {
                 code: "BASE_TYPE_BAD_LENGTH",
-                message: `Must be between 2 and ${maxUsername} in length.`,
+                message: `Must be between ${minLength} and ${maxUsername} in length.`,
             },
         });
     }
