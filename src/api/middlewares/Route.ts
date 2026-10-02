@@ -16,7 +16,19 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { ApiError, DiscordApiErrors, EVENT, FieldErrors, PermissionResolvable, Permissions, RightResolvable, Rights, SpacebarApiErrors, getPermission, getRights } from "@spacebar/util";
+import {
+    ApiError,
+    DiscordApiErrors,
+    EVENT,
+    FieldErrors,
+    PermissionResolvable,
+    Permissions,
+    RightResolvable,
+    Rights,
+    SpacebarApiErrors,
+    getPermission,
+    getRights,
+} from "@spacebar/util";
 import { AnyValidateFunction } from "ajv/dist/core";
 import { NextFunction, Request, Response } from "express";
 import { ajv } from "@spacebar/schemas";
@@ -137,6 +149,13 @@ export function route(opts: RouteOptions) {
     return async (req: Request, res: Response, next: NextFunction) => {
         if (opts.authentication === "required" && !req.isAuthenticated) throw new ApiError("401: Unauthorized", 0, 401);
 
+        const malformed = (["channel_id", "message_id"] as const).find((key) => {
+            const value = (req.params as Record<string, string | undefined>)[key];
+            return value !== undefined && value !== "@original" && !/^\d{1,20}$/.test(value);
+        });
+        if (malformed)
+            throw FieldErrors({ [malformed]: { code: "NUMBER_TYPE_COERCE", message: `Value "${(req.params as Record<string, string>)[malformed]}" is not snowflake.` } });
+
         if (opts.permission) {
             const { guild_id, channel_id } = req.params as { [key: string]: string };
             req.permission = await getPermission(req.user_id, guild_id, channel_id);
@@ -144,9 +163,7 @@ export function route(opts: RouteOptions) {
             const requiredPerms = Array.isArray(opts.permission) ? opts.permission : [opts.permission];
             requiredPerms.forEach((perm) => {
                 // bitfield comparison: check if user lacks certain permission
-                if (!req.permission!.has(new Permissions(perm))) {
-                    throw DiscordApiErrors.MISSING_PERMISSIONS.withParams(perm as string);
-                }
+                if (!req.permission!.has(new Permissions(perm))) throw perm === "VIEW_CHANNEL" ? DiscordApiErrors.MISSING_ACCESS : DiscordApiErrors.MISSING_PERMISSIONS;
             });
         }
 

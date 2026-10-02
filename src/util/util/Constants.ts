@@ -529,121 +529,121 @@ export const DiscordApiErrors = {
         return new ApiError("General error (such as a malformed request body, amongst other things)", 0);
     },
     get UNKNOWN_ACCOUNT() {
-        return new ApiError("Unknown account", 10001);
+        return new ApiError("Unknown account", 10001, 404);
     },
     get UNKNOWN_APPLICATION() {
-        return new ApiError("Unknown application", 10002);
+        return new ApiError("Unknown application", 10002, 404);
     },
     get UNKNOWN_CHANNEL() {
-        return new ApiError("Unknown channel", 10003);
+        return new ApiError("Unknown channel", 10003, 404);
     },
     get UNKNOWN_GUILD() {
         return new ApiError("Unknown guild", 10004, 404);
     },
     get UNKNOWN_INTEGRATION() {
-        return new ApiError("Unknown integration", 10005);
+        return new ApiError("Unknown integration", 10005, 404);
     },
     get UNKNOWN_INVITE() {
         return new ApiError("Unknown invite", 10006, 404);
     },
     get UNKNOWN_MEMBER() {
-        return new ApiError("Unknown member", 10007);
+        return new ApiError("Unknown member", 10007, 404);
     },
     get UNKNOWN_MESSAGE() {
-        return new ApiError("Unknown message", 10008);
+        return new ApiError("Unknown message", 10008, 404);
     },
     get UNKNOWN_OVERWRITE() {
-        return new ApiError("Unknown permission overwrite", 10009);
+        return new ApiError("Unknown permission overwrite", 10009, 404);
     },
     get UNKNOWN_PROVIDER() {
-        return new ApiError("Unknown provider", 10010);
+        return new ApiError("Unknown provider", 10010, 404);
     },
     get UNKNOWN_ROLE() {
-        return new ApiError("Unknown role", 10011);
+        return new ApiError("Unknown role", 10011, 404);
     },
     get UNKNOWN_TOKEN() {
-        return new ApiError("Unknown token", 10012);
+        return new ApiError("Unknown token", 10012, 404);
     },
     get UNKNOWN_USER() {
-        return new ApiError("Unknown user", 10013);
+        return new ApiError("Unknown user", 10013, 404);
     },
     get UNKNOWN_EMOJI() {
-        return new ApiError("Unknown emoji", 10014);
+        return new ApiError("Unknown emoji", 10014, 404);
     },
     get UNKNOWN_WEBHOOK() {
         return new ApiError("Unknown webhook", 10015, 404);
     },
     get UNKNOWN_WEBHOOK_SERVICE() {
-        return new ApiError("Unknown webhook service", 10016);
+        return new ApiError("Unknown webhook service", 10016, 404);
     },
     get UNKNOWN_CONNECTION() {
         return new ApiError("Unknown connection", 10017, 400);
     },
     get UNKNOWN_SESSION() {
-        return new ApiError("Unknown session", 10020);
+        return new ApiError("Unknown session", 10020, 404);
     },
     get UNKNOWN_BAN() {
-        return new ApiError("Unknown ban", 10026);
+        return new ApiError("Unknown ban", 10026, 404);
     },
     get UNKNOWN_SKU() {
-        return new ApiError("Unknown SKU", 10027);
+        return new ApiError("Unknown SKU", 10027, 404);
     },
     get UNKNOWN_STORE_LISTING() {
-        return new ApiError("Unknown Store Listing", 10028);
+        return new ApiError("Unknown Store Listing", 10028, 404);
     },
     get UNKNOWN_ENTITLEMENT() {
-        return new ApiError("Unknown entitlement", 10029);
+        return new ApiError("Unknown entitlement", 10029, 404);
     },
     get UNKNOWN_BUILD() {
-        return new ApiError("Unknown build", 10030);
+        return new ApiError("Unknown build", 10030, 404);
     },
     get UNKNOWN_LOBBY() {
-        return new ApiError("Unknown lobby", 10031);
+        return new ApiError("Unknown lobby", 10031, 404);
     },
     get UNKNOWN_BRANCH() {
-        return new ApiError("Unknown branch", 10032);
+        return new ApiError("Unknown branch", 10032, 404);
     },
     get UNKNOWN_STORE_DIRECTORY_LAYOUT() {
-        return new ApiError("Unknown store directory layout", 10033);
+        return new ApiError("Unknown store directory layout", 10033, 404);
     },
     get UNKNOWN_REDISTRIBUTABLE() {
-        return new ApiError("Unknown redistributable", 10036);
+        return new ApiError("Unknown redistributable", 10036, 404);
     },
     get UNKNOWN_GIFT_CODE() {
-        return new ApiError("Unknown gift code", 10038);
+        return new ApiError("Unknown gift code", 10038, 404);
     },
     get UNKNOWN_STREAM() {
-        return new ApiError("Unknown stream", 10049);
+        return new ApiError("Unknown stream", 10049, 404);
     },
     get UNKNOWN_PREMIUM_SERVER_SUBSCRIBE_COOLDOWN() {
-        return new ApiError("Unknown premium server subscribe cooldown", 10050);
+        return new ApiError("Unknown premium server subscribe cooldown", 10050, 404);
     },
     get UNKNOWN_GUILD_TEMPLATE() {
         return new ApiError("Unknown guild template", 10057, 404);
     },
     get UNKNOWN_DISCOVERABLE_SERVER_CATEGORY() {
-        return new ApiError("Unknown discoverable server category", 10059);
+        return new ApiError("Unknown discoverable server category", 10059, 404);
     },
     get UNKNOWN_STICKER() {
-        return new ApiError("Unknown sticker", 10060);
+        return new ApiError("Unknown sticker", 10060, 404);
     },
     get UNKNOWN_INTERACTION() {
-        return new ApiError("Unknown interaction", 10062);
+        return new ApiError("Unknown interaction", 10062, 404);
     },
     get UNKNOWN_APPLICATION_COMMAND() {
-        return new ApiError("Unknown application command", 10063);
+        return new ApiError("Unknown application command", 10063, 404);
     },
     get UNKNOWN_APPLICATION_COMMAND_PERMISSIONS() {
-        return new ApiError("Unknown application command permissions", 10066);
+        return new ApiError("Unknown application command permissions", 10066, 404);
     },
     get UNKNOWN_STAGE_INSTANCE() {
-        return new ApiError("Unknown Stage Instance", 10067);
+        return new ApiError("Unknown Stage Instance", 10067, 404);
     },
     get UNKNOWN_GUILD_MEMBER_VERIFICATION_FORM() {
-        return new ApiError("Unknown Guild Member Verification Form", 10068);
+        return new ApiError("Unknown Guild Member Verification Form", 10068, 404);
     },
     get UNKNOWN_GUILD_WELCOME_SCREEN() {
-        return new ApiError("Unknown Guild Welcome Screen", 10069);
+        return new ApiError("Unknown Guild Welcome Screen", 10069, 404);
     },
     get UNKNOWN_GUILD_SCHEDULED_EVENT() {
         return new ApiError("Unknown Guild Scheduled Event", 10070, 404);
@@ -772,7 +772,7 @@ export const DiscordApiErrors = {
         return new ApiError("An application command with that name already exists", 40041);
     },
     get MISSING_ACCESS() {
-        return new ApiError("Missing access", 50001);
+        return new ApiError("Missing Access", 50001, 403);
     },
     get INVALID_ACCOUNT_TYPE() {
         return new ApiError("Invalid account type", 50002);
@@ -784,7 +784,7 @@ export const DiscordApiErrors = {
         return new ApiError("Widget Disabled", 50004);
     },
     get CANNOT_EDIT_MESSAGE_BY_OTHER() {
-        return new ApiError("Cannot edit a message authored by another user", 50005);
+        return new ApiError("Cannot edit a message authored by another user", 50005, 403);
     },
     get CANNOT_SEND_EMPTY_MESSAGE() {
         return new ApiError("Cannot send an empty message", 50006);
@@ -808,7 +808,7 @@ export const DiscordApiErrors = {
         return new ApiError("Invalid OAuth2 state", 50012);
     },
     get MISSING_PERMISSIONS() {
-        return new ApiError("You lack permissions to perform that action ({})", 50013, undefined, [""]);
+        return new ApiError("Missing Permissions", 50013, 403);
     },
     get INVALID_AUTHENTICATION_TOKEN() {
         return new ApiError("Invalid authentication token provided", 50014);
