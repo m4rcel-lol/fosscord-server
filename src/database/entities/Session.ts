@@ -91,8 +91,7 @@ export class Session extends BaseClassWithoutId {
             approx_last_used_time: (this.last_seen ?? new Date(0)).toISOString(),
             client_info: {
                 os: this.client_info?.os,
-                platform:
-                    this.client_info?.platform + (this.client_info?.version ? ` ${this.client_info?.version}` : "") + (this.session_nickname ? ` (${this.session_nickname})` : ""),
+                platform: [this.client_info?.platform, this.client_info?.version, this.session_nickname && `(${this.session_nickname})`].filter(Boolean).join(" ") || undefined,
                 location: this.last_seen_location,
             },
         };

@@ -181,7 +181,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     if (typeof this.session.client_info === "string") this.session.client_info = JSON.parse(this.session.client_info);
     // noinspection SuspiciousTypeOfGuard - typeorm being weird
     if (typeof this.session.last_seen_location_info === "string") this.session.last_seen_location_info = JSON.parse(this.session.last_seen_location_info);
-    this.session.client_info.platform = identify.properties?.$device ?? identify.properties?.$device;
+    this.session.client_info.platform = identify.properties?.browser || identify.properties?.$browser || identify.properties?.device || identify.properties?.$device;
     this.session.client_info.os = identify.properties?.os || identify.properties?.$os;
     this.session.client_status = {};
     this.session.activities = identify.presence?.activities ?? []; // TODO: validation
