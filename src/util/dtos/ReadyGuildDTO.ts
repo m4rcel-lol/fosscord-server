@@ -85,6 +85,7 @@ export interface IReadyGuildDTO {
         max_stage_video_channel_users: 50; // TODO
         nsfw: boolean;
         id: string;
+        premium_features?: Guild["premium_features"];
     };
     roles: Role[];
     stage_instances: unknown[];
@@ -142,6 +143,7 @@ export class ReadyGuildDTO implements IReadyGuildDTO {
         max_stage_video_channel_users: 50; // TODO
         nsfw: boolean;
         id: string;
+        premium_features?: Guild["premium_features"];
     };
     roles: Role[];
     stage_instances: unknown[];
@@ -209,6 +211,7 @@ export class ReadyGuildDTO implements IReadyGuildDTO {
             max_stage_video_channel_users: 50, // TODO
             nsfw: guild.nsfw,
             safety_alerts_channel_id: null,
+            premium_features: guild.premium_features,
         };
         this.roles = guild.roles.map((x) => x.toJSON());
         this.stage_instances = [];

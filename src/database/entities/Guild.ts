@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId } from "typeorm";
+import { AfterLoad, Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId } from "typeorm";
 import { arrayRemove } from "@spacebar/extensions";
 import { Config, handleFile, Snowflake } from "@spacebar/util";
 import {
@@ -60,6 +60,20 @@ import { InviteGuild } from "@spacebar/schemas/api/guilds/Invite";
 // 		"miHoYo",
 // 		"Gacha"
 // 	],
+
+export const GuildPowerupFeatures = [
+    "ENHANCED_ROLE_COLORS",
+    "GUILD_TAGS",
+    "GUILD_TAGS_BADGE_PACK_PETS",
+    "GUILD_TAGS_BADGE_PACK_FLEX",
+    "GUILD_TAGS_BADGE_PACK_PLANT",
+    "GUILD_TAGS_BADGE_PACK_CREEPY_CRAWLIES",
+    "GUILD_THEME",
+];
+
+export const GuildBoostFeatures = ["ANIMATED_BANNER", "ANIMATED_ICON", "BANNER", "INVITE_SPLASH", "ROLE_ICONS", "VANITY_URL", ...GuildPowerupFeatures];
+
+export const GuildBoostCount = 14;
 
 export const PublicGuildRelations = [
     "channels",
@@ -316,6 +330,21 @@ export class Guild extends BaseClass {
     @Column({ default: false })
     discovery_excluded: boolean = false;
 
+    premium_features?: {
+        features: string[];
+        additional_emoji_slots: number;
+        additional_sticker_slots: number;
+        additional_sound_slots: number;
+    };
+
+    @AfterLoad()
+    applyBoostPerks() {
+        this.premium_tier = GuildPremiumTier.TIER_3;
+        this.premium_subscription_count = Math.max(this.premium_subscription_count ?? 0, GuildBoostCount);
+        this.features = [...new Set([...(this.features ?? []), ...GuildBoostFeatures])];
+        this.premium_features = { features: GuildPowerupFeatures, additional_emoji_slots: 0, additional_sticker_slots: 0, additional_sound_slots: 0 };
+    }
+
     async toDiscoverableGuild(): Promise<DiscoverableGuild | null> {
         if (!this.features.includes("DISCOVERABLE")) {
             return null;
@@ -395,8 +424,8 @@ export class Guild extends BaseClass {
             member_count: 0, // will automatically be increased by addMember()
             mfa_level: 0,
             preferred_locale: "en-US",
-            premium_subscription_count: 0,
-            premium_tier: 0,
+            premium_subscription_count: GuildBoostCount,
+            premium_tier: GuildPremiumTier.TIER_3,
             system_channel_flags: 4, // defaults effect: suppress the setup tips to save performance
             nsfw_level: 0,
             verification_level: 0,
@@ -409,7 +438,7 @@ export class Guild extends BaseClass {
             afk_timeout: Config.get().defaults.guild.afkTimeout,
             default_message_notifications: Config.get().defaults.guild.defaultMessageNotifications,
             explicit_content_filter: Config.get().defaults.guild.explicitContentFilter,
-            features: Config.get().guild.defaultFeatures,
+            features: [...new Set([...Config.get().guild.defaultFeatures, ...GuildBoostFeatures])],
             max_members: Config.get().limits.guild.maxMembers,
             max_presences: Config.get().defaults.guild.maxPresences,
             max_video_channel_users: Config.get().defaults.guild.maxVideoChannelUsers,
