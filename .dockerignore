@@ -11,6 +11,7 @@
 !scripts/clan-badges.js
 !scripts/compress-client.js
 !scripts/vencord.js
+!scripts/default-avatars.js
 !scripts/docker-configure.js
 !extra/pion-sfu
 !docker

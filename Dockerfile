@@ -28,6 +28,8 @@ COPY client client
 RUN VENCORD_DIR=/tmp/vencord node scripts/vencord.js && rm -rf /tmp/vencord
 COPY tsconfig.json ./
 COPY src src
+COPY scripts/default-avatars.js scripts/default-avatars.js
+COPY assets/icon.png assets/icon.png
 RUN npm run build:src && npm prune --omit=dev --no-audit --no-fund
 
 FROM node:26-slim AS server
