@@ -1,110 +1,236 @@
-import { ConfigEntity } from "../entities/Config";
-import fs from "fs";
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+	
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+	
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+	
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import { existsSync } from "node:fs";
+import fs from "node:fs/promises";
+import { OrmUtils } from "../imports";
 import { ConfigValue } from "../config";
+import { ConfigEntity } from "../../database/entities";
+import { JsonValue } from "@protobuf-ts/runtime";
+import { bold, red, redBright } from "picocolors";
 
 // TODO: yaml instead of json
 const overridePath = process.env.CONFIG_PATH ?? "";
 
-var config: ConfigValue;
-var pairs: ConfigEntity[];
+let config: ConfigValue;
+let pairs: ConfigEntity[];
 
 // TODO: use events to inform about config updates
 // Config keys are separated with _
 
-export const Config = {
-	init: async function init() {
-		if (config) return config;
-		console.log("[Config] Loading configuration...");
-		pairs = await ConfigEntity.find();
-		config = pairsToConfig(pairs);
-		// TODO: this overwrites existing config values with defaults.
-		// we actually want to extend the object with new keys instead.
-		// config = (config || {}).merge(new ConfigValue());
-		// Object.assign(config, new ConfigValue());
+export class Config {
+    public static async init(force: boolean = false) {
+        if (config && !force) return config;
+        console.log("[Config] Loading configuration...");
+        if (!process.env.CONFIG_PATH) {
+            if (process.env.CONFIG_SOURCE !== "database") {
+                console.log("[Config]:", redBright("Warning:"), bold("Database driven configuration has been deprecated"));
+                console.log("[Config]:", redBright("Warning:"), "Please migrate to JSON configuration by setting CONFIG_PATH=/path/to/config.json");
+                console.log("[Config]:", redBright("Warning:"), "  or set CONFIG_SOURCE=database to ignore this warning for now.");
+                console.log("[Config]:", redBright("Warning:"), "");
+                console.log("[Config]:", redBright("Warning:"), "Note that this option will be removed soon, and lack hereof will stop the server from starting!");
+            }
 
-		// If a config doesn't exist, create it.
-		if (Object.keys(config).length == 0) config = new ConfigValue();
+            pairs = await validateConfig();
+            config = pairsToConfig(pairs);
+        } else {
+            console.log(`[Config] Using CONFIG_PATH rather than database:`, process.env.CONFIG_PATH);
+            if (existsSync(process.env.CONFIG_PATH)) {
+                const file = JSON.parse((await fs.readFile(process.env.CONFIG_PATH)).toString());
+                config = file;
+            } else config = new ConfigValue();
+            pairs = generatePairs(config);
+        }
 
-		if (process.env.CONFIG_PATH) {
-			console.log(
-				`[Config] Using config path from environment rather than database.`,
-			);
-			try {
-				const overrideConfig = JSON.parse(
-					fs.readFileSync(overridePath, { encoding: "utf8" }),
-				);
-				config = overrideConfig.merge(config);
-			} catch (error) {
-				fs.writeFileSync(overridePath, JSON.stringify(config, null, 4));
-			}
-		}
+        // If a config doesn't exist, create it.
+        if (Object.keys(config).length == 0) config = new ConfigValue();
 
-		return this.set(config);
-	},
-	get: function get() {
-		if (!config) {
-			// If we haven't initialised the config yet, return default config.
-			// Typeorm instantiates each entity once when initising database,
-			// which means when we use config values as default values in entity classes,
-			// the config isn't initialised yet and would throw an error about the config being undefined.
+        config = OrmUtils.mergeDeep({}, { ...new ConfigValue() }, config);
 
-			return new ConfigValue();
-		}
+        // TODO: factor this out someday
+        if (process.env.CDN_SIGNATURE_PATH) config.security.cdnSignatureKey = await Config.readSecret("CDN_SIGNATURE_PATH");
+        if (process.env.LEGACY_JWT_SECRET_PATH) config.security.jwtSecret = await Config.readSecret("LEGACY_JWT_SECRET_PATH");
+        if (process.env.MAILJET_API_KEY_PATH) config.email.mailjet.apiKey = await Config.readSecret("MAILJET_API_KEY_PATH");
+        if (process.env.MAILJET_API_SECRET_PATH) config.email.mailjet.apiSecret = await Config.readSecret("MAILJET_API_SECRET_PATH");
+        if (process.env.SMTP_PASSWORD_PATH) config.email.smtp.password = await Config.readSecret("SMTP_PASSWORD_PATH");
+        if (process.env.GIF_API_KEY_PATH) config.gif.apiKey = await Config.readSecret("GIF_API_KEY_PATH");
+        if (process.env.RABBITMQ_HOST) config.rabbitmq.host = process.env.RABBITMQ_HOST.trim();
+        if (process.env.RABBITMQ_HOST_PATH) config.rabbitmq.host = await Config.readSecret("RABBITMQ_HOST_PATH");
+        if (process.env.ABUSEIPDB_API_KEY_PATH) config.security.abuseIpDbApiKey = await Config.readSecret("ABUSEIPDB_API_KEY_PATH");
+        if (process.env.CAPTCHA_SECRET_KEY_PATH) config.security.captcha.secret = await Config.readSecret("CAPTCHA_SECRET_KEY_PATH");
+        if (process.env.CAPTCHA_SITE_KEY_PATH) config.security.captcha.sitekey = await Config.readSecret("CAPTCHA_SITE_KEY_PATH");
+        if (process.env.IPDATA_API_KEY_PATH) config.security.ipdataApiKey = await Config.readSecret("IPDATA_API_KEY_PATH");
+        if (process.env.REQUEST_SIGNATURE_PATH) config.security.requestSignature = await Config.readSecret("REQUEST_SIGNATURE_PATH");
+        if (process.env.KLIPY_API_KEY_PATH) config.integrations.gifs.klipy.apiKeyPath = process.env.KLIPY_API_KEY_PATH;
 
-		return config;
-	},
-	set: function set(val: Partial<ConfigValue>) {
-		if (!config || !val) return;
-		config = val.merge(config);
+        await this.set(config);
+        validateFinalConfig(config);
+        return config;
+    }
 
-		return applyConfig(config);
-	},
+    private static async readSecret(name: string) {
+        process.stdout.write(`[Config] Reading secret ${name}...`);
+        const res = (await fs.readFile(process.env[name]!, "utf-8")).trim();
+        if (process.env.LOG_SECRET_VALUES) process.stdout.write(" " + res);
+        else process.stdout.write(" Done!");
+        process.stdout.write("\n");
+        return res;
+    }
+    public static get() {
+        if (!config) {
+            // If we haven't initialised the config yet, return default config.
+            // Typeorm instantiates each entity once when initialising database,
+            // which means when we use config values as default values in entity classes,
+            // the config isn't initialised yet and would throw an error about the config being undefined.
+
+            return new ConfigValue();
+        }
+
+        return config;
+    }
+    public static set(val: Partial<ConfigValue>) {
+        if (!config || !val) return;
+        config = OrmUtils.mergeDeep(config);
+
+        return applyConfig(config);
+    }
+}
+
+// TODO: better types
+const generatePairs = (obj: object | null, key = ""): ConfigEntity[] => {
+    if (typeof obj == "object" && obj != null) {
+        return Object.keys(obj)
+            .map((k) =>
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                generatePairs((obj as any)[k], key ? `${key}_${k}` : k),
+            )
+            .flat();
+    }
+
+    const ret = new ConfigEntity();
+    ret.key = key;
+    ret.value = obj;
+    return [ret];
 };
 
-function applyConfig(val: ConfigValue) {
-	async function apply(obj: any, key = ""): Promise<any> {
-		if (typeof obj === "object" && obj !== null)
-			return Promise.all(
-				Object.keys(obj).map((k) =>
-					apply(obj[k], key ? `${key}_${k}` : k),
-				),
-			);
-
-		let pair = pairs.find((x) => x.key === key);
-		if (!pair) pair = new ConfigEntity();
-
-		pair.key = key;
-		pair.value = obj;
-		return pair.save();
-	}
-
-	if (process.env.CONFIG_PATH)
-		fs.writeFileSync(overridePath, JSON.stringify(val, null, 4));
-
-	return apply(val);
+async function applyConfig(val: ConfigValue) {
+    if (process.env.CONFIG_PATH)
+        if (!process.env.CONFIG_READONLY) await fs.writeFile(overridePath, JSON.stringify(val, null, 4));
+        else console.log("[WARNING] JSON config file in use, and writing is disabled! Programmatic config changes will not be persisted, and your config will not get updated!");
+    else {
+        const pairs = generatePairs(val);
+        // keys are sorted to try to influence database order...
+        await Promise.all(pairs.sort((x, y) => (x.key > y.key ? 1 : -1)).map((pair) => pair.save()));
+    }
+    return val;
 }
 
 function pairsToConfig(pairs: ConfigEntity[]) {
-	var value: any = {};
+    // TODO: typings
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const value: any = {};
 
-	pairs.forEach((p) => {
-		const keys = p.key.split("_");
-		let obj = value;
-		let prev = "";
-		let prevObj = obj;
-		let i = 0;
+    pairs.forEach((p) => {
+        const keys = p.key.split("_");
+        let obj = value;
+        let prev = "";
+        let prevObj = obj;
+        let i = 0;
 
-		for (const key of keys) {
-			if (!isNaN(Number(key)) && !prevObj[prev]?.length)
-				prevObj[prev] = obj = [];
-			if (i++ === keys.length - 1) obj[key] = p.value;
-			else if (!obj[key]) obj[key] = {};
+        for (const key of keys) {
+            if (!isNaN(Number(key)) && !prevObj[prev]?.length) prevObj[prev] = obj = [];
+            if (i++ === keys.length - 1) obj[key] = p.value;
+            else if (!obj[key]) obj[key] = {};
 
-			prev = key;
-			prevObj = obj;
-			obj = obj[key];
-		}
-	});
+            prev = key;
+            prevObj = obj;
+            obj = obj[key];
+        }
+    });
 
-	return value as ConfigValue;
+    return value as ConfigValue;
+}
+
+const validateConfig = async () => {
+    let hasErrored = false;
+    const totalStartTime = new Date();
+    const config = await ConfigEntity.find({ select: { key: true } });
+
+    for (const row in config) {
+        // extension methods...
+        if (typeof config[row] === "function") continue;
+
+        try {
+            const found = await ConfigEntity.findOne({
+                where: { key: config[row].key },
+            });
+            if (!found) continue;
+            config[row] = found;
+        } catch (e) {
+            console.error(`Config key '${config[row].key}' has invalid JSON value : ${(e as Error)?.message}`);
+            hasErrored = true;
+        }
+    }
+
+    console.log("[Config] Total config load time:", new Date().getTime() - totalStartTime.getTime(), "ms");
+
+    if (hasErrored) {
+        console.error("[Config] Your config has invalid values. Fix them first https://docs.spacebar.chat/setup/server/configuration");
+        process.exit(1);
+    }
+
+    return config;
+};
+
+function validateFinalConfig(config: ConfigValue) {
+    let hasErrors = false;
+    function assertConfig(path: string, condition: (val: JsonValue) => boolean, recommendedValue: string) {
+        // _ to separate keys
+        const keys = path.split("_");
+        let obj: never = config as never;
+
+        for (const key of keys) {
+            if (obj == null || !(key in obj)) {
+                console.warn(`[Config] Missing config value for '${path}'. Recommended value: ${recommendedValue}`);
+                return;
+            }
+            obj = obj[key];
+        }
+
+        if (!condition(obj)) {
+            console.warn(`[Config] Invalid config value for '${path}': ${obj}. Recommended value: ${recommendedValue}`);
+            hasErrors = true;
+        }
+    }
+
+    assertConfig(
+        "general_serverName",
+        (v) => v != null,
+        'A valid domain hosting your .well-known (defaulting to https at port 443), eg. "spacebar.chat" or "http://localhost:3001"',
+    );
+    assertConfig("api_endpointPublic", (v) => v != null, 'A valid public API endpoint URL, eg. "http://localhost:3001/api/v9"');
+    assertConfig("cdn_endpointPublic", (v) => v != null, 'A valid public CDN endpoint URL, eg. "http://localhost:3003/"');
+    assertConfig("cdn_endpointPrivate", (v) => v != null, 'A valid private CDN endpoint URL, eg. "http://localhost:3003/" - must be routable from the API server!');
+    assertConfig("gateway_endpointPublic", (v) => v != null, 'A valid public gateway endpoint URL, eg. "ws://localhost:3002/"');
+
+    if (hasErrors) {
+        console.error("[Config] Your config has invalid values. Fix them first https://docs.spacebar.chat/setup/server/configuration");
+        console.error("[Config] Hint: if you're just testing with bundle (`npm run start`), you can set all endpoint URLs to [proto]://localhost:3001");
+        process.exit(1);
+    } else console.log("[Config] Configuration validated successfully.");
 }

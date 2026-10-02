@@ -1,0 +1,213 @@
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2026 Spacebar and Spacebar Contributors
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import { Request, Response, Router } from "express";
+import { HTTPError } from "lambert-server/HTTPError";
+import multer from "multer";
+import { route } from "@spacebar/api/middlewares";
+import { Webhook, Message } from "@spacebar/database";
+import { Config, DiscordApiErrors, emitEvent, handleFile, ValidateName, WebhooksUpdateEvent } from "@spacebar/util";
+import { executeWebhook } from "@spacebar/api/util/handlers/Webhook";
+import type { WebhookResponse, WebhookUpdateSchema } from "@spacebar/schemas";
+
+const router = Router({ mergeParams: true });
+
+router.get(
+    "/",
+    route({
+        description: "Returns a webhook object for the given id and token.",
+        responses: {
+            200: {
+                body: "WebhookResponse",
+            },
+            404: {},
+        },
+        authentication: "never",
+    }),
+    async (req: Request, res: Response) => {
+        const { webhook_id, webhook_token } = req.params as { [key: string]: string };
+        const webhook = await Webhook.findOne({
+            where: {
+                id: webhook_id,
+            },
+            relations: { user: true, channel: true, source_channel: true, guild: true, source_guild: true, application: true },
+        });
+
+        if (!webhook) {
+            throw DiscordApiErrors.UNKNOWN_WEBHOOK;
+        }
+
+        if (webhook.token !== webhook_token) {
+            throw DiscordApiErrors.INVALID_WEBHOOK_TOKEN_PROVIDED;
+        }
+
+        return res.json({
+            ...webhook,
+            user: webhook.user.toPartialUser(),
+            source_guild: webhook.source_guild?.toIntegrationGuild(),
+            source_channel: webhook.source_channel?.toWebhookChannel(),
+            url: Config.get().api.endpointPublic + "/webhooks/" + webhook.id + "/" + webhook.token,
+        } satisfies WebhookResponse);
+    },
+);
+
+// TODO: config max upload size
+const messageUpload = multer({
+    limits: {
+        fileSize: Config.get().limits.message.maxAttachmentSize,
+        fields: 10,
+        // files: 1
+    },
+    storage: multer.memoryStorage(),
+}); // max upload 50 mb
+
+// https://discord.com/developers/docs/resources/webhook#execute-webhook
+// TODO: Slack compatible hooks
+router.post(
+    "/",
+    messageUpload.any(),
+    (req, _res, next) => {
+        if (req.body.payload_json) {
+            req.body = JSON.parse(req.body.payload_json);
+        }
+
+        next();
+    },
+    route({
+        requestBody: "WebhookExecuteSchema",
+        stripNulls: true,
+        query: {
+            wait: {
+                type: "boolean",
+                required: false,
+                description: "waits for server confirmation of message send before response, and returns the created message body",
+            },
+            thread_id: {
+                type: "string",
+                required: false,
+                description: "Send a message to the specified thread within a webhook's channel.",
+            },
+        },
+        responses: {
+            204: {},
+            400: {
+                body: "APIErrorResponse",
+            },
+            404: {},
+        },
+        authentication: "never",
+    }),
+    executeWebhook,
+);
+
+router.delete(
+    "/",
+    route({
+        responses: {
+            204: {},
+            400: {
+                body: "APIErrorResponse",
+            },
+            404: {},
+        },
+        authentication: "never",
+    }),
+    async (req: Request, res: Response) => {
+        const { webhook_id, webhook_token } = req.params as { [key: string]: string };
+
+        const webhook = await Webhook.findOne({
+            where: {
+                id: webhook_id,
+            },
+            relations: { channel: true, guild: true, application: true },
+        });
+
+        if (!webhook) throw DiscordApiErrors.UNKNOWN_WEBHOOK;
+        if (webhook.token !== webhook_token) throw DiscordApiErrors.INVALID_WEBHOOK_TOKEN_PROVIDED;
+
+        const channel_id = webhook.channel_id;
+        await Message.delete({ channel_id, webhook_id });
+        await Webhook.delete({ id: webhook_id });
+
+        await emitEvent({
+            event: "WEBHOOKS_UPDATE",
+            channel_id,
+            data: {
+                channel_id,
+                guild_id: webhook.guild_id!, // TODO: is this even the right fix?
+            },
+        } satisfies WebhooksUpdateEvent);
+
+        res.sendStatus(204);
+    },
+);
+
+router.patch(
+    "/",
+    route({
+        requestBody: "WebhookUpdateSchema",
+        responses: {
+            200: {},
+            400: {
+                body: "APIErrorResponse",
+            },
+            403: {},
+            404: {},
+        },
+        authentication: "never",
+    }),
+    async (req: Request, res: Response) => {
+        const { webhook_id, webhook_token } = req.params as { [key: string]: string };
+        const body = req.body as WebhookUpdateSchema;
+
+        const webhook = await Webhook.findOne({
+            where: { id: webhook_id },
+            relations: { user: true, channel: true, source_channel: true, guild: true, source_guild: true, application: true },
+        });
+
+        if (!webhook) throw DiscordApiErrors.UNKNOWN_WEBHOOK;
+        if (webhook.token != webhook_token) throw DiscordApiErrors.INVALID_WEBHOOK_TOKEN_PROVIDED;
+
+        const channel_id = webhook.channel_id;
+        if (!body.name && !body.avatar) {
+            throw new HTTPError("Empty webhook updates are not allowed", 50006);
+        }
+        if (body.avatar) body.avatar = await handleFile(`/avatars/${webhook_id}`, body.avatar as string);
+
+        if (body.name) {
+            ValidateName(body.name);
+        }
+
+        webhook.assign(body);
+
+        await Promise.all([
+            webhook.save(),
+            emitEvent({
+                event: "WEBHOOKS_UPDATE",
+                channel_id,
+                data: {
+                    channel_id,
+                    guild_id: webhook.guild_id!, //TODO: is this even the right fix?
+                },
+            } satisfies WebhooksUpdateEvent),
+        ]);
+        res.status(204);
+    },
+);
+
+export default router;

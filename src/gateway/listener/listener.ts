@@ -1,21 +1,28 @@
-import {
-	getPermission,
-	Permissions,
-	RabbitMQ,
-	listenEvent,
-	EventOpts,
-	ListenEventOpts,
-	Member,
-	EVENTEnum,
-	Relationship,
-	RelationshipType,
-} from "@fosscord/util";
-import { OPCODES } from "../util/Constants";
-import { Send } from "../util/Send";
-import { WebSocket } from "@fosscord/gateway";
-import "missing-native-js-functions";
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
 import { Channel as AMQChannel } from "amqplib";
-import { Recipient } from "@fosscord/util";
+import { bgRedBright } from "picocolors";
+import { Ban, Member, Message, Recipient, Relationship } from "@spacebar/database";
+import { EVENTEnum, EventOpts, getPermission, listenEvent, ListenEventOpts, NewUrlUserSignatureData, Permissions, RabbitMQ } from "@spacebar/util";
+import { WebSocket } from "@spacebar/gateway";
+import { PublicMember, RelationshipType } from "@spacebar/schemas";
+import { CLOSECODES, OPCODES, Send } from "../util";
 
 // TODO: close connection on Invalidated Token
 // TODO: check intent
@@ -24,229 +31,357 @@ import { Recipient } from "@fosscord/util";
 // Sharding: calculate if the current shard id matches the formula: shard_id = (guild_id >> 22) % num_shards
 // https://discord.com/developers/docs/topics/gateway#sharding
 
-export function handlePresenceUpdate(
-	this: WebSocket,
-	{ event, acknowledge, data }: EventOpts,
-) {
-	acknowledge?.();
-	if (event === EVENTEnum.PresenceUpdate) {
-		return Send(this, {
-			op: OPCODES.Dispatch,
-			t: event,
-			d: data,
-			s: this.sequence++,
-		});
-	}
+export function handlePresenceUpdate(this: WebSocket, { event, acknowledge, data }: EventOpts) {
+    acknowledge?.();
+    if (event === EVENTEnum.PresenceUpdate) {
+        return Send(this, {
+            op: OPCODES.Dispatch,
+            t: event,
+            d: data,
+            s: this.sequence++,
+        });
+    }
 }
 
 // TODO: use already queried guilds/channels of Identify and don't fetch them again
 export async function setupListener(this: WebSocket) {
-	const [members, recipients, relationships] = await Promise.all([
-		Member.find({
-			where: { id: this.user_id },
-			relations: ["guild", "guild.channels"],
-		}),
-		Recipient.find({
-			where: { user_id: this.user_id, closed: false },
-			relations: ["channel"],
-		}),
-		Relationship.find({
-			where: {
-				from_id: this.user_id,
-				type: RelationshipType.friends,
-			},
-		}),
-	]);
+    const [members, recipients, relationships] = await Promise.all([
+        Member.find({
+            where: { id: this.user_id },
+            relations: { guild: { channels: true } },
+        }),
+        Recipient.find({
+            where: { user_id: this.user_id, closed: false },
+            relations: { channel: true },
+        }),
+        Relationship.find({
+            where: {
+                from_id: this.user_id,
+                type: RelationshipType.FRIEND,
+            },
+        }),
+    ]);
 
-	const guilds = members.map((x) => x.guild);
-	const dm_channels = recipients.map((x) => x.channel);
+    const guilds = members.map((x) => x.guild);
+    const dm_channels = recipients.map((x) => x.channel);
 
-	const opts: { acknowledge: boolean; channel?: AMQChannel } = {
-		acknowledge: true,
-	};
-	this.listen_options = opts;
-	const consumer = consume.bind(this);
+    const opts: {
+        acknowledge: boolean;
+        channel?: AMQChannel & { queues?: unknown; ch?: number };
+    } = {
+        acknowledge: true,
+    };
+    this.listen_options = opts;
+    const consumer = consume.bind(this);
 
-	if (RabbitMQ.connection) {
-		opts.channel = await RabbitMQ.connection.createChannel();
-		// @ts-ignore
-		opts.channel.queues = {};
-	}
+    const handleChannelError = (err: unknown) => {
+        console.error(`[RabbitMQ] [user-${this.user_id}] Channel Error (Handled):`, err);
+    };
 
-	this.events[this.user_id] = await listenEvent(this.user_id, consumer, opts);
+    // Function to set up all event listeners (used for initial setup and reconnection)
+    const setupEventListeners = async () => {
+        if (RabbitMQ.connection) {
+            console.log(`[RabbitMQ] [user-${this.user_id}] Setting up channel and event listeners`);
+            opts.channel = await RabbitMQ.connection.createChannel();
 
-	relationships.forEach(async (relationship) => {
-		this.events[relationship.to_id] = await listenEvent(
-			relationship.to_id,
-			handlePresenceUpdate.bind(this),
-			opts,
-		);
-	});
+            opts.channel.on("error", handleChannelError);
+            opts.channel.queues = {};
+            console.log("[RabbitMQ] channel created: ", typeof opts.channel, "with channel id", opts.channel?.ch);
+        }
 
-	dm_channels.forEach(async (channel) => {
-		this.events[channel.id] = await listenEvent(channel.id, consumer, opts);
-	});
+        this.events[this.user_id] = await listenEvent(this.user_id, consumer, opts);
+        this.events[this.session_id] = await listenEvent(this.session_id, consumer, opts);
 
-	guilds.forEach(async (guild) => {
-		const permission = await getPermission(this.user_id, guild.id);
-		this.permissions[guild.id] = permission;
-		this.events[guild.id] = await listenEvent(guild.id, consumer, opts);
+        await Promise.all(
+            relationships.map(async (relationship) => {
+                this.events[relationship.to_id] = await listenEvent(relationship.to_id, handlePresenceUpdate.bind(this), opts);
+            }),
+        );
 
-		guild.channels.forEach(async (channel) => {
-			if (
-				permission
-					.overwriteChannel(channel.permission_overwrites!)
-					.has("VIEW_CHANNEL")
-			) {
-				this.events[channel.id] = await listenEvent(
-					channel.id,
-					consumer,
-					opts,
-				);
-			}
-		});
-	});
+        await Promise.all(
+            dm_channels.map(async (channel) => {
+                this.events[channel.id] = await listenEvent(channel.id, consumer, opts);
+            }),
+        );
 
-	this.once("close", () => {
-		if (opts.channel) opts.channel.close();
-		else {
-			Object.values(this.events).forEach((x) => x());
-			Object.values(this.member_events).forEach((x) => x());
-		}
-	});
+        await Promise.all(
+            guilds.map(async (guild) => {
+                const permission = await getPermission(this.user_id, guild.id);
+                this.permissions[guild.id] = permission;
+                this.events[guild.id] = await listenEvent(guild.id, consumer, opts);
+
+                await Promise.all(
+                    guild.channels.map(async (channel) => {
+                        if (permission.overwriteChannel(channel.permission_overwrites ?? []).has("VIEW_CHANNEL")) {
+                            this.events[channel.id] = await listenEvent(channel.id, consumer, opts);
+                        }
+                    }),
+                );
+            }),
+        );
+    };
+
+    // Initial setup
+    await setupEventListeners();
+
+    // Handle RabbitMQ reconnection - re-establish all subscriptions
+    const handleReconnect = async () => {
+        console.log(`[RabbitMQ] [user-${this.user_id}] Connection restored, re-establishing subscriptions`);
+        try {
+            // Clear old event handlers (they're now invalid)
+            this.events = {};
+            this.member_events = {};
+            opts.channel = undefined;
+
+            // re-establish all subscriptions
+            await setupEventListeners();
+            console.log(`[RabbitMQ] [user-${this.user_id}] Successfully re-established subscriptions`);
+        } catch (e) {
+            console.error(`[RabbitMQ] [user-${this.user_id}] Failed to re-establish subscriptions:`, e);
+            // close the WebSocket - will force client to reconnect and redo subscription setup
+            this.close(4000, "Failed to re-establish event subscriptions");
+        }
+    };
+
+    const handleDisconnect = () => {
+        console.log(`[RabbitMQ] [user-${this.user_id}] Connection lost, waiting for reconnection`);
+        // mark channel invalid
+        if (opts.channel) {
+            opts.channel.off("error", handleChannelError);
+        }
+        opts.channel = undefined;
+    };
+
+    // Subscribe to RabbitMQ connection events
+    RabbitMQ.on("reconnected", handleReconnect);
+    RabbitMQ.on("disconnected", handleDisconnect);
+
+    this.once("close", async () => {
+        // Unsubscribe from RabbitMQ events
+        RabbitMQ.off("reconnected", handleReconnect);
+        RabbitMQ.off("disconnected", handleDisconnect);
+
+        // wait for event consumer cancellation
+        await Promise.all(
+            Object.values(this.events).map((x) => {
+                if (x) return x();
+                else return Promise.resolve();
+            }),
+        );
+        await Promise.all(Object.values(this.member_events).map((x) => x()));
+
+        if (opts.channel) {
+            try {
+                await opts.channel.close();
+            } catch {
+                // Channel might already be closed
+            }
+            opts.channel.off("error", handleChannelError);
+        }
+    });
 }
 
 // TODO: only subscribe for events that are in the connection intents
 async function consume(this: WebSocket, opts: EventOpts) {
-	const { data, event } = opts;
-	let id = data.id as string;
-	const permission = this.permissions[id] || new Permissions("ADMINISTRATOR"); // default permission for dm
+    const { data, event } = opts;
+    const id = (opts.guild_id || opts.channel_id || opts.user_id || opts.session_id) as string;
+    const permission = this.permissions[id] || new Permissions("ADMINISTRATOR"); // default permission for dm
 
-	const consumer = consume.bind(this);
-	const listenOpts = opts as ListenEventOpts;
-	opts.acknowledge?.();
-	// console.log("event", event);
+    const consumer = consume.bind(this);
+    const listenOpts = opts as ListenEventOpts;
+    opts.acknowledge?.();
+    // console.log("event", event);
 
-	// subscription managment
-	switch (event) {
-		case "GUILD_MEMBER_REMOVE":
-			this.member_events[data.user.id]?.();
-			delete this.member_events[data.user.id];
-		case "GUILD_MEMBER_ADD":
-			if (this.member_events[data.user.id]) break; // already subscribed
-			this.member_events[data.user.id] = await listenEvent(
-				data.user.id,
-				handlePresenceUpdate.bind(this),
-				this.listen_options,
-			);
-			break;
-		case "GUILD_MEMBER_REMOVE":
-			if (!this.member_events[data.user.id]) break;
-			this.member_events[data.user.id]();
-			break;
-		case "RELATIONSHIP_REMOVE":
-		case "CHANNEL_DELETE":
-		case "GUILD_DELETE":
-			delete this.events[id];
-			opts.cancel();
-			break;
-		case "CHANNEL_CREATE":
-			if (
-				!permission
-					.overwriteChannel(data.permission_overwrites)
-					.has("VIEW_CHANNEL")
-			) {
-				return;
-			}
-			this.events[id] = await listenEvent(id, consumer, listenOpts);
-			break;
-		case "RELATIONSHIP_ADD":
-			this.events[data.user.id] = await listenEvent(
-				data.user.id,
-				handlePresenceUpdate.bind(this),
-				this.listen_options,
-			);
-			break;
-		case "GUILD_CREATE":
-			this.events[id] = await listenEvent(id, consumer, listenOpts);
-			break;
-		case "CHANNEL_UPDATE":
-			const exists = this.events[id];
-			// @ts-ignore
-			if (
-				permission
-					.overwriteChannel(data.permission_overwrites)
-					.has("VIEW_CHANNEL")
-			) {
-				if (exists) break;
-				this.events[id] = await listenEvent(id, consumer, listenOpts);
-			} else {
-				if (!exists) return; // return -> do not send channel update events for hidden channels
-				opts.cancel(id);
-				delete this.events[id];
-			}
-			break;
-	}
+    // deduplicate gateway messages
+    if (opts.transaction_id) {
+        if (this.recentTransactions.includes(opts.transaction_id)) return;
+        this.recentTransactions.push(opts.transaction_id);
+        if (this.recentTransactions.length > 100) this.recentTransactions = this.recentTransactions.slice(1);
+    }
 
-	// permission checking
-	switch (event) {
-		case "INVITE_CREATE":
-		case "INVITE_DELETE":
-		case "GUILD_INTEGRATIONS_UPDATE":
-			if (!permission.has("MANAGE_GUILD")) return;
-			break;
-		case "WEBHOOKS_UPDATE":
-			if (!permission.has("MANAGE_WEBHOOKS")) return;
-			break;
-		case "GUILD_MEMBER_ADD":
-		case "GUILD_MEMBER_REMOVE":
-		case "GUILD_MEMBER_UPDATE":
-		// only send them, if the user subscribed for this part of the member list, or is a bot
-		case "PRESENCE_UPDATE": // exception if user is friend
-			break;
-		case "GUILD_BAN_ADD":
-		case "GUILD_BAN_REMOVE":
-			if (!permission.has("BAN_MEMBERS")) return;
-			break;
-		case "VOICE_STATE_UPDATE":
-		case "MESSAGE_CREATE":
-		case "MESSAGE_DELETE":
-		case "MESSAGE_DELETE_BULK":
-		case "MESSAGE_UPDATE":
-		case "CHANNEL_PINS_UPDATE":
-		case "MESSAGE_REACTION_ADD":
-		case "MESSAGE_REACTION_REMOVE":
-		case "MESSAGE_REACTION_REMOVE_ALL":
-		case "MESSAGE_REACTION_REMOVE_EMOJI":
-		case "TYPING_START":
-			// only gets send if the user is alowed to view the current channel
-			if (!permission.has("VIEW_CHANNEL")) return;
-			break;
-		case "GUILD_CREATE":
-		case "GUILD_DELETE":
-		case "GUILD_UPDATE":
-		case "GUILD_ROLE_CREATE":
-		case "GUILD_ROLE_UPDATE":
-		case "GUILD_ROLE_DELETE":
-		case "CHANNEL_CREATE":
-		case "CHANNEL_DELETE":
-		case "CHANNEL_UPDATE":
-		case "GUILD_EMOJIS_UPDATE":
-		case "READY": // will be sent by the gateway
-		case "USER_UPDATE":
-		case "APPLICATION_COMMAND_CREATE":
-		case "APPLICATION_COMMAND_DELETE":
-		case "APPLICATION_COMMAND_UPDATE":
-		default:
-			// always gets sent
-			// Any events not defined in an intent are considered "passthrough" and will always be sent
-			break;
-	}
+    // special codes
+    switch (event) {
+        case "SB_SESSION_CLOSE":
+            // TODO: what do we even send here?
+            await Send(this, {
+                op: OPCODES.Reconnect,
+                s: this.sequence++,
+                d: opts.reconnect_delay ?? opts.data ?? 1000,
+            });
+            this.close(1000); // not a discord close code, standard WS "Normal Closure"
+            return;
+        case "SB_SESSION_REMOVE":
+            // TODO: what do we even send here?
+            await Send(this, {
+                op: OPCODES.Invalid_Session,
+                s: this.sequence++,
+            });
+            this.close(CLOSECODES.Invalid_session); // TODO: this is deprecated?
+            return;
+        default:
+            // no special treatment
+            break;
+    }
 
-	await Send(this, {
-		op: OPCODES.Dispatch,
-		t: event,
-		d: data,
-		s: this.sequence++,
-	});
+    // subscription managment
+    switch (event) {
+        case "GUILD_MEMBER_REMOVE":
+            this.member_events[data.user.id]?.();
+            delete this.member_events[data.user.id];
+            break;
+        case "GUILD_MEMBER_ADD":
+            if (this.member_events[data.user.id]) break; // already subscribed
+            this.member_events[data.user.id] = await listenEvent(data.user.id, handlePresenceUpdate.bind(this), this.listen_options);
+            break;
+        case "GUILD_MEMBER_UPDATE":
+            if (!this.member_events[data.user.id]) break;
+            await this.member_events[data.user.id]();
+            break;
+        case "RELATIONSHIP_REMOVE":
+        case "CHANNEL_DELETE":
+        case "GUILD_DELETE":
+            this.events[id]?.();
+            delete this.events[id];
+            if (event === "GUILD_DELETE" && this.ipAddress) {
+                const ban = await Ban.findOne({
+                    where: { guild_id: id, user_id: this.user_id },
+                });
+
+                if (ban) {
+                    ban.ip = this.ipAddress || undefined;
+                    await ban.save();
+                }
+            }
+            break;
+        case "CHANNEL_CREATE":
+            if (!permission.overwriteChannel(data.permission_overwrites).has("VIEW_CHANNEL")) return;
+            this.events[id] = await listenEvent(id, consumer, listenOpts);
+            break;
+        case "RELATIONSHIP_ADD":
+            this.events[data.user.id] = await listenEvent(data.user.id, handlePresenceUpdate.bind(this), this.listen_options);
+            break;
+        case "GUILD_CREATE":
+            await Promise.all([
+                ...data.channels.map(async ({ id }: { id: string }) => {
+                    this.events[id] = await listenEvent(id, consumer, listenOpts);
+                }),
+                listenEvent(id, consumer, listenOpts).then((ret) => (this.events[id] = ret)),
+            ]);
+            break;
+        case "CHANNEL_UPDATE": {
+            const exists = this.events[id];
+            if (permission.overwriteChannel(data.permission_overwrites).has("VIEW_CHANNEL")) {
+                if (exists) break;
+                this.events[id] = await listenEvent(id, consumer, listenOpts);
+            } else {
+                if (!exists) return; // return -> do not send channel update events for hidden channels
+                opts.cancel(id);
+                delete this.events[id];
+            }
+            break;
+        }
+        default:
+            // no special treatment
+            break;
+    }
+
+    // permission checking
+    switch (event) {
+        case "INVITE_CREATE":
+        case "INVITE_DELETE":
+        case "GUILD_INTEGRATIONS_UPDATE":
+            if (!permission.has("MANAGE_GUILD")) return;
+            break;
+        case "WEBHOOKS_UPDATE":
+            if (!permission.has("MANAGE_WEBHOOKS")) return;
+            break;
+        case "GUILD_MEMBER_ADD":
+        case "GUILD_MEMBER_REMOVE":
+        case "GUILD_MEMBER_UPDATE": // only send them, if the user subscribed for this part of the member list, or is a bot
+        case "PRESENCE_UPDATE": // exception if user is friend
+            break;
+        case "GUILD_BAN_ADD":
+        case "GUILD_BAN_REMOVE":
+            if (!permission.has("BAN_MEMBERS")) return;
+            break;
+        case "VOICE_STATE_UPDATE":
+        case "MESSAGE_CREATE":
+        case "MESSAGE_DELETE":
+        case "MESSAGE_DELETE_BULK":
+        case "MESSAGE_UPDATE":
+        case "CHANNEL_PINS_UPDATE":
+        case "MESSAGE_REACTION_ADD":
+        case "MESSAGE_REACTION_REMOVE":
+        case "MESSAGE_REACTION_REMOVE_ALL":
+        case "MESSAGE_REACTION_REMOVE_EMOJI":
+        case "TYPING_START":
+            // only gets send if the user is alowed to view the current channel
+            if (!permission.has("VIEW_CHANNEL")) return;
+            break;
+        case "GUILD_CREATE":
+        case "GUILD_DELETE":
+        case "GUILD_UPDATE":
+        case "GUILD_ROLE_CREATE":
+        case "GUILD_ROLE_UPDATE":
+        case "GUILD_ROLE_DELETE":
+        case "CHANNEL_CREATE":
+        case "CHANNEL_DELETE":
+        case "CHANNEL_UPDATE":
+        case "GUILD_EMOJIS_UPDATE":
+        case "READY": // will be sent by the gateway
+        case "USER_UPDATE":
+        case "APPLICATION_COMMAND_CREATE":
+        case "APPLICATION_COMMAND_DELETE":
+        case "APPLICATION_COMMAND_UPDATE":
+        default:
+            // always gets sent
+            // Any events not defined in an intent are considered "passthrough" and will always be sent
+            break;
+    }
+
+    // data rewrites, e.g. signed attachment URLs
+    switch (event) {
+        case "MESSAGE_CREATE":
+        case "MESSAGE_UPDATE":
+            // console.log(this.request)
+            if (data["attachments"])
+                data["attachments"] = Message.prototype.withSignedAttachments.call(
+                    data,
+                    new NewUrlUserSignatureData({
+                        ip: this.ipAddress,
+                        userAgent: this.userAgent,
+                    }),
+                ).attachments;
+            if (data["components"]) {
+                data["components"] = Message.prototype.withSignedAttachments.call(
+                    data,
+                    new NewUrlUserSignatureData({
+                        ip: this.ipAddress,
+                        userAgent: this.userAgent,
+                    }),
+                ).components;
+            }
+            break;
+        default:
+            break;
+    }
+
+    if (event === "GUILD_MEMBER_ADD") {
+        if ((data as PublicMember).roles === undefined || (data as PublicMember).roles === null) {
+            console.log(
+                bgRedBright(`[Gateway/${this.user_id}]`),
+                "[GUILD_MEMBER_ADD] roles is undefined, setting to empty array!",
+                opts.origin ?? "(Event origin not defined)",
+                data,
+            );
+            (data as PublicMember).roles = [];
+        }
+    }
+
+    await Send(this, {
+        op: OPCODES.Dispatch,
+        t: event,
+        d: data,
+        s: this.sequence++,
+    });
 }

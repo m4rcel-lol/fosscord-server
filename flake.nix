@@ -1,0 +1,137 @@
+{
+  description = "Spacebar server, written in Typescript.";
+
+  nixConfig = {
+    extra-substituters = [
+      "https://nix-bincache.rory.gay"
+    ];
+    extra-trusted-public-keys = [
+      "nix-bincache.rory.gay:663PIW8xxgIImxLcsokODWI2PHFWXvzJEfjX6TaIjxQ="
+    ];
+  };
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/master"; # temp hack because unstable is frozen
+    flake-utils.url = "github:numtide/flake-utils";
+    pion-webrtc = {
+      url = "github:spacebarchat/pion-webrtc";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
+    };
+  };
+
+  outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+      pion-webrtc,
+    }:
+    nixpkgs.lib.recursiveUpdate
+      (
+        let
+          rVersion =
+            let
+              rev = self.sourceInfo.shortRev or self.sourceInfo.dirtyShortRev;
+              date = builtins.substring 0 8 self.sourceInfo.lastModifiedDate;
+              time = builtins.substring 8 6 self.sourceInfo.lastModifiedDate;
+            in
+            "preview.${date}-${time}"; # +${rev}";
+        in
+        flake-utils.lib.eachSystem flake-utils.lib.allSystems (
+          system:
+          let
+            pkgs = import nixpkgs {
+              inherit system;
+            };
+            lib = pkgs.lib;
+          in
+          {
+            packages = {
+              default = (pkgs.callPackage (import ./default.nix { inherit self rVersion; })) { };
+              nodeModules = (pkgs.callPackage ./node-modules.nix) { };
+              pion-sfu = pion-webrtc.packages.${system}.default;
+            };
+
+            containers = {
+              docker = {
+                default = pkgs.dockerTools.buildLayeredImage {
+                  name = "spacebar-server-ts";
+                  tag = builtins.replaceStrings [ "+" ] [ "_" ] self.packages.${system}.default.version;
+                  contents = [
+                    self.packages.${system}.default
+                    pkgs.dockerTools.binSh
+                    pkgs.dockerTools.usrBinEnv
+                    pkgs.dockerTools.caCertificates
+                  ];
+                  config = {
+                    Cmd = [ "${self.outputs.packages.${system}.default}/bin/start-bundle" ];
+                    WorkingDir = "/data";
+                    Env = [
+                      "PORT=3001"
+                    ];
+                    Expose = [ "3001" ];
+                  };
+                };
+              }
+              // lib.genAttrs [ "api" "cdn" "gateway" "webrtc" ] (
+                mod:
+                pkgs.dockerTools.buildLayeredImage {
+                  name = "spacebar-server-ts-${mod}";
+                  tag = builtins.replaceStrings [ "+" ] [ "_" ] self.packages.${system}.default.version;
+                  contents = [
+                    self.packages.${system}.default
+                    pkgs.dockerTools.binSh
+                    pkgs.dockerTools.usrBinEnv
+                    pkgs.dockerTools.caCertificates
+                  ];
+                  config = {
+                    Cmd = [ "${self.outputs.packages.${system}.default}/bin/start-${mod}" ];
+                    WorkingDir = "/data";
+                    Env = [
+                      "PORT=3001"
+                    ];
+                    Expose = [ "3001" ];
+                  };
+                }
+              );
+            };
+
+            devShells.default = pkgs.mkShell {
+              buildInputs = with pkgs; [
+                nodejs_24
+                typescript
+                patch-package
+                prettier
+                (pkgs.python3.withPackages (ps: with ps; [ setuptools ]))
+              ];
+            };
+          }
+        )
+        // {
+          nixosModules.default = import ./nix/modules/default self;
+          nixosConfigurations.testVm = import ./nix/testVm/default.nix { inherit self nixpkgs; };
+          checks =
+            let
+              pkgs = import nixpkgs { system = "x86_64-linux"; };
+              lib = pkgs.lib;
+            in
+            lib.recursiveUpdate (lib.attrsets.unionOfDisjoint { } self.packages) {
+              x86_64-linux = {
+                spacebar-server-tests = self.packages.x86_64-linux.default.passthru.tests;
+              }
+              // (lib.listToAttrs (
+                lib.mapAttrsToList (name: container: {
+                  name = "docker-${name}";
+                  value = container;
+                }) self.containers.x86_64-linux.docker
+              ));
+            };
+        }
+      )
+      (
+        import ./extra/admin-api/outputs.nix {
+          inherit self nixpkgs flake-utils;
+        }
+      );
+}

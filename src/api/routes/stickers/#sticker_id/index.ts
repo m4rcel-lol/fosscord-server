@@ -1,12 +1,56 @@
-import { Sticker } from "@fosscord/util";
-import { Router, Request, Response } from "express";
-import { route } from "@fosscord/api";
-const router = Router();
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+	
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+	
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+	
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
 
-router.get("/", route({}), async (req: Request, res: Response) => {
-	const { sticker_id } = req.params;
+import { Request, Response, Router } from "express";
+import { route } from "@spacebar/api/middlewares";
+import { Sticker } from "@spacebar/database";
 
-	res.json(await Sticker.find({ where: { id: sticker_id } }));
-});
+const router = Router({ mergeParams: true });
+
+router.get(
+    "/",
+    route({
+        responses: {
+            200: {
+                body: "Sticker",
+            },
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const { sticker_id } = req.params as { [key: string]: string };
+
+        res.json(await Sticker.findOne({ where: { id: sticker_id } }));
+    },
+);
+router.get(
+    "/guild",
+    route({
+        responses: {
+            200: {
+                body: "Sticker",
+            },
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const { sticker_id } = req.params as { [key: string]: string };
+        const sticker = await Sticker.findOne({ where: { id: sticker_id }, relations: { guild: true } });
+        res.json(await sticker?.guild?.toDiscoverableGuild());
+    },
+);
 
 export default router;

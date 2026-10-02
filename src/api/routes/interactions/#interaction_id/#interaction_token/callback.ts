@@ -1,0 +1,204 @@
+/*
+  Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+  Copyright (C) 2023 Spacebar and Spacebar Contributors
+  
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published
+  by the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+  
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU Affero General Public License for more details.
+  
+  You should have received a copy of the GNU Affero General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import { Request, Response, Router } from "express";
+import { HTTPError } from "lambert-server/HTTPError";
+import { handleComps, sendMessage } from "@spacebar/api/util";
+import { route } from "@spacebar/api/middlewares";
+import { Message, User } from "@spacebar/database";
+import { InteractionCallbacksSchema, InteractionCallbackType, InteractionFailureReason, MessageType } from "@spacebar/schemas";
+import { Config, emitEvent, InteractionSuccessEvent, MessageUpdateEvent, pendingInteractions, InteractionFailureEvent } from "@spacebar/util";
+
+const router = Router({ mergeParams: true });
+
+router.post(
+    "/",
+    route({
+        stripNulls: true,
+        requestBody: "InteractionCallbacksSchema",
+        authentication: "never",
+    }),
+    async (req: Request, res: Response) => {
+        const body = req.body as InteractionCallbacksSchema;
+
+        const interactionId = req.params.interaction_id as string;
+        const interaction = pendingInteractions.get(req.params.interaction_id);
+
+        if (!interaction) {
+            return;
+        }
+
+        clearTimeout(interaction.timeout);
+
+        await emitEvent({
+            event: "INTERACTION_SUCCESS",
+            user_id: interaction?.userId,
+            data: {
+                id: interactionId,
+                nonce: interaction.nonce ?? "", // TODO: did i do this right?
+            },
+        } satisfies InteractionSuccessEvent);
+
+        switch (body.type) {
+            case InteractionCallbackType.PONG:
+                // TODO
+                break;
+            case InteractionCallbackType.ACKNOWLEDGE:
+                // Deprected
+                break;
+            case InteractionCallbackType.CHANNEL_MESSAGE:
+                // TODO
+                break;
+            case InteractionCallbackType.CHANNEL_MESSAGE_WITH_SOURCE: {
+                const user = await User.findOneOrFail({ where: { id: interaction.userId } });
+                /*
+			const files = (req.files as Express.Multer.File[]) ?? [];
+			//I don't think traditional attachments are allowed anyways
+			const attachments: (Attachment | MessageCreateAttachment | MessageCreateCloudAttachment)[] = [];
+			for (const currFile of files) {
+				try {
+					const file = await uploadFile(`/attachments/${interaction.channelId}`, currFile);
+					attachments.push(Attachment.create(file));
+				} catch (error) {
+					return res.status(400).json({ message: error?.toString() });
+				}
+			}
+			*/
+                await sendMessage({
+                    type: MessageType.APPLICATION_COMMAND,
+                    timestamp: new Date(),
+                    application_id: interaction.applicationId,
+                    channel_id: interaction.channelId,
+                    author_id: interaction.applicationId,
+                    nonce: interaction.nonce,
+                    content: body.data.content,
+                    components: body.data.components || [],
+                    tts: body.data.tts,
+                    embeds: body.data.embeds || [],
+                    attachments: body.data.attachments,
+                    poll: body.data.poll,
+                    flags: body.data.flags,
+                    reactions: [],
+                    // webhook_id: interaction.applicationId, // This one requires a webhook to be created first
+                    interaction: {
+                        id: interactionId,
+                        name: interaction.commandName,
+                        type: 2,
+                        user,
+                    },
+                    interaction_metadata: {
+                        id: interactionId,
+                        type: 2,
+                        user_id: interaction.userId,
+                        user,
+                        authorizing_integration_owners: {
+                            "1": interaction.userId,
+                        },
+                        name: interaction.commandName,
+                        command_type: interaction.commandType,
+                    },
+                });
+
+                break;
+            }
+            case InteractionCallbackType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE:
+                // TODO
+                break;
+            case InteractionCallbackType.DEFERRED_UPDATE_MESSAGE:
+                //TODO keep track of state of this
+                interaction.timeout = setTimeout(() => {
+                    emitEvent({
+                        event: "INTERACTION_FAILURE",
+                        user_id: req.user_id,
+                        data: {
+                            id: interactionId,
+                            nonce: interaction.nonce,
+                            reason_code: InteractionFailureReason.TIMEOUT,
+                        },
+                    } as InteractionFailureEvent);
+                }, 30000);
+                pendingInteractions.delete(interactionId);
+                res.sendStatus(204);
+                return;
+            case InteractionCallbackType.UPDATE_MESSAGE:
+                {
+                    if (!interaction.messageId) throw new HTTPError("no. That was not a message");
+                    const message = await Message.findOneOrFail({
+                        relations: {
+                            author: true,
+                            webhook: true,
+                            application: true,
+                            mentions: true,
+                            mention_roles: true,
+                            mention_channels: true,
+                            sticker_items: true,
+                            attachments: true,
+                            thread: {
+                                recipients: {
+                                    user: true,
+                                },
+                            },
+                            channel: true,
+                        },
+                        where: {
+                            id: interaction.messageId,
+                        },
+                    });
+                    if (body.data.content && body.data.content.length > Config.get().limits.message.maxCharacters) {
+                        throw new HTTPError("Content length over max character limit");
+                    }
+                    message.embeds = body.data.embeds || [];
+                    const handle = body.data.components ? handleComps(body.data.components, message.flags) : undefined;
+                    await handle?.(message.id, message.author as User, message.channel);
+                    message.components = body.data.components;
+                    await message.save();
+                    emitEvent({
+                        event: "MESSAGE_UPDATE",
+                        channel_id: message.channel_id,
+                        data: message.toJSON(),
+                    } satisfies MessageUpdateEvent);
+                }
+                // TODO
+                break;
+            /*
+            case InteractionCallbackType.APPLICATION_COMMAND_AUTOCOMPLETE_RESULT:
+                // TODO
+                break;
+            case InteractionCallbackType.MODAL:
+                // TODO
+                break;
+            case InteractionCallbackType.PREMIUM_REQUIRED:
+                // Deprecated
+                break;
+            case InteractionCallbackType.IFRAME_MODAL:
+                // TODO
+                break;
+            case InteractionCallbackType.LAUNCH_ACTIVITY:
+                // TODO
+                break;
+            */
+            default:
+                body satisfies never;
+        }
+
+        pendingInteractions.delete(interactionId);
+        res.sendStatus(204);
+    },
+);
+
+export default router;

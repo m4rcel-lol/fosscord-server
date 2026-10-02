@@ -1,0 +1,534 @@
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import { User } from "./User";
+import { Member } from "./Member";
+import { Role } from "./Role";
+import { Channel } from "./Channel";
+import { Application } from "./Application";
+import { Column, CreateDateColumn, Entity, Index, JoinColumn, JoinTable, ManyToMany, ManyToOne, OneToMany, RelationId, FindOneOptions, Raw, Not, BaseEntity, In } from "typeorm";
+import { BaseClass } from "./BaseClass";
+import { Guild } from "./Guild";
+import { Webhook } from "./Webhook";
+import { Sticker } from "./Sticker";
+import { Attachment } from "./Attachment";
+import { NewUrlUserSignatureData } from "../../util/Signing";
+import {
+    ApplicationCommandType,
+    BaseMessageComponents,
+    Embed,
+    MessageComponentType,
+    MessageSnapshot,
+    MessageType,
+    PartialMessage,
+    Poll,
+    PublicMessage,
+    Reaction,
+    UnfurledMediaItem,
+    PartialUser,
+    InteractionType,
+} from "@spacebar/schemas";
+import { MessageFlags } from "@spacebar/util";
+import { JsonRemoveEmpty } from "@spacebar/util/util/Decorators";
+
+@Entity({
+    name: "messages",
+})
+@Index(["channel_id", "id"], { unique: true })
+export class Message extends BaseClass {
+    @Column({ nullable: true })
+    @RelationId((message: Message) => message.channel)
+    @Index()
+    channel_id?: string;
+
+    @JoinColumn({ name: "channel_id", foreignKeyConstraintName: "FK_message_channel_id" })
+    @ManyToOne(() => Channel, {
+        onDelete: "CASCADE",
+    })
+    channel: Channel;
+
+    @Column({ nullable: true })
+    @RelationId((message: Message) => message.thread)
+    @JsonRemoveEmpty
+    thread_id?: string;
+
+    @JoinColumn({ name: "thread_id", foreignKeyConstraintName: "FK_message_thread_id" })
+    @ManyToOne(() => Channel, {
+        onDelete: "CASCADE",
+    })
+    @JsonRemoveEmpty
+    thread?: Channel;
+
+    @Column({ nullable: true })
+    @RelationId((message: Message) => message.guild)
+    @JsonRemoveEmpty
+    guild_id?: string;
+
+    @JoinColumn({ name: "guild_id", foreignKeyConstraintName: "FK_message_guild_id" })
+    @ManyToOne(() => Guild, {
+        onDelete: "CASCADE",
+    })
+    guild?: Guild;
+
+    @Column({ nullable: true })
+    @RelationId((message: Message) => message.author)
+    @Index()
+    author_id?: string;
+
+    @JoinColumn({ name: "author_id", referencedColumnName: "id", foreignKeyConstraintName: "FK_message_author_id" })
+    @ManyToOne(() => User, {
+        onDelete: "CASCADE",
+    })
+    author?: User;
+
+    @Column({ nullable: true })
+    @RelationId((message: Message) => message.member)
+    member_id?: string;
+
+    @JoinColumn({ name: "member_id", referencedColumnName: "id", foreignKeyConstraintName: "FK_message_member_id" })
+    @ManyToOne(() => User, {
+        onDelete: "CASCADE",
+    })
+    member?: Member;
+
+    @Column({ nullable: true })
+    @RelationId((message: Message) => message.webhook)
+    @JsonRemoveEmpty
+    webhook_id?: string;
+
+    @JoinColumn({ name: "webhook_id", foreignKeyConstraintName: "FK_message_webhook_id" })
+    @ManyToOne(() => Webhook)
+    webhook?: Webhook;
+
+    @Column({ nullable: true })
+    @RelationId((message: Message) => message.application)
+    application_id?: string;
+
+    @JoinColumn({ name: "application_id", foreignKeyConstraintName: "FK_message_application_id" })
+    @ManyToOne(() => Application)
+    application?: Application;
+
+    @Column({ nullable: true })
+    content?: string;
+
+    @Column()
+    @CreateDateColumn()
+    timestamp: Date;
+
+    @Column({ nullable: true })
+    edited_timestamp?: Date;
+
+    @Column({ nullable: true })
+    tts?: boolean;
+
+    @Column({ nullable: true })
+    mention_everyone?: boolean;
+
+    @JoinTable({
+        name: "message_user_mentions",
+        joinColumn: {
+            name: "message_id",
+            referencedColumnName: "id",
+            foreignKeyConstraintName: "FK_message_mentions_message_id",
+        },
+        inverseJoinColumn: {
+            name: "user_id",
+            referencedColumnName: "id",
+            foreignKeyConstraintName: "FK_message_mentions_user_id",
+        },
+    })
+    @ManyToMany(() => User)
+    mentions: User[];
+
+    @JoinTable({
+        name: "message_role_mentions",
+        joinColumn: {
+            name: "message_id",
+            referencedColumnName: "id",
+            foreignKeyConstraintName: "FK_message_role_mentions_message_id",
+        },
+        inverseJoinColumn: {
+            name: "role_id",
+            referencedColumnName: "id",
+            foreignKeyConstraintName: "FK_message_role_mentions_role_id",
+        },
+    })
+    @ManyToMany(() => Role)
+    mention_roles: Role[];
+
+    @JoinTable({
+        name: "message_channel_mentions",
+        joinColumn: {
+            name: "message_id",
+            referencedColumnName: "id",
+            foreignKeyConstraintName: "FK_message_channel_mentions_message_id",
+        },
+        inverseJoinColumn: {
+            name: "channel_id",
+            referencedColumnName: "id",
+            foreignKeyConstraintName: "FK_message_channel_mentions_channel_id",
+        },
+    })
+    @ManyToMany(() => Channel)
+    @JsonRemoveEmpty
+    mention_channels: Channel[];
+
+    @JoinTable({
+        name: "message_stickers",
+        joinColumn: {
+            name: "message_id",
+            referencedColumnName: "id",
+            foreignKeyConstraintName: "FK_message_stickers_message_id",
+        },
+        inverseJoinColumn: {
+            name: "sticker_id",
+            referencedColumnName: "id",
+            foreignKeyConstraintName: "FK_message_stickers_sticker_id",
+        },
+    })
+    @ManyToMany(() => Sticker, { cascade: true, onDelete: "CASCADE" })
+    @JsonRemoveEmpty
+    sticker_items?: Sticker[];
+
+    @OneToMany(() => Attachment, (attachment: Attachment) => attachment.message, {
+        cascade: true,
+        orphanedRowAction: "delete",
+    })
+    attachments?: Attachment[];
+
+    @Column({ type: "jsonb" })
+    embeds: Embed[];
+
+    @Column({ type: "jsonb" })
+    @JsonRemoveEmpty
+    reactions: Reaction[];
+
+    @Column({ type: "text", nullable: true })
+    @JsonRemoveEmpty
+    nonce?: string;
+
+    @Column({ nullable: true, type: Date })
+    pinned_at?: Date | null;
+
+    get pinned(): boolean {
+        return this.pinned_at != null;
+    }
+
+    @Column({ type: "int" })
+    type: MessageType;
+
+    @Column({ type: "jsonb", nullable: true })
+    @JsonRemoveEmpty
+    activity?: {
+        type: number;
+        party_id: string;
+    };
+
+    @Column({ default: 0 })
+    flags: number;
+
+    @Column({ type: "jsonb", nullable: true })
+    @JsonRemoveEmpty
+    message_reference?: {
+        message_id?: string;
+        channel_id?: string;
+        guild_id?: string;
+        type?: number; // 0 = DEFAULT, 1 = FORWARD
+    };
+
+    @JoinColumn({ name: "message_reference_id", foreignKeyConstraintName: "FK_message_message_reference_id" })
+    @ManyToOne(() => Message, { onDelete: "SET NULL" })
+    referenced_message?: Message | null;
+
+    @Column({ type: "jsonb", nullable: true })
+    @JsonRemoveEmpty
+    interaction?: {
+        id: string;
+        type: InteractionType;
+        name: string;
+    };
+
+    @Column({ type: "jsonb", nullable: true })
+    @JsonRemoveEmpty
+    interaction_metadata?: {
+        id: string;
+        type: InteractionType;
+        user_id: string;
+        authorizing_integration_owners: object;
+        name: string;
+        command_type: ApplicationCommandType;
+    };
+
+    @Column({ type: "jsonb", nullable: true })
+    components?: BaseMessageComponents[];
+
+    @Column({ type: "jsonb", nullable: true })
+    @JsonRemoveEmpty
+    poll?: Poll;
+
+    @Column({ nullable: true })
+    username?: string;
+
+    @Column({ nullable: true })
+    avatar?: string;
+
+    @Column({ default: "[]", type: "jsonb" })
+    message_snapshots: MessageSnapshot[];
+
+    get isWebhook() {
+        return this.webhook_id != null && this.webhook != null;
+    }
+
+    static async fillReplies(messages: Message[]) {
+        const ms = messages
+            .filter((msg) => msg.message_reference && !msg.referenced_message?.id && msg.message_reference.message_id)
+            .filter((msg) => [MessageType.REPLY, MessageType.THREAD_STARTER_MESSAGE, MessageType.CONTEXT_MENU_COMMAND].includes(msg.type));
+        if (!ms.length) return;
+        const curMs = new Map(messages.map((m) => [m.id, m] as const));
+        const neededIds = new Set(ms.map((m) => m.message_reference!.message_id as string)).difference(curMs);
+        if (neededIds.size) {
+            const newMessages = await Message.find({
+                where: {
+                    id: In([...neededIds]),
+                },
+                relations: { author: true, mentions: true, mention_roles: true, mention_channels: true },
+            });
+            newMessages.forEach((msg) => curMs.set(msg.id, msg));
+        }
+        for (const message of ms) {
+            message.referenced_message = curMs.get(message.message_reference!.message_id as string) || null;
+        }
+    }
+
+    toJSON(shallow = false): PublicMessage {
+        // this.clean_data();
+        return {
+            ...this,
+            channel_id: this.channel_id ?? this.channel.id,
+            channel: undefined,
+
+            timestamp: this.timestamp.toISOString(),
+            edited_timestamp: this.edited_timestamp ? this.edited_timestamp.toISOString() : null,
+
+            author_id: undefined,
+            member_id: undefined,
+            webhook_id: this.webhook_id ?? undefined,
+            application_id: undefined,
+            mentions: this.mentions?.map((user) => {
+                if (user && !user.toPublicUser) console.trace("toPublic user missing!!!");
+                return (user?.toPublicUser?.() ?? user ?? undefined) as unknown as PartialUser;
+            }),
+
+            mention_roles: this.mention_roles?.map((role) => role.id) ?? [],
+            mention_channels: this.mention_channels?.map((ch) => ch.toJSON()) ?? [],
+            attachments: this.attachments?.map((att) => att.toJSON()) ?? [],
+
+            nonce: this.nonce ?? undefined,
+            tts: this.tts ?? false,
+            guild: this.guild ?? undefined,
+            webhook: this.webhook?.toMessageWebhook() ?? undefined,
+            interaction: this.interaction ?? undefined,
+            interaction_metadata: this.interaction_metadata ?? undefined,
+            reactions: this.reactions ?? undefined,
+            sticker_items: this.sticker_items ?? undefined,
+            message_reference: this.message_reference ?? undefined,
+            mention_everyone: this.mention_everyone ?? false,
+            author: {
+                ...(this.author?.toPartialUser() ?? undefined),
+                // Webhooks
+                username: this.username ?? this.author?.username ?? null,
+                avatar: this.avatar ?? this.author?.avatar ?? null,
+            },
+            activity: this.activity ?? undefined,
+            application: this.application ?? undefined,
+            components: this.components ?? [],
+            poll: this.poll ?? undefined,
+            content: this.content ?? "",
+            pinned: this.pinned,
+            thread: this.thread ? this.thread.toJSON() : this.thread,
+            referenced_message: this.referenced_message && !shallow ? this.referenced_message.toJSON(true) : undefined,
+        } satisfies PublicMessage;
+    }
+
+    toPartialMessage(): PartialMessage {
+        return {
+            id: this.id,
+            // lobby_id: this.lobby_id,
+            channel_id: this.channel_id!,
+            type: this.type,
+            content: this.content!,
+            author: { ...this.author!, avatar: this.author?.avatar ?? null },
+            flags: this.flags,
+            application_id: this.application_id,
+            //channel: this.channel, // TODO: ephemeral DM channels
+            // recipient_id: this.recipient_id, // TODO: ephemeral DM channels
+        };
+    }
+
+    toSnapshot(): MessageSnapshot {
+        return {
+            message: {
+                attachments: this.attachments?.map((x) => x.toJSON()),
+                components: this.components,
+                content: this.content!,
+                edited_timestamp: this.edited_timestamp,
+                embeds: this.embeds,
+                flags: this.flags,
+                mention_roles: this.mention_roles?.map((x) => x.id),
+                mentions: this.mentions.map((x) => x.toPublicUser() as unknown as PartialUser), // TODO: write a proper method for this
+                timestamp: this.timestamp,
+                type: this.type,
+            },
+        };
+    }
+
+    withSignedAttachments(data: NewUrlUserSignatureData) {
+        function signMedia(media: UnfurledMediaItem) {
+            Object.assign(media, Attachment.prototype.signUrls.call(media, data));
+        }
+        return {
+            ...this,
+            attachments: this.attachments?.map((attachment: Attachment) => Attachment.prototype.signUrls.call(attachment, data)),
+            components: this.components
+                ? this.components.map((comp) => {
+                      comp = structuredClone(comp);
+                      if (comp.type === MessageComponentType.Section) {
+                          const accessory = comp.accessory;
+                          if (accessory.type === MessageComponentType.Thumbnail) {
+                              signMedia(accessory.media);
+                          }
+                      } else if (comp.type === MessageComponentType.MediaGallery) {
+                          comp.items.forEach(({ media }) => signMedia(media));
+                      } else if (comp.type === MessageComponentType.File) {
+                          signMedia(comp.file);
+                      } else if (comp.type === MessageComponentType.Container) {
+                          for (const elm of comp.components) {
+                              switch (elm.type) {
+                                  case MessageComponentType.Separator:
+                                  case MessageComponentType.TextDisplay:
+                                  case MessageComponentType.ActionRow:
+                                      break;
+                                  case MessageComponentType.Section: {
+                                      const accessory = elm.accessory;
+                                      if (accessory.type === MessageComponentType.Thumbnail) {
+                                          signMedia(accessory.media);
+                                      }
+                                      break;
+                                  }
+                                  case MessageComponentType.MediaGallery:
+                                      elm.items.forEach(({ media }) => signMedia(media));
+                                      break;
+                                  case MessageComponentType.File: {
+                                      signMedia(elm.file);
+                                      break;
+                                  }
+
+                                  default:
+                                      elm satisfies never;
+                              }
+                          }
+                      }
+                      return comp;
+                  })
+                : this.components,
+        };
+    }
+
+    static async createWithDefaults(opts: Partial<Message>): Promise<Message> {
+        const message = Message.create();
+
+        if (!opts.author) {
+            if (!opts.author_id) throw new Error("Either author or author_id must be provided to create a Message");
+            opts.author = await User.findOneOrFail({ where: { id: opts.author_id! } });
+        }
+
+        if (!opts.channel) {
+            if (!opts.channel_id) throw new Error("Either channel or channel_id must be provided to create a Message");
+            opts.channel = await Channel.findOneOrFail({ where: { id: opts.channel_id! } });
+            opts.guild_id ??= opts.channel.guild_id;
+        }
+
+        if (!opts.member_id) opts.member_id = message.author_id;
+        if (!opts.member) opts.member = await Member.findOneOrFail({ where: { id: opts.member_id! } });
+
+        if (!opts.guild) {
+            if (opts.guild_id) opts.guild = await Guild.findOneOrFail({ where: { id: opts.guild_id! } });
+            else if (opts.channel?.guild?.id) opts.guild = opts.channel.guild;
+            else if (opts.channel?.guild_id) opts.guild = await Guild.findOneOrFail({ where: { id: opts.channel.guild_id! } });
+            else if (opts.member?.guild?.id) opts.guild = opts.member.guild;
+            else if (opts.member?.guild_id) opts.guild = await Guild.findOneOrFail({ where: { id: opts.member.guild_id! } });
+            else throw new Error("Either guild, guild_id, channel.guild, channel.guild_id, member.guild or member.guild_id must be provided to create a Message");
+        }
+
+        // try 2 now that we have a guild
+        if (!opts.member) opts.member = await Member.findOneOrFail({ where: { id: opts.author!.id, guild_id: opts.guild!.id } });
+
+        // set reply type if a message if referenced
+        if (opts.message_reference && !opts.type) message.type = MessageType.REPLY;
+
+        // backpropagate ids
+        opts.channel_id = opts.channel.id;
+        opts.guild_id = opts.guild.id;
+        opts.author_id = opts.author.id;
+        opts.member_id = opts.member.id;
+        opts.webhook_id = opts.webhook?.id;
+        opts.application_id = opts.application?.id;
+
+        delete opts.member;
+
+        Object.assign(message, {
+            tts: false,
+            embeds: [],
+            reactions: [],
+            flags: 0,
+            type: 0,
+            timestamp: new Date(),
+            ...opts,
+        });
+        return message;
+    }
+    static addDefault(options: FindOneOptions<Message>) {
+        if (options.where) {
+            const arr = options.where instanceof Array ? options.where : [options.where];
+            for (const thing of arr) {
+                if (!("flags" in thing)) {
+                    thing.flags = Not(Raw((alias) => `${alias} & ${MessageFlags.FLAGS.EPHEMERAL} = ${MessageFlags.FLAGS.EPHEMERAL}`));
+                }
+            }
+        }
+    }
+}
+
+//@ts-expect-error It works but TS types hate it
+Message.findOneOrFail = function (this: Message, options: FindOneOptions<Message>): Promise<Message> {
+    Message.addDefault(options as FindOneOptions<Message>);
+    //@ts-expect-error how to use generics on call, who knows!
+    return BaseEntity.findOneOrFail.call(Message, options);
+};
+//@ts-expect-error It works but TS types hate it
+Message.findOne = function (this: Message, options: FindOneOptions<Message>): Promise<Message> {
+    Message.addDefault(options as FindOneOptions<Message>);
+    //@ts-expect-error how to use generics on call, who knows!
+    return BaseEntity.findOne.call(Message, options);
+};
+//@ts-expect-error It works but TS types hate it
+Message.find = function (this: Message, options: FindOneOptions<Message>): Promise<Message[]> {
+    Message.addDefault(options as FindOneOptions<Message>);
+    //@ts-expect-error how to use generics on call, who knows!
+    return BaseEntity.find.call(Message, options);
+};

@@ -1,117 +1,446 @@
 /*
-	Regenerates the `fosscord-server/assets/schemas.json` file, used for API/Gateway input validation.
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
+
+/*
+	Regenerates the `spacebarchat/server/assets/schemas.json` file, used for API/Gateway input validation.
+*/
+const { Stopwatch } = require("../dist/extensions/Stopwatch");
+const totalSw = Stopwatch.startNew();
+
+const conWarn = console.warn;
+console.warn = (...args) => {
+    // silence some expected warnings
+    if (args[0] === "initializer is expression for property id") return;
+    if (args[0].startsWith("unknown initializer for property ") && args[0].endsWith("[object Object]")) return;
+    conWarn(...args);
+};
 
 const path = require("path");
 const fs = require("fs");
+const fsp = require("fs/promises");
 const TJS = require("typescript-json-schema");
+const walk = require("./util/walk");
+const { redBright, yellowBright, bgRedBright, yellow, greenBright, green, cyanBright, blueBright, blue, cyan, bgRed, gray } = require("picocolors");
 const schemaPath = path.join(__dirname, "..", "assets", "schemas.json");
+const exclusionList = JSON.parse(fs.readFileSync(path.join(__dirname, "schemaExclusions.json"), { encoding: "utf8" }));
 
+// @type {TJS.PartialArgs}
 const settings = {
-	required: true,
-	ignoreErrors: true,
-	excludePrivate: true,
-	defaultNumberType: "integer",
-	noExtraProps: true,
-	defaultProps: false,
+    required: true,
+    ignoreErrors: true,
+    excludePrivate: true,
+    defaultNumberType: "integer",
+    noExtraProps: true,
+    defaultProps: false,
+    useTypeOfKeyword: true, // should help catch functions?
 };
-const compilerOptions = {
-	strictNullChecks: true,
-};
-const Excluded = [
-	"DefaultSchema",
-	"Schema",
-	"EntitySchema",
-	"ServerResponse",
-	"Http2ServerResponse",
-	"global.Express.Response",
-	"Response",
-	"e.Response",
-	"request.Response",
-	"supertest.Response",
 
-	// TODO: Figure out how to exclude schemas from node_modules?
-	"SomeJSONSchema",
-	"UncheckedPartialSchema",
-	"PartialSchema",
-	"UncheckedPropertiesSchema",
-	"PropertiesSchema",
-	"AsyncSchema",
-	"AnySchema",
+const baseClassProperties = [
+    // BaseClass methods
+    "toJSON",
+    "hasId",
+    "save",
+    "remove",
+    "softRemove",
+    "recover",
+    "reload",
+    "assign",
+    "_do_validate", // ?
+    "hasId", // ?
 ];
 
-function modify(obj) {
-	for (var k in obj) {
-		if (typeof obj[k] === "object" && obj[k] !== null) {
-			modify(obj[k]);
-		}
-	}
+const entityMethods = ["ToGuildSource"];
+
+const ExcludeAndWarn = [...exclusionList.manualWarn, ...exclusionList.manualWarnRe.map((r) => new RegExp(r))];
+const Excluded = [...exclusionList.manual, ...exclusionList.manualRe.map((r) => new RegExp(r)), ...exclusionList.auto.map((r) => r.value)];
+const Included = [...exclusionList.include, ...exclusionList.includeRe.map((r) => new RegExp(r))];
+
+const excludedLambdas = [
+    (n, s) => {
+        // attempt to import
+        if (JSON.stringify(s).includes(`#/definitions/import(`)) {
+            console.log(`\r${redBright("[WARN]")} Omitting schema ${n} as it attempted to use import().`);
+            exclusionList.auto.push({ value: n, reason: "Uses import()" });
+            return true;
+        }
+    },
+    (n, s) => {
+        if (JSON.stringify(s).includes(process.cwd())) {
+            console.log(`\r${redBright("[WARN]")} Omitting schema ${n} as it leaked $PWD.`);
+            exclusionList.auto.push({ value: n, reason: "Leaked $PWD" });
+            return true;
+        }
+    },
+    (n, s) => {
+        if (JSON.stringify(s).includes(process.env.HOME)) {
+            console.log(`\r${redBright("[WARN]")} Omitting schema ${n} as it leaked a $HOME path.`);
+            exclusionList.auto.push({ value: n, reason: "Leaked $HOME" });
+            return true;
+        }
+    },
+    (n, s) => {
+        if (s["$ref"] === `#/definitions/${n}`) {
+            console.log(`\r${redBright("[WARN]")} Omitting schema ${n} as it is a self-reference only schema.`);
+            exclusionList.auto.push({ value: n, reason: "Self-reference only schema" });
+            // fs.writeFileSync(`fucked/${n}.json`, JSON.stringify(s, null, 4));
+            return true;
+        }
+    },
+    (n, s) => {
+        if (s.description?.match(/Smithy/)) {
+            console.log(`\r${redBright("[WARN]")} Omitting schema ${n} as it appears to be an AWS Smithy schema.`);
+            exclusionList.auto.push({ value: n, reason: "AWS Smithy schema" });
+            return true;
+        }
+    },
+    (n, s) => {
+        if (s.description?.startsWith("<p>")) {
+            console.log(`\r${redBright("[WARN]")} Omitting schema ${n} as we don't use HTML paragraphs for descriptions.`);
+            exclusionList.auto.push({ value: n, reason: "HTML paragraph in description" });
+            return true;
+        }
+    },
+    (n, s) => {
+        if (s.properties && Object.keys(s.properties).every((x) => x[0] === x[0].toUpperCase())) {
+            console.log(`\r${redBright("[WARN]")} Omitting schema ${n} as all its properties have uppercase characters.`);
+            exclusionList.auto.push({ value: n, reason: "Schema with only uppercase properties" });
+            return true;
+        }
+    },
+    // (n, s) => {
+    // 	if (JSON.stringify(s).length <= 300) {
+    // 		console.log({n, s});
+    // 	}
+    // }
+];
+
+function includesMatch(haystack, needles, log = false) {
+    for (const needle of needles) {
+        const match = needle instanceof RegExp ? needle.test(haystack) : haystack === needle;
+        if (match) {
+            if (log) console.warn(redBright("[WARN]:"), "Excluding schema", haystack, "due to match with", needle);
+            return needle;
+        }
+    }
+    return null;
 }
 
-function main() {
-	const program = TJS.programFromConfig(
-		path.join(__dirname, "..", "tsconfig.json"),
-		walk(path.join(__dirname, "..", "src", "util", "schemas")),
-	);
-	const generator = TJS.buildGenerator(program, settings);
-	if (!generator || !program) return;
+async function main() {
+    const stepSw = Stopwatch.startNew();
 
-	let schemas = generator
-		.getUserSymbols()
-		.filter(
-			(x) =>
-				(x.endsWith("Schema") || x.endsWith("Response")) &&
-				!Excluded.includes(x),
-		);
-	console.log(schemas);
+    process.stdout.write("Loading program... ");
+    const program = TJS.programFromConfig(path.join(__dirname, "..", "tsconfig.json"), walk(path.join(__dirname, "..", "src", "schemas")));
+    const generator = TJS.buildGenerator(program, settings);
+    if (!generator || !program) {
+        console.log(redBright("Failed to create schema generator."));
+        return;
+    }
 
-	var definitions = {};
+    const elapsedLoad = stepSw.getElapsedAndReset();
+    process.stdout.write("Done in " + yellowBright(elapsedLoad.totalMilliseconds + "." + elapsedLoad.microseconds) + " ms\n");
 
-	for (const name of schemas) {
-		const part = TJS.generateSchema(program, name, settings, [], generator);
-		if (!part) continue;
+    process.stdout.write("Generating schema list... ");
+    let schemas = generator.getUserSymbols().filter((x) => {
+        return (
+            (x.endsWith("Schema") || x.endsWith("Response") || x.startsWith("API") || x.endsWith("Array")) &&
+            // !ExcludeAndWarn.some((exc) => {
+            // 	const match = exc instanceof RegExp ? exc.test(x) : x === exc;
+            // 	if (match) console.warn("Warning: Excluding schema", x);
+            // 	return match;
+            // }) &&
+            // !Excluded.some((exc) => (exc instanceof RegExp ? exc.test(x) : x === exc))
+            (includesMatch(x, Included) || (!includesMatch(x, ExcludeAndWarn, true) && !includesMatch(x, Excluded)))
+        );
+    });
+    //.sort((a,b) => a.localeCompare(b));
 
-		// this is a hack. want some want to check if its a @column, instead
-		if (part.properties)
-			Object.keys(part.properties)
-				.filter((key) =>
-					[
-						// BaseClass methods
-						"toJSON",
-						"hasId",
-						"save",
-						"remove",
-						"softRemove",
-						"recover",
-						"reload",
-						"assign",
-					].includes(key),
-				)
-				.forEach((key) => delete part.properties[key]);
+    // remove node modules once and for all
+    console.log("Removing schemas from node modules...");
+    schemas = schemas.filter((x) => !generator.getSymbols(x)[0].fullyQualifiedName.includes("/node_modules/"));
 
-		definitions = { ...definitions, [name]: { ...part } };
-	}
+    // for (const s of schemas) {
+    //     console.log(generator.getSymbols(s)[0].symbol);
+    // }
 
-	modify(definitions);
+    const elapsedList = stepSw.getElapsedAndReset();
+    process.stdout.write("Done in " + yellowBright(elapsedList.totalMilliseconds + "." + elapsedList.microseconds) + " ms\n");
+    console.log("Found", yellowBright(schemas.length), "schemas to process.");
 
-	fs.writeFileSync(schemaPath, JSON.stringify(definitions, null, 4));
+    let definitions = {};
+    let nestedDefinitions = {};
+    let writePromises = [];
+
+    if (process.env.WRITE_SCHEMA_DIR === "true") {
+        fs.rmSync("schemas_orig", { recursive: true, force: true });
+        fs.mkdirSync("schemas_orig");
+
+        fs.rmSync("schemas_nested", { recursive: true, force: true });
+        fs.mkdirSync("schemas_nested");
+
+        fs.rmSync("schemas_final", { recursive: true, force: true });
+        fs.mkdirSync("schemas_final");
+    }
+
+    const schemaSw = Stopwatch.startNew();
+    for (const name of schemas) {
+        process.stdout.write(`Processing schema ${name}... `);
+        let part = TJS.generateSchema(program, name, settings, [], generator);
+        if (!part) continue;
+
+        if (definitions[name]) {
+            process.stdout.write(yellow(` [ERROR] Duplicate schema name detected: ${name}. Overwriting previous schema.`));
+        }
+
+        if (!includesMatch(name, Included) && excludedLambdas.some((fn) => fn(name, part))) {
+            continue;
+        }
+
+        // part = removeKeysMatchingRecursive(part, /^__@annotationsKey.*/, 128);
+        // part = removeArrayValuesMatchingRecursive(part, /^__@annotationsKey.*/, 128);
+        const _matchesRegex = (r) => (k, v, _) => (typeof k === "string" && k.match(r)) || (typeof v === "string" && v.match(r));
+        part = await removeAllMatchingRecursive(part, _matchesRegex(/__@annotationsKey/));
+        part = await removeAllMatchingRecursive(part, _matchesRegex(/ToGuildSource/));
+
+        if (process.env.WRITE_SCHEMA_DIR === "true") writePromises.push(async () => await fsp.writeFile(path.join("schemas_orig", `${name}.json`), JSON.stringify(part, null, 4)));
+
+        // testing:
+        function mergeDefs(schemaName, schema) {
+            if (schema.definitions) {
+                // schema["x-sb-defs"] = Object.keys(schema.definitions);
+                process.stdout.write(cyanBright("Processing nested... "));
+                for (const defKey in schema.definitions) {
+                    if (definitions[defKey] && deepEqual(definitions[defKey], schema.definitions[defKey])) {
+                        // console.log("Definition", defKey, "from schema", schemaName, "is identical to existing definition, skipping.");
+                        schema.definitions = Object.fromEntries(Object.entries(schema.definitions).filter(([k, _]) => k !== defKey));
+                        process.stdout.write(greenBright("T"));
+                    } else if (!nestedDefinitions[defKey]) {
+                        nestedDefinitions[defKey] = schema.definitions[defKey];
+                        schema.definitions = Object.fromEntries(Object.entries(schema.definitions).filter(([k, _]) => k !== defKey));
+                        // console.log("Tracking sub-definition", defKey, "from schema", schemaName);
+                        process.stdout.write(green("N"));
+                    } else if (!deepEqual(nestedDefinitions[defKey], schema.definitions[defKey])) {
+                        console.log(redBright("[ERROR]"), "Conflicting nested definition for", defKey, "found in schema", schemaName);
+                        console.log(columnizedObjectDiff(nestedDefinitions[defKey], schema.definitions[defKey], true));
+                    } else {
+                        // console.log("Definition", defKey, "from schema", schemaName, "is identical to existing definition, skipping.");
+                        schema.definitions = Object.fromEntries(Object.entries(schema.definitions).filter(([k, _]) => k !== defKey));
+                        process.stdout.write(greenBright("M"));
+                    }
+                }
+                if (Object.keys(schema.definitions).length === 0) {
+                    process.stdout.write(greenBright("✓ "));
+                    delete schema.definitions;
+                } else {
+                    console.log("Remaining definitions in schema", schemaName, "after merge:", Object.keys(schema.definitions));
+                }
+            }
+        }
+        mergeDefs(name, part);
+
+        const elapsed = schemaSw.getElapsedAndReset();
+        process.stdout.write(
+            "Done in " + yellowBright(elapsed.totalMilliseconds + "." + elapsed.microseconds) + " ms, " + yellowBright(JSON.stringify(part).length) + " bytes (unformatted) ",
+        );
+        if (elapsed.totalMilliseconds >= 100) console.log(bgRedBright("\x1b[5m[SLOW]\x1b[25m"));
+        else console.log();
+
+        definitions = { ...definitions, [name]: { ...part } };
+    }
+    console.log("Processed", Object.keys(definitions).length, "schemas in", Number(stepSw.elapsed().totalMilliseconds + "." + stepSw.elapsed().microseconds), "ms.");
+
+    console.log("Merging nested definitions into main definitions...");
+    let isNewLine = true;
+    for (const defKey in nestedDefinitions) {
+        if (!includesMatch(defKey, Included, false)) {
+            const bannedMatch = includesMatch(defKey, ExcludeAndWarn, false) ?? includesMatch(defKey, Excluded, false);
+            if (bannedMatch !== null) {
+                // console.log(yellowBright("\n[WARN]"), "Skipping nested definition", defKey, "as it matched a banned format.");
+                console.log((isNewLine ? "" : "\n") + redBright("WARNING") + " Excluding schema " + yellowBright(defKey) + " due to match with " + redBright(bannedMatch));
+                isNewLine = true;
+                continue;
+            }
+        }
+
+        nestedDefinitions[defKey]["$schema"] = "http://json-schema.org/draft-07/schema#";
+        if (definitions[defKey]) {
+            if (!deepEqual(definitions[defKey], nestedDefinitions[defKey])) {
+                if (Object.keys(definitions[defKey]).every((k) => k === "$ref" || k === "$schema")) {
+                    definitions[defKey] = nestedDefinitions[defKey];
+                    console.log(yellowBright("\nWARNING"), "Overwriting definition for", defKey, "with nested definition (ref/schema only).");
+                    isNewLine = true;
+                } else {
+                    console.log(redBright("\nERROR"), "Conflicting definition for", defKey, "found in main definitions.");
+                    console.log(columnizedObjectDiff(definitions[defKey], nestedDefinitions[defKey], true));
+                    console.log("Keys:", Object.keys(definitions[defKey]), Object.keys(nestedDefinitions[defKey]));
+                    isNewLine = true;
+                }
+            } else {
+                // console.log("Definition", defKey, "is identical to existing definition, skipping.");
+            }
+        } else {
+            definitions[defKey] = nestedDefinitions[defKey];
+            if (isNewLine) {
+                process.stdout.write("Adding nested definitions to main definitions: ");
+                isNewLine = false;
+            } else process.stdout.write("\x1b[4D, ");
+            process.stdout.write(yellowBright(defKey) + "... ");
+        }
+    }
+
+    deleteOneOfKindUndefinedRecursive(definitions, "$");
+    for (const defKey in definitions) {
+        filterSchema(definitions[defKey]);
+    }
+
+    if (process.env.WRITE_SCHEMA_DIR === "true") {
+        await Promise.all(writePromises);
+        await Promise.all(
+            Object.keys(definitions).map(async (name) => {
+                await fsp.writeFile(path.join("schemas_final", `${name}.json`), JSON.stringify(definitions[name], null, 4));
+                // console.log("Wrote schema", name, "to schemas/");
+            }),
+        );
+        await Promise.all(
+            Object.keys(nestedDefinitions).map(async (name) => {
+                await fsp.writeFile(path.join("schemas_nested", `${name}.json`), JSON.stringify(nestedDefinitions[name], null, 4));
+                // console.log("Wrote schema", name, "to schemas_nested/");
+            }),
+        );
+    }
+
+    fs.writeFileSync(schemaPath, JSON.stringify(definitions, null, 4));
+    fs.writeFileSync(__dirname + "/schemaExclusions.json", JSON.stringify(exclusionList, null, 4));
+    const elapsedMs = Number(totalSw.elapsed().totalMilliseconds + "." + totalSw.elapsed().microseconds);
+    console.log("\nSuccessfully wrote", Object.keys(definitions).length, "schemas to", schemaPath, "in", elapsedMs, "ms,", fs.statSync(schemaPath).size, "bytes.");
 }
 
-main();
+function deleteOneOfKindUndefinedRecursive(obj, path) {
+    if (obj?.type === "object" && obj?.properties?.oneofKind?.type === "undefined") return true;
 
-function walk(dir) {
-	var results = [];
-	var list = fs.readdirSync(dir);
-	list.forEach(function (file) {
-		file = dir + "/" + file;
-		var stat = fs.statSync(file);
-		if (stat && stat.isDirectory()) {
-			/* Recurse into a subdirectory */
-			results = results.concat(walk(file));
-		} else {
-			if (!file.endsWith(".ts")) return;
-			results.push(file);
-		}
-	});
-	return results;
+    for (const key in obj) {
+        if (typeof obj[key] === "object" && deleteOneOfKindUndefinedRecursive(obj[key], path + "." + key)) {
+            console.log("Deleting", path, key);
+            delete obj[key];
+        }
+    }
+
+    return false;
+}
+
+function filterSchema(schema) {
+    // this is a hack. we may want to check if its a @column instead
+    if (schema.properties) {
+        for (let key in schema.properties) {
+            if (baseClassProperties.includes(key)) {
+                delete schema.properties[key];
+            }
+        }
+    }
+
+    if (schema.required) schema.required = schema.required.filter((x) => !baseClassProperties.includes(x));
+
+    // recurse into own definitions
+    if (schema.definitions) {
+        console.log(redBright("WARNING"), "Schema has own definitions, recursing into them to filter base class properties:", Object.keys(schema.definitions));
+        for (const defKey in schema.definitions) {
+            filterSchema(schema.definitions[defKey]);
+        }
+    }
+}
+
+function deepEqual(a, b) {
+    if (a === b) return true;
+
+    if (typeof a !== "object" || typeof b !== "object" || a == null || b == null) {
+        return false;
+    }
+
+    const keysA = Object.keys(a);
+    const keysB = Object.keys(b);
+
+    if (keysA.length !== keysB.length) return false;
+
+    for (const key of keysA) {
+        if (!keysB.includes(key) || (typeof a[key] === typeof b[key] && !deepEqual(a[key], b[key]))) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function columnizedObjectDiff(a, b, trackEqual = false) {
+    const diffs = { left: {}, right: {}, ...(trackEqual ? { equal: {} } : {}) };
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    for (const key of keys) {
+        if (!deepEqual(a[key], b[key])) {
+            diffs.left[key] = a[key];
+            diffs.right[key] = b[key];
+        } else if (trackEqual) diffs.equal[key] = a[key];
+    }
+    return diffs;
+}
+
+const showScanDepth = process.env.SCHEMAS_SHOW_SCAN_DEPTH === "true";
+async function removeAllMatchingRecursive(o, selector, maxDepth = 32, path = "$") {
+    // process.stdout.write("S");
+    // console.log("scan @", path, "with depth", maxDepth, typeof o, o);
+    // await printEnd(path, path.length);
+    if (!o) return o;
+    for (const [k, v] of Object.entries(o)) {
+        if (selector(k, v, o)) {
+            process.stdout.write(yellowBright("R(" + gray(k) + " @ " + cyan(path) + ") "));
+            delete o[k];
+        } else if (maxDepth > 0 && typeof o != "string") {
+            if (showScanDepth) process.stdout.write(gray(">"));
+            o[k] = await removeAllMatchingRecursive(o[k], selector, maxDepth - 1, path + "." + k);
+            if (showScanDepth) process.stdout.write(cyan("\b \b"));
+        }
+    }
+
+    return o;
+}
+
+main().then(() => {});
+
+// this is broken, figure this out someday - would be really neat to have
+async function printEnd(str, len) {
+    const width = process.stdout.columns || 80;
+    const height = process.stdout.rows || 25;
+
+    const storePos = "\x1b[s";
+    const restPos = "\x1b[u";
+    const eraseAfter = "\x1b[0K";
+    const eraseLine = "\x1b[2K";
+    const down1 = "\x1b[1E";
+    const up1 = "\x1b[1F";
+    const setCol = (col) => `\x1b[${col}G`;
+    const setTopPos = (col) => `\x1b[1;${col}H`;
+    const setBottomPos = (col) => `\x1b[${height};${col}H`;
+
+    const startColumn = Math.max(1, width - len + 1);
+
+    process.stdout.write(`\n\n\n${up1}${up1}${up1}`);
+    // process.stdout.write(`${storePos}${down1}${eraseAfter}${setTopPos(startColumn)}${str}${restPos}`);//${up1}`);
+    process.stdout.write(`${storePos}${setCol(startColumn)}${str}${restPos}`);
+    await sleep(12);
+}
+
+async function sleep(delay) {
+    return new Promise((res, rej) => setTimeout(res, delay));
 }

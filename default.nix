@@ -1,0 +1,148 @@
+{ self, rVersion }:
+{
+  pkgs,
+  lib,
+  nodejs_26,
+  ...
+}:
+
+let
+  filteredSrc = lib.fileset.toSource {
+    root = ./.;
+    fileset = (
+      lib.fileset.intersection ./. (
+        lib.fileset.unions [
+          ./src
+          ./package.json
+          ./tsconfig.json
+          ./assets
+          ./patches
+          ./scripts
+        ]
+      )
+    );
+  };
+
+  revsFile = pkgs.writeText "spacebar-server-rev.json" (
+    builtins.toJSON {
+      rev = self.sourceInfo.rev or self.sourceInfo.dirtyRev;
+      shortRev = self.sourceInfo.shortRev or self.sourceInfo.dirtyShortRev;
+      lastModified = self.sourceInfo.lastModified;
+    }
+  );
+
+  srcHash = builtins.substring 11 32 (toString filteredSrc);
+  unwrapped = pkgs.stdenv.mkDerivation {
+    pname = "spacebar-server-ts-unwrapped";
+    nodejs = pkgs.nodejs_26;
+    version = "1.0.0-" + srcHash;
+
+    meta = with lib; {
+      description = "Spacebar server, a FOSS reimplementation of the Discord backend.";
+      homepage = "https://github.com/spacebarchat/server";
+      license = licenses.agpl3Plus;
+      platforms = platforms.all;
+      mainProgram = "start-bundle";
+      maintainers = with maintainers; [ RorySys ];
+    };
+
+    src = filteredSrc;
+    dontStrip = true;
+
+    nativeBuildInputs = with pkgs; [
+      nodejs_26
+      (pkgs.python3.withPackages (ps: with ps; [ setuptools ]))
+    ];
+
+    configurePhase = ''
+      cp -r --no-preserve=ownership,timestamps ${pkgs.callPackage ./node-modules.nix { }} node_modules
+      chown $USER:$GROUP node_modules -R
+      chmod +w node_modules -R
+    '';
+
+    buildPhase = ''
+      npm run build
+    '';
+
+    installPhase = ''
+      runHook preInstall
+      # set -x
+
+      # remove packages not needed for production, or at least try to...
+      npm prune --omit dev --no-save --offline
+      rm -v dist/src.tsbuildinfo
+      rm -rv scripts
+      time ${./nix/trimNodeModules.sh}
+
+      # Copy outputs
+      echo "Installing package into $out"
+      mkdir -p $out
+      cp -r assets dist node_modules package.json $out/
+
+      # set +x
+      runHook postInstall
+    '';
+
+    doCheck = true;
+    checkPhase = ''
+      node -r dotenv/config -r module-alias/register --enable-source-maps --test --experimental-test-coverage dist/**/*.test.js
+    '';
+  };
+in
+pkgs.stdenv.mkDerivation rec {
+  pname = "spacebar-server-ts";
+  nodejs = unwrapped.nodejs;
+  version = "1.0.0-" + rVersion;
+  meta = unwrapped.meta;
+
+  nativeBuildInputs = with pkgs; [
+    makeWrapper
+  ];
+
+  # this isnt a real builder, we dont need these at all
+  dontUnpack = true;
+  dontBuild = true;
+  dontPatch = true;
+  dontConfigure = true;
+  dontStrip = true;
+  dontFixup = true;
+
+  installPhase = ''
+    # Copy outputs
+    echo "Installing package into $out"
+    mkdir -p $out
+    cp -r --no-preserve=ownership,timestamps ${unwrapped}/. $out/
+
+    # add version info
+    cp ${revsFile} $out/.rev
+
+    # Create wrappers for start scripts
+    echo "Creating wrappers for start scripts"
+    for i in $out/dist/**/start.js
+    do
+      makeWrapper ${nodejs}/bin/node $out/bin/start-`dirname ''${i#$out/dist/}` --prefix NODE_PATH : $out/node_modules --add-flags --enable-source-maps --add-flags $i
+    done
+    makeWrapper ${nodejs}/bin/node $out/bin/apply-migrations --prefix NODE_PATH : $out/node_modules --add-flags --enable-source-maps --add-flags $out/dist/apply-migrations.js
+  '';
+  passthru.tests = pkgs.runCommand "spacebar-server-ts-all-tests" rec {
+    bundleStarts = pkgs.testers.runNixOSTest (import ./nix/tests/test-bundle-starts.nix { inherit self; });
+    bundleStartsRabbitMqSingle = pkgs.testers.runNixOSTest (
+      import ./nix/tests/test-bundle-starts.nix {
+        inherit self;
+        withIpc = "rabbitmq-single";
+      }
+    );
+    bundleStartsRabbitMqLegacy = pkgs.testers.runNixOSTest (
+      import ./nix/tests/test-bundle-starts.nix {
+        inherit self;
+        withIpc = "rabbitmq-legacy";
+      }
+    );
+
+    nativeBuildInputs = [
+      bundleStarts
+      bundleStartsRabbitMqSingle
+      bundleStartsRabbitMqLegacy
+    ];
+  } "touch $out";
+}

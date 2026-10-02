@@ -1,155 +1,256 @@
-import { Router, Request, Response } from "express";
-import {
-	User,
-	PrivateUserProjection,
-	emitEvent,
-	UserUpdateEvent,
-	handleFile,
-	FieldErrors,
-	adjustEmail,
-	Config,
-	UserModifySchema,
-	generateToken,
-} from "@fosscord/util";
-import { route } from "@fosscord/api";
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
 import bcrypt from "bcrypt";
+import { Request, Response, Router } from "express";
+import { route } from "@spacebar/api/middlewares";
+import { AvatarDecoration, User } from "@spacebar/database";
+import { ApiError, Config, DiscordApiErrors, emitEvent, FieldErrors, generateToken, handleFile, UserUpdateEvent } from "@spacebar/util";
+import { DisplayNameStyle, PrivateUserProjection, UserModifySchema } from "@spacebar/schemas";
 
-const router: Router = Router();
+const router: Router = Router({ mergeParams: true });
 
-router.get("/", route({}), async (req: Request, res: Response) => {
-	res.json(
-		await User.findOne({
-			select: PrivateUserProjection,
-			where: { id: req.user_id },
-		}),
-	);
-});
+router.get(
+    "/",
+    route({
+        responses: {
+            200: {
+                body: "PrivateUser",
+            },
+        },
+    }),
+    async (req: Request, res: Response) => {
+        res.json(
+            await User.findOne({
+                select: Object.fromEntries(PrivateUserProjection.map((i) => [i, true])), //TODO: cleanup
+                where: { id: req.user_id },
+            }),
+        );
+    },
+);
 
 router.patch(
-	"/",
-	route({ body: "UserModifySchema" }),
-	async (req: Request, res: Response) => {
-		const body = req.body as UserModifySchema;
+    "/",
+    route({
+        requestBody: "UserModifySchema",
+        responses: {
+            200: {
+                body: "UserUpdateResponse",
+            },
+            400: {
+                body: "APIErrorResponse",
+            },
+            404: {
+                body: "APIErrorResponse",
+            },
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const body = req.body as UserModifySchema;
 
-		const user = await User.findOneOrFail({
-			where: { id: req.user_id },
-			select: [...PrivateUserProjection, "data"],
-		});
+        const user = await User.findOneOrFail({
+            where: { id: req.user_id },
+            select: Object.fromEntries([...PrivateUserProjection, "data"].map((i) => [i, true])), //TODO: cleanup
+        });
 
-		// Populated on password change
-		var newToken: string | undefined;
+        // Populated on password change
+        let newToken: string | undefined;
 
-		if (body.avatar)
-			body.avatar = await handleFile(
-				`/avatars/${req.user_id}`,
-				body.avatar as string,
-			);
-		if (body.banner)
-			body.banner = await handleFile(
-				`/banners/${req.user_id}`,
-				body.banner as string,
-			);
+        if (body.avatar) body.avatar = await handleFile(`/avatars/${req.user_id}`, body.avatar as string);
+        if (body.banner) body.banner = await handleFile(`/banners/${req.user_id}`, body.banner as string);
 
-		if (body.password) {
-			if (user.data?.hash) {
-				const same_password = await bcrypt.compare(
-					body.password,
-					user.data.hash || "",
-				);
-				if (!same_password) {
-					throw FieldErrors({
-						password: {
-							message: req.t("auth:login.INVALID_PASSWORD"),
-							code: "INVALID_PASSWORD",
-						},
-					});
-				}
-			} else {
-				user.data.hash = await bcrypt.hash(body.password, 12);
-			}
-		}
+        if (body.password) {
+            if (user.data?.hash) {
+                const same_password = await bcrypt.compare(body.password, user.data.hash || "");
+                if (!same_password) {
+                    throw FieldErrors({
+                        password: {
+                            message: req.t("auth:login.INVALID_PASSWORD"),
+                            code: "INVALID_PASSWORD",
+                        },
+                    });
+                }
+            } else {
+                user.data.hash = await bcrypt.hash(body.password, 12);
+            }
+        }
 
-		if (body.email) {
-			body.email = adjustEmail(body.email);
-			if (!body.email && Config.get().register.email.required)
-				throw FieldErrors({
-					email: {
-						message: req.t("auth:register.EMAIL_INVALID"),
-						code: "EMAIL_INVALID",
-					},
-				});
-			if (!body.password)
-				throw FieldErrors({
-					password: {
-						message: req.t("auth:register.INVALID_PASSWORD"),
-						code: "INVALID_PASSWORD",
-					},
-				});
-		}
+        if (body.email) {
+            if (!body.email && Config.get().register.email.required)
+                throw FieldErrors({
+                    email: {
+                        message: req.t("auth:register.EMAIL_INVALID"),
+                        code: "EMAIL_INVALID",
+                    },
+                });
+            if (!body.password)
+                throw FieldErrors({
+                    password: {
+                        message: req.t("auth:login.INVALID_PASSWORD"),
+                        code: "INVALID_PASSWORD",
+                    },
+                });
+        }
 
-		if (body.new_password) {
-			if (!body.password && !user.email) {
-				throw FieldErrors({
-					password: {
-						code: "BASE_TYPE_REQUIRED",
-						message: req.t("common:field.BASE_TYPE_REQUIRED"),
-					},
-				});
-			}
-			user.data.hash = await bcrypt.hash(body.new_password, 12);
-			user.data.valid_tokens_since = new Date();
-			newToken = (await generateToken(user.id)) as string;
-		}
+        if (body.new_password) {
+            if (!body.password && user.email) {
+                throw FieldErrors({
+                    password: {
+                        code: "BASE_TYPE_REQUIRED",
+                        message: req.t("common:field.BASE_TYPE_REQUIRED"),
+                    },
+                });
+            }
+            user.data.hash = await bcrypt.hash(body.new_password, 12);
+            user.data.valid_tokens_since = new Date();
+            newToken = (await generateToken(user.id)) as string;
+        }
 
-		if (body.username) {
-			var check_username = body?.username?.replace(/\s/g, "");
-			if (!check_username) {
-				throw FieldErrors({
-					username: {
-						code: "BASE_TYPE_REQUIRED",
-						message: req.t("common:field.BASE_TYPE_REQUIRED"),
-					},
-				});
-			}
-		}
+        if (body.username) {
+            const check_username = body?.username?.replace(/\s/g, "").trim();
+            if (!check_username) {
+                throw FieldErrors({
+                    username: {
+                        code: "BASE_TYPE_REQUIRED",
+                        message: req.t("common:field.BASE_TYPE_REQUIRED"),
+                    },
+                });
+            }
 
-		if (body.discriminator) {
-			if (
-				await User.findOne({
-					where: {
-						discriminator: body.discriminator,
-						username: body.username || user.username,
-					},
-				})
-			) {
-				throw FieldErrors({
-					discriminator: {
-						code: "INVALID_DISCRIMINATOR",
-						message: "This discriminator is already in use.",
-					},
-				});
-			}
-		}
+            const { maxUsername } = Config.get().limits.user;
+            if (check_username.length > maxUsername || check_username.length < 2) {
+                throw FieldErrors({
+                    username: {
+                        code: "BASE_TYPE_BAD_LENGTH",
+                        message: `Must be between 2 and ${maxUsername} in length.`,
+                    },
+                });
+            }
 
-		user.assign(body);
-		user.validate();
-		await user.save();
+            if (!body.password) {
+                throw FieldErrors({
+                    password: {
+                        message: req.t("auth:login.INVALID_PASSWORD"),
+                        code: "INVALID_PASSWORD",
+                    },
+                });
+            }
+        }
 
-		// @ts-ignore
-		delete user.data;
+        if (body.discriminator) {
+            // TODO: HACK - maybe make this optional?
+            if (!/^\d{4}$/.test(body.discriminator)) {
+                throw FieldErrors({
+                    discriminator: {
+                        code: "INVALID_DISCRIMINATOR",
+                        message: "Discriminator must be 4 digits.",
+                    },
+                });
+            }
 
-		// TODO: send update member list event in gateway
-		await emitEvent({
-			event: "USER_UPDATE",
-			user_id: req.user_id,
-			data: user,
-		} as UserUpdateEvent);
+            if (
+                await User.findOne({
+                    where: {
+                        discriminator: body.discriminator,
+                        username: body.username || user.username,
+                    },
+                })
+            ) {
+                throw FieldErrors({
+                    discriminator: {
+                        code: "INVALID_DISCRIMINATOR",
+                        message: "This discriminator is already in use.",
+                    },
+                });
+            }
+        }
 
-		res.json({
-			...user,
-			newToken,
-		});
-	},
+        if (body.bio) {
+            const { maxBio } = Config.get().limits.user;
+            if (body.bio.length > maxBio) {
+                throw FieldErrors({
+                    bio: {
+                        code: "BIO_INVALID",
+                        message: `Bio must be less than ${maxBio} in length`,
+                    },
+                });
+            }
+        }
+
+        if ("display_name_font_id" in body) {
+            if (!body.display_name_font_id) user.display_name_styles = undefined;
+            else {
+                user.display_name_styles ??= {} as unknown as DisplayNameStyle;
+                user.display_name_styles!.font_id = body.display_name_font_id;
+            }
+        }
+
+        if ("display_name_effect_id" in body) {
+            if (!body.display_name_effect_id) user.display_name_styles = undefined;
+            else {
+                user.display_name_styles ??= {} as unknown as DisplayNameStyle;
+                user.display_name_styles!.effect_id = body.display_name_effect_id;
+            }
+        }
+
+        if ("display_name_colors" in body) {
+            if (!body.display_name_colors) user.display_name_styles = undefined;
+            else {
+                user.display_name_styles ??= {} as unknown as DisplayNameStyle;
+                user.display_name_styles!.colors = body.display_name_colors;
+            }
+        }
+
+        if ("avatar_decoration_sku_id" in body) {
+            if (!body.avatar_decoration_sku_id) {
+                user.avatar_decoration_data = undefined;
+                user.avatar_decoration_id = undefined;
+            } else {
+                const avatarDecoration = await AvatarDecoration.findOne({ where: { id: body.avatar_decoration_sku_id } });
+                if (!avatarDecoration) throw FieldErrors({ avatar_decoration_sku_id: { code: "50057", message: "Invalid SKU" } });
+
+                if (!(await avatarDecoration.canUseAvatarDecoration(req.user_id)))
+                    throw FieldErrors({ avatar_decoration_sku_id: { code: "40018", message: "You do not have access to this avatar decoration" } }); // TODO: find a better code
+
+                user.avatar_decoration_id = body.avatar_decoration_sku_id;
+            }
+        }
+
+        user.assign(body);
+        user.validate();
+        await user.save();
+
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        //@ts-ignore
+        delete user.data;
+
+        // TODO: send update member list event in gateway
+        await emitEvent({
+            event: "USER_UPDATE",
+            user_id: req.user_id,
+            data: user,
+        } satisfies UserUpdateEvent);
+
+        res.json({
+            ...user,
+            newToken,
+        });
+    },
 );
 
 export default router;

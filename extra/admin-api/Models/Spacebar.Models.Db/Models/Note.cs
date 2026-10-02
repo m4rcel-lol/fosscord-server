@@ -1,0 +1,33 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.EntityFrameworkCore;
+
+namespace Spacebar.Models.Db.Models;
+
+[Table("notes")]
+[Index("OwnerId", "TargetId", Name = "UQ_74e6689b9568cc965b8bfc9150b", IsUnique = true)]
+public partial class Note
+{
+    [Key]
+    [Column("id")]
+    public long Id { get; set; }
+
+    [Column("content", TypeName = "character varying")]
+    public string Content { get; set; } = null!;
+
+    [Column("owner_id")]
+    public long? OwnerId { get; set; }
+
+    [Column("target_id")]
+    public long? TargetId { get; set; }
+
+    [ForeignKey("OwnerId")]
+    [InverseProperty("NoteOwners")]
+    public virtual User? Owner { get; set; }
+
+    [ForeignKey("TargetId")]
+    [InverseProperty("NoteTargets")]
+    public virtual User? Target { get; set; }
+}

@@ -1,176 +1,267 @@
-import { Router, Response, Request } from "express";
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import { handleMessage, postHandleMessage } from "@spacebar/api/util";
+import { route } from "@spacebar/api/middlewares";
+import { Attachment, Channel, Member, Message, ReadState, Relationship, User, ThreadMember, ThreadMemberFlags } from "@spacebar/database";
 import {
-	Attachment,
-	Channel,
-	ChannelType,
-	Config,
-	DmChannelDTO,
-	emitEvent,
-	FieldErrors,
-	getPermission,
-	Message,
-	MessageCreateEvent,
-	Snowflake,
-	uploadFile,
-	Member,
-	Role,
-	MessageCreateSchema,
-	ReadState,
-	DiscordApiErrors,
-	getRights,
-	Rights,
-} from "@fosscord/util";
-import { HTTPError } from "lambert-server";
-import {
-	handleMessage,
-	postHandleMessage,
-	route,
-	getIpAdress,
-} from "@fosscord/api";
+    Config,
+    DiscordApiErrors,
+    DmChannelDTO,
+    emitEvent,
+    FieldErrors,
+    getPermission,
+    getUrlSignature,
+    MessageCreateEvent,
+    NewUrlSignatureData,
+    NewUrlUserSignatureData,
+    Rights,
+    Snowflake,
+    uploadFile,
+    ThreadMembersUpdateEvent,
+    ThreadCreateEvent,
+} from "@spacebar/util";
+import { Request, Response, Router } from "express";
+import { HTTPError } from "lambert-server/HTTPError";
 import multer from "multer";
-import { yellow } from "picocolors";
-import { FindManyOptions, LessThan, MoreThan } from "typeorm";
-import { URL } from "url";
+import { FindManyOptions, FindOperator, LessThan, MoreThan, MoreThanOrEqual } from "typeorm";
+import {
+    AcknowledgeDeleteSchema,
+    isTextChannel,
+    MessageCreateAttachment,
+    MessageCreateCloudAttachment,
+    MessageCreateSchema,
+    PartialUser,
+    PollAnswerCount,
+    PublicMessage,
+    Reaction,
+    ReadStateType,
+    RelationshipType,
+} from "@spacebar/schemas";
 
-const router: Router = Router();
-
-export default router;
-
-export function isTextChannel(type: ChannelType): boolean {
-	switch (type) {
-		case ChannelType.GUILD_STORE:
-		case ChannelType.GUILD_VOICE:
-		case ChannelType.GUILD_STAGE_VOICE:
-		case ChannelType.GUILD_CATEGORY:
-		case ChannelType.GUILD_FORUM:
-		case ChannelType.DIRECTORY:
-			throw new HTTPError("not a text channel", 400);
-		case ChannelType.DM:
-		case ChannelType.GROUP_DM:
-		case ChannelType.GUILD_NEWS:
-		case ChannelType.GUILD_NEWS_THREAD:
-		case ChannelType.GUILD_PUBLIC_THREAD:
-		case ChannelType.GUILD_PRIVATE_THREAD:
-		case ChannelType.GUILD_TEXT:
-		case ChannelType.ENCRYPTED:
-		case ChannelType.ENCRYPTED_THREAD:
-			return true;
-		default:
-			throw new HTTPError("unimplemented", 400);
-	}
-}
+const router: Router = Router({ mergeParams: true });
 
 // https://discord.com/developers/docs/resources/channel#create-message
 // get messages
-router.get("/", async (req: Request, res: Response) => {
-	const channel_id = req.params.channel_id;
-	const channel = await Channel.findOneOrFail({ where: { id: channel_id } });
-	if (!channel) throw new HTTPError("Channel not found", 404);
+router.get(
+    "/",
+    route({
+        query: {
+            around: {
+                type: "string",
+            },
+            before: {
+                type: "string",
+            },
+            after: {
+                type: "string",
+            },
+            limit: {
+                type: "number",
+                description: "max number of messages to return (1-100). defaults to 50",
+            },
+        },
+        responses: {
+            200: {
+                body: "PublicMessageListResponse",
+            },
+            400: {
+                body: "APIErrorResponse",
+            },
+            403: {},
+            404: {},
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const { channel_id } = req.params as { [key: string]: string };
+        const channel = await Channel.findOneOrFail({
+            where: { id: channel_id },
+        });
+        if (!channel) throw new HTTPError("Channel not found", 404);
 
-	isTextChannel(channel.type);
-	const around = req.query.around ? `${req.query.around}` : undefined;
-	const before = req.query.before ? `${req.query.before}` : undefined;
-	const after = req.query.after ? `${req.query.after}` : undefined;
-	const limit = Number(req.query.limit) || 50;
-	if (limit < 1 || limit > 100)
-		throw new HTTPError("limit must be between 1 and 100", 422);
+        isTextChannel(channel.type);
+        const around = req.query.around ? `${req.query.around}` : undefined;
+        const before = req.query.before ? `${req.query.before}` : undefined;
+        const after = req.query.after ? `${req.query.after}` : undefined;
+        const limit = Number(req.query.limit) || 50;
+        if (limit < 1 || limit > 100) throw new HTTPError("limit must be between 1 and 100", 422);
 
-	var halfLimit = Math.floor(limit / 2);
+        const permissions = await getPermission(req.user_id, channel.guild_id, channel_id);
+        permissions.hasThrow("VIEW_CHANNEL");
+        if (!permissions.has("READ_MESSAGE_HISTORY")) return res.json([]);
 
-	const permissions = await getPermission(
-		req.user_id,
-		channel.guild_id,
-		channel_id,
-	);
-	permissions.hasThrow("VIEW_CHANNEL");
-	if (!permissions.has("READ_MESSAGE_HISTORY")) return res.json([]);
+        const query: FindManyOptions<Message> & {
+            where: { id?: FindOperator<string> | FindOperator<string>[] };
+        } = {
+            relationLoadStrategy: "query",
+            order: { timestamp: "DESC" },
+            take: limit,
+            where: { channel_id },
+            relations: {
+                author: true,
+                webhook: true,
+                application: true,
+                mentions: true,
+                mention_roles: true,
+                mention_channels: true,
+                sticker_items: true,
+                attachments: true,
+                thread: {
+                    recipients: {
+                        user: true,
+                    },
+                },
+            },
+        };
 
-	var query: FindManyOptions<Message> & { where: { id?: any } } = {
-		order: { timestamp: "DESC" },
-		take: limit,
-		where: { channel_id },
-		relations: [
-			"author",
-			"webhook",
-			"application",
-			"mentions",
-			"mention_roles",
-			"mention_channels",
-			"sticker_items",
-			"attachments",
-		],
-	};
+        let messages: Message[];
 
-	if (after) {
-		if (BigInt(after) > BigInt(Snowflake.generate()))
-			return res.status(422);
-		query.where.id = MoreThan(after);
-	} else if (before) {
-		if (BigInt(before) < BigInt(req.params.channel_id))
-			return res.status(422);
-		query.where.id = LessThan(before);
-	} else if (around) {
-		query.where.id = [
-			MoreThan((BigInt(around) - BigInt(halfLimit)).toString()),
-			LessThan((BigInt(around) + BigInt(halfLimit)).toString()),
-		];
+        if (around) {
+            query.take = Math.floor(limit / 2);
+            if (query.take != 0) {
+                const [right, left] = await Promise.all([
+                    Message.find({
+                        ...query,
+                        where: { channel_id, id: LessThan(around) },
+                    }),
+                    Message.find({
+                        ...query,
+                        where: { channel_id, id: MoreThanOrEqual(around) },
+                        order: { timestamp: "ASC" },
+                    }),
+                ]);
+                left.push(...right);
+                messages = left.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+            } else {
+                query.take = 1;
+                const message = await Message.findOne({
+                    ...query,
+                    where: { channel_id, id: around },
+                });
+                messages = message ? [message] : [];
+            }
+        } else {
+            if (after) {
+                if (BigInt(after) > BigInt(Snowflake.generate())) throw new HTTPError("after parameter must not be greater than current time", 422);
 
-		return res.json([]); // TODO: fix around
-	}
+                query.where.id = MoreThan(after);
+                query.order = { timestamp: "ASC" };
+            } else if (before) {
+                if (BigInt(before) > BigInt(Snowflake.generate())) throw new HTTPError("before parameter must not be greater than current time", 422);
 
-	const messages = await Message.find(query);
-	const endpoint = Config.get().cdn.endpointPublic;
+                query.where.id = LessThan(before);
+            }
 
-	return res.json(
-		messages.map((x: any) => {
-			(x.reactions || []).forEach((x: any) => {
-				// @ts-ignore
-				if ((x.user_ids || []).includes(req.user_id)) x.me = true;
-				// @ts-ignore
-				delete x.user_ids;
-			});
-			// @ts-ignore
-			if (!x.author)
-				x.author = {
-					id: "4",
-					discriminator: "0000",
-					username: "Fosscord Ghost",
-					public_flags: "0",
-					avatar: null,
-				};
-			x.attachments?.forEach((y: any) => {
-				// dynamically set attachment proxy_url in case the endpoint changed
-				const uri = y.proxy_url.startsWith("http")
-					? y.proxy_url
-					: `https://example.org${y.proxy_url}`;
-				y.proxy_url = `${endpoint == null ? "" : endpoint}${
-					new URL(uri).pathname
-				}`;
-			});
+            messages = await Message.find(query);
+        }
 
-			/**
+        await Message.fillReplies(messages);
+        const ret = messages.map((msg) => {
+            const x = msg.toJSON();
+
+            (x.reactions || []).forEach((y: Partial<Reaction>) => {
+                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                //@ts-ignore
+                if ((y.user_ids || []).includes(req.user_id)) y.me = true;
+                delete y.user_ids;
+            });
+            if (!x.author)
+                x.author = {
+                    id: "4",
+                    discriminator: "0000",
+                    username: "Spacebar Ghost",
+                    public_flags: 0,
+                    avatar: null,
+                } as PartialUser;
+            x.attachments =
+                msg.attachments?.map((y: Attachment) => {
+                    const att = y.toJSON();
+
+                    att.proxy_url = getUrlSignature(
+                        new NewUrlSignatureData({
+                            url: att.proxy_url,
+                            userAgent: req.headers["user-agent"],
+                            ip: req.ip,
+                        }),
+                    )
+                        .applyToUrl(att.proxy_url)
+                        .toString();
+
+                    att.url = getUrlSignature(
+                        new NewUrlSignatureData({
+                            url: att.url,
+                            userAgent: req.headers["user-agent"],
+                            ip: req.ip,
+                        }),
+                    )
+                        .applyToUrl(att.url)
+                        .toString();
+
+                    return att;
+                }) ?? [];
+
+            if (x.poll?.results) {
+                (x.poll.results.answer_counts as (PollAnswerCount & { voters?: string[] })[]).map((answer) => {
+                    answer.me_voted = answer.voters!.includes(req.user_id);
+                    delete answer.voters;
+
+                    return answer;
+                });
+            }
+
+            /**
 			Some clients ( discord.js ) only check if a property exists within the response,
-			which causes erorrs when, say, the `application` property is `null`.
+			which causes errors when, say, the `application` property is `null`.
 			**/
 
-			// for (var curr in x) {
-			// 	if (x[curr] === null)
-			// 		delete x[curr];
-			// }
+            // for (var curr in x) {
+            // 	if (x[curr] === null)
+            // 		delete x[curr];
+            // }
 
-			return x;
-		}),
-	);
-});
+            return x;
+        });
+        //console.log(ret);
+
+        type MessageWithInteraction = PublicMessage & {
+            interaction_metadata?: { user?: User; user_id: string };
+            interaction?: { user?: User };
+        };
+        await Promise.all(
+            (ret as MessageWithInteraction[])
+                .filter((x) => x.interaction_metadata && !x.interaction_metadata.user)
+                .map(async (x) => {
+                    x.interaction_metadata!.user = x.interaction!.user = await User.findOneOrFail({ where: { id: x.interaction_metadata!.user_id } });
+                }),
+        );
+
+        return res.json(ret);
+    },
+);
 
 // TODO: config max upload size
-const messageUpload = multer({
-	limits: {
-		fileSize: Config.get().limits.message.maxAttachmentSize,
-		fields: 10,
-		// files: 1
-	},
-	storage: multer.memoryStorage(),
+export const messageUpload = multer({
+    limits: {
+        fileSize: Config.get().limits.message.maxAttachmentSize,
+        fields: 10,
+        files: Config.get().limits.message.maxAttachments,
+    },
+    storage: multer.memoryStorage(),
 }); // max upload 50 mb
 /**
  TODO: dynamically change limit of MessageCreateSchema with config
@@ -182,170 +273,280 @@ const messageUpload = multer({
 **/
 // Send message
 router.post(
-	"/",
-	messageUpload.any(),
-	(req, res, next) => {
-		if (req.body.payload_json) {
-			req.body = JSON.parse(req.body.payload_json);
-		}
+    "/",
+    messageUpload.any(),
+    (req, res, next) => {
+        if (req.body.payload_json) {
+            req.body = JSON.parse(req.body.payload_json);
+        }
 
-		next();
-	},
-	route({
-		body: "MessageCreateSchema",
-		permission: "SEND_MESSAGES",
-		right: "SEND_MESSAGES",
-	}),
-	async (req: Request, res: Response) => {
-		const { channel_id } = req.params;
-		var body = req.body as MessageCreateSchema;
-		const attachments: Attachment[] = [];
+        next();
+    },
+    route({
+        requestBody: "MessageCreateSchema",
+        stripNulls: {
+            components: true,
+            embeds: true,
+        },
+        permission: "VIEW_CHANNEL",
+        right: "SEND_MESSAGES",
+        responses: {
+            200: {
+                body: "PublicMessage",
+            },
+            400: {
+                body: "APIErrorResponse",
+            },
+            403: {},
+            404: {},
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const { channel_id } = req.params as { [key: string]: string };
+        const body = req.body as MessageCreateSchema;
+        const messageId = Snowflake.generate();
+        const attachments: (Attachment | MessageCreateAttachment | MessageCreateCloudAttachment)[] = body.attachments ?? [];
 
-		const channel = await Channel.findOneOrFail({
-			where: { id: channel_id },
-			relations: ["recipients", "recipients.user"],
-		});
-		if (!channel.isWritable()) {
-			throw new HTTPError(
-				`Cannot send messages to channel of type ${channel.type}`,
-				400,
-			);
-		}
+        const channel = await Channel.findOneOrFail({
+            where: { id: channel_id },
+            relations: { recipients: { user: true } },
+        });
+        if (channel.thread_metadata?.locked) throw DiscordApiErrors.THREAD_IS_LOCKED;
+        if (channel.isThread()) {
+            req.permission!.hasThrow("SEND_MESSAGES_IN_THREADS");
+            if (channel.recipients && !channel.recipients.find(({ id }) => id === req.user_id)) {
+                const member = await Member.findOneOrFail({ where: { id: req.user_id, guild_id: channel.guild_id! } });
 
-		if (body.nonce) {
-			const existing = await Message.findOne({
-				where: {
-					nonce: body.nonce,
-					channel_id: channel.id,
-					author_id: req.user_id,
-				},
-			});
-			if (existing) {
-				return res.json(existing);
-			}
-		}
+                if (!(await ThreadMember.existsBy({ member_idx: member.index, id: channel_id }))) {
+                    const threadMember = ThreadMember.create({
+                        member_idx: member.index,
+                        id: channel_id,
+                        join_timestamp: new Date(),
+                        muted: false,
+                        flags: ThreadMemberFlags.ALL_MESSAGES,
+                    });
+                    await threadMember.save();
 
-		if (!req.rights.has(Rights.FLAGS.BYPASS_RATE_LIMITS)) {
-			var limits = Config.get().limits;
-			if (limits.absoluteRate.register.enabled) {
-				const count = await Message.count({
-					where: {
-						channel_id,
-						timestamp: MoreThan(
-							new Date(
-								Date.now() -
-									limits.absoluteRate.sendMessage.window,
-							),
-						),
-					},
-				});
+                    // increment member count
+                    if (channel.member_count !== null && channel.member_count !== undefined) {
+                        channel.member_count++;
+                        await channel.save();
+                    }
 
-				if (count >= limits.absoluteRate.sendMessage.limit)
-					throw FieldErrors({
-						channel_id: {
-							code: "TOO_MANY_MESSAGES",
-							message: req.t("common:toomany.MESSAGE"),
-						},
-					});
-			}
-		}
+                    await emitEvent({
+                        event: "THREAD_MEMBERS_UPDATE",
+                        data: {
+                            guild_id: channel.guild_id!,
+                            id: channel.id,
+                            member_count: channel.member_count ?? 0, // TODO: is this the right fix?
+                            added_members: [{ user_id: req.user_id, ...threadMember.toJSON() }],
+                        },
+                        channel_id: channel.id,
+                    } satisfies ThreadMembersUpdateEvent);
 
-		const files = (req.files as Express.Multer.File[]) ?? [];
-		for (var currFile of files) {
-			try {
-				const file = await uploadFile(
-					`/attachments/${channel.id}`,
-					currFile,
-				);
-				attachments.push(
-					Attachment.create({ ...file, proxy_url: file.url }),
-				);
-			} catch (error) {
-				return res.status(400).json({ message: error!.toString() });
-			}
-		}
+                    await emitEvent({
+                        event: "THREAD_CREATE",
+                        data: { ...channel.toJSON(), newly_created: false },
+                        user_id: req.user_id,
+                    } satisfies ThreadCreateEvent);
+                }
+            }
+        } else {
+            req.permission!.hasThrow("SEND_MESSAGES");
+        }
+        if (!channel.isWritable()) {
+            throw new HTTPError(`Cannot send messages to channel of type ${channel.type}`, 400);
+        }
 
-		const embeds = body.embeds || [];
-		if (body.embed) embeds.push(body.embed);
-		let message = await handleMessage({
-			...body,
-			type: 0,
-			pinned: false,
-			author_id: req.user_id,
-			embeds,
-			channel_id,
-			attachments,
-			edited_timestamp: undefined,
-			timestamp: new Date(),
-		});
+        if (body.poll && !isTextChannel(channel.type)) {
+            throw DiscordApiErrors.POLL_INVALID_CHANNEL_TYPE;
+        }
 
-		channel.last_message_id = message.id;
+        // handle blocked users in dms
+        if (channel.recipients?.length == 2) {
+            const otherUser = channel.recipients.find((r) => r.user_id != req.user_id)?.user;
+            if (otherUser) {
+                const relationship = await Relationship.findOne({
+                    where: [
+                        { from_id: req.user_id, to_id: otherUser.id },
+                        { from_id: otherUser.id, to_id: req.user_id },
+                    ],
+                });
 
-		if (channel.isDm()) {
-			const channel_dto = await DmChannelDTO.from(channel);
+                if (relationship?.type === RelationshipType.BLOCKED) {
+                    throw DiscordApiErrors.CANNOT_MESSAGE_USER;
+                }
+            }
+        }
 
-			// Only one recipients should be closed here, since in group DMs the recipient is deleted not closed
-			await Promise.all(
-				channel.recipients!.map((recipient) => {
-					if (recipient.closed) {
-						recipient.closed = false;
-						return Promise.all([
-							recipient.save(),
-							emitEvent({
-								event: "CHANNEL_CREATE",
-								data: channel_dto.excludedRecipients([
-									recipient.user_id,
-								]),
-								user_id: recipient.user_id,
-							}),
-						]);
-					}
-				}),
-			);
-		}
+        if (body.nonce) {
+            const existing = await Message.findOne({
+                where: {
+                    nonce: body.nonce,
+                    channel_id: channel.id,
+                    author_id: req.user_id,
+                },
+            });
+            if (existing) {
+                return res.json(existing);
+            }
+        }
 
-		if (message.guild_id) {
-			// handleMessage will fetch the Member, but only if they are not guild owner.
-			// have to fetch ourselves otherwise.
-			if (!message.member) {
-				message.member = await Member.findOneOrFail({
-					where: { id: req.user_id, guild_id: message.guild_id },
-					relations: ["roles"],
-				});
-			}
+        if (!req.rights.has(Rights.FLAGS.BYPASS_RATE_LIMITS)) {
+            const limits = Config.get().limits;
+            if (limits.absoluteRate.sendMessage.enabled) {
+                const count = await Message.count({
+                    where: {
+                        channel_id,
+                        timestamp: MoreThan(new Date(Date.now() - limits.absoluteRate.sendMessage.window)),
+                    },
+                });
 
-			//@ts-ignore
-			message.member.roles = message.member.roles
-				.filter((x) => x.id != x.guild_id)
-				.map((x) => x.id);
-		}
+                if (count >= limits.absoluteRate.sendMessage.limit)
+                    throw FieldErrors({
+                        channel_id: {
+                            code: "TOO_MANY_MESSAGES",
+                            message: req.t("common:toomany.MESSAGE"),
+                        },
+                    });
+            }
+        }
 
-		let read_state = await ReadState.findOne({
-			where: { user_id: req.user_id, channel_id },
-		});
-		if (!read_state)
-			read_state = ReadState.create({ user_id: req.user_id, channel_id });
-		read_state.last_message_id = message.id;
+        const files = (req.files as Express.Multer.File[]) ?? [];
+        for (const currFile of files) {
+            try {
+                const file = await uploadFile(`/attachments/${channel.id}/${messageId}`, currFile);
+                attachments.push(file);
+            } catch (error) {
+                return res.status(400).json({ message: error?.toString() });
+            }
+        }
 
-		await Promise.all([
-			read_state.save(),
-			message.save(),
-			emitEvent({
-				event: "MESSAGE_CREATE",
-				channel_id: channel_id,
-				data: message,
-			} as MessageCreateEvent),
-			message.guild_id
-				? Member.update(
-						{ id: req.user_id, guild_id: message.guild_id },
-						{ last_message_id: message.id },
-				  )
-				: null,
-			channel.save(),
-		]);
+        const embeds = body.embeds || [];
+        if (body.embed) embeds.push(body.embed);
+        const message = await handleMessage({
+            ...body,
+            id: messageId,
+            type: 0,
+            pinned: false,
+            author_id: req.user_id,
+            embeds,
+            channel_id,
+            attachments,
+            timestamp: new Date(),
+        });
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore dont care
+        message.edited_timestamp = null;
 
-		postHandleMessage(message).catch((e) => {}); // no await as it shouldnt block the message send function and silently catch error
+        if (channel.isDm()) {
+            const channel_dto = await DmChannelDTO.from(channel);
 
-		return res.json(message);
-	},
+            // Only one recipients should be closed here, since in group DMs the recipient is deleted not closed
+            await Promise.all(
+                channel.recipients
+                    ?.map((recipient) => {
+                        if (recipient.closed) {
+                            recipient.closed = false;
+                            return Promise.all([
+                                recipient.save(),
+                                emitEvent({
+                                    event: "CHANNEL_CREATE",
+                                    data: channel_dto.excludedRecipients([recipient.user_id]),
+                                    user_id: recipient.user_id,
+                                }),
+                            ]);
+                        }
+                        return null;
+                    })
+                    .filter((x) => x !== null) || [],
+            );
+        }
+
+        if (channel.isThread()) {
+            channel.message_count = (channel.message_count || 0) + 1;
+            channel.total_message_sent = (channel.total_message_sent || 0) + 1;
+            channel.last_message_id = message.id;
+            await Promise.all([
+                channel.save(),
+                emitEvent({
+                    event: "CHANNEL_UPDATE",
+                    data: { ...channel.toJSON(), newly_created: false },
+                    guild_id: channel.guild_id,
+                }),
+            ]);
+        }
+
+        if (message.guild_id) {
+            // handleMessage will fetch the Member, but only if they are not guild owner.
+            // have to fetch ourselves otherwise.
+            if (!message.member) {
+                message.member = await Member.findOneOrFail({
+                    where: { id: req.user_id, guild_id: message.guild_id },
+                    relations: { roles: true },
+                });
+                message.member.clean_data();
+            }
+
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
+            message.member.roles = message.member.roles.filter((x) => x.id != x.guild_id).map((x) => x.id);
+        }
+
+        let read_state = await ReadState.findOne({
+            where: { user_id: req.user_id, channel_id },
+        });
+        if (!read_state) read_state = ReadState.create({ user_id: req.user_id, channel_id });
+        read_state.last_message_id = message.id;
+        //It's a little more complicated than this but this'll do
+        read_state.mention_count = 0;
+
+        await Promise.all([
+            read_state.save(),
+            message.save(),
+            emitEvent({
+                event: "MESSAGE_CREATE",
+                channel_id: channel_id,
+                data: message.toJSON(),
+            } satisfies MessageCreateEvent),
+            message.guild_id ? Member.update({ id: req.user_id, guild_id: message.guild_id }, { last_message_id: message.id }) : undefined,
+        ]);
+
+        // no await as it shouldnt block the message send function and silently catch error
+        postHandleMessage(message).catch((e) => console.error("[Message] post-message handler failed", e));
+        return res.json(
+            message.withSignedAttachments(
+                new NewUrlUserSignatureData({
+                    ip: req.ip,
+                    userAgent: req.headers["user-agent"] as string,
+                }),
+            ),
+        );
+    },
 );
+
+router.delete(
+    "/ack",
+    route({
+        requestBody: "AcknowledgeDeleteSchema",
+        responses: {
+            204: {},
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const { channel_id } = req.params as { [key: string]: string }; // not really a channel id if read_state_type != CHANNEL
+        const body = req.body as AcknowledgeDeleteSchema;
+        if (body.version != 2) return res.status(204).send();
+        // TODO: handle other read state types
+        if (body.read_state_type != ReadStateType.CHANNEL) return res.status(204).send();
+
+        const readState = await ReadState.findOne({ where: { channel_id, user_id: req.user_id } });
+        if (readState) {
+            await readState.remove();
+        }
+
+        res.status(204).send();
+    },
+);
+
+export default router;

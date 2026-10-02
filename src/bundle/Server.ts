@@ -1,41 +1,86 @@
-process.on("unhandledRejection", console.error);
-process.on("uncaughtException", console.error);
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+	
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+	
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+	
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
 
-import http from "http";
-import * as Api from "@fosscord/api";
-import * as Gateway from "@fosscord/gateway";
-import { CDNServer } from "@fosscord/cdn";
+import http from "node:http";
+import fs from "node:fs";
+import cluster from "node:cluster";
+import morgan from "morgan";
 import express from "express";
-import { green, bold, yellow } from "picocolors";
-import { Config, initDatabase, Sentry } from "@fosscord/util";
+import { green, bold } from "picocolors";
+import { SpacebarServer } from "@spacebar/api";
+import { CDNServer } from "@spacebar/cdn";
+import { initDatabase } from "@spacebar/database";
+import { GatewayServer } from "@spacebar/gateway";
+import { Config } from "@spacebar/util";
+import { WebrtcServer } from "@spacebar/webrtc";
+import { ProcessLifecycle } from "../util/util/ProcessLifecycle";
+import { Monitoring } from "../util/monitoring/Monitoring";
 
 const app = express();
 const server = http.createServer();
 const port = Number(process.env.PORT) || 3001;
+const wrtcWsPort = Number(process.env.WRTC_WS_PORT) || 3004;
 const production = process.env.NODE_ENV == "development" ? false : true;
 server.on("request", app);
 
-const api = new Api.FosscordServer({ server, port, production, app });
+const api = new SpacebarServer({ server, port, production, app });
 const cdn = new CDNServer({ server, port, production, app });
-const gateway = new Gateway.Server({ server, port, production });
+const gateway = new GatewayServer({ server, port, production, app });
+const webrtc = new WebrtcServer({
+    server: undefined,
+    port: wrtcWsPort,
+    production,
+});
 
-process.on("SIGTERM", async () => {
-	console.log("Shutting down due to SIGTERM");
-	server.close();
-	Sentry.close();
+ProcessLifecycle.eventEmitter.on("stopping", async () => {
+    await gateway.stop();
+    await cdn.stop();
+    await api.stop();
+    await webrtc.stop();
+    server.close();
 });
 
 async function main() {
-	await initDatabase();
-	await Config.init();
-	await Sentry.init(app);
+    await Monitoring.init();
+    Monitoring.attach(app);
+    await initDatabase();
+    await Config.init();
 
-	server.listen(port);
-	await Promise.all([api.start(), cdn.start(), gateway.start()]);
+    const logRequests = process.env["LOG_REQUESTS"] != undefined;
+    if (logRequests) {
+        app.use(
+            morgan("combined", {
+                skip: (req, res) => {
+                    let skip = !(process.env["LOG_REQUESTS"]?.includes(res.statusCode.toString()) ?? false);
+                    if (process.env["LOG_REQUESTS"]?.charAt(0) == "-") skip = !skip;
+                    return skip;
+                },
+            }),
+        );
+    }
 
-	Sentry.errorHandler(app);
+    await new Promise((resolve) => void server.listen({ port }, () => resolve(undefined)));
+    await Promise.all([api.start(), cdn.start(), gateway.start(), webrtc.start()]);
 
-	console.log(`[Server] ${green(`listening on port ${bold(port)}`)}`);
+    if (fs.existsSync("/proc/self/comm")) fs.writeFileSync("/proc/self/comm", `spacebar-bundle-${cluster.worker ? cluster.worker.id : port}`);
+    process.title = `sb-bundle-${cluster.worker ? cluster.worker.id : port}`;
+
+    console.log(`[Server] ${green(`Listening on port ${bold(port)}`)}`);
 }
 
 main().catch(console.error);

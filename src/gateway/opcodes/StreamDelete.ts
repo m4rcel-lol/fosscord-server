@@ -1,0 +1,103 @@
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2026 Spacebar and Spacebar Contributors
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import { Member, Stream, VoiceState } from "@spacebar/database";
+import { parseStreamKey, Payload, WebSocket } from "@spacebar/gateway";
+import { emitEvent, StreamDeleteEvent, VoiceStateUpdateEvent } from "@spacebar/util";
+import { check } from "./instanceOf";
+import { StreamDeleteSchema } from "@spacebar/schemas";
+
+export async function onStreamDelete(this: WebSocket, data: Payload) {
+    const startTime = Date.now();
+    check.call(this, StreamDeleteSchema, data.d);
+    const body = data.d as StreamDeleteSchema;
+
+    let parsedKey: {
+        type: "guild" | "call";
+        channelId: string;
+        guildId?: string;
+        userId: string;
+    };
+
+    try {
+        parsedKey = parseStreamKey(body.stream_key);
+    } catch (e) {
+        return this.close(4000, "Invalid stream key");
+    }
+
+    // noinspection JSUnusedLocalSymbols - TODO: what is type here?
+    const { userId, channelId, guildId, type } = parsedKey;
+
+    // when a user selects to stop watching another user stream, this event gets triggered
+    // just disconnect user without actually deleting stream
+    if (this.user_id !== userId) {
+        await emitEvent({
+            event: "STREAM_DELETE",
+            data: {
+                stream_key: body.stream_key,
+            },
+            user_id: this.user_id,
+        } satisfies StreamDeleteEvent);
+        return;
+    }
+
+    const stream = await Stream.findOne({
+        where: { channel_id: channelId, owner_id: userId },
+    });
+
+    if (!stream) return;
+
+    await stream.remove();
+
+    const voiceState = await VoiceState.findOne({
+        where: { user_id: this.user_id },
+        // relations: { member: true }, // TODO: actually add the relation
+    });
+
+    if (voiceState) {
+        voiceState.self_stream = false;
+        await voiceState.save();
+        voiceState.member = await Member.findOneOrFail({
+            where: {
+                id: voiceState.user_id,
+                guild_id: voiceState.guild_id,
+            },
+        });
+
+        await emitEvent({
+            event: "VOICE_STATE_UPDATE",
+            data: {
+                ...voiceState.toPublicVoiceState(),
+                member: voiceState.member.toPublicMember(),
+            },
+            guild_id: guildId,
+            channel_id: channelId,
+        } satisfies VoiceStateUpdateEvent);
+    }
+
+    await emitEvent({
+        event: "STREAM_DELETE",
+        data: {
+            stream_key: body.stream_key,
+        },
+        guild_id: guildId,
+        channel_id: channelId,
+    } satisfies StreamDeleteEvent);
+
+    console.log(`[Gateway/${this.user_id}] STREAM_DELETE for user ${this.user_id} in channel ${channelId} with stream key ${body.stream_key} in ${Date.now() - startTime}ms`);
+}

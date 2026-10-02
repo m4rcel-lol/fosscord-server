@@ -1,0 +1,131 @@
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import { Channel, Member, Stream, StreamSession, VoiceState } from "@spacebar/database";
+import { genVoiceToken, Payload, WebSocket, generateStreamKey } from "@spacebar/gateway";
+import { Config, emitEvent, Snowflake, StreamCreateEvent, StreamServerUpdateEvent, VoiceStateUpdateEvent } from "@spacebar/util";
+import { check } from "./instanceOf";
+import { StreamCreateSchema } from "@spacebar/schemas";
+
+export async function onStreamCreate(this: WebSocket, data: Payload) {
+    const startTime = Date.now();
+    check.call(this, StreamCreateSchema, data.d);
+    const body = data.d as StreamCreateSchema;
+
+    if (body.channel_id.trim().length === 0) return;
+
+    // first check if we are in a voice channel already. cannot create a stream if there's no existing voice connection
+    const voiceState = await VoiceState.findOne({
+        where: { user_id: this.user_id },
+    });
+
+    if (!voiceState || !voiceState.channel_id) return;
+
+    if (body.guild_id) {
+        voiceState.member = await Member.findOneOrFail({
+            where: { id: voiceState.user_id, guild_id: voiceState.guild_id },
+            relations: { user: true, roles: true },
+        });
+    }
+
+    // TODO: permissions check - if it's a guild, check if user is allowed to create stream in this guild
+
+    const channel = await Channel.findOne({
+        where: { id: body.channel_id },
+    });
+
+    if (!channel || (body.type === "guild" && channel.guild_id != body.guild_id)) return this.close(4000, "invalid channel");
+
+    // TODO: actually apply preferred_region from the event payload
+    const regions = Config.get().regions;
+    const guildRegion = regions.available.find((r) => r.id === regions.default);
+
+    if (!guildRegion) {
+        throw new Error("No default region configured");
+    }
+
+    // first make sure theres no other streams for this user that somehow didnt get cleared
+    await Stream.delete({
+        owner_id: this.user_id,
+    });
+
+    // create a new entry in db containing the token for authenticating user in stream gateway IDENTIFY
+    const stream = Stream.create({
+        id: Snowflake.generate(),
+        owner_id: this.user_id,
+        channel_id: body.channel_id,
+        endpoint: guildRegion.endpoint,
+    });
+
+    await stream.save();
+
+    const token = genVoiceToken();
+
+    const streamSession = StreamSession.create({
+        stream_id: stream.id,
+        user_id: this.user_id,
+        session_id: this.session_id,
+        token,
+    });
+
+    await streamSession.save();
+
+    const streamKey = generateStreamKey(body.type, body.guild_id, body.channel_id, this.user_id);
+
+    await emitEvent({
+        event: "STREAM_CREATE",
+        data: {
+            stream_key: streamKey,
+            rtc_server_id: stream.id, // for voice connections in guilds it is guild_id, for dm voice calls it seems to be DM channel id, for GoLive streams a generated number
+            viewer_ids: [],
+            region: guildRegion.name,
+            paused: false,
+        },
+        user_id: this.user_id,
+    } satisfies StreamCreateEvent);
+
+    await emitEvent({
+        event: "STREAM_SERVER_UPDATE",
+        data: {
+            token: streamSession.token,
+            stream_key: streamKey,
+            guild_id: null, // not sure why its always null
+            endpoint: stream.endpoint,
+        },
+        user_id: this.user_id,
+    } satisfies StreamServerUpdateEvent);
+
+    voiceState.self_stream = true;
+    await voiceState.save();
+
+    await emitEvent({
+        event: "VOICE_STATE_UPDATE",
+        data: {
+            ...voiceState.toPublicVoiceState(),
+            member: voiceState.member.toPublicMember(),
+        },
+        guild_id: voiceState.guild_id,
+        channel_id: voiceState.channel_id,
+    } satisfies VoiceStateUpdateEvent);
+
+    console.log(`[Gateway/${this.user_id}] STREAM_CREATE for user ${this.user_id} in channel ${body.channel_id} with stream key ${streamKey} in ${Date.now() - startTime}ms`);
+}
+
+//stream key:
+// guild:${guild_id}:${channel_id}:${user_id}
+// call:${channel_id}:${user_id}

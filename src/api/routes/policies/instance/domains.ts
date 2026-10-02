@@ -1,21 +1,49 @@
-import { Router, Request, Response } from "express";
-import { route } from "@fosscord/api";
-import { Config } from "@fosscord/util";
-import { config } from "dotenv";
-const router = Router();
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+	
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+	
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+	
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
 
-router.get("/", route({}), async (req: Request, res: Response) => {
-	const { cdn, gateway } = Config.get();
+import { route } from "@spacebar/api/middlewares";
+import { Config } from "@spacebar/util";
+import { Request, Response, Router } from "express";
+const router = Router({ mergeParams: true });
 
-	const IdentityForm = {
-		cdn: cdn.endpointPublic || process.env.CDN || "http://localhost:3001",
-		gateway:
-			gateway.endpointPublic ||
-			process.env.GATEWAY ||
-			"ws://localhost:3002",
-	};
+router.get(
+    "/",
+    route({
+        responses: {
+            200: {
+                body: "InstanceDomainsResponse",
+            },
+        },
+        spacebarOnly: true,
+        authentication: "never",
+    }),
+    (req: Request, res: Response) => {
+        const { cdn, gateway, api } = Config.get();
 
-	res.json(IdentityForm);
-});
+        res.json({
+            admin: Config.get().admin.endpointPublic,
+            api: (Config.get().api.endpointPublic + "/api/").replace("//api/", "/api/"), // Transitional, see /.well-known/spacebar/client
+            apiEndpoint: api.endpointPublic,
+            cdn: cdn.endpointPublic,
+            defaultApiVersion: api.defaultVersion,
+            gateway: gateway.endpointPublic,
+        });
+    },
+);
 
 export default router;

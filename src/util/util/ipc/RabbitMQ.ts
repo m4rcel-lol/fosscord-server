@@ -1,0 +1,250 @@
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+	
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+	
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+	
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import { randomUUID } from "node:crypto";
+import EventEmitter from "node:events";
+import amqp, { Channel, ChannelModel } from "amqplib";
+import { Event, EVENT } from "../../interfaces";
+import { Config } from "../Config";
+import type { EventOpts } from "./Event";
+
+export class RabbitMQ {
+    public static connection: ChannelModel | null = null;
+    public static channel: Channel | null = null;
+
+    // Event emitter for connection state changes
+    private static events = new EventEmitter();
+
+    // Reconnection state
+    private static isReconnecting = false;
+    private static reconnectAttempts = 0;
+    private static readonly BASE_RECONNECT_DELAY_MS = 500; // reconnect after 500 milliseconds delay
+
+    // Track if event listeners have been set up (to avoid duplicates)
+    private static connectionListenersAttached = false;
+
+    /**
+     * Subscribe to connection events.
+     * - 'reconnected': Fired after successful reconnection. Consumers should re-establish subscriptions.
+     * - 'disconnected': Fired when connection is lost.
+     */
+    static on(event: "reconnected" | "disconnected", listener: () => void) {
+        this.events.on(event, listener);
+    }
+
+    static off(event: "reconnected" | "disconnected", listener: () => void) {
+        this.events.off(event, listener);
+    }
+
+    static async init() {
+        const host = Config.get().rabbitmq.host;
+        if (!host) return;
+
+        await this.connect(host);
+    }
+
+    private static async connect(host: string): Promise<void> {
+        try {
+            console.log(`[RabbitMQ] Connecting to: ${host}`);
+            this.connection = await amqp.connect(host, {
+                timeout: 1000 * 60,
+            });
+            console.log(`[RabbitMQ] Connected successfully`);
+
+            // Reset reconnection state on successful connect
+            this.reconnectAttempts = 0;
+            this.isReconnecting = false;
+
+            // Only attach listeners once per connection object
+            if (!this.connectionListenersAttached) {
+                this.attachConnectionListeners(host);
+                this.connectionListenersAttached = true;
+            }
+
+            // Pre-create the shared channel
+            await this.getSafeChannel();
+
+            // Notify subscribers that connection is (re-)established
+            this.events.emit("reconnected");
+        } catch (error) {
+            console.error("[RabbitMQ] Connection failed:", error);
+            await this.scheduleReconnect(host);
+        }
+    }
+
+    private static attachConnectionListeners(host: string) {
+        if (!this.connection) return;
+
+        this.connection.on("error", (err) => {
+            console.error("[RabbitMQ] Connection error:", err);
+            // Don't reconnect here - wait for 'close' event
+        });
+
+        this.connection.on("close", () => {
+            console.error("[RabbitMQ] Connection closed");
+            this.channel = null;
+            this.connection = null;
+            this.connectionListenersAttached = false;
+
+            // Notify subscribers that connection is lost
+            this.events.emit("disconnected");
+
+            // Schedule reconnection
+            this.scheduleReconnect(host).catch((e) => console.error("[RabbitMQ] Failed to schedule reconnection:", e));
+        });
+    }
+
+    private static async scheduleReconnect(host: string): Promise<void> {
+        if (this.isReconnecting) {
+            console.log("[RabbitMQ] Reconnection already in progress, skipping");
+            return;
+        }
+
+        this.isReconnecting = true;
+        this.reconnectAttempts++;
+
+        console.log(`[RabbitMQ] Scheduling reconnection attempt ${this.reconnectAttempts} in ${this.BASE_RECONNECT_DELAY_MS}ms`);
+
+        await new Promise((resolve) => void setTimeout(resolve, this.BASE_RECONNECT_DELAY_MS));
+
+        try {
+            await this.connect(host);
+        } catch {
+            // connect() will schedule another reconnect on failure
+            console.log("[RabbitMQ] Reconnection attempt failed, will retry");
+        }
+    }
+
+    static async getSafeChannel(): Promise<Channel> {
+        if (!this.connection) {
+            return Promise.reject(new Error("[RabbitMQ] No connection available"));
+        }
+
+        // Check if cached channel is still usable
+        if (this.channel) {
+            // amqplib channels have a 'closed' property when closed
+            const isClosed = (this.channel as unknown as { closed?: boolean }).closed;
+            if (!isClosed) {
+                return this.channel;
+            }
+            console.log("[RabbitMQ] Cached channel is closed, creating new one");
+            this.channel = null;
+        }
+
+        try {
+            this.channel = await this.connection.createChannel();
+            console.log("[RabbitMQ] Channel created");
+
+            this.channel.on("error", (err) => {
+                console.error("[RabbitMQ] Channel error:", err);
+            });
+
+            this.channel.on("close", () => {
+                console.log("[RabbitMQ] Channel closed");
+                this.channel = null;
+            });
+
+            return this.channel;
+        } catch (e) {
+            console.error("[RabbitMQ] Failed to create channel:", e);
+            this.channel = null;
+            throw e;
+        }
+    }
+
+    /**
+     * Check if RabbitMQ is currently connected and ready.
+     */
+    static isConnected(): boolean {
+        return this.connection !== null && !this.isReconnecting;
+    }
+
+    static async publishEvent(id: string, payload: Omit<Event, "created_at">, retryCount = 0): Promise<void> {
+        const data = typeof payload.data === "object" ? JSON.stringify(payload.data) : payload.data; // use rabbitmq for event transmission
+        const channel = await RabbitMQ.getSafeChannel();
+        try {
+            await channel.assertExchange(id, "fanout", {
+                durable: false,
+            });
+
+            // assertQueue isn't needed, because a queue will automatically created if it doesn't exist
+            const successful = channel.publish(id, "", Buffer.from(`${data}`), { type: payload.event });
+            if (!successful) throw new Error("failed to send event");
+        } catch (e) {
+            // Check if this is a channel closed error and if we should retry
+            const errorMessage = e instanceof Error ? e.message : String(e);
+            const isChannelError = errorMessage.includes("Channel closed") || errorMessage.includes("IllegalOperationError") || errorMessage.includes("RESOURCE_ERROR");
+
+            if (isChannelError && retryCount < 1) {
+                console.log("[RabbitMQ] Channel error detected, retrying with new channel...");
+                // Force the cached channel to be discarded by calling getSafeChannel which will create a new one
+                return RabbitMQ.publishEvent(id, payload, retryCount + 1);
+            }
+
+            console.log("[RabbitMQ] ", e);
+        }
+    }
+}
+
+export async function rabbitListen(channel: Channel, id: string, callback: (event: EventOpts) => unknown, opts?: { acknowledge?: boolean }): Promise<() => Promise<void>> {
+    await channel.assertExchange(id, "fanout", { durable: false });
+    const q = await channel.assertQueue("", {
+        exclusive: true,
+        autoDelete: true,
+        messageTtl: 5000,
+    });
+
+    const consumerTag = randomUUID();
+
+    const cancel = async () => {
+        try {
+            await channel.unbindQueue(q.queue, id, "");
+            await channel.cancel(consumerTag);
+        } catch (e) {
+            console.log("[RabbitMQ] Error while cancelling channel (may be expected):", e instanceof Error ? e.message : e);
+        }
+    };
+
+    await channel.bindQueue(q.queue, id, "");
+    await channel.consume(
+        q.queue,
+        (opts) => {
+            if (!opts) return;
+
+            const data = JSON.parse(opts.content.toString());
+            const event = opts.properties.type as EVENT;
+
+            callback({
+                event,
+                data,
+                acknowledge() {
+                    channel.ack(opts);
+                },
+                channel,
+                cancel,
+            });
+            // rabbitCh.ack(opts);
+        },
+        {
+            noAck: !opts?.acknowledge,
+            consumerTag: consumerTag,
+        },
+    );
+
+    return cancel;
+}

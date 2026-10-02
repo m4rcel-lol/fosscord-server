@@ -1,0 +1,46 @@
+name: Dependabot-nix-update
+
+on:
+  push:
+    branches:
+      - "dependabot/npm_and_yarn/*"
+
+jobs:
+  update_npm_deps_hash:
+    name: Update NPM dependencies hash
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]' || github.actor == 'dependabot-preview[bot]'
+    permissions:
+      contents: write
+    steps:
+      - name: Check Out Code
+        uses: actions/checkout@v6
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            system-features = nixos-test benchmark big-parallel kvm
+            trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= nix-bincache.rory.gay:663PIW8xxgIImxLcsokODWI2PHFWXvzJEfjX6TaIjxQ=
+            trusted-substituters = https://cache.nixos.org https://nix-bincache.rory.gay
+
+      - name: Update Nix Flake
+        run: nix flake update --extra-experimental-features 'nix-command flakes'
+
+      - name: Set up Git Config
+        run: |
+          # Configure author metadata to look like commits are made by Dependabot
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+
+      - name: Commit changes
+        run: |
+          git add .
+          # Skip committing or pushing if there are no changes
+          if [[ $(git status -s) ]]; then
+            git commit -m "build(deps): update npm dependencies hash [dependabot skip]" --no-verify
+            git push
+            echo "Pushed an update to npm dependencies hash"
+          else
+            echo "Npm dependencies hash was not changed"
+          fi

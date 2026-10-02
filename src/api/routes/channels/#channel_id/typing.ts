@@ -1,45 +1,100 @@
-import { Channel, emitEvent, Member, TypingStartEvent } from "@fosscord/util";
-import { route } from "@fosscord/api";
-import { Router, Request, Response } from "express";
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+	
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+	
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+	
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
 
-const router: Router = Router();
+import { Request, Response, Router } from "express";
+import { route } from "@spacebar/api/middlewares";
+import { Channel, Member, Message } from "@spacebar/database";
+import { emitEvent, getPermission, TypingStartEvent } from "@spacebar/util";
+
+const router: Router = Router({ mergeParams: true });
 
 router.post(
-	"/",
-	route({ permission: "SEND_MESSAGES" }),
-	async (req: Request, res: Response) => {
-		const { channel_id } = req.params;
-		const user_id = req.user_id;
-		const timestamp = Date.now();
-		const channel = await Channel.findOneOrFail({
-			where: { id: channel_id },
-		});
-		const member = await Member.findOne({
-			where: { id: user_id, guild_id: channel.guild_id },
-			relations: ["roles", "user"],
-		});
+    "/",
+    route({
+        permission: "SEND_MESSAGES",
+        responses: {
+            200: {},
+            204: {},
+            404: {},
+            403: {},
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const { channel_id } = req.params as { [key: string]: string };
+        const user_id = req.user_id;
+        const timestamp = Math.floor(Date.now() / 1000);
+        const channel = await Channel.findOneOrFail({
+            where: { id: channel_id },
+        });
 
-		await emitEvent({
-			event: "TYPING_START",
-			channel_id: channel_id,
-			data: {
-				...(member
-					? {
-							member: {
-								...member,
-								roles: member?.roles?.map((x) => x.id),
-							},
-					  }
-					: null),
-				channel_id,
-				timestamp,
-				user_id,
-				guild_id: channel.guild_id,
-			},
-		} as TypingStartEvent);
+        const limit = channel.rate_limit_per_user;
+        if (limit) {
+            const lastMsgTime = (
+                await Message.findOne({
+                    where: {
+                        channel_id: channel.id,
+                        author_id: user_id,
+                    },
+                    select: { timestamp: true },
+                    order: { timestamp: "DESC" },
+                })
+            )?.timestamp;
 
-		res.sendStatus(204);
-	},
+            if (lastMsgTime) {
+                const cooldown = +lastMsgTime + limit * 1000 - Date.now();
+
+                if (cooldown > 0) {
+                    const permission = await getPermission(user_id, channel.guild_id, channel);
+
+                    if (!permission.has("MANAGE_MESSAGES") && !permission.has("MANAGE_CHANNELS") && !permission.has("BYPASS_SLOWMODE")) {
+                        return res.status(200).json({
+                            message_send_cooldown_ms: cooldown,
+                        });
+                    }
+                }
+            }
+        }
+
+        const member = await Member.findOne({
+            where: { id: user_id, guild_id: channel.guild_id },
+            relations: { roles: true, user: true },
+        });
+        await emitEvent({
+            event: "TYPING_START",
+            channel_id: channel_id,
+            data: {
+                ...(member
+                    ? {
+                          member: {
+                              ...member.toPublicMember(),
+                              roles: member?.roles?.map((x) => x.id),
+                          },
+                      }
+                    : null),
+                channel_id,
+                timestamp,
+                user_id,
+                guild_id: channel.guild_id ?? undefined,
+            },
+        } satisfies TypingStartEvent);
+
+        res.sendStatus(204);
+    },
 );
 
 export default router;

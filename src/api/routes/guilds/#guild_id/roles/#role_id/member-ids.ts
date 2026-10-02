@@ -1,0 +1,48 @@
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+	
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+	
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+	
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import { Router, Request, Response } from "express";
+import { Member } from "@spacebar/database";
+import { route } from "@spacebar/api/middlewares";
+
+const router = Router({ mergeParams: true });
+
+router.get("/", route({}), async (req: Request, res: Response) => {
+    const { guild_id, role_id } = req.params as { [key: string]: string };
+
+    await Member.IsInGuildOrFail(req.user_id, guild_id);
+
+    // Does not return results for the @everyone role
+    if (guild_id == role_id) return res.json([]);
+
+    // TODO: Is this route really not paginated?
+    const members = await Member.find({
+        select: { id: true },
+        where: {
+            roles: {
+                id: role_id,
+            },
+            guild_id,
+        },
+        take: 100,
+    });
+
+    return res.json(members.map((x) => x.id));
+});
+
+export default router;

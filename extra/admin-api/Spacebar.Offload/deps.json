@@ -1,0 +1,112 @@
+[
+  {
+    "pname": "ArcaneLibs",
+    "version": "1.0.1-preview.20260827-231533",
+    "hash": "sha256-9Wo5cL23gJ0n1AVQ+EckBrAnCMVEpImEMUBvAbprdKg="
+  },
+  {
+    "pname": "BCrypt.Net-Next",
+    "version": "4.2.0",
+    "hash": "sha256-dqDg0iQQUjncCN+bIASlsrxt4oEfyg/JkPu34wSRpc4="
+  },
+  {
+    "pname": "Microsoft.AspNetCore.OpenApi",
+    "version": "10.0.11",
+    "hash": "sha256-RwBH8PntKXwmHFtitnqTTmry1C8hLT+vlDCAjSC0PxQ="
+  },
+  {
+    "pname": "Microsoft.EntityFrameworkCore",
+    "version": "10.0.4",
+    "hash": "sha256-V3Vwl1MtVMRTPo7a9lAgs6UaeMnFV3eEsKnLyPaPMHA="
+  },
+  {
+    "pname": "Microsoft.EntityFrameworkCore.Abstractions",
+    "version": "10.0.4",
+    "hash": "sha256-so4y7Wrp/oWhQ7wd1rK9ha9GtPme1l5H8SrQz7sf8MQ="
+  },
+  {
+    "pname": "Microsoft.EntityFrameworkCore.Analyzers",
+    "version": "10.0.4",
+    "hash": "sha256-Wed75M4RdQ7bCUWSc+q/0YqL6R5CrIZ2X0t/LpU7ZZA="
+  },
+  {
+    "pname": "Microsoft.EntityFrameworkCore.Relational",
+    "version": "10.0.4",
+    "hash": "sha256-WwGoCwNxDXyqfBvUX9fGa/6X+yiDBuE7hf3csU78+Os="
+  },
+  {
+    "pname": "Microsoft.IdentityModel.Abstractions",
+    "version": "8.18.0",
+    "hash": "sha256-mkguJA4aXIVVQvSJ9Duq9mivbGXAIkLQp3a8PKy223A="
+  },
+  {
+    "pname": "Microsoft.IdentityModel.JsonWebTokens",
+    "version": "8.18.0",
+    "hash": "sha256-MdqY9CGRs+fTLb3HYYcSfuzqDFo4Dpho4McFWWferjA="
+  },
+  {
+    "pname": "Microsoft.IdentityModel.Logging",
+    "version": "8.18.0",
+    "hash": "sha256-09WyYskyL8gjjVDzoZBQAGXgsPmyagWftALSBCdt4gg="
+  },
+  {
+    "pname": "Microsoft.IdentityModel.Tokens",
+    "version": "8.18.0",
+    "hash": "sha256-sFhonZW9G6H4ooQ6N/78fkZvADZ2Hf5WAS3FKd/ue1E="
+  },
+  {
+    "pname": "Microsoft.OpenApi",
+    "version": "2.7.5",
+    "hash": "sha256-oYeR/8toy23G+YbVWfJUdMHPKdbfaYU2+0sQ9TIX0yA="
+  },
+  {
+    "pname": "Npgsql",
+    "version": "10.0.3",
+    "hash": "sha256-ddCXCSOoyfy7035OvnL+4LEDYqHjZyPoZ3ffG2coMW0="
+  },
+  {
+    "pname": "Npgsql.EntityFrameworkCore.PostgreSQL",
+    "version": "10.0.3",
+    "hash": "sha256-2ImviEfJ21Dk7pjLJRFCndi5fqDLOl4gkmtGxH3O48Q="
+  },
+  {
+    "pname": "OpenTelemetry",
+    "version": "1.16.0",
+    "hash": "sha256-KViNS0YOkmVeF6TxUyiafJELGycUPIKCOn4Aex9EYl0="
+  },
+  {
+    "pname": "OpenTelemetry",
+    "version": "1.18.0",
+    "hash": "sha256-r1jytFUP2GnoeiYru8qZDDpvWIA7eVU5j2GM+/wOASs="
+  },
+  {
+    "pname": "OpenTelemetry.Api",
+    "version": "1.18.0",
+    "hash": "sha256-k0duyYLYxWzHWzxzjXQ95Kr3eW+kpu5AQOmHNBTgusY="
+  },
+  {
+    "pname": "OpenTelemetry.Api.ProviderBuilderExtensions",
+    "version": "1.16.0",
+    "hash": "sha256-DjEfeTGE0Y5FIpk+HrlOUiP11hgXHV41L3Xh3irPhmo="
+  },
+  {
+    "pname": "OpenTelemetry.Api.ProviderBuilderExtensions",
+    "version": "1.18.0",
+    "hash": "sha256-0nrZ5F/t/EBuFoIF4G31CMoLjjjtJ0XwiVp2a++Ptu0="
+  },
+  {
+    "pname": "OpenTelemetry.Exporter.Prometheus.AspNetCore",
+    "version": "1.16.0-beta.1",
+    "hash": "sha256-17xjNxhPrBmnTk8uszU3BtUufo1bHcDdR+yRapCaxa8="
+  },
+  {
+    "pname": "OpenTelemetry.Extensions.Hosting",
+    "version": "1.18.0",
+    "hash": "sha256-uIhH1HtU3Ycgt6ruH4ObgRkyPzDFaU4PO1CH2GiNUrk="
+  },
+  {
+    "pname": "System.IdentityModel.Tokens.Jwt",
+    "version": "8.18.0",
+    "hash": "sha256-90vrFrRi93g0HuPsUpjt/Aa01l8Jpi1z9hgMB3wIaxs="
+  }
+]

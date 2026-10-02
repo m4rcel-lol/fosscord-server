@@ -1,0 +1,156 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.EntityFrameworkCore;
+
+namespace Spacebar.Models.Db.Models;
+
+[Table("messages")]
+[Index("AuthorId", Name = "IDX_05535bc695e9f7ee104616459d")]
+[Index("ChannelId", "Id", Name = "IDX_3ed7a60fb7dbe04e1ba9332a8b", IsUnique = true)]
+[Index("ChannelId", Name = "IDX_86b9109b155eb70c0a2ca3b4b6")]
+public partial class Message
+{
+    [Key]
+    [Column("id")]
+    public long Id { get; set; }
+
+    [Column("channel_id")]
+    public long? ChannelId { get; set; }
+
+    [Column("guild_id")]
+    public long? GuildId { get; set; }
+
+    [Column("author_id")]
+    public long? AuthorId { get; set; }
+
+    [Column("member_id")]
+    public long? MemberId { get; set; }
+
+    [Column("webhook_id")]
+    public long? WebhookId { get; set; }
+
+    [Column("application_id")]
+    public long? ApplicationId { get; set; }
+
+    [Column("content", TypeName = "character varying")]
+    public string? Content { get; set; }
+
+    [Column("timestamp", TypeName = "timestamp without time zone")]
+    public DateTime Timestamp { get; set; }
+
+    [Column("edited_timestamp", TypeName = "timestamp without time zone")]
+    public DateTime? EditedTimestamp { get; set; }
+
+    [Column("tts")]
+    public bool? Tts { get; set; }
+
+    [Column("mention_everyone")]
+    public bool? MentionEveryone { get; set; }
+
+    [Column("embeds", TypeName = "jsonb")]
+    public string Embeds { get; set; } = null!;
+
+    [Column("reactions", TypeName = "jsonb")]
+    public string Reactions { get; set; } = null!;
+
+    [Column("nonce")]
+    public string? Nonce { get; set; }
+
+    [Column("type")]
+    public int Type { get; set; }
+
+    [Column("activity", TypeName = "jsonb")]
+    public string? Activity { get; set; }
+
+    [Column("message_reference", TypeName = "jsonb")]
+    public string? MessageReference { get; set; }
+
+    [Column("interaction", TypeName = "jsonb")]
+    public string? Interaction { get; set; }
+
+    [Column("components", TypeName = "jsonb")]
+    public string? Components { get; set; }
+
+    [Column("message_reference_id")]
+    public long? MessageReferenceId { get; set; }
+
+    [Column("flags")]
+    public int Flags { get; set; }
+
+    [Column("poll", TypeName = "jsonb")]
+    public string? Poll { get; set; }
+
+    [Column("username", TypeName = "character varying")]
+    public string? Username { get; set; }
+
+    [Column("avatar", TypeName = "character varying")]
+    public string? Avatar { get; set; }
+
+    [Column("pinned_at", TypeName = "timestamp without time zone")]
+    public DateTime? PinnedAt { get; set; }
+
+    [Column("interaction_metadata", TypeName = "jsonb")]
+    public string? InteractionMetadata { get; set; }
+
+    [Column("message_snapshots", TypeName = "jsonb")]
+    public string MessageSnapshots { get; set; } = null!;
+
+    [Column("thread_id")]
+    public long? ThreadId { get; set; }
+
+    [ForeignKey("ApplicationId")]
+    [InverseProperty("Messages")]
+    public virtual Application? Application { get; set; }
+
+    [InverseProperty("Message")]
+    public virtual ICollection<Attachment> Attachments { get; set; } = new List<Attachment>();
+
+    [ForeignKey("AuthorId")]
+    [InverseProperty("MessageAuthors")]
+    public virtual User? Author { get; set; }
+
+    [ForeignKey("ChannelId")]
+    [InverseProperty("MessageChannels")]
+    public virtual Channel? Channel { get; set; }
+
+    [ForeignKey("GuildId")]
+    [InverseProperty("Messages")]
+    public virtual Guild? Guild { get; set; }
+
+    [InverseProperty("MessageReferenceNavigation")]
+    public virtual ICollection<Message> InverseMessageReferenceNavigation { get; set; } = new List<Message>();
+
+    [ForeignKey("MemberId")]
+    [InverseProperty("MessageMembers")]
+    public virtual User? Member { get; set; }
+
+    [ForeignKey("MessageReferenceId")]
+    [InverseProperty("InverseMessageReferenceNavigation")]
+    public virtual Message? MessageReferenceNavigation { get; set; }
+
+    [ForeignKey("ThreadId")]
+    [InverseProperty("MessageThreads")]
+    public virtual Channel? Thread { get; set; }
+
+    [ForeignKey("WebhookId")]
+    [InverseProperty("Messages")]
+    public virtual Webhook? Webhook { get; set; }
+
+    [ForeignKey("MessageId")]
+    [InverseProperty("Messages")]
+    public virtual ICollection<Channel> Channels { get; set; } = new List<Channel>();
+
+    [ForeignKey("MessageId")]
+    [InverseProperty("Messages")]
+    public virtual ICollection<Role> Roles { get; set; } = new List<Role>();
+
+    [ForeignKey("MessageId")]
+    [InverseProperty("Messages")]
+    public virtual ICollection<Sticker> Stickers { get; set; } = new List<Sticker>();
+
+    [ForeignKey("MessageId")]
+    [InverseProperty("Messages")]
+    public virtual ICollection<User> Users { get; set; } = new List<User>();
+}

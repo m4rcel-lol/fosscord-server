@@ -1,0 +1,38 @@
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2025 Spacebar and Spacebar Contributors
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import { NextFunction, Response, Request } from "express";
+import { Config } from "@spacebar/util";
+import { HTTPError } from "lambert-server";
+
+export function setCacheControl(req: Request, res: Response, next: NextFunction) {
+    const cacheDuration = 21600; // 6 hours
+    res.setHeader("Cache-Control", `public, max-age=${cacheDuration}, s-maxage=${cacheDuration}, immutable`);
+    next();
+}
+
+export function setCacheControlNotFound(req: Request, res: Response) {
+    const cacheDuration = 60; // 1 minute
+    res.setHeader("Cache-Control", `public, max-age=${cacheDuration}, s-maxage=${cacheDuration}, immutable`);
+    res.status(404).send(req.path + " not found");
+}
+
+export function validateServerAuth(req: Request, res: Response, next: NextFunction) {
+    if (req.headers.signature !== Config.get().security.requestSignature) throw new HTTPError("Invalid request signature");
+    next();
+}

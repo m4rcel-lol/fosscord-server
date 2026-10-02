@@ -1,280 +1,922 @@
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import { HTTPError } from "lambert-server/HTTPError";
+import { Equal, In, Or } from "typeorm";
+// noinspection ES6PreferShortImport -- Causes a circular reference...
+import { fillMessageUrlEmbeds } from "../utility/EmbedHandlers";
+import { getDatabase, Application, Attachment, Channel, CloudAttachment, Guild, Member, Message, ReadState, Role, Session, Sticker, User, Webhook } from "@spacebar/database";
+import { mathLogBase, arrayDistributeSequentially, Stopwatch, Random } from "@spacebar/extensions";
 import {
-	Channel,
-	Embed,
-	emitEvent,
-	Guild,
-	Message,
-	MessageCreateEvent,
-	MessageUpdateEvent,
-	getPermission,
-	getRights,
-	CHANNEL_MENTION,
-	USER_MENTION,
-	ROLE_MENTION,
-	Role,
-	EVERYONE_MENTION,
-	HERE_MENTION,
-	MessageType,
-	User,
-	Application,
-	Webhook,
-	Attachment,
-	Config,
-	Sticker,
-	MessageCreateSchema,
-	EmbedCache,
-} from "@fosscord/util";
-import { HTTPError } from "lambert-server";
-import { In } from "typeorm";
-import { EmbedHandlers } from "@fosscord/api";
-import * as Sentry from "@sentry/node";
+    Config,
+    DiscordApiErrors,
+    emitEvent,
+    ErrorList,
+    EVERYONE_MENTION,
+    FieldError,
+    FieldErrors,
+    getPermission,
+    getRights,
+    handleFile,
+    HERE_MENTION,
+    makeObjectErrorContent,
+    MessageCreateEvent,
+    MessageFlags,
+    Permissions,
+    ROLE_MENTION,
+    Snowflake,
+    TraceNode,
+    TraceRoot,
+    TraceSubTree,
+    USER_MENTION,
+} from "@spacebar/util";
+import {
+    ActionRowComponent,
+    AttachmentFlags,
+    BaseMessageComponents,
+    ButtonStyle,
+    ChannelType,
+    EmbedType,
+    MessageComponentType,
+    MessageCreateCloudAttachment,
+    MessageReferenceType,
+    MessageType,
+    ReadStateType,
+    UnfurledMediaItem,
+    v1CompTypes,
+} from "@spacebar/schemas";
+import { addPendingPoll } from "../utility/polls";
+import { MessageOptionAttachment, MessageOptions } from "@spacebar/util/dtos/MessageOptions";
+
 const allow_empty = false;
 // TODO: check webhook, application, system author, stickers
 // TODO: embed gifs/videos/images
 
-const LINK_REGEX =
-	/https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/g;
+function checkActionRow(row: ActionRowComponent, knownComponentIds: string[], errors: Record<string, { code?: string; message: string }>, rowIndex: number) {
+    if (!row.components) {
+        return;
+    }
 
+    if (row.components.length < 1 || row.components.length > 5) {
+        errors[`data.components[${rowIndex}].components`] = {
+            code: "BASE_TYPE_BAD_LENGTH",
+            message: `Must be between 1 and 5 in length.`,
+        };
+    }
+
+    for (const component of row.components) {
+        if (component.type == MessageComponentType.Button && component.style != ButtonStyle.Link) {
+            if (component.custom_id?.trim() === "") {
+                errors[`data.components[${rowIndex}].components[${row.components.indexOf(component)}].custom_id`] = {
+                    code: "BUTTON_COMPONENT_CUSTOM_ID_REQUIRED",
+                    message: "A custom id required",
+                };
+            }
+
+            if (knownComponentIds.includes(component.custom_id!)) {
+                errors[`data.components[${rowIndex}].components[${row.components.indexOf(component)}].custom_id`] = {
+                    code: "COMPONENT_CUSTOM_ID_DUPLICATED",
+                    message: "Component custom id cannot be duplicated",
+                };
+            } else {
+                knownComponentIds.push(component.custom_id!);
+            }
+        }
+    }
+}
+async function processMedia(media: UnfurledMediaItem, messageId: string, batchId: string, user: User, channel: Channel, id: string): Promise<(() => void) | void> {
+    if (Object.keys(media).length > 1) throw new HTTPError("Extra keys for media items are not allowed");
+    if (!URL.canParse(media.url)) throw new HTTPError("media URL must be a URI");
+    const url = new URL(media.url);
+    if (!["http:", "https:", "attachment:"].includes(url.protocol)) throw new HTTPError("invalid media protocol");
+    let attEnt: CloudAttachment;
+    let delWhenDone = false;
+    if (url.protocol === "attachment") {
+        attEnt = await CloudAttachment.findOneOrFail({
+            where: {
+                uploadFilename: url.hostname,
+            },
+        });
+    } else {
+        const res = await fetch(url);
+        if (!res.ok) throw new HTTPError("URL did not return OK");
+        const blob = await res.blob();
+        const name = url.pathname.split("/").findLast((_) => _) || id;
+        const uploadFilename = `${channel.id}/${batchId}/${id ?? "0"}/${name}`;
+        attEnt = CloudAttachment.create({
+            user: user,
+            channel: channel,
+            uploadFilename: uploadFilename,
+            userAttachmentId: id ?? "0",
+            userFilename: name,
+            userFileSize: blob.size,
+            userIsClip: false,
+        });
+        await attEnt.save();
+        const cdnUrl = Config.get().cdn.endpointPublic;
+        const fetchUrl = `${cdnUrl}/attachments/${attEnt.uploadFilename}`;
+        await (
+            await fetch(fetchUrl, {
+                method: "PUT",
+                body: blob,
+            })
+        ).text();
+        // re-fetch due to changed DB entry
+        attEnt = await CloudAttachment.findOneOrFail({
+            where: {
+                id: attEnt.id,
+            },
+        });
+        delWhenDone = true;
+    }
+
+    const cloneResponse = await fetch(`${Config.get().cdn.endpointPrivate}/attachments/${attEnt.uploadFilename}/clone_to_message/${messageId}`, {
+        method: "POST",
+        headers: {
+            signature: Config.get().security.requestSignature || "",
+        },
+    });
+
+    if (!cloneResponse.ok) {
+        console.error(`[Message] Failed to clone attachment ${attEnt.userFilename} to message ${messageId}`);
+        throw new HTTPError("Failed to process attachment: " + (await cloneResponse.text()), 500);
+    }
+
+    const cloneRespBody = (await cloneResponse.json()) as { success: boolean; new_path: string };
+    media.proxy_url = `${Config.get().cdn.endpointPublic}/${cloneRespBody.new_path}`;
+    if (url.protocol === "attachment:") media.url = media.proxy_url;
+
+    const realAtt = Attachment.create({
+        filename: attEnt.userFilename,
+        size: attEnt.size,
+        height: attEnt.height,
+        width: attEnt.width,
+        content_type: attEnt.contentType || attEnt.userOriginalContentType,
+        channel_id: channel.id,
+        message_id: messageId,
+    });
+    await realAtt.save();
+
+    //TODO maybe this needs to be a new DB object? I don't see a reason to do this rn though, though this id *should* technically be different from the id of the attachment
+    media.id = realAtt.id;
+
+    media.height = attEnt.height;
+    media.width = attEnt.width;
+    media.content_type = attEnt.contentType;
+    //TODO flags?
+    media.attachment_id = attEnt.id;
+    //TODO preview stuff
+
+    if (delWhenDone) {
+        return () =>
+            fetch(`${Config.get().cdn.endpointPrivate}/attachments/${attEnt.uploadFilename}`, {
+                headers: {
+                    signature: Config.get().security.requestSignature,
+                },
+                method: "DELETE",
+            }).then(() => {
+                attEnt.remove();
+            });
+    }
+}
+export function handleComps(components: BaseMessageComponents[], flags: number) {
+    const conf = Config.get();
+    const mediaGalleryLimit = conf.components.mediaGalleryLimit ?? 10;
+    const actionRowLimit = conf.components.actionRowLimit ?? 5;
+
+    const errors: Record<string, { code?: string; message: string }> = {};
+    const knownComponentIds: string[] = [];
+    const compv2 = (flags || 0) & Number(MessageFlags.FLAGS.IS_COMPONENTS_V2);
+    if (!compv2) {
+        const bad = components.reduce((bad, comp) => bad || !v1CompTypes.has(comp.type), false);
+        if (bad) throw new HTTPError("Must be comp v2");
+    }
+    const medias: UnfurledMediaItem[] = [];
+    for (const comp of components || []) {
+        if (comp.type === MessageComponentType.ActionRow) {
+            checkActionRow(comp, knownComponentIds, errors, components!.indexOf(comp));
+        } else if (comp.type === MessageComponentType.Section) {
+            const accessory = comp.accessory;
+            if (comp.components.length < 1 || comp.components.length > actionRowLimit) {
+                errors[`data.components[${components!.indexOf(comp)}].components`] = {
+                    code: "TOO_LONG",
+                    message: "Component list is too long",
+                };
+            }
+            if (accessory.type === MessageComponentType.Thumbnail) {
+                medias.push(accessory.media);
+            }
+        } else if (comp.type === MessageComponentType.TextDisplay) {
+            //Here to make sure everything is checked
+        } else if (comp.type === MessageComponentType.MediaGallery) {
+            if (comp.items.length < 1 || comp.items.length > mediaGalleryLimit) {
+                errors[`data.components[${components!.indexOf(comp)}].items`] = {
+                    code: "TOO_LONG",
+                    message: "Media list is too long",
+                };
+            }
+            medias.push(...comp.items.map(({ media }) => media));
+        } else if (comp.type === MessageComponentType.File) {
+            medias.push(comp.file);
+        } else if (comp.type === MessageComponentType.Separator) {
+            //Here to make sure everything is checked
+        } else if (comp.type === MessageComponentType.Container) {
+            for (const elm of comp.components) {
+                switch (elm.type) {
+                    case MessageComponentType.Separator:
+                    case MessageComponentType.TextDisplay:
+                        break;
+                    case MessageComponentType.Section: {
+                        const accessory = elm.accessory;
+                        if (elm.components.length < 1 || elm.components.length > actionRowLimit) {
+                            errors[`data.components[${components!.indexOf(comp)}].components[${comp.components!.indexOf(elm)}].components`] = {
+                                code: "TOO_LONG",
+                                message: "Component list is too long",
+                            };
+                        }
+                        if (accessory.type === MessageComponentType.Thumbnail) {
+                            medias.push(accessory.media);
+                        }
+                        break;
+                    }
+                    case MessageComponentType.MediaGallery:
+                        if (elm.items.length < 1 || elm.items.length > mediaGalleryLimit) {
+                            errors[`data.components[${components!.indexOf(comp)}].components[${comp.components!.indexOf(elm)}].items`] = {
+                                code: "TOO_LONG",
+                                message: "Media list is too long",
+                            };
+                        }
+                        medias.push(...elm.items.map(({ media }) => media));
+                        break;
+                    case MessageComponentType.File: {
+                        medias.push(elm.file);
+                        break;
+                    }
+                    case MessageComponentType.ActionRow:
+                        checkActionRow(elm, knownComponentIds, errors, components!.indexOf(elm));
+                        break;
+                    default:
+                        elm satisfies never;
+                }
+            }
+        } else {
+            comp satisfies never;
+        }
+    }
+
+    if (Object.keys(errors).length > 0) {
+        throw FieldErrors(errors);
+    }
+    return async (messageId: string, user: User, channel: Channel) => {
+        const batchId = `CLOUD_compUploads_${Random.getString("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789", 128)}`;
+        (await Promise.all(medias.map((m, index) => processMedia(m, messageId, batchId, user, channel, index + "")))).forEach((_) => _?.());
+    };
+}
 export async function handleMessage(opts: MessageOptions): Promise<Message> {
-	const channel = await Channel.findOneOrFail({
-		where: { id: opts.channel_id },
-		relations: ["recipients"],
-	});
-	if (!channel || !opts.channel_id)
-		throw new HTTPError("Channel not found", 404);
+    const conf = Config.get();
+    const handle = opts.components ? handleComps(opts.components, opts.flags || 0) : undefined;
 
-	const stickers = opts.sticker_ids
-		? await Sticker.find({ where: { id: In(opts.sticker_ids) } })
-		: undefined;
-	const message = Message.create({
-		...opts,
-		sticker_items: stickers,
-		guild_id: channel.guild_id,
-		channel_id: opts.channel_id,
-		attachments: opts.attachments || [],
-		embeds: opts.embeds || [],
-		reactions: /*opts.reactions ||*/ [],
-		type: opts.type ?? 0,
-	});
+    const channel = await Channel.findOneOrFail({
+        where: { id: opts.channel_id },
+        relations: { recipients: true },
+    });
+    if (!channel || !opts.channel_id) throw new HTTPError("Channel not found", 404);
 
-	if (
-		message.content &&
-		message.content.length > Config.get().limits.message.maxCharacters
-	) {
-		throw new HTTPError("Content length over max character limit");
-	}
+    let permission: null | Permissions = null;
+    const limit = channel.rate_limit_per_user;
 
-	if (opts.author_id) {
-		message.author = await User.getPublicUser(opts.author_id);
-		const rights = await getRights(opts.author_id);
-		rights.hasThrow("SEND_MESSAGES");
-	}
-	if (opts.application_id) {
-		message.application = await Application.findOneOrFail({
-			where: { id: opts.application_id },
-		});
-	}
-	if (opts.webhook_id) {
-		message.webhook = await Webhook.findOneOrFail({
-			where: { id: opts.webhook_id },
-		});
-	}
+    if (limit) {
+        const lastMsgTime = (await Message.findOne({ where: { channel_id: channel.id, author_id: opts.author_id }, select: { timestamp: true }, order: { timestamp: "DESC" } }))
+            ?.timestamp;
+        if (lastMsgTime && Date.now() - limit * 1000 < +lastMsgTime) {
+            permission = await getPermission(opts.author_id, channel.guild_id, channel);
+            //FIXME MANAGE_MESSAGES and MANAGE_CHANNELS will need to be removed once they're gone as checks
+            if (!permission.has("MANAGE_MESSAGES") && !permission.has("MANAGE_CHANNELS") && !permission.has("BYPASS_SLOWMODE")) {
+                throw DiscordApiErrors.SLOWMODE_RATE_LIMIT;
+            }
+        }
+    }
 
-	const permission = await getPermission(
-		opts.author_id,
-		channel.guild_id,
-		opts.channel_id,
-	);
-	permission.hasThrow("SEND_MESSAGES");
-	if (permission.cache.member) {
-		message.member = permission.cache.member;
-	}
+    const stickers = opts.sticker_ids ? await Sticker.find({ where: { id: In(opts.sticker_ids) } }) : undefined;
 
-	if (opts.tts) permission.hasThrow("SEND_TTS_MESSAGES");
-	if (opts.message_reference) {
-		permission.hasThrow("READ_MESSAGE_HISTORY");
-		// code below has to be redone when we add custom message routing
-		if (message.guild_id !== null) {
-			const guild = await Guild.findOneOrFail({
-				where: { id: channel.guild_id },
-			});
-			if (!guild.features.includes("CROSS_CHANNEL_REPLIES")) {
-				if (opts.message_reference.guild_id !== channel.guild_id)
-					throw new HTTPError(
-						"You can only reference messages from this guild",
-					);
-				if (opts.message_reference.channel_id !== opts.channel_id)
-					throw new HTTPError(
-						"You can only reference messages from this channel",
-					);
-			}
-		}
-		/** Q: should be checked if the referenced message exists? ANSWER: NO
-		 otherwise backfilling won't work **/
-		// @ts-ignore
-		message.type = MessageType.REPLY;
-	}
+    const message = Message.create({
+        ...opts,
+        message_reference: opts.message_reference ?? undefined,
+        poll: opts.poll,
+        sticker_items: stickers,
+        guild_id: channel.guild_id,
+        channel_id: opts.channel_id,
+        attachments: [],
+        embeds: opts.embeds || [],
+        reactions: opts.reactions || [],
+        type: opts.type ?? 0,
+        mentions: [],
+        components: opts.components ?? undefined, // Fix Discord-Go?
+    });
+    message.channel = channel;
+    await processMessageOptionAttachments(opts, message);
 
-	// TODO: stickers/activity
-	if (
-		!allow_empty &&
-		!opts.content &&
-		!opts.embeds?.length &&
-		!opts.attachments?.length &&
-		!opts.sticker_ids?.length
-	) {
-		throw new HTTPError("Empty messages are not allowed", 50006);
-	}
+    if (opts.author_id) {
+        message.author = await User.findOneOrFail({
+            where: { id: opts.author_id },
+        });
+        const rights = await getRights(opts.author_id);
+        message.author.clean_data();
+        rights.hasThrow("SEND_MESSAGES");
+    }
 
-	var content = opts.content;
-	var mention_channel_ids = [] as string[];
-	var mention_role_ids = [] as string[];
-	var mention_user_ids = [] as string[];
-	var mention_everyone = false;
+    const ephermal = (message.flags & (1 << 6)) !== 0;
+    if (!ephermal && channel.type === ChannelType.GUILD_PUBLIC_THREAD) {
+        const rep = Channel.getRepository();
+        await rep.increment({ id: channel.id }, "message_count", 1);
+        await rep.increment({ id: channel.id }, "total_message_sent", 1);
+    }
+    if (!ephermal) {
+        channel.last_message_id = message.id;
+        await channel.save();
+    }
 
-	if (content) {
-		// TODO: explicit-only mentions
-		message.content = content.trim();
-		content = content.replace(/ *\`[^)]*\` */g, ""); // remove codeblocks
-		for (const [_, mention] of content.matchAll(CHANNEL_MENTION)) {
-			if (!mention_channel_ids.includes(mention))
-				mention_channel_ids.push(mention);
-		}
+    // TODO: Removed cloud attachment handling being inline - handle components!
 
-		for (const [_, mention] of content.matchAll(USER_MENTION)) {
-			if (!mention_user_ids.includes(mention))
-				mention_user_ids.push(mention);
-		}
+    if (message.content && message.content.length > conf.limits.message.maxCharacters) {
+        throw new HTTPError("Content length over max character limit");
+    }
 
-		await Promise.all(
-			Array.from(content.matchAll(ROLE_MENTION)).map(
-				async ([_, mention]) => {
-					const role = await Role.findOneOrFail({
-						where: { id: mention, guild_id: channel.guild_id },
-					});
-					if (role.mentionable || permission.has("MANAGE_ROLES")) {
-						mention_role_ids.push(mention);
-					}
-				},
-			),
-		);
+    if (opts.application_id) {
+        message.application = await Application.findOneOrFail({
+            where: { id: opts.application_id },
+        });
+    }
 
-		if (permission.has("MENTION_EVERYONE")) {
-			mention_everyone =
-				!!content.match(EVERYONE_MENTION) ||
-				!!content.match(HERE_MENTION);
-		}
-	}
+    if (opts.webhook_id) {
+        message.webhook = await Webhook.findOneOrFail({
+            where: { id: opts.webhook_id },
+        });
 
-	message.mention_channels = mention_channel_ids.map((x) =>
-		Channel.create({ id: x }),
-	);
-	message.mention_roles = mention_role_ids.map((x) => Role.create({ id: x }));
-	message.mentions = mention_user_ids.map((x) => User.create({ id: x }));
-	message.mention_everyone = mention_everyone;
+        message.author =
+            (await User.findOne({
+                where: { id: opts.webhook_id },
+            })) || undefined;
 
-	// TODO: check and put it all in the body
+        if (!message.author) {
+            message.author = User.create({
+                id: opts.webhook_id,
+                username: message.webhook.name,
+                discriminator: "0000",
+                avatar: message.webhook.avatar,
+                public_flags: 0,
+                premium: false,
+                premium_type: 0,
+                bot: true,
+                created_at: new Date(),
+                verified: true,
+                rights: "0",
+                data: {
+                    valid_tokens_since: new Date(),
+                },
+            });
 
-	return message;
+            await message.author.save();
+        }
+
+        if (opts.username) {
+            message.username = opts.username;
+            message.author.username = message.username;
+        }
+        if (opts.avatar_url) {
+            const avatarData = await fetch(opts.avatar_url);
+            const base64 = await avatarData.arrayBuffer().then((x) => Buffer.from(x).toString("base64"));
+
+            const dataUri = "data:" + avatarData.headers.get("content-type") + ";base64," + base64;
+
+            message.avatar = await handleFile(`/avatars/${opts.webhook_id}`, dataUri as string);
+            message.author.avatar = message.avatar;
+        }
+    } else {
+        permission ||= await getPermission(opts.author_id, channel.guild_id, channel);
+        if (permission === null) throw new HTTPError("permission was null after getPermission", 500);
+        permission.hasThrow("SEND_MESSAGES");
+        if (permission.cache.member) {
+            message.member = permission.cache.member;
+        }
+
+        if (opts.tts) permission.hasThrow("SEND_TTS_MESSAGES");
+        if (opts.message_reference) {
+            permission.hasThrow("READ_MESSAGE_HISTORY");
+            // code below has to be redone when we add custom message routing
+            if (message.guild_id !== null) {
+                await Guild.findOneOrFail({
+                    where: { id: channel.guild_id },
+                });
+                if (!opts.message_reference.guild_id) opts.message_reference.guild_id = channel.guild_id;
+                if (!opts.message_reference.channel_id) opts.message_reference.channel_id = opts.channel_id;
+
+                if (opts.message_reference.type != 1) {
+                    if (opts.message_reference.guild_id !== channel.guild_id) throw new HTTPError("You can only reference messages from this guild");
+                    if (opts.message_reference.channel_id !== opts.channel_id && opts.type !== MessageType.THREAD_STARTER_MESSAGE && opts.type !== MessageType.THREAD_CREATED)
+                        throw new HTTPError("You can only reference messages from this channel");
+                }
+
+                message.message_reference = opts.message_reference;
+                if (message.message_reference.message_id) {
+                    message.referenced_message = await Message.findOneOrFail({
+                        where: {
+                            id: opts.message_reference.message_id,
+                        },
+                        relations: {
+                            author: true,
+                            webhook: true,
+                            application: true,
+                            mentions: true,
+                            mention_roles: true,
+                            mention_channels: true,
+                            sticker_items: true,
+                            attachments: true,
+                        },
+                    });
+
+                    if (
+                        message.referenced_message.channel_id &&
+                        message.referenced_message.channel_id !== opts.message_reference.channel_id &&
+                        opts.type !== MessageType.THREAD_STARTER_MESSAGE
+                    )
+                        throw new HTTPError("Referenced message not found in the specified channel", 404);
+                    if (
+                        message.referenced_message.guild_id &&
+                        message.referenced_message.guild_id !== opts.message_reference.guild_id &&
+                        opts.type !== MessageType.THREAD_STARTER_MESSAGE
+                    )
+                        throw new HTTPError("Referenced message not found in the specified channel", 404);
+                }
+            }
+            /** Q: should be checked if the referenced message exists? ANSWER: NO
+			 otherwise backfilling won't work **/
+            if (MessageType.THREAD_STARTER_MESSAGE !== message.type && MessageType.THREAD_CREATED !== message.type && MessageType.POLL_RESULT !== message.type)
+                message.type = MessageType.REPLY;
+        }
+    }
+
+    // TODO: stickers/activity
+    if (
+        !allow_empty &&
+        !opts.content &&
+        !opts.embeds?.length &&
+        !opts.attachments?.length &&
+        !opts.sticker_ids?.length &&
+        !opts.poll &&
+        !opts.components?.length &&
+        opts.message_reference?.type != 1 &&
+        opts.type !== MessageType.THREAD_STARTER_MESSAGE
+    ) {
+        console.log("[Message] Rejecting empty message:", opts, message);
+        throw new HTTPError("Empty messages are not allowed", 50006);
+    }
+
+    message.content = opts.content?.trim();
+
+    if (message.poll) {
+        message.poll.results = { answer_counts: [], is_finalized: false };
+
+        if (opts.poll?.duration) {
+            message.poll.expiry = new Date(Date.now() + opts.poll.duration * 3600000);
+            addPendingPoll(message, opts.poll.duration * 3600000);
+        }
+
+        if (opts.poll?.answers) {
+            if (opts.poll.answers.length < 1 || opts.poll.answers.length > 10) {
+                const errors: ErrorList = {};
+                errors["poll"] = makeObjectErrorContent("BASE_TYPE_BAD_LENGTH", "Must be between 1 and 10 in length.");
+                throw new FieldError(50035, "Invalid form body", errors);
+            }
+
+            for (let i = 0; i < opts.poll.answers.length; i++) {
+                message.poll.answers[i].answer_id = i + 1;
+            }
+        }
+    }
+
+    await handleMessageMentionsAsync(message);
+
+    const attachmentIndices = new Map(message.attachments?.map((attachment, index) => [`attachment://${attachment.filename}`, index]));
+    const attachmentsToRemove = new Set<number>();
+    function fetchAttachment(url: string | undefined): Attachment | undefined {
+        if (url == undefined) {
+            return undefined;
+        }
+        const index = attachmentIndices.get(url);
+        if (index === undefined) {
+            return undefined;
+        }
+        const attachment = message.attachments?.[index];
+        if (attachment === undefined) {
+            return undefined;
+        }
+        attachmentsToRemove.add(index);
+        return attachment;
+    }
+    for (const embed of message.embeds) {
+        const footer = embed.footer;
+        const footerAttachment = fetchAttachment(footer?.icon_url);
+        if (footerAttachment !== undefined) {
+            footer!.icon_url = footerAttachment.toJSON().url;
+            footer!.proxy_icon_url = footerAttachment.toJSON().proxy_url;
+        }
+
+        const image = embed.image;
+        const imageAttachment = fetchAttachment(image?.url);
+        if (imageAttachment !== undefined) {
+            image!.url = imageAttachment.toJSON().url;
+            image!.proxy_url = imageAttachment.toJSON().proxy_url;
+        }
+
+        const author = embed.author;
+        const authorAttachment = fetchAttachment(author?.icon_url);
+        if (authorAttachment !== undefined) {
+            author!.icon_url = authorAttachment.toJSON().url;
+            author!.proxy_icon_url = authorAttachment.toJSON().proxy_url;
+        }
+    }
+    message.attachments = message.attachments?.filter((_, index) => !attachmentsToRemove.has(index));
+
+    // TODO: check and put it all in the body
+
+    return message;
 }
 
 // TODO: cache link result in db
 export async function postHandleMessage(message: Message) {
-	const content = message.content?.replace(/ *\`[^)]*\` */g, ""); // remove markdown
-	var links = content?.match(LINK_REGEX);
-	if (!links) return;
+    message.clean_data();
 
-	const data = { ...message };
-	data.embeds = data.embeds.filter((x) => x.type !== "link");
+    message.embeds ??= [];
+    message.embeds.forEach((embed) => {
+        // we need to handle false-y values (empty string) here, so cant use ??=
+        embed.type ||= EmbedType.rich;
+    });
 
-	links = links.slice(0, 20) as RegExpMatchArray; // embed max 20 links — TODO: make this configurable with instance policies
-
-	const cachePromises = [];
-
-	for (const link of links) {
-		const url = new URL(link);
-
-		const cached = await EmbedCache.findOne({ where: { url: link } });
-		if (cached) {
-			data.embeds.push(cached.embed);
-			continue;
-		}
-
-		// bit gross, but whatever!
-		const endpointPublic =
-			Config.get().cdn.endpointPublic || "http://127.0.0.1"; // lol
-		const handler =
-			url.hostname == new URL(endpointPublic).hostname
-				? EmbedHandlers["self"]
-				: EmbedHandlers[url.hostname] || EmbedHandlers["default"];
-
-		try {
-			let res = await handler(url);
-			if (!res) continue;
-			// tried to use shorthand but types didn't like me L
-			if (!Array.isArray(res)) res = [res];
-
-			for (var embed of res) {
-				var cache = EmbedCache.create({
-					url: link,
-					embed: embed,
-				});
-				cachePromises.push(cache.save());
-				data.embeds.push(embed);
-			}
-		} catch (e) {
-			Sentry.captureException(e, (scope) => {
-				scope.clear();
-				scope.setContext("request", { url });
-				return scope;
-			});
-			continue;
-		}
-	}
-
-	if (!data.embeds) return;
-
-	await Promise.all([
-		emitEvent({
-			event: "MESSAGE_UPDATE",
-			channel_id: message.channel_id,
-			data,
-		} as MessageUpdateEvent),
-		Message.update(
-			{ id: message.id, channel_id: message.channel_id },
-			{ embeds: data.embeds },
-		),
-		...cachePromises,
-	]);
+    if (message.isWebhook || (await getPermission(message.author_id, message.channel.guild_id, message.channel_id)).has(Permissions.FLAGS.EMBED_LINKS))
+        await fillMessageUrlEmbeds(message);
 }
 
 export async function sendMessage(opts: MessageOptions) {
-	const message = await handleMessage({ ...opts, timestamp: new Date() });
+    const message = await handleMessage({ ...opts, timestamp: new Date() });
 
-	await Promise.all([
-		Message.insert(message),
-		emitEvent({
-			event: "MESSAGE_CREATE",
-			channel_id: opts.channel_id,
-			data: message.toJSON(),
-		} as MessageCreateEvent),
-	]);
+    const ephemeral = (message.flags & Number(MessageFlags.FLAGS.EPHEMERAL)) !== 0;
+    await getDatabase()?.transaction(async (entityManager) => {
+        await entityManager.save(message);
+        await entityManager.save(message.channel);
+        if (message.attachments && message.attachments.length > 0) await entityManager.save(message.attachments);
+    });
+    await Promise.all([
+        emitEvent({
+            event: "MESSAGE_CREATE",
+            ...(ephemeral ? { user_id: message.interaction_metadata?.user_id } : { channel_id: message.channel_id }),
+            data: message.toJSON(),
+        } satisfies MessageCreateEvent),
+    ]);
 
-	postHandleMessage(message).catch((e) => {}); // no await as it should catch error non-blockingly
+    // no await as it should catch error non-blockingly
+    postHandleMessage(message).catch((e) => console.error("[Message] post-message handler failed", e));
 
-	return message;
+    return message;
 }
 
-interface MessageOptions extends MessageCreateSchema {
-	id?: string;
-	type?: MessageType;
-	pinned?: boolean;
-	author_id?: string;
-	webhook_id?: string;
-	application_id?: string;
-	embeds?: Embed[];
-	channel_id?: string;
-	attachments?: Attachment[];
-	edited_timestamp?: Date;
-	timestamp?: Date;
+// Makes for concise code, inspired by Nix' lib.trace
+function logPassthru<T>(obj: T, ...data: unknown[]) {
+    console.log(...data);
+    return obj;
+}
+export async function processMessageOptionAttachments(source: MessageOptions, destination: Message) {
+    if (!source.attachments || source.attachments.length == 0) return;
+    const logp = `[Message/${destination.id}/Attachments]`;
+    console.log("[Message] Processing attachments for message", source.id, "->", source.attachments);
+    const tasks = source.attachments?.map(async (src): Promise<Attachment> => {
+        if (src instanceof Attachment) return logPassthru(src, logp, `Got Attachment instance`);
+        if (isCloudAttachment(src)) {
+            const result = logPassthru(await convertCloudAttachmentToAttachment(src, destination.channel_id!, destination.id), logp, "Got MessageCreateCloudAttachment contents");
+
+            result.flags = 0 as AttachmentFlags;
+            result.flags &= (src.is_clip ? 1 : 0) * (AttachmentFlags.IS_CLIP as number);
+            result.flags &= (src.is_remix ? 1 : 0) * (AttachmentFlags.IS_REMIX as number);
+            result.flags &= (src.is_thumbnail ? 1 : 0) * (AttachmentFlags.IS_THUMBNAIL as number);
+            result.flags &= (src.is_spoiler ? 1 : 0) * (AttachmentFlags.IS_SPOILER as number);
+            return logPassthru(result, logp, "Got MessageCreateCloudAttachment contents");
+        }
+        if (isInternalCdnAttachment(src)) {
+            const result = Attachment.create({
+                ...src,
+            });
+
+            // result.flags = 0 as AttachmentFlags;
+            // result.flags &= (src.is_clip ? 1 : 0) * (AttachmentFlags.IS_CLIP as number);
+            // result.flags &= (src.is_remix ? 1 : 0) * (AttachmentFlags.IS_REMIX as number);
+            // result.flags &= (src.is_thumbnail ? 1 : 0) * (AttachmentFlags.IS_THUMBNAIL as number);
+            // result.flags &= (src.is_spoiler ? 1 : 0) * (AttachmentFlags.IS_SPOILER as number);
+            return result;
+        }
+        throw new Error(logp + " Unhandled attachment: " + JSON.stringify(src));
+    });
+
+    destination.attachments = [];
+    for (const task of tasks) {
+        destination.attachments.push(await task);
+    }
+}
+
+export function isCloudAttachment(attachment: MessageOptionAttachment) {
+    return "uploaded_filename" in attachment;
+}
+
+export function isInternalCdnAttachment(attachment: MessageOptionAttachment) {
+    return "url" in attachment;
+}
+
+export async function convertCloudAttachmentToAttachment(cloudAttachmentReference: MessageCreateCloudAttachment, destinationChannelId: string, destinationMessageId: string) {
+    const cloudAttachment = await CloudAttachment.findOneOrFail({
+        where: {
+            uploadFilename: cloudAttachmentReference.uploaded_filename,
+        },
+    });
+
+    const cloneResponse = await fetch(`${Config.get().cdn.endpointPrivate}/attachments/${cloudAttachment.uploadFilename}/clone_to_message/${destinationMessageId}`, {
+        method: "POST",
+        headers: {
+            signature: Config.get().security.requestSignature || "",
+        },
+    });
+
+    if (!cloneResponse.ok) {
+        console.error(`[Message] Failed to clone attachment ${cloudAttachment.userFilename} to message ${destinationMessageId}`);
+        throw new HTTPError("Failed to process attachment: " + (await cloneResponse.text()), 500);
+    }
+
+    const cloneRespBody = (await cloneResponse.json()) as { success: boolean; new_path: string };
+
+    const realAtt = Attachment.create({
+        channel_id: destinationChannelId,
+        message_id: destinationMessageId,
+
+        filename: cloudAttachment.userFilename,
+        size: cloudAttachment.size,
+        height: cloudAttachment.height,
+        width: cloudAttachment.width,
+        content_type: cloudAttachment.contentType || cloudAttachment.userOriginalContentType,
+
+        title: cloudAttachmentReference.title,
+        duration_secs: cloudAttachmentReference.duration_secs,
+        clip_created_at: cloudAttachmentReference.clip_created_at,
+        description: cloudAttachmentReference.description,
+        waveform: cloudAttachmentReference.waveform,
+    });
+
+    console.log("[Message] Converted cloud attachment to", realAtt);
+    return realAtt;
+}
+
+async function handleMessageMentionsAsync(message: Message) {
+    const sw = Stopwatch.startNew(),
+        totalSw = Stopwatch.startNew();
+    const trace: TraceNode = { micros: 0, calls: [] };
+    const traceRoot: TraceRoot = ["handleMessageMentionsAsync", trace];
+
+    const channel = await Channel.findOneOrFail({
+        where: { id: message.channel_id },
+        relations: { recipients: true },
+    });
+    trace.calls.push(`getChannel(${channel.id})`, { micros: sw.getElapsedAndReset().totalMicroseconds });
+
+    const permissionTargetId = message.isWebhook ? message.webhook?.application_id : (message.author_id ?? message.author?.id);
+    const permission =
+        permissionTargetId != null
+            ? await getPermission(permissionTargetId, channel.guild_id, channel)
+            : message.guild_id != null
+              ? new Permissions((await Role.findOneOrFail({ where: { id: message.guild_id ?? message.guild?.id } })).permissions)
+              : Permissions.DEFAULT_DM_PERMISSIONS;
+    trace.calls.push(`getPermissions`, { micros: sw.getElapsedAndReset().totalMicroseconds });
+
+    let content = message.content;
+
+    // TODO: sets
+    // root@Rory - 20/02/2023 - This breaks channel mentions in test client. We're not sure this was used in older clients.
+    //const mention_channel_ids = [] as string[];
+    let mention_everyone = false;
+    let mention_here = false;
+    const mention_user_id_set = new Set<string>();
+    const mention_role_id_set = new Set<string>();
+
+    if (content) {
+        const contentSw = Stopwatch.startNew();
+        const contentTrace: TraceNode = { micros: 0, calls: [] };
+        // TODO: explicit-only mentions
+        // TODO: make mentions lazy
+        content = content.replace(/ *`[^)]*` */g, ""); // remove codeblocks
+        // root@Rory - 20/02/2023 - This breaks channel mentions in test client. We're not sure this was used in older clients.
+        /*for (const [, mention] of content.matchAll(CHANNEL_MENTION)) {
+			if (!mention_channel_ids.includes(mention))
+				mention_channel_ids.push(mention);
+		}*/
+        contentTrace.calls.push("filterCodeblocks", { micros: sw.getElapsedAndReset().totalMicroseconds });
+
+        for (const [, mention] of content.matchAll(USER_MENTION)) mention_user_id_set.add(mention);
+        for (const [, mention] of content.matchAll(ROLE_MENTION)) mention_role_id_set.add(mention);
+        if (message.webhook?.id || message.webhook_id || permission?.has("MENTION_EVERYONE") || channel.type === ChannelType.DM || channel.type === ChannelType.GROUP_DM) {
+            mention_everyone = !!content.match(EVERYONE_MENTION);
+            mention_here = !!content.match(HERE_MENTION);
+        }
+        contentTrace.calls.push("parseMentions", { micros: sw.getElapsedAndReset().totalMicroseconds });
+
+        let mentionedRoles = !channel.guild_id ? [] : await Role.find({ where: { id: In(mention_role_id_set.values().toArray()), guild_id: channel.guild_id } });
+        contentTrace.calls.push("queryMentionRoles", { micros: sw.getElapsedAndReset().totalMicroseconds });
+
+        //TODO: should this throw at all?
+        if (mention_role_id_set.size != mentionedRoles.length) {
+            const missingRoles = mention_role_id_set
+                .values()
+                .filter((x) => !mentionedRoles.find((r) => r.id == x))
+                .toArray();
+            throw new HTTPError("Mentioned invalid roles: " + missingRoles.join(", "), 500);
+        }
+
+        if (!(message.webhook?.id || message.webhook_id || permission?.has("MANAGE_ROLES"))) {
+            mentionedRoles = mentionedRoles.filter((x) => x.mentionable);
+            mention_role_id_set.clear();
+            mentionedRoles.forEach((r) => mention_role_id_set.add(r.id));
+        }
+
+        contentTrace.calls.push("validateMentionRoles", { micros: sw.getElapsedAndReset().totalMicroseconds });
+        contentTrace.micros = contentSw.elapsed().totalMicroseconds;
+        trace.calls.push("parseContent", contentTrace);
+    }
+
+    if (message.message_reference?.message_id) {
+        const referencedMessage = await Message.findOne({
+            where: {
+                id: message.message_reference.message_id,
+                channel_id: message.channel_id,
+            },
+            relations: {
+                mentions: true,
+                mention_roles: true,
+            },
+        });
+        if (referencedMessage && referencedMessage.author_id !== message.author_id) {
+            message.mentions.push(
+                // @ts-expect-error it does not like the .toPublicUser() lol
+                (await User.findOne({ where: { id: referencedMessage.author_id } }))!.toPublicUser(),
+            );
+        }
+
+        if (message.embeds[0]?.type === EmbedType.poll_result) {
+            message.mentions.push(
+                // @ts-expect-error it does not like the .toPublicUser() lol
+                (await User.findOne({ where: { id: message.author_id } }))!.toPublicUser(),
+            );
+        }
+
+        if (message.message_reference.type === MessageReferenceType.FORWARD) {
+            message.type = MessageType.DEFAULT;
+
+            if (message.referenced_message) {
+                // TODO: mention_roles and mentions arrays - not needed it seems, but discord still returns that
+                message.message_snapshots = [message.referenced_message.toSnapshot()];
+            }
+        }
+        trace.calls.push("handleMessageReference", { micros: sw.getElapsedAndReset().totalMicroseconds });
+    }
+
+    // root@Rory - 20/02/2023 - This breaks channel mentions in test client. We're not sure this was used in older clients.
+    /*message.mention_channels = mention_channel_ids.map((x) =>
+		Channel.create({ id: x }),
+	);*/
+    message.mention_roles = mention_role_id_set.size == 0 ? [] : await Role.find({ where: { id: In(mention_role_id_set.values().toArray()), guild_id: channel.guild_id } });
+    message.mentions = [...message.mentions, ...(await User.find({ where: { id: In(mention_user_id_set.values().toArray()) } }))];
+    message.mention_everyone = mention_everyone;
+    trace.calls.push("fillMessageMentionProperties", { micros: sw.getElapsedAndReset().totalMicroseconds });
+
+    const fillInMissingIDs = async (ids: string[], trace?: TraceSubTree) => {
+        const fillMessageSw = Stopwatch.startNew(),
+            subSw = Stopwatch.startNew();
+        const subTrace: TraceSubTree = { micros: 0, calls: [] };
+        try {
+            const states = await ReadState.find({
+                where: {
+                    user_id: In(ids),
+                    channel_id: channel.id,
+                    read_state_type: ReadStateType.CHANNEL,
+                },
+                select: { user_id: true },
+            });
+            subTrace.calls.push("findReadStates", { micros: subSw.getElapsedAndReset().totalMicroseconds });
+
+            const users = new Set(ids);
+            states.forEach((state) => users.delete(state.user_id));
+            subTrace.calls.push("collectMissingIds", { micros: subSw.getElapsedAndReset().totalMicroseconds });
+
+            if (!users.size) {
+                subTrace.calls.push("--noop--", { micros: subSw.getElapsedAndReset().totalMicroseconds });
+                return;
+            }
+
+            const newReadStateSeqs = arrayDistributeSequentially(users.values().toArray(), Math.max(1, mathLogBase(users.size, 2))).map((seq) =>
+                seq.map((user_id) => ({ id: Snowflake.generate(), user_id, channel_id: channel.id, read_state_type: ReadStateType.CHANNEL })),
+            );
+            subTrace.calls.push(`constructNewReadStatesChunked(${newReadStateSeqs.length})`, { micros: subSw.getElapsedAndReset().totalMicroseconds });
+
+            await Promise.all(
+                newReadStateSeqs.map((seq) =>
+                    // just a safety thing... handle postgres hard limit at 65535 parameters, at 4 params per object... 16384
+                    seq.length > 15000
+                        ? fillInMissingIDs(
+                              seq.map((rs) => rs.user_id),
+                              subTrace,
+                          )
+                        : ReadState.insert(seq).catch((e) => {
+                              console.log("Failed to bulk insert", seq.length, "new ReadStates, trying again (race condition/too many params?)...\nDetails:", e);
+                              return fillInMissingIDs(
+                                  seq.map((rs) => rs.user_id),
+                                  subTrace,
+                              );
+                          }),
+                ),
+            );
+            subTrace.calls.push("insertNewReadStatesChunked", { micros: subSw.getElapsedAndReset().totalMicroseconds });
+        } finally {
+            trace?.calls.push(`fillInMissingIDs(${ids.length})`, { micros: fillMessageSw.getElapsedAndReset().totalMicroseconds, calls: subTrace.calls });
+        }
+    };
+
+    if ((message.flags & (1 << 6)) !== 0) {
+        // ephemeral messages
+        const id = message.interaction_metadata?.user_id;
+        if (id) {
+            let pinged = mention_everyone || channel.type === ChannelType.DM || channel.type === ChannelType.GROUP_DM;
+            if (!pinged) pinged = !!message.mentions.find((user) => user.id === id);
+            // TODO: can we somehow rewrite this into an In(...) query?
+            if (!pinged) pinged = !!(await Member.find({ where: { id, roles: Or(...message.mention_roles.map(({ id }) => Equal(id))) } }));
+            if (pinged) {
+                //stuff
+            }
+        }
+        trace.calls.push("ephemeralPinged", { micros: sw.getElapsedAndReset().totalMicroseconds });
+    } else if (mention_everyone) {
+        if (channel.type === ChannelType.DM || channel.type === ChannelType.GROUP_DM) {
+            if (channel.recipients) {
+                await fillInMissingIDs(
+                    channel.recipients.map((r) => r.user_id),
+                    trace,
+                );
+            }
+        } else {
+            await fillInMissingIDs(
+                (await Member.find({ where: { guild_id: channel.guild_id }, select: { id: true } })).map((m) => m.id),
+                trace,
+            );
+        }
+        const repository = ReadState.getRepository();
+        await repository.increment({ channel_id: channel.id, read_state_type: ReadStateType.CHANNEL }, "mention_count", 1);
+        trace.calls.push("mentionEveryone", { micros: sw.getElapsedAndReset().totalMicroseconds });
+    } else {
+        const users = new Set<string>([
+            ...(message.mention_roles.length
+                ? await Member.find({
+                      where: [...message.mention_roles.map((role) => ({ roles: { id: role.id } }))],
+                  })
+                : []
+            ).map((member) => member.id),
+            ...message.mentions.map((user) => user.id),
+        ]);
+        trace.calls.push("getUsers", { micros: sw.getElapsedAndReset().totalMicroseconds });
+
+        if (mention_here) {
+            // TODO: incorporate sessions
+            const ids = (await Member.find({ where: { guild_id: channel.guild_id } })).map((m) => m.id);
+            (await Session.find({ where: { user_id: In(ids) } })).forEach((s) => users.add(s.user_id));
+            trace.calls.push("mentionHere", { micros: sw.getElapsedAndReset().totalMicroseconds });
+        }
+
+        if (users.size) {
+            const repository = ReadState.getRepository();
+
+            await fillInMissingIDs([...users], trace);
+            await repository.increment({ user_id: In(users.values().toArray()), channel_id: channel.id, read_state_type: ReadStateType.CHANNEL }, "mention_count", 1);
+            trace.calls.push("updateMentionedUserReadStates", { micros: sw.getElapsedAndReset().totalMicroseconds });
+        }
+    }
+
+    trace.micros = totalSw.elapsed().totalMicroseconds;
+    if (process.env.LOG_MENTION_TRACE === "true") new console.Console({ stdout: process.stdout, inspectOptions: { depth: 20 } }).log("Mention handling trace:", trace);
 }

@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+        <ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>
+        <UseSystemResourceKeys>false</UseSystemResourceKeys>
+        <UseSizeOptimizedLinq>false</UseSizeOptimizedLinq> <!-- makes Linq slightly faster -->
+        <DebuggerSupport>true</DebuggerSupport>
+        <TrimmerRemoveSymbols>false</TrimmerRemoveSymbols>
+
+        <!-- copied from https://cgit.rory.gay/matrix/tools/MatrixUtils.git/tree/MatrixUtils.Web/MatrixUtils.Web.csproj -->
+        <LinkIncremental>true</LinkIncremental>
+        <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+        <UseBlazorWebAssembly>true</UseBlazorWebAssembly>
+        <BlazorEnableCompression>false</BlazorEnableCompression>
+        <CompressionEnabled>false</CompressionEnabled>
+        <BlazorCacheBootResources>false</BlazorCacheBootResources>
+        <!--<BlazorEnableTimeZoneSupport>false</BlazorEnableTimeZoneSupport>-->
+        <WasmEnableHotReload>false</WasmEnableHotReload>
+        <DebugSymbols>true</DebugSymbols>
+        <DebugType>full</DebugType>
+        
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="ArcaneLibs.Blazor.Components" Version="1.0.1-preview.20260827-231533" />
+        <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.8" />
+        <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.8" PrivateAssets="all" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\Models\Spacebar.Models.AdminApi\Spacebar.Models.AdminApi.csproj"/>
+        <ProjectReference Include="..\..\Models\Spacebar.Models.Api\Spacebar.Models.Api.csproj"/>
+        <ProjectReference Include="..\..\Models\Spacebar.Models.Gateway\Spacebar.Models.Gateway.csproj"/>
+        <ProjectReference Include="..\..\Models\Spacebar.Models.Generic\Spacebar.Models.Generic.csproj"/>
+        <ProjectReference Include="..\Spacebar.Sdk\Spacebar.Sdk.csproj" />
+    </ItemGroup>
+    
+    <ItemGroup>
+        <ServiceWorker Include="wwwroot\service-worker.js" PublishedContent="wwwroot\service-worker.published.js"/>
+    </ItemGroup>
+
+</Project>

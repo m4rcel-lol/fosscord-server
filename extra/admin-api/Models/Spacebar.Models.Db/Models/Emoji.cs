@@ -1,0 +1,57 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.EntityFrameworkCore;
+
+namespace Spacebar.Models.Db.Models;
+
+[Table("emojis")]
+public partial class Emoji
+{
+    [Key]
+    [Column("id")]
+    public long Id { get; set; }
+
+    [Column("animated")]
+    public bool Animated { get; set; }
+
+    [Column("available")]
+    public bool Available { get; set; }
+
+    [Column("guild_id")]
+    public long? GuildId { get; set; }
+
+    [Column("user_id")]
+    public long? UserId { get; set; }
+
+    [Column("managed")]
+    public bool Managed { get; set; }
+
+    [Column("name", TypeName = "character varying")]
+    public string Name { get; set; } = null!;
+
+    [Column("require_colons")]
+    public bool RequireColons { get; set; }
+
+    [Column("roles")]
+    public List<long> Roles { get; set; } = null!;
+
+    [Column("groups")]
+    public List<long>? Groups { get; set; }
+
+    [Column("application_id")]
+    public long? ApplicationId { get; set; }
+
+    [ForeignKey("ApplicationId")]
+    [InverseProperty("Emojis")]
+    public virtual Application? Application { get; set; }
+
+    [ForeignKey("GuildId")]
+    [InverseProperty("Emojis")]
+    public virtual Guild? Guild { get; set; }
+
+    [ForeignKey("UserId")]
+    [InverseProperty("Emojis")]
+    public virtual User? User { get; set; }
+}

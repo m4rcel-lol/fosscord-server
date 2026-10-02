@@ -1,0 +1,160 @@
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2026 Spacebar and Spacebar Contributors
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import { Request, Response } from "express";
+import { HTTPError } from "lambert-server/HTTPError";
+import { MoreThan } from "typeorm";
+import { handleMessage, postHandleMessage } from "./Message";
+import { Attachment, Channel, Message, Webhook } from "@spacebar/database";
+import { Config, DiscordApiErrors, emitEvent, FieldErrors, MessageCreateEvent, Snowflake, uploadFile, ValidateName } from "@spacebar/util";
+import { WebhookExecuteSchema } from "@spacebar/schemas";
+
+export const executeWebhook = async (req: Request, res: Response) => {
+    const body = req.body as WebhookExecuteSchema;
+    const messageId = Snowflake.generate();
+
+    const { webhook_id, webhook_token } = req.params as { [key: string]: string };
+
+    const webhook = await Webhook.findOne({
+        where: {
+            id: webhook_id,
+        },
+        relations: { channel: true, guild: true, application: true },
+    });
+
+    if (!webhook) throw DiscordApiErrors.UNKNOWN_WEBHOOK;
+    if (webhook.token !== webhook_token) throw DiscordApiErrors.INVALID_WEBHOOK_TOKEN_PROVIDED;
+
+    if (body.username) {
+        ValidateName(body.username);
+    }
+
+    // ensure one of content, embeds, components, or file is present
+    if (!body.content && !body.embeds && !body.components && !body.file && !body.attachments) {
+        throw DiscordApiErrors.CANNOT_SEND_EMPTY_MESSAGE;
+    }
+
+    const wait = req.query.wait === "true";
+    const thread_id = typeof req.query.thread_id === "string" ? req.query.thread_id : undefined;
+
+    if (!wait) {
+        res.status(204).send();
+    }
+
+    const attachments: Attachment[] = [];
+
+    if (!webhook.channel.isWritable()) {
+        if (wait) {
+            throw new HTTPError(`Cannot send messages to channel of type ${webhook.channel.type}`, 400);
+        } else {
+            return;
+        }
+    }
+
+    // TODO: creating messages by users checks if the user can bypass rate limits, we cant do that on webhooks, but maybe we could check the application if there is one?
+    const limits = Config.get().limits;
+    if (limits.absoluteRate.sendMessage.enabled) {
+        const count = await Message.count({
+            where: {
+                channel_id: webhook.channel_id,
+                timestamp: MoreThan(new Date(Date.now() - limits.absoluteRate.sendMessage.window)),
+            },
+        });
+
+        if (count >= limits.absoluteRate.sendMessage.limit)
+            if (wait) {
+                throw FieldErrors({
+                    channel_id: {
+                        code: "TOO_MANY_MESSAGES",
+                        message: req.t("common:toomany.MESSAGE"),
+                    },
+                });
+            } else {
+                return;
+            }
+    }
+
+    let sendChannel = webhook.channel;
+    if (thread_id) {
+        sendChannel = await Channel.findOneOrFail({
+            where: {
+                id: thread_id,
+                parent_id: webhook.channel.id,
+            },
+        });
+    }
+
+    const files = (req.files as Express.Multer.File[]) ?? [];
+    for (const currFile of files) {
+        try {
+            const file = await uploadFile(`/attachments/${sendChannel.id}/${messageId}`, currFile);
+            attachments.push(Attachment.create(file));
+        } catch (error) {
+            if (wait) res.status(400).json({ message: error?.toString() });
+            console.error("[webhookExecute] Failed to handle attachment:", error);
+            return;
+        }
+    }
+
+    const embeds = body.embeds || [];
+    const bodyMsg = {
+        ...body,
+        allowed_mentions: body.allowed_mentions
+            ? {
+                  ...body.allowed_mentions,
+                  parse: body.allowed_mentions.parse as ("users" | "roles" | "everyone")[],
+              }
+            : undefined,
+    } as Parameters<typeof handleMessage>[0];
+    const message = await handleMessage({
+        id: messageId,
+        ...bodyMsg,
+        username: body.username || webhook.name,
+        avatar_url: body.avatar_url || webhook.avatar,
+        type: 0,
+        pinned: false,
+        webhook_id: webhook.id,
+        application_id: webhook.application?.id,
+        embeds,
+        // TODO: Support thread_id/thread_name once threads are implemented
+        channel_id: sendChannel.id,
+        attachments,
+        timestamp: new Date(),
+    });
+
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    //@ts-ignore dont care2
+    message.edited_timestamp = null;
+
+    sendChannel.last_message_id = message.id;
+
+    await Promise.all([
+        message.save(),
+        sendChannel.save(),
+        emitEvent({
+            event: "MESSAGE_CREATE",
+            channel_id: sendChannel.id,
+            data: message.toJSON(),
+        } satisfies MessageCreateEvent),
+    ]);
+
+    // no await as it shouldnt block the message send function and silently catch error
+    postHandleMessage(message).catch((e) => console.error("[Message] post-message handler failed", e));
+    if (wait) res.json(message);
+    return;
+};

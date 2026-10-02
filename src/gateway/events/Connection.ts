@@ -1,105 +1,180 @@
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+	
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+	
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+	
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 import WS from "ws";
-import { WebSocket } from "@fosscord/gateway";
+import { genSessionId, WebSocket } from "@spacebar/gateway";
 import { Send } from "../util/Send";
 import { CLOSECODES, OPCODES } from "../util/Constants";
 import { setHeartbeat } from "../util/Heartbeat";
-import { IncomingMessage } from "http";
+import { IncomingMessage } from "node:http";
 import { Close } from "./Close";
 import { Message } from "./Message";
 import { Deflate, Inflate } from "fast-zlib";
-import { URL } from "url";
-import { Config } from "@fosscord/util";
-var erlpack: any;
-try {
-	erlpack = require("@yukikaze-bot/erlpack");
-} catch (error) {}
+import { URL } from "node:url";
+import { Config } from "@spacebar/util";
+import { Decoder, Encoder } from "@toondepauw/node-zstd";
+import { ProcessLifecycle } from "@spacebar/util/util/ProcessLifecycle";
+import { Monitoring } from "../../util/monitoring/Monitoring";
+import { Gauge } from "prom-client";
 
 // TODO: check rate limit
 // TODO: specify rate limit in config
 // TODO: check msg max size
 
-export async function Connection(
-	this: WS.Server,
-	socket: WebSocket,
-	request: IncomingMessage,
-) {
-	const forwardedFor = Config.get().security.forwadedFor;
-	const ipAddress = forwardedFor
-		? (request.headers[forwardedFor] as string)
-		: request.socket.remoteAddress;
+export const openConnections: WebSocket[] = [];
 
-	socket.ipAddress = ipAddress;
+const openConnectionCount = Monitoring.attachMetric(
+    "spacebar_gateway_open_connection_count",
+    new Gauge({
+        name: "spacebar_gateway_open_connection_count",
+        help: "The total number of HTTP requests received",
+        registers: [],
+    }),
+);
 
-	try {
-		// @ts-ignore
-		socket.on("close", Close);
-		// @ts-ignore
-		socket.on("message", Message);
+export async function Connection(this: WS.Server, socket: WebSocket, request: IncomingMessage) {
+    openConnections.push(socket);
+    openConnectionCount.set(openConnections.length);
+    socket.on("close", () => {
+        const index = openConnections.indexOf(socket);
+        if (index !== -1) openConnections.splice(index, 1);
+        openConnectionCount.set(openConnections.length);
+    });
 
-		socket.on("error", (err) => console.error("[Gateway]", err));
+    const onShutdown = async () => {
+        await Send(socket, {
+            op: OPCODES.Reconnect,
+            s: socket.sequence++,
+            d: Math.round(Math.random() * 5000),
+        });
 
-		// console.log(
-		// 	`[Gateway] New connection from ${socket.ipAddress}, total ${this.clients.size}`,
-		// );
+        const closeListeners = socket.listeners("close");
+        for (const listener of closeListeners) {
+            socket.off("close", listener);
+            // noinspection JSVoidFunctionReturnValueUsed - awaiting results
+            const res = listener.call(socket, 1000, 0) as void | Promise<void>;
+            if (res) await res;
+        }
 
-		if (process.env.WS_LOGEVENTS)
-			[
-				"close",
-				"error",
-				"upgrade",
-				//"message",
-				"open",
-				"ping",
-				"pong",
-				"unexpected-response",
-			].forEach((x) => {
-				socket.on(x, (y) => console.log(x, y));
-			});
+        socket.close(1000);
+    };
 
-		const { searchParams } = new URL(`http://localhost${request.url}`);
-		// @ts-ignore
-		socket.encoding = searchParams.get("encoding") || "json";
-		if (!["json", "etf"].includes(socket.encoding)) {
-			if (socket.encoding === "etf" && erlpack) {
-				throw new Error(
-					"Erlpack is not installed: 'npm i @yukikaze-bot/erlpack'",
-				);
-			}
-			return socket.close(CLOSECODES.Decode_error);
-		}
+    if (ProcessLifecycle.state == "stopping" || ProcessLifecycle.state == "stopped") return await onShutdown();
+    ProcessLifecycle.eventEmitter.on("stopping", onShutdown);
 
-		socket.version = Number(searchParams.get("version")) || 8;
-		if (socket.version != 8)
-			return socket.close(CLOSECODES.Invalid_API_version);
+    const forwardedFor = Config.get().security.forwardedFor;
+    const ipAddress = forwardedFor ? (request.headers[forwardedFor.toLowerCase()] as string) : request.socket.remoteAddress;
 
-		// @ts-ignore
-		socket.compress = searchParams.get("compress") || "";
-		if (socket.compress) {
-			if (socket.compress !== "zlib-stream")
-				return socket.close(CLOSECODES.Decode_error);
-			socket.deflate = new Deflate();
-			socket.inflate = new Inflate();
-		}
+    socket.ipAddress = ipAddress;
+    socket.userAgent = request.headers["user-agent"] as string;
 
-		socket.events = {};
-		socket.member_events = {};
-		socket.permissions = {};
-		socket.sequence = 0;
+    if (!ipAddress && Config.get().security.cdnSignatureIncludeIp) {
+        console.error("Gateway connection rejected: No IP address found.");
+        return socket.close(CLOSECODES.Decode_error, "Gateway connection rejected: IP address is required.");
+    }
 
-		setHeartbeat(socket);
+    if (!socket.userAgent && Config.get().security.cdnSignatureIncludeUserAgent) {
+        console.error("Gateway connection rejected: No User-Agent header found.");
+        return socket.close(CLOSECODES.Decode_error, "Gateway connection rejected: User-Agent header is required.");
+    }
 
-		await Send(socket, {
-			op: OPCODES.Hello,
-			d: {
-				heartbeat_interval: 1000 * 30,
-			},
-		});
+    if (request.headers.cookie?.split("; ").find((x) => x.startsWith("__sb_sessid="))) {
+        socket.fingerprint = request.headers.cookie
+            .split("; ")
+            .find((x) => x.startsWith("__sb_sessid="))
+            ?.split("=")[1];
+    }
 
-		socket.readyTimeout = setTimeout(() => {
-			return socket.close(CLOSECODES.Session_timed_out);
-		}, 1000 * 30);
-	} catch (error) {
-		console.error(error);
-		return socket.close(CLOSECODES.Unknown_error);
-	}
+    //Create session ID when the connection is opened. This allows gateway dump to group the initial websocket messages with the rest of the conversation.
+    socket.session_id = "TEMP_" + genSessionId(); //Set the session of the WebSocket object
+
+    try {
+        // @ts-ignore
+        socket.on("close", Close);
+        // @ts-ignore
+        socket.on("message", Message);
+
+        socket.on("error", (err) => console.error(`[Gateway/${socket.user_id ?? socket.ipAddress}]`, err));
+
+        console.log(`[Gateway] New connection from ${ipAddress}, total ${this.clients.size}`);
+
+        if (process.env.WS_LOGEVENTS)
+            [
+                "close",
+                "error",
+                "upgrade",
+                //"message",
+                "open",
+                "ping",
+                "pong",
+                "unexpected-response",
+            ].forEach((x) => {
+                socket.on(x, (y) => console.log(x, y));
+            });
+
+        const { searchParams } = new URL(`http://localhost${request.url}`);
+        // @ts-ignore
+        socket.encoding = searchParams.get("encoding") || "json";
+        if (!["json", "etf"].includes(socket.encoding)) {
+            console.error(`[Gateway/${socket.ipAddress}] Unknown encoding: ${socket.encoding}`);
+            return socket.close(CLOSECODES.Decode_error);
+        }
+
+        socket.version = Number(searchParams.get("version")) || 8;
+        if (socket.version != 8) {
+            console.error(`[Gateway/${socket.ipAddress}] Invalid API version: ${socket.version}`);
+            return socket.close(CLOSECODES.Invalid_API_version);
+        }
+
+        // @ts-ignore
+        socket.compress = searchParams.get("compress") || "";
+        if (socket.compress) {
+            if (socket.compress === "zlib-stream") {
+                socket.deflate = new Deflate();
+                socket.inflate = new Inflate();
+            } else if (socket.compress === "zstd-stream") {
+                socket.zstdEncoder = new Encoder(6);
+                socket.zstdDecoder = new Decoder();
+            } else {
+                console.error(`[Gateway/${socket.user_id}] Unknown compression: ${socket.compress}`);
+                return socket.close(CLOSECODES.Decode_error);
+            }
+        }
+
+        socket.recentTransactions = [];
+        socket.events = {};
+        socket.member_events = {};
+        socket.permissions = {};
+        socket.sequence = 0;
+
+        setHeartbeat(socket);
+
+        await Send(socket, {
+            op: OPCODES.Hello,
+            d: {
+                heartbeat_interval: 1000 * 30,
+            },
+        });
+
+        socket.readyTimeout = setTimeout(() => socket.close(CLOSECODES.Session_timed_out), 1000 * 30);
+    } catch (error) {
+        console.error(error);
+        return socket.close(CLOSECODES.Unknown_error);
+    }
 }

@@ -1,8 +1,9 @@
 //TODO: this is a template for a generic route
 
 import { Router, Request, Response } from "express";
-import { route } from "@fosscord/api";
-const router = Router();
+import { route } from "@spacebar/api/util/handlers/route";
+
+const router = Router({ mergeParams: true });
 
 router.get("/",route({}), async (req: Request, res: Response) => {
 	res.json({});

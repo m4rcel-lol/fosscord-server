@@ -1,9 +1,60 @@
-import { Router, Response, Request } from "express";
-import { route } from "@fosscord/api";
-const router = Router();
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
 
-//TODO: implement webhooks
-router.get("/", route({}), async (req: Request, res: Response) => {
-	res.json([]);
-});
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import { Request, Response, Router } from "express";
+import { route } from "@spacebar/api/middlewares";
+import { Webhook } from "@spacebar/database";
+import { Config } from "@spacebar/util";
+import { WebhookResponse } from "@spacebar/schemas";
+
+const router = Router({ mergeParams: true });
+
+router.get(
+    "/",
+    route({
+        description: "Returns a list of guild webhook objects. Requires the MANAGE_WEBHOOKS permission.",
+        permission: "MANAGE_WEBHOOKS",
+        responses: {
+            200: {
+                body: "WebhookListResponse",
+            },
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const { guild_id } = req.params as { [key: string]: string };
+        const webhooks = await Webhook.find({
+            where: { guild_id },
+            relations: { user: true, channel: true, source_channel: true, guild: true, source_guild: true, application: true },
+        });
+
+        return res.json(
+            webhooks.map(
+                (webhook) =>
+                    ({
+                        ...webhook,
+                        user: webhook.user.toPartialUser(),
+                        source_guild: webhook.source_guild?.toIntegrationGuild(),
+                        source_channel: webhook.source_channel?.toWebhookChannel(),
+                        url: Config.get().api.endpointPublic + "/webhooks/" + webhook.id + "/" + webhook.token,
+                    }) satisfies WebhookResponse,
+            ),
+        );
+    },
+);
+
 export default router;

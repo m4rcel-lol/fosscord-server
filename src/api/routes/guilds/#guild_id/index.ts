@@ -1,129 +1,220 @@
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
 import { Request, Response, Router } from "express";
-import {
-	DiscordApiErrors,
-	emitEvent,
-	getPermission,
-	getRights,
-	Guild,
-	GuildUpdateEvent,
-	handleFile,
-	Member,
-	GuildUpdateSchema,
-	FosscordApiErrors,
-} from "@fosscord/util";
-import { HTTPError } from "lambert-server";
-import { route } from "@fosscord/api";
+import { HTTPError } from "lambert-server/HTTPError";
+import { route } from "@spacebar/api/middlewares";
+import { Channel, Guild, Member } from "@spacebar/database";
+import { DiscordApiErrors, GuildUpdateEvent, Permissions, SpacebarApiErrors, emitEvent, getPermission, getRights, handleFile } from "@spacebar/util";
+import { GuildCreateResponse, GuildUpdateSchema } from "@spacebar/schemas";
 
-const router = Router();
+const router = Router({ mergeParams: true });
 
-router.get("/", route({}), async (req: Request, res: Response) => {
-	const { guild_id } = req.params;
+router.get(
+    "/",
+    route({
+        responses: {
+            "200": {
+                body: "APIGuildWithJoinedAt",
+            },
+            401: {
+                body: "APIErrorResponse",
+            },
+            404: {
+                body: "APIErrorResponse",
+            },
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const { guild_id } = req.params as { [key: string]: string };
 
-	const [guild, member] = await Promise.all([
-		Guild.findOneOrFail({ where: { id: guild_id } }),
-		Member.findOne({ where: { guild_id: guild_id, id: req.user_id } }),
-	]);
-	if (!member)
-		throw new HTTPError(
-			"You are not a member of the guild you are trying to access",
-			401,
-		);
+        const [guild, member] = await Promise.all([Guild.findOneOrFail({ where: { id: guild_id } }), Member.findOne({ where: { guild_id: guild_id, id: req.user_id } })]);
+        if (!member) throw new HTTPError("You are not a member of the guild you are trying to access", 401);
 
-	// @ts-ignore
-	guild.joined_at = member?.joined_at;
-
-	return res.send(guild);
-});
+        return res.send({
+            ...guild,
+            joined_at: member?.joined_at,
+        });
+    },
+);
 
 router.patch(
-	"/",
-	route({ body: "GuildUpdateSchema" }),
-	async (req: Request, res: Response) => {
-		const body = req.body as GuildUpdateSchema;
-		const { guild_id } = req.params;
+    "/",
+    route({
+        requestBody: "GuildUpdateSchema",
+        permission: "MANAGE_GUILD",
+        responses: {
+            200: {
+                body: "GuildCreateResponse",
+            },
+            401: {
+                body: "APIErrorResponse",
+            },
+            403: {
+                body: "APIErrorResponse",
+            },
+            404: {
+                body: "APIErrorResponse",
+            },
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const body = req.body as GuildUpdateSchema;
+        const { guild_id } = req.params as { [key: string]: string };
 
-		const rights = await getRights(req.user_id);
-		const permission = await getPermission(req.user_id, guild_id);
+        const rights = await getRights(req.user_id);
+        const permission = await getPermission(req.user_id, guild_id);
 
-		if (!rights.has("MANAGE_GUILDS") && !permission.has("MANAGE_GUILD"))
-			throw DiscordApiErrors.MISSING_PERMISSIONS.withParams(
-				"MANAGE_GUILDS",
-			);
+        if (!rights.has("MANAGE_GUILDS") && !permission.has("MANAGE_GUILD")) throw DiscordApiErrors.MISSING_PERMISSIONS.withParams("MANAGE_GUILDS");
 
-		var guild = await Guild.findOneOrFail({
-			where: { id: guild_id },
-			relations: ["emojis", "roles", "stickers"],
-		});
+        const guild = await Guild.findOneOrFail({
+            where: { id: guild_id },
+            relations: { emojis: true, roles: true, stickers: true },
+        });
 
-		// TODO: guild update check image
+        // trying to `select` this fails
+        guild.channel_ordering = (
+            await Guild.findOneOrFail({
+                where: { id: guild_id },
+                select: { channel_ordering: true },
+            })
+        ).channel_ordering;
 
-		if (body.icon && body.icon != guild.icon)
-			body.icon = await handleFile(`/icons/${guild_id}`, body.icon);
+        // TODO: guild update check image
 
-		if (body.banner && body.banner !== guild.banner)
-			body.banner = await handleFile(`/banners/${guild_id}`, body.banner);
+        if (body.icon && body.icon != guild.icon) body.icon = await handleFile(`/icons/${guild_id}`, body.icon);
 
-		if (body.splash && body.splash !== guild.splash)
-			body.splash = await handleFile(
-				`/splashes/${guild_id}`,
-				body.splash,
-			);
+        if (body.banner && body.banner !== guild.banner) body.banner = await handleFile(`/banners/${guild_id}`, body.banner);
 
-		if (
-			body.discovery_splash &&
-			body.discovery_splash !== guild.discovery_splash
-		)
-			body.discovery_splash = await handleFile(
-				`/discovery-splashes/${guild_id}`,
-				body.discovery_splash,
-			);
+        if (body.splash && body.splash !== guild.splash) body.splash = await handleFile(`/splashes/${guild_id}`, body.splash);
 
-		if (body.features) {
-			const diff = guild.features
-				.filter((x) => !body.features?.includes(x))
-				.concat(
-					body.features.filter((x) => !guild.features.includes(x)),
-				);
+        if (body.discovery_splash && body.discovery_splash !== guild.discovery_splash)
+            body.discovery_splash = await handleFile(`/discovery-splashes/${guild_id}`, body.discovery_splash);
 
-			// TODO move these
-			const MUTABLE_FEATURES = [
-				"COMMUNITY",
-				"INVITES_DISABLED",
-				"DISCOVERABLE",
-			];
+        if (body.features) {
+            const diff = guild.features.filter((x) => !body.features?.includes(x)).concat(body.features.filter((x) => !guild.features.includes(x)));
 
-			for (var feature of diff) {
-				if (MUTABLE_FEATURES.includes(feature)) continue;
+            // TODO move these
+            const MUTABLE_FEATURES = ["COMMUNITY", "INVITES_DISABLED", "DISCOVERABLE"];
 
-				throw FosscordApiErrors.FEATURE_IS_IMMUTABLE.withParams(
-					feature,
-				);
-			}
+            for (const feature of diff) {
+                if (MUTABLE_FEATURES.includes(feature)) continue;
 
-			// for some reason, they don't update in the assign.
-			guild.features = body.features;
-		}
+                throw SpacebarApiErrors.FEATURE_IS_IMMUTABLE.withParams(feature);
+            }
 
-		// TODO: check if body ids are valid
-		guild.assign(body);
+            // for some reason, they don't update in the assign.
+            guild.features = body.features;
+        }
 
-		const data = guild.toJSON();
-		// TODO: guild hashes
-		// TODO: fix vanity_url_code, template_id
-		delete data.vanity_url_code;
-		delete data.template_id;
+        // TODO: check if body ids are valid
+        guild.assign(body);
 
-		await Promise.all([
-			guild.save(),
-			emitEvent({
-				event: "GUILD_UPDATE",
-				data,
-				guild_id,
-			} as GuildUpdateEvent),
-		]);
+        if (body.public_updates_channel_id == "1") {
+            // create an updates channel for them
+            const channel = await Channel.createChannel(
+                {
+                    name: "moderator-only",
+                    guild_id: guild.id,
+                    position: 0,
+                    type: 0,
+                    permission_overwrites: [
+                        // remove SEND_MESSAGES from @everyone
+                        {
+                            id: guild.id,
+                            allow: "0",
+                            deny: Permissions.FLAGS.VIEW_CHANNEL.toString(),
+                            type: 0,
+                        },
+                    ],
+                },
+                undefined,
+                { skipPermissionCheck: true },
+            );
 
-		return res.json(data);
-	},
+            await Guild.insertChannelInOrder(guild.id, channel.id, 0, guild);
+
+            guild.public_updates_channel_id = channel.id;
+        } else if (body.public_updates_channel_id != undefined) {
+            // ensure channel exists in this guild
+            await Channel.findOneOrFail({
+                where: { guild_id, id: body.public_updates_channel_id },
+                select: { id: true },
+            });
+        }
+
+        if (body.rules_channel_id == "1") {
+            // create a rules for them
+            const channel = await Channel.createChannel(
+                {
+                    name: "rules",
+                    guild_id: guild.id,
+                    position: 0,
+                    type: 0,
+                    permission_overwrites: [
+                        // remove SEND_MESSAGES from @everyone
+                        {
+                            id: guild.id,
+                            allow: "0",
+                            deny: Permissions.FLAGS.SEND_MESSAGES.toString(),
+                            type: 0,
+                        },
+                    ],
+                },
+                undefined,
+                { skipPermissionCheck: true },
+            );
+
+            await Guild.insertChannelInOrder(guild.id, channel.id, 0, guild);
+
+            guild.rules_channel_id = channel.id;
+        } else if (body.rules_channel_id != undefined) {
+            // ensure channel exists in this guild
+            await Channel.findOneOrFail({
+                where: { guild_id, id: body.rules_channel_id },
+                select: { id: true },
+            });
+        }
+
+        const data = guild.toJSON();
+        // TODO: guild hashes
+        // TODO: fix vanity_url_code, template_id
+        // delete data.vanity_url_code;
+        delete data.template_id;
+
+        await Promise.all([
+            guild.save(),
+            emitEvent({
+                event: "GUILD_UPDATE",
+                data: {
+                    ...data,
+                    // TODO: did i do this right?
+                    afk_channel_id: data.afk_channel_id ?? undefined,
+                    public_updates_channel_id: data.public_updates_channel_id ?? undefined,
+                    rules_channel_id: data.rules_channel_id ?? undefined,
+                    system_channel_id: data.system_channel_id ?? undefined,
+                } satisfies GuildCreateResponse, // apparently we dont have a separate schema for this
+                guild_id,
+            } satisfies GuildUpdateEvent),
+        ]);
+
+        return res.json(data);
+    },
 );
 
 export default router;

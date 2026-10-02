@@ -1,0 +1,63 @@
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2026 Spacebar and Spacebar Contributors
+	
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+	
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+	
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import { Snowflake } from "../../Identifiers";
+
+export interface GuildAvailableSchema {
+    id: Snowflake;
+    available: boolean;
+}
+
+export interface IntegrationGuild {
+    id: Snowflake;
+    name: string;
+    icon: string | null;
+}
+
+export enum GuildVerificationLevel {
+    NONE = 0,
+    // Verified email
+    LOW = 1,
+    // Registered >5min ago
+    MEDIUM = 2,
+    // Member for >10min
+    HIGH = 3,
+    // Verified phone number
+    VERY_HIGH = 4,
+}
+
+export enum GuildNsfwLevel {
+    DEFAULT = 0,
+    EXPLICIT = 1,
+    SAFE = 2,
+    AGE_RESTRICTED = 3,
+}
+
+// Unlocked boost perk level
+export enum GuildPremiumTier {
+    NONE = 0,
+    TIER_1 = 1,
+    TIER_2 = 2,
+    TIER_3 = 3,
+}
+
+export enum GuildHubType {
+    DEFAULT = 0,
+    HIGH_SCHOOL = 1,
+    COLLEGE = 2,
+}

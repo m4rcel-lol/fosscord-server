@@ -1,89 +1,158 @@
-import { Router, Request, Response } from "express";
-import {
-	emitEvent,
-	getPermission,
-	Guild,
-	Invite,
-	InviteDeleteEvent,
-	User,
-	PublicInviteRelation,
-} from "@fosscord/util";
-import { route } from "@fosscord/api";
-import { HTTPError } from "lambert-server";
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+	
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+	
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+	
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
 
-const router: Router = Router();
+import { route } from "@spacebar/api/middlewares";
+import { Ban, Guild, Invite, PublicInviteRelation } from "@spacebar/database";
+import { Config, DiscordApiErrors, emitEvent, getPermission, InviteDeleteEvent } from "@spacebar/util";
+import { Request, Response, Router } from "express";
+import { HTTPError } from "lambert-server/HTTPError";
+import { UserFlags } from "@spacebar/schemas";
 
-router.get("/:code", route({}), async (req: Request, res: Response) => {
-	const { code } = req.params;
+const router: Router = Router({ mergeParams: true });
 
-	const invite = await Invite.findOneOrFail({
-		where: { code },
-		relations: PublicInviteRelation,
-	});
+router.get(
+    "/:invite_code",
+    route({
+        responses: {
+            "200": {
+                body: "Invite",
+            },
+            404: {
+                body: "APIErrorResponse",
+            },
+        },
+        authentication: "never",
+    }),
+    async (req: Request, res: Response) => {
+        const { invite_code } = req.params as { [key: string]: string };
 
-	res.status(200).send(invite);
-});
+        const invite = await Invite.findOneOrFail({
+            where: { code: invite_code },
+            relations: Object.fromEntries(PublicInviteRelation.map((i) => [i, true])), //TODO: clean up
+        });
+
+        res.status(200).send(invite.toPublicJSON());
+    },
+);
 
 router.post(
-	"/:code",
-	route({ right: "USE_MASS_INVITES" }),
-	async (req: Request, res: Response) => {
-		const { code } = req.params;
-		const { guild_id } = await Invite.findOneOrFail({
-			where: { code: code },
-		});
-		const { features } = await Guild.findOneOrFail({
-			where: { id: guild_id },
-		});
-		const { public_flags } = await User.findOneOrFail({
-			where: { id: req.user_id },
-		});
+    "/:invite_code",
+    route({
+        right: "USE_MASS_INVITES",
+        responses: {
+            "200": {
+                body: "Invite",
+            },
+            401: {
+                body: "APIErrorResponse",
+            },
+            403: {
+                body: "APIErrorResponse",
+            },
+            404: {
+                body: "APIErrorResponse",
+            },
+        },
+    }),
+    async (req: Request, res: Response) => {
+        if (req.user_bot && !Config.get().user.botsCanUseInvites) throw DiscordApiErrors.BOT_PROHIBITED_ENDPOINT;
 
-		if (
-			features.includes("INTERNAL_EMPLOYEE_ONLY") &&
-			(public_flags & 1) !== 1
-		)
-			throw new HTTPError(
-				"Only intended for the staff of this server.",
-				401,
-			);
-		if (features.includes("INVITES_CLOSED"))
-			throw new HTTPError("Sorry, this guild has joins closed.", 403);
+        const { invite_code } = req.params as { [key: string]: string };
+        const { public_flags } = req.user;
+        const { guild_id } = await Invite.findOneOrFail({
+            where: { code: invite_code },
+        });
+        const { features } = await Guild.findOneOrFail({
+            where: { id: guild_id },
+        });
+        const ban = await Ban.findOne({
+            where: [
+                { guild_id: guild_id, user_id: req.user_id },
+                { guild_id: guild_id, ip: req.ip },
+            ],
+        });
 
-		const invite = await Invite.joinGuild(req.user_id, code);
+        if (ban) {
+            console.log(`[Invite] User ${req.user_id} tried to join guild ${guild_id} but is banned by ${ban.user_id === req.user_id ? "User ID" : "IP address"}.`);
+            throw DiscordApiErrors.USER_BANNED;
+        }
 
-		res.json(invite);
-	},
+        if ((BigInt(public_flags) & UserFlags.FLAGS.QUARANTINED) === UserFlags.FLAGS.QUARANTINED) {
+            console.log(`[Invite] User ${req.user_id} tried to join guild ${guild_id} but is quarantined.`);
+            throw DiscordApiErrors.UNKNOWN_INVITE;
+        }
+
+        if (features.includes("INTERNAL_EMPLOYEE_ONLY") && (public_flags & 1) !== 1) {
+            console.log(`[Invite] User ${req.user_id} tried to join guild ${guild_id} but is not staff.`);
+            throw new HTTPError("Only intended for the staff of this instance.", 401);
+        }
+
+        if (features.includes("INVITES_DISABLED")) {
+            console.log(`[Invite] User ${req.user_id} tried to join guild ${guild_id} but joins are closed.`);
+            throw new HTTPError("Sorry, this guild has joins closed.", 403);
+        }
+
+        const invite = await Invite.joinGuild(req.user_id, invite_code);
+
+        res.json(invite);
+    },
 );
 
 // * cant use permission of route() function because path doesn't have guild_id/channel_id
-router.delete("/:code", route({}), async (req: Request, res: Response) => {
-	const { code } = req.params;
-	const invite = await Invite.findOneOrFail({ where: { code } });
-	const { guild_id, channel_id } = invite;
+router.delete(
+    "/:invite_code",
+    route({
+        responses: {
+            "200": {
+                body: "Invite",
+            },
+            401: {
+                body: "APIErrorResponse",
+            },
+            404: {
+                body: "APIErrorResponse",
+            },
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const { invite_code } = req.params as { [key: string]: string };
+        const invite = await Invite.findOneOrFail({ where: { code: invite_code } });
+        const { guild_id, channel_id } = invite;
 
-	const permission = await getPermission(req.user_id, guild_id, channel_id);
+        const permission = await getPermission(req.user_id, guild_id, channel_id);
 
-	if (!permission.has("MANAGE_GUILD") && !permission.has("MANAGE_CHANNELS"))
-		throw new HTTPError(
-			"You missing the MANAGE_GUILD or MANAGE_CHANNELS permission",
-			401,
-		);
+        if (!permission.has("MANAGE_GUILD") && !permission.has("MANAGE_CHANNELS")) throw new HTTPError("You missing the MANAGE_GUILD or MANAGE_CHANNELS permission", 401);
 
-	await Promise.all([
-		Invite.delete({ code }),
-		emitEvent({
-			event: "INVITE_DELETE",
-			guild_id: guild_id,
-			data: {
-				channel_id: channel_id,
-				guild_id: guild_id,
-				code: code,
-			},
-		} as InviteDeleteEvent),
-	]);
+        await Promise.all([
+            Invite.delete({ code: invite_code }),
+            emitEvent({
+                event: "INVITE_DELETE",
+                guild_id: guild_id,
+                data: {
+                    channel_id: channel_id,
+                    guild_id: guild_id,
+                    code: invite_code,
+                },
+            } satisfies InviteDeleteEvent),
+        ]);
 
-	res.json({ invite: invite });
-});
+        res.json({ invite: invite });
+    },
+);
 
 export default router;

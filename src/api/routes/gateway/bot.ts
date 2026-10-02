@@ -1,40 +1,50 @@
-import { Config } from "@fosscord/util";
-import { Router, Response, Request } from "express";
-import { route, RouteOptions } from "@fosscord/api";
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+	
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+	
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+	
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
 
-const router = Router();
+import { route } from "@spacebar/api/middlewares";
+import { Config } from "@spacebar/util";
+import { Request, Response, Router } from "express";
 
-export interface GatewayBotResponse {
-	url: string;
-	shards: number;
-	session_start_limit: {
-		total: number;
-		remaining: number;
-		reset_after: number;
-		max_concurrency: number;
-	};
-}
+const router = Router({ mergeParams: true });
 
-const options: RouteOptions = {
-	test: {
-		response: {
-			body: "GatewayBotResponse",
-		},
-	},
-};
-
-router.get("/", route(options), (req: Request, res: Response) => {
-	const { endpointPublic } = Config.get().gateway;
-	res.json({
-		url: endpointPublic || process.env.GATEWAY || "ws://localhost:3002",
-		shards: 1,
-		session_start_limit: {
-			total: 1000,
-			remaining: 999,
-			reset_after: 14400000,
-			max_concurrency: 1,
-		},
-	});
-});
+router.get(
+    "/",
+    route({
+        responses: {
+            200: {
+                body: "GatewayBotResponse",
+            },
+        },
+        authentication: "never",
+    }),
+    (req: Request, res: Response) => {
+        const { endpointPublic } = Config.get().gateway;
+        res.json({
+            url: endpointPublic,
+            shards: 1,
+            session_start_limit: {
+                total: 1000,
+                remaining: 999,
+                reset_after: 14400000,
+                max_concurrency: 1,
+            },
+        });
+    },
+);
 
 export default router;

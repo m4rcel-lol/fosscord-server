@@ -1,0 +1,119 @@
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2026 Spacebar and Spacebar Contributors
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import { BeforeRemove, Column, Entity, JoinColumn, ManyToOne, RelationId } from "typeorm";
+import { Config, deleteFile } from "@spacebar/util/util";
+import { getUrlSignature, NewUrlUserSignatureData, NewUrlSignatureData } from "@spacebar/util/Signing";
+import { AttachmentFlags, PublicAttachment } from "@spacebar/schemas/api/messages/Attachments";
+import { BaseClass } from "./BaseClass";
+
+@Entity({
+    name: "attachments",
+})
+export class Attachment extends BaseClass {
+    @Column()
+    filename: string; // name of file attached
+
+    @Column()
+    size: number; // size of file in bytes
+
+    @Column({ nullable: true })
+    height?: number; // height of file (if image)
+
+    @Column({ nullable: true })
+    width?: number; // width of file (if image)
+
+    @Column({ nullable: true })
+    content_type?: string;
+
+    @Column({ nullable: true, foreignKeyConstraintName: "FK_attachment_message_id" })
+    @RelationId((attachment: Attachment) => attachment.message)
+    message_id: string;
+
+    @Column({ nullable: true, foreignKeyConstraintName: "FK_attachment_channel_id" })
+    @RelationId((attachment: Attachment) => attachment.channel)
+    channel_id: string;
+
+    @JoinColumn({ name: "message_id", foreignKeyConstraintName: "FK_attachment_message_id" })
+    @ManyToOne(() => require("./Message").Message, (message: import("./Message").Message) => message.attachments, {
+        onDelete: "CASCADE",
+    })
+    message: import("./Message").Message;
+
+    @JoinColumn({ name: "channel_id", foreignKeyConstraintName: "FK_attachment_channel_id" })
+    @ManyToOne(() => require("./Channel").Channel, {
+        onDelete: "CASCADE",
+    })
+    channel: import("./Channel").Channel;
+
+    @Column({ nullable: true, type: "character varying" })
+    description?: string;
+
+    @Column({ nullable: true, type: "int2" })
+    flags?: AttachmentFlags;
+
+    @Column({ nullable: true, type: "int2" })
+    content_scan_version?: number;
+
+    @Column({ nullable: true, type: "int2" })
+    placeholder_version?: number;
+
+    @Column({ nullable: true, type: "character varying" })
+    placeholder?: string;
+
+    @Column({ nullable: true, type: "float8" })
+    duration_secs?: number;
+
+    @Column({ nullable: true, type: "character varying" })
+    waveform?: string;
+
+    @Column({ nullable: true, type: "character varying" })
+    title?: string;
+
+    @Column({ nullable: true, type: "timestamp with time zone" })
+    clip_created_at?: Date;
+
+    @BeforeRemove()
+    onDelete() {
+        return deleteFile(new URL(this.toJSON().url).pathname);
+    }
+
+    toJSON(): PublicAttachment {
+        const channelId = this.channel_id ?? this.channel?.id ?? this.message?.channel_id;
+        const messageId = this.message_id ?? this.message?.id;
+        return {
+            ...this,
+            url: `${Config.get().cdn.endpointPublic}/attachments/${channelId}/${this.id}/${this.filename}`,
+            proxy_url: `${Config.get().cdn.endpointPublic}/attachments/${channelId}/${this.id}/${this.filename}`,
+        } satisfies PublicAttachment;
+    }
+    signUrls(data: NewUrlUserSignatureData): PublicAttachment {
+        const att = Attachment.prototype.toJSON.apply(this);
+        return {
+            ...att,
+            url: getUrlSignature(new NewUrlSignatureData({ ...data, url: att.url }))
+                .applyToUrl(att.url)
+                .toString(),
+            proxy_url: att.proxy_url
+                ? getUrlSignature(new NewUrlSignatureData({ ...data, url: att.proxy_url }))
+                      .applyToUrl(att.proxy_url)
+                      .toString()
+                : att.proxy_url,
+        };
+    }
+}

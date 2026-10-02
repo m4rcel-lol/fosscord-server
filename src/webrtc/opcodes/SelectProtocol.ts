@@ -1,49 +1,68 @@
-import { Payload, Send, WebSocket } from "@fosscord/gateway";
-import { SelectProtocolSchema, validateSchema } from "@fosscord/util";
-import { endpoint, PublicIP, VoiceOPCodes } from "@fosscord/webrtc";
-import SemanticSDP, { MediaInfo, SDPInfo } from "semantic-sdp";
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+	
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+	
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+	
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+import { SelectProtocolSchema, validateSchema } from "@spacebar/schemas";
+import { mediaServer, Send, VoiceOPCodes, VoicePayload, WebRtcWebSocket } from "@spacebar/webrtc";
 
-export async function onSelectProtocol(this: WebSocket, payload: Payload) {
-	if (!this.client) return;
+export async function onSelectProtocol(this: WebRtcWebSocket, payload: VoicePayload) {
+    if (!this.webRtcClient) return;
 
-	const data = validateSchema(
-		"SelectProtocolSchema",
-		payload.d,
-	) as SelectProtocolSchema;
+    const data = validateSchema("SelectProtocolSchema", payload.d) as SelectProtocolSchema;
 
-	const offer = SemanticSDP.SDPInfo.parse("m=audio\n" + data.sdp!);
-	this.client.sdp!.setICE(offer.getICE());
-	this.client.sdp!.setDTLS(offer.getDTLS());
+    // UDP protocol not currently supported. Maybe in the future?
+    if (data.protocol !== "webrtc") return this.close(4000, "only webrtc protocol supported currently");
 
-	const transport = endpoint.createTransport(this.client.sdp!);
-	this.client.transport = transport;
-	transport.setRemoteProperties(this.client.sdp!);
-	transport.setLocalProperties(this.client.sdp!);
+    const response = await mediaServer.onOffer(this.webRtcClient, data.sdp!, data.codecs ?? []);
 
-	const dtls = transport.getLocalDTLSInfo();
-	const ice = transport.getLocalICEInfo();
-	const port = endpoint.getLocalPort();
-	const fingerprint = dtls.getHash() + " " + dtls.getFingerprint();
-	const candidates = transport.getLocalCandidates();
-	const candidate = candidates[0];
+    await Send(this, {
+        op: VoiceOPCodes.SESSION_DESCRIPTION,
+        d: {
+            video_codec: response.selectedVideoCodec,
+            sdp: response.sdp,
+            media_session_id: this.session_id,
+            audio_codec: "opus",
+        },
+    });
 
-	const answer =
-		`m=audio ${port} ICE/SDP` +
-		`a=fingerprint:${fingerprint}` +
-		`c=IN IP4 ${PublicIP}` +
-		`a=rtcp:${port}` +
-		`a=ice-ufrag:${ice.getUfrag()}` +
-		`a=ice-pwd:${ice.getPwd()}` +
-		`a=fingerprint:${fingerprint}` +
-		`a=candidate:1 1 ${candidate.getTransport()} ${candidate.getFoundation()} ${candidate.getAddress()} ${candidate.getPort()} typ host`;
+    const { voiceRoomId } = this.webRtcClient;
+    const connectedClients = mediaServer.getClientsForRtcServer<WebRtcWebSocket>(voiceRoomId);
+    const clientConnectData = {
+        user_ids: connectedClients.values().map((c) => c.user_id),
+    };
 
-	await Send(this, {
-		op: VoiceOPCodes.SELECT_PROTOCOL_ACK,
-		d: {
-			video_codec: "H264",
-			sdp: answer,
-			media_session_id: this.session_id,
-			audio_codec: "opus",
-		},
-	});
+    for (const client of connectedClients) {
+        await Send(client.websocket, {
+            op: VoiceOPCodes.CLIENTS_CONNECT,
+            d: clientConnectData,
+        });
+        await Send(this, {
+            op: VoiceOPCodes.CLIENT_FLAGS,
+            d: {
+                user_id: client.user_id,
+                flags: 0, // TODO: clips flags, we currently just send "none"
+            },
+        });
+
+        await Send(this, {
+            op: VoiceOPCodes.CLIENT_PLATFORM,
+            d: {
+                user_id: client.user_id,
+                platform: 0, // TODO: send platform, currently we always say desktop...
+            },
+        });
+    }
 }

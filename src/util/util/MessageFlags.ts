@@ -1,20 +1,27 @@
 // based on https://github.com/discordjs/discord.js/blob/master/src/util/MessageFlags.js
 // Apache License Version 2.0 Copyright 2015 - 2021 Amish Shah, 2022 Erkin Alp Güney
+// @fc-license-skip
 
 import { BitField } from "./BitField";
 
 export class MessageFlags extends BitField {
-	static FLAGS = {
-		CROSSPOSTED: BigInt(1) << BigInt(0),
-		IS_CROSSPOST: BigInt(1) << BigInt(1),
-		SUPPRESS_EMBEDS: BigInt(1) << BigInt(2),
-		// SOURCE_MESSAGE_DELETED: BigInt(1) << BigInt(3), // fosscord will delete them from destination too, making this redundant
-		URGENT: BigInt(1) << BigInt(4),
-		// HAS_THREAD: BigInt(1) << BigInt(5) // does not apply to fosscord due to infrastructural differences
-		PRIVATE_ROUTE: BigInt(1) << BigInt(6), // it that has been routed to only some of the users that can see the channel
-		INTERACTION_WAIT: BigInt(1) << BigInt(7), // discord.com calls this LOADING
-		// FAILED_TO_MENTION_SOME_ROLES_IN_THREAD: BigInt(1) << BigInt(8)
-		SCRIPT_WAIT: BigInt(1) << BigInt(24), // waiting for the self command to complete
-		IMPORT_WAIT: BigInt(1) << BigInt(25), // latest message of a bulk import, waiting for the rest of the channel to be backfilled
-	};
+    static FLAGS = {
+        CROSSPOSTED: 1n,
+        IS_CROSSPOST: 1n << 1n,
+        SUPPRESS_EMBEDS: 1n << 2n,
+        SOURCE_MESSAGE_DELETED: 1n << 3n,
+        URGENT: 1n << 4n,
+        HAS_THREAD: 1n << 5n,
+        EPHEMERAL: 1n << 6n,
+        LOADING: 1n << 17n,
+        FAILED_TO_MENTION_SOME_ROLES_IN_THREAD: 1n << 8n,
+        GUILD_FEED_HIDDEN: 1n << 9n,
+        SHOULD_SHOW_LINK_NOT_DISCORD_WARNING: 1n << 10n,
+        // 1<<11 not documented
+        SUPPRESS_NOTIFICATIONS: 1n << 12n,
+        IS_VOICE_MESSAGE: 1n << 13n,
+        HAS_SNAPSHOT: 1n << 14n,
+        IS_COMPONENTS_V2: 1n << 15n,
+        SENT_BY_SOCIAL_LAYER_INTEGRATION: 1n << 16n,
+    };
 }

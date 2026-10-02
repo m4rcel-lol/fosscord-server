@@ -1,71 +1,108 @@
-import "missing-native-js-functions";
-import dotenv from "dotenv";
-dotenv.config();
-import {
-	closeDatabase,
-	Config,
-	initDatabase,
-	initEvent,
-	Sentry,
-} from "@fosscord/util";
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+	
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+	
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+	
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import http from "node:http";
+import path from "node:path";
+import morgan from "morgan";
+import { red } from "picocolors";
 import ws from "ws";
+import { Server, ServerOptions } from "lambert-server";
+import { initDatabase } from "@spacebar/database";
+import { Config, initEvent, JSONReplacer, JwtKeypairManager, registerRoutes } from "@spacebar/util";
+import { ProcessLifecycle, SystemdLifecycle } from "../util/util/ProcessLifecycle";
+import { Monitoring } from "../util/monitoring/Monitoring";
 import { Connection } from "./events/Connection";
-import http from "http";
+import { cleanupOnStartup } from "./util";
+import { Authentication, BodyParser, CORS, ErrorHandler } from "@spacebar/api";
 
-export class Server {
-	public ws: ws.Server;
-	public port: number;
-	public server: http.Server;
-	public production: boolean;
+export class GatewayServer extends Server {
+    public ws: ws.Server;
 
-	constructor({
-		port,
-		server,
-		production,
-	}: {
-		port: number;
-		server?: http.Server;
-		production?: boolean;
-	}) {
-		this.port = port;
-		this.production = production || false;
+    constructor(options?: Partial<ServerOptions>) {
+        super(options);
 
-		if (server) this.server = server;
-		else {
-			this.server = http.createServer(function (req, res) {
-				res.writeHead(200).end("Online");
-			});
-		}
+        this.http ??= http.createServer(this.app);
 
-		this.server.on("upgrade", (request, socket, head) => {
-			// @ts-ignore
-			this.ws.handleUpgrade(request, socket, head, (socket) => {
-				this.ws.emit("connection", socket, request);
-			});
-		});
+        this.http.on("upgrade", (request, socket, head) => {
+            this.ws.handleUpgrade(request, socket, head, (socket) => {
+                this.ws.emit("connection", socket, request);
+            });
+        });
 
-		this.ws = new ws.Server({
-			maxPayload: 4096,
-			noServer: true,
-		});
-		this.ws.on("connection", Connection);
-		this.ws.on("error", console.error);
-	}
+        this.ws = new ws.Server({
+            maxPayload: 4096,
+            noServer: true,
+        });
+        this.ws.on("connection", Connection);
+        this.ws.on("error", console.error);
+    }
 
-	async start(): Promise<void> {
-		await initDatabase();
-		await Config.init();
-		await initEvent();
-		await Sentry.init();
+    async start(): Promise<void> {
+        await Monitoring.init();
+        Monitoring.attach(this.app);
+        await initDatabase();
+        await Config.init();
+        await initEvent();
+        // temporary fix
+        await cleanupOnStartup();
+        await JwtKeypairManager.init();
 
-		if (!this.server.listening) {
-			this.server.listen(this.port);
-			console.log(`[Gateway] online on 0.0.0.0:${this.port}`);
-		}
-	}
+        const logRequests = process.env["LOG_REQUESTS"] != undefined;
+        if (logRequests) {
+            this.app.use(
+                morgan("combined", {
+                    skip: (req, res) => {
+                        let skip = !(process.env["LOG_REQUESTS"]?.includes(res.statusCode.toString()) ?? false);
+                        if (process.env["LOG_REQUESTS"]?.charAt(0) == "-") skip = !skip;
+                        return skip;
+                    },
+                }),
+            );
+        }
 
-	async stop() {
-		closeDatabase();
-		this.server.close();
-	}
+        this.app.set("json replacer", JSONReplacer);
+        this.app.disable("x-powered-by");
+
+        const trustedProxies = Config.get().security.trustedProxies;
+        if (trustedProxies) this.app.set("trust proxy", trustedProxies);
+
+        this.app.use(CORS);
+        this.app.use(BodyParser({ inflate: true, limit: "10mb" }));
+        this.app.use(Authentication);
+
+        this.routes = (await registerRoutes(this, path.join(__dirname, "routes", "/"))).filter((r) => !!r);
+
+        this.app.get("/", (req, res) => res.status(200).send("Online"));
+
+        this.app.use(ErrorHandler);
+        if (logRequests) console.log(red(`Warning: Request logging is enabled! This will spam your console!\nTo disable this, unset the 'LOG_REQUESTS' environment variable!`));
+
+        await super.start();
+        await SystemdLifecycle.setStatus(`Listening on ${this.options.host}:${this.options.port}...`);
+
+        await ProcessLifecycle.Ready();
+    }
+
+    async stop() {
+        await ProcessLifecycle.Shutdown();
+        this.ws.clients.forEach((x) => x.close());
+        this.ws.close();
+        this.http.close();
+        await ProcessLifecycle.Finalize();
+    }
 }

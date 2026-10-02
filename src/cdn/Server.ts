@@ -1,100 +1,107 @@
-import { Server, ServerOptions } from "lambert-server";
-import { Config, initDatabase, registerRoutes, Sentry } from "@fosscord/util";
-import path from "path";
-import avatarsRoute from "./routes/avatars";
-import guildProfilesRoute from "./routes/guild-profiles";
-import iconsRoute from "./routes/role-icons";
-import bodyParser from "body-parser";
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
 
-export interface CDNServerOptions extends ServerOptions {}
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import path from "node:path";
+import morgan from "morgan";
+import { Server, ServerOptions } from "lambert-server/Server";
+import { CORS, BodyParser, Authentication } from "@spacebar/api/middlewares";
+import { Attachment, initDatabase } from "@spacebar/database";
+import { Config, JwtKeypairManager, registerRoutes } from "@spacebar/util";
+import { ProcessLifecycle, SystemdLifecycle } from "../util/util/ProcessLifecycle";
+import { Monitoring } from "../util/monitoring/Monitoring";
+import guildProfilesRoute from "./routes/guild-profiles";
+import { storage } from "./util";
+import { ErrorHandler } from "@spacebar/cdn/util/ErrorHandler";
+
+export type CDNServerOptions = ServerOptions;
 
 export class CDNServer extends Server {
-	public declare options: CDNServerOptions;
+    declare public options: CDNServerOptions;
 
-	constructor(options?: Partial<CDNServerOptions>) {
-		super(options);
-	}
+    constructor(options?: Partial<CDNServerOptions>) {
+        super(options);
+    }
 
-	async start() {
-		await initDatabase();
-		await Config.init();
-		await Sentry.init(this.app);
+    async start() {
+        await Monitoring.init();
+        Monitoring.attach(this.app);
+        await initDatabase();
+        await Config.init();
+        await JwtKeypairManager.init();
 
-		this.app.use((req, res, next) => {
-			res.set("Access-Control-Allow-Origin", "*");
-			// TODO: use better CSP policy
-			res.set(
-				"Content-security-policy",
-				"default-src *  data: blob: filesystem: about: ws: wss: 'unsafe-inline' 'unsafe-eval'; script-src * data: blob: 'unsafe-inline' 'unsafe-eval'; connect-src * data: blob: 'unsafe-inline'; img-src * data: blob: 'unsafe-inline'; frame-src * data: blob: ; style-src * data: blob: 'unsafe-inline'; font-src * data: blob: 'unsafe-inline';",
-			);
-			res.set(
-				"Access-Control-Allow-Headers",
-				req.header("Access-Control-Request-Headers") || "*",
-			);
-			res.set(
-				"Access-Control-Allow-Methods",
-				req.header("Access-Control-Request-Methods") || "*",
-			);
-			next();
-		});
-		this.app.use(bodyParser.json({ inflate: true, limit: "10mb" }));
+        this.migrateAttachments().then(
+            (_) => console.log("[CDN] Successfully migrated attachments"),
+            (_) => console.log("[CDN] Attachment migration failed"),
+        );
 
-		await registerRoutes(this, path.join(__dirname, "routes/"));
+        const logRequests = process.env["LOG_REQUESTS"] != undefined;
+        if (logRequests) {
+            this.app.use(
+                morgan("combined", {
+                    skip: (req, res) => {
+                        let skip = !(process.env["LOG_REQUESTS"]?.includes(res.statusCode.toString()) ?? false);
+                        if (process.env["LOG_REQUESTS"]?.charAt(0) == "-") skip = !skip;
+                        return skip;
+                    },
+                }),
+            );
+        }
 
-		this.app.use("/icons/", avatarsRoute);
-		this.log("verbose", "[Server] Route /icons registered");
+        const trustedProxies = Config.get().security.trustedProxies;
+        if (trustedProxies) this.app.set("trust proxy", trustedProxies);
 
-		this.app.use("/role-icons/", iconsRoute);
-		this.log("verbose", "[Server] Route /role-icons registered");
+        this.app.disable("x-powered-by");
 
-		this.app.use("/emojis/", avatarsRoute);
-		this.log("verbose", "[Server] Route /emojis registered");
+        this.app.use(Authentication);
+        this.app.use(ErrorHandler);
+        this.app.use(CORS);
+        this.app.use(BodyParser({ inflate: true, limit: "10mb" }));
 
-		this.app.use("/stickers/", avatarsRoute);
-		this.log("verbose", "[Server] Route /stickers registered");
+        await registerRoutes(this, path.join(__dirname, "routes/"));
 
-		this.app.use("/banners/", avatarsRoute);
-		this.log("verbose", "[Server] Route /banners registered");
+        this.app.use("/guilds/:guild_id/users/:user_id/avatars", guildProfilesRoute);
+        if (process.env.LOG_ROUTES !== "false") console.log("[Server] Route /guilds/:guild_id/users/:user_id/avatars registered");
 
-		this.app.use("/splashes/", avatarsRoute);
-		this.log("verbose", "[Server] Route /splashes registered");
+        this.app.use("/guilds/:guild_id/users/:user_id/banners", guildProfilesRoute);
+        if (process.env.LOG_ROUTES !== "false") console.log("[Server] Route /guilds/:guild_id/users/:user_id/banners registered");
 
-		this.app.use("/discovery-splashes/", avatarsRoute);
-		this.log("verbose", "[Server] Route /discovery-splashes registered");
+        await super.start();
+        await SystemdLifecycle.setStatus(`Listening on ${this.options.host}:${this.options.port}...`);
+        await ProcessLifecycle.Ready();
+    }
 
-		this.app.use("/app-icons/", avatarsRoute);
-		this.log("verbose", "[Server] Route /app-icons registered");
+    async migrateAttachments() {
+        if (await storage.exists(".mig_complete.attachments1")) return;
+        for await (const attachment of await Attachment.createQueryBuilder("attachments").where("message_id is not null").select().stream()) {
+            const oldPath = `attachments/${attachment.attachments_channel_id}/${attachment.attachments_id}/${attachment.attachments_filename}`;
+            const newPath = `attachments/${attachment.attachments_channel_id}/${attachment.attachments_message_id}/${attachment.attachments_filename}`;
+            if (!(await storage.exists(oldPath))) {
+                console.log(`[CDN/Attachments] Attachment migration: could not find old path, skipping migration: ` + oldPath);
+                continue;
+            }
+            await storage.move(oldPath, newPath);
+        }
+        await storage.set(".mig_complete.attachments1", Buffer.from([1]));
+    }
 
-		this.app.use("/app-assets/", avatarsRoute);
-		this.log("verbose", "[Server] Route /app-assets registered");
-
-		this.app.use("/discover-splashes/", avatarsRoute);
-		this.log("verbose", "[Server] Route /discover-splashes registered");
-
-		this.app.use("/team-icons/", avatarsRoute);
-		this.log("verbose", "[Server] Route /team-icons registered");
-
-		this.app.use("/channel-icons/", avatarsRoute);
-		this.log("verbose", "[Server] Route /channel-icons registered");
-
-		this.app.use(
-			"/guilds/:guild_id/users/:user_id/avatars",
-			guildProfilesRoute,
-		);
-		this.log("verbose", "[Server] Route /guilds/avatars registered");
-
-		this.app.use(
-			"/guilds/:guild_id/users/:user_id/banners",
-			guildProfilesRoute,
-		);
-		this.log("verbose", "[Server] Route /guilds/banners registered");
-
-		Sentry.errorHandler(this.app);
-
-		return super.start();
-	}
-
-	async stop() {
-		return super.stop();
-	}
+    async stop() {
+        await ProcessLifecycle.Shutdown();
+        await ProcessLifecycle.Finalize();
+        return super.stop();
+    }
 }

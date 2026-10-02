@@ -1,86 +1,172 @@
-import { Router, Response, Request } from "express";
-import {
-	Channel,
-	ChannelUpdateEvent,
-	emitEvent,
-	ChannelModifySchema,
-	ChannelReorderSchema,
-} from "@fosscord/util";
-import { HTTPError } from "lambert-server";
-import { route } from "@fosscord/api";
-const router = Router();
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
 
-router.get("/", route({}), async (req: Request, res: Response) => {
-	const { guild_id } = req.params;
-	const channels = await Channel.find({ where: { guild_id } });
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
 
-	res.json(channels);
-});
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import { Request, Response, Router } from "express";
+import { route } from "@spacebar/api/middlewares";
+import { Channel, Guild } from "@spacebar/database";
+import { ChannelUpdateEvent, emitEvent } from "@spacebar/util";
+import { ChannelCreateSchema, ChannelReorderSchema } from "@spacebar/schemas";
+
+const router = Router({ mergeParams: true });
+
+router.get(
+    "/",
+    route({
+        responses: {
+            201: {
+                body: "APIChannelArray",
+            },
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const { guild_id } = req.params as { [key: string]: string };
+        const channels = await Channel.find({ where: { guild_id } });
+
+        for await (const channel of channels) {
+            channel.position = await Channel.calculatePosition(channel.id, guild_id, channel.guild);
+        }
+        channels.sort((a, b) => a.position - b.position);
+
+        res.json(channels);
+    },
+);
 
 router.post(
-	"/",
-	route({ body: "ChannelModifySchema", permission: "MANAGE_CHANNELS" }),
-	async (req: Request, res: Response) => {
-		// creates a new guild channel https://discord.com/developers/docs/resources/guild#create-guild-channel
-		const { guild_id } = req.params;
-		const body = req.body as ChannelModifySchema;
+    "/",
+    route({
+        requestBody: "ChannelCreateSchema",
+        permission: "MANAGE_CHANNELS",
+        responses: {
+            201: {
+                body: "Channel",
+            },
+            400: {
+                body: "APIErrorResponse",
+            },
+            403: {
+                body: "APIErrorResponse",
+            },
+        },
+    }),
+    async (req: Request, res: Response) => {
+        // creates a new guild channel https://discord.com/developers/docs/resources/guild#create-guild-channel
+        const { guild_id } = req.params as { [key: string]: string };
+        const body = req.body as ChannelCreateSchema;
 
-		const channel = await Channel.createChannel(
-			{ ...body, guild_id },
-			req.user_id,
-		);
+        const channel = await Channel.createChannel({ ...body, guild_id }, req.user_id);
+        channel.position = await Channel.calculatePosition(channel.id, guild_id, channel.guild);
 
-		res.status(201).json(channel);
-	},
+        res.status(201).json(channel);
+    },
 );
 
 router.patch(
-	"/",
-	route({ body: "ChannelReorderSchema", permission: "MANAGE_CHANNELS" }),
-	async (req: Request, res: Response) => {
-		// changes guild channel position
-		const { guild_id } = req.params;
-		const body = req.body as ChannelReorderSchema;
+    "/",
+    route({
+        requestBody: "ChannelReorderSchema",
+        permission: "MANAGE_CHANNELS",
+        responses: {
+            204: {},
+            400: {
+                body: "APIErrorResponse",
+            },
+            403: {
+                body: "APIErrorResponse",
+            },
+        },
+    }),
+    async (req: Request, res: Response) => {
+        // changes guild channel position
+        const { guild_id } = req.params as { [key: string]: string };
+        let body = req.body as ChannelReorderSchema;
 
-		await Promise.all([
-			body.map(async (x) => {
-				if (x.position == null && !x.parent_id)
-					throw new HTTPError(
-						`You need to at least specify position or parent_id`,
-						400,
-					);
+        const guild = await Guild.findOneOrFail({
+            where: { id: guild_id },
+            select: { channel_ordering: true },
+        });
 
-				const opts: any = {};
-				if (x.position != null) opts.position = x.position;
+        body = body.sort((a, b) => {
+            const apos = a.position || (a.parent_id ? guild.channel_ordering.findIndex((_) => _ === a.parent_id) + 1 : 0);
+            const bpos = b.position || (b.parent_id ? guild.channel_ordering.findIndex((_) => _ === b.parent_id) + 1 : 0);
+            return apos - bpos;
+        });
 
-				if (x.parent_id) {
-					opts.parent_id = x.parent_id;
-					const parent_channel = await Channel.findOneOrFail({
-						where: { id: x.parent_id, guild_id },
-						select: ["permission_overwrites"],
-					});
-					if (x.lock_permissions) {
-						opts.permission_overwrites =
-							parent_channel.permission_overwrites;
-					}
-				}
+        // The channels not listed for this query
+        const notMentioned = guild.channel_ordering.filter((x) => !body.find((c) => c.id == x));
 
-				await Channel.update({ guild_id, id: x.id }, opts);
-				const channel = await Channel.findOneOrFail({
-					where: { guild_id, id: x.id },
-				});
+        const withParents = body.filter((x) => x.parent_id !== undefined);
+        const withPositions = body.filter((x) => x.position !== undefined);
+        // You can't do it with Promise.all or the way this is being done is super incorrect
+        for await (const opt of withPositions) {
+            const channel = await Channel.findOneOrFail({
+                where: { id: opt.id },
+            });
 
-				await emitEvent({
-					event: "CHANNEL_UPDATE",
-					data: channel,
-					channel_id: x.id,
-					guild_id,
-				} as ChannelUpdateEvent);
-			}),
-		]);
+            notMentioned.splice(opt.position as number, 0, channel.id);
+            channel.position = notMentioned.findIndex((_) => _ === channel.id);
 
-		res.sendStatus(204);
-	},
+            await emitEvent({
+                event: "CHANNEL_UPDATE",
+                data: channel.toJSON(),
+                channel_id: channel.id,
+                guild_id,
+            } satisfies ChannelUpdateEvent);
+        }
+        // Due to this also being able to change the order, this needs to be done in order
+        // have to do the parents after the positions
+        for await (const opt of withParents) {
+            const [channel, parent] = await Promise.all([
+                Channel.findOneOrFail({
+                    where: { id: opt.id },
+                }),
+                opt.parent_id
+                    ? Channel.findOneOrFail({
+                          where: { id: opt.parent_id },
+                          select: {
+                              permission_overwrites: true,
+                              id: true,
+                          },
+                      })
+                    : null,
+            ]);
+
+            if (opt.lock_permissions && parent) await Channel.update({ id: channel.id }, { permission_overwrites: parent.permission_overwrites });
+            if (parent && opt.position === undefined) {
+                const parentPos = notMentioned.indexOf(parent.id);
+                notMentioned.splice(parentPos + 1, 0, channel.id);
+                channel.position = (parentPos + 1) as number;
+            }
+            channel.parent = parent || undefined;
+            channel.parent_id = parent?.id || null;
+            await channel.save();
+
+            await emitEvent({
+                event: "CHANNEL_UPDATE",
+                data: channel?.toJSON(),
+                channel_id: channel.id,
+                guild_id,
+            } satisfies ChannelUpdateEvent);
+        }
+
+        await Guild.update({ id: guild_id }, { channel_ordering: notMentioned });
+
+        return res.sendStatus(204);
+    },
 );
 
 export default router;

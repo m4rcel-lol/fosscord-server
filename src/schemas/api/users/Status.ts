@@ -1,0 +1,56 @@
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+export enum PublicStatusOrder {
+    online = 0,
+    idle = 1,
+    dnd = 2,
+    offline = 3,
+}
+
+export enum InternalStatusOrder {
+    online = 0,
+    idle = 1,
+    dnd = 2,
+    invisible = 3,
+    offline = 4,
+    unknown = 5,
+}
+
+export type PublicStatus = keyof typeof PublicStatusOrder;
+export type PrivateStatus = PublicStatus | "invisible";
+export type SetPrivateStatus = PrivateStatus | "unknown";
+
+// @deprecated Use PublicStatus, PrivateStatus or SetPrivateStatus instead
+export type Status =
+    | "idle"
+    | "dnd"
+    | "online"
+    | "offline"
+    // Send only
+    | "invisible"
+    // Identify only
+    | "unknown";
+
+export interface ClientStatus {
+    desktop?: string; // e.g. Windows/Linux/Mac
+    mobile?: string; // e.g. iOS/Android
+    web?: string; // e.g. browser, bot account, unknown
+    embedded?: string; // e.g. embedded
+    vr?: string;
+}

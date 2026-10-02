@@ -1,0 +1,153 @@
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import { Request, Response, Router } from "express";
+import { HTTPError } from "lambert-server/HTTPError";
+import { route } from "@spacebar/api/middlewares";
+import { Channel, Tag } from "@spacebar/database";
+import { ChannelUpdateEvent, emitEvent } from "@spacebar/util";
+import { TagCreateSchema } from "@spacebar/schemas";
+
+const router: Router = Router({ mergeParams: true });
+
+router.post(
+    "/",
+    route({
+        requestBody: "TagCreateSchema",
+        permission: "MANAGE_CHANNELS",
+        responses: {
+            200: {
+                body: "Channel",
+            },
+            404: {},
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const body = req.body as TagCreateSchema;
+        const { channel_id } = req.params as Record<string, string>;
+
+        const channel = await Channel.findOneOrFail({
+            where: { id: channel_id },
+            relations: { available_tags: true },
+        });
+
+        if (!channel.isForum()) throw new Error("is not thread only channel");
+
+        const tag = Tag.create({
+            channel,
+            name: body.name,
+            moderated: body.moderated || false,
+            emoji_id: body.emoji_id || undefined,
+            emoji_name: body.emoji_name || undefined,
+        });
+        channel.available_tags?.push(tag);
+
+        await Promise.all([
+            tag.save(),
+            emitEvent({
+                event: "CHANNEL_UPDATE",
+                data: channel.toJSON(),
+                channel_id,
+            } satisfies ChannelUpdateEvent),
+        ]);
+
+        res.json(channel.toJSON());
+    },
+);
+
+router.put(
+    "/:tag_id",
+    route({
+        requestBody: "TagCreateSchema",
+        permission: "MANAGE_CHANNELS",
+        responses: {
+            200: {
+                body: "Channel",
+            },
+            404: {},
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const body = req.body as TagCreateSchema;
+        const { channel_id, tag_id } = req.params as Record<string, string>;
+
+        const channel = await Channel.findOneOrFail({
+            where: { id: channel_id },
+            relations: { available_tags: true },
+        });
+
+        if (!channel.isForum()) throw new Error("is not thread only channel");
+
+        const tag = channel.available_tags?.find((tag) => tag.id == tag_id);
+        //TODO better error
+        if (!tag) throw new HTTPError("Tag not found");
+        tag.assign(body);
+
+        await Promise.all([
+            tag.save(),
+            emitEvent({
+                event: "CHANNEL_UPDATE",
+                data: channel.toJSON(),
+                channel_id,
+            } satisfies ChannelUpdateEvent),
+        ]);
+
+        res.json(channel.toJSON());
+    },
+);
+
+router.delete(
+    "/:tag_id",
+    route({
+        permission: "MANAGE_CHANNELS",
+        responses: {
+            200: {
+                body: "Channel",
+            },
+            404: {},
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const { channel_id, tag_id } = req.params as Record<string, string>;
+
+        const channel = await Channel.findOneOrFail({
+            where: { id: channel_id },
+            relations: { available_tags: true },
+        });
+
+        if (!channel.isForum()) throw new Error("is not thread only channel");
+
+        const tag = await Tag.findOneByOrFail({
+            id: tag_id,
+        });
+        channel.available_tags = channel.available_tags?.filter((t) => t.id !== tag.id);
+
+        await Promise.all([
+            tag.remove(),
+            emitEvent({
+                event: "CHANNEL_UPDATE",
+                data: channel.toJSON(),
+                channel_id,
+            } satisfies ChannelUpdateEvent),
+        ]);
+
+        res.json(channel.toJSON());
+    },
+);
+
+export default router;

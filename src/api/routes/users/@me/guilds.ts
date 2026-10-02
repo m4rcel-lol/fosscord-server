@@ -1,76 +1,86 @@
-import { Router, Request, Response } from "express";
-import {
-	Guild,
-	Member,
-	User,
-	GuildDeleteEvent,
-	GuildMemberRemoveEvent,
-	emitEvent,
-	Config,
-} from "@fosscord/util";
-import { HTTPError } from "lambert-server";
-import { route } from "@fosscord/api";
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+	
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+	
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+	
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
 
-const router: Router = Router();
+import { Request, Response, Router } from "express";
+import { HTTPError } from "lambert-server/HTTPError";
+import { route } from "@spacebar/api/middlewares";
+import { Guild, Member } from "@spacebar/database";
+import { Config } from "@spacebar/util";
 
-router.get("/", route({}), async (req: Request, res: Response) => {
-	const members = await Member.find({
-		relations: ["guild"],
-		where: { id: req.user_id },
-	});
+const router: Router = Router({ mergeParams: true });
 
-	let guild = members.map((x) => x.guild);
+router.get(
+    "/",
+    route({
+        responses: {
+            200: {
+                body: "APIGuildArray",
+            },
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const members = await Member.find({
+            relations: { guild: true },
+            where: { id: req.user_id },
+        });
 
-	if ("with_counts" in req.query && req.query.with_counts == "true") {
-		guild = []; // TODO: Load guilds with user role permissions number
-	}
+        let guild = members.map((x) => x.guild);
 
-	res.json(guild);
-});
+        if ("with_counts" in req.query && req.query.with_counts == "true") {
+            guild = []; // TODO: Load guilds with user role permissions number
+        }
+
+        res.json(guild);
+    },
+);
 
 // user send to leave a certain guild
-router.delete("/:guild_id", route({}), async (req: Request, res: Response) => {
-	const { autoJoin } = Config.get().guild;
-	const { guild_id } = req.params;
-	const guild = await Guild.findOneOrFail({
-		where: { id: guild_id },
-		select: ["owner_id"],
-	});
+router.delete(
+    "/:guild_id",
+    route({
+        responses: {
+            204: {},
+            400: {
+                body: "APIErrorResponse",
+            },
+            404: {
+                body: "APIErrorResponse",
+            },
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const { autoJoin } = Config.get().guild;
+        const { guild_id } = req.params as { [key: string]: string };
+        const guild = await Guild.findOneOrFail({
+            where: { id: guild_id },
+            select: { owner_id: true },
+        });
 
-	if (!guild) throw new HTTPError("Guild doesn't exist", 404);
-	if (guild.owner_id === req.user_id)
-		throw new HTTPError("You can't leave your own guild", 400);
-	if (
-		autoJoin.enabled &&
-		autoJoin.guilds.includes(guild_id) &&
-		!autoJoin.canLeave
-	) {
-		throw new HTTPError("You can't leave instance auto join guilds", 400);
-	}
+        if (!guild) throw new HTTPError("Guild doesn't exist", 404);
+        if (guild.owner_id === req.user_id) throw new HTTPError("You can't leave your own guild", 400);
+        if (autoJoin.enabled && autoJoin.guilds.includes(guild_id) && !autoJoin.canLeave) {
+            throw new HTTPError("You can't leave instance auto join guilds", 400);
+        }
 
-	await Promise.all([
-		Member.delete({ id: req.user_id, guild_id: guild_id }),
-		emitEvent({
-			event: "GUILD_DELETE",
-			data: {
-				id: guild_id,
-			},
-			user_id: req.user_id,
-		} as GuildDeleteEvent),
-	]);
+        await Member.removeFromGuild(req.user_id, guild_id);
 
-	const user = await User.getPublicUser(req.user_id);
-
-	await emitEvent({
-		event: "GUILD_MEMBER_REMOVE",
-		data: {
-			guild_id: guild_id,
-			user: user,
-		},
-		guild_id: guild_id,
-	} as GuildMemberRemoveEvent);
-
-	return res.sendStatus(204);
-});
+        return res.sendStatus(204);
+    },
+);
 
 export default router;

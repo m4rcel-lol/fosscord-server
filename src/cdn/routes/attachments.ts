@@ -1,100 +1,251 @@
-import { Router, Response, Request } from "express";
-import { Config, Snowflake } from "@fosscord/util";
-import { storage } from "../util/Storage";
-import FileType from "file-type";
-import { HTTPError } from "lambert-server";
-import { multer } from "../util/multer";
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2025 Spacebar and Spacebar Contributors
+	
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+	
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+	
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import { Request, Response, Router } from "express";
+import { fileTypeFromBuffer } from "file-type";
 import imageSize from "image-size";
+import { HTTPError } from "lambert-server/HTTPError";
+import { Attachment, CloudAttachment } from "@spacebar/database";
+import { Config, hasValidSignature, NewUrlUserSignatureData, Snowflake, UrlSignResult } from "@spacebar/util";
+import { storage, multer, setCacheControl } from "../util";
+import { InternalCdnAttachment } from "@spacebar/util/dtos/MessageOptions";
 
-const router = Router();
+const router = Router({ mergeParams: true });
 
-const SANITIZED_CONTENT_TYPE = [
-	"text/html",
-	"text/mhtml",
-	"multipart/related",
-	"application/xhtml+xml",
-];
+const SANITIZED_CONTENT_TYPE = ["text/html", "text/mhtml", "multipart/related", "application/xhtml+xml"];
 
-router.post(
-	"/:channel_id",
-	multer.single("file"),
-	async (req: Request, res: Response) => {
-		if (req.headers.signature !== Config.get().security.requestSignature)
-			throw new HTTPError("Invalid request signature");
-		if (!req.file) throw new HTTPError("file missing");
+router.post("/:channel_id/:message_id", multer.single("file"), async (req: Request, res: Response) => {
+    if (req.headers.signature !== Config.get().security.requestSignature) throw new HTTPError("Invalid request signature");
 
-		const { buffer, mimetype, size, originalname, fieldname } = req.file;
-		const { channel_id } = req.params;
-		const filename = originalname
-			.replaceAll(" ", "_")
-			.replace(/[^a-zA-Z0-9._]+/g, "");
-		const id = Snowflake.generate();
-		const path = `attachments/${channel_id}/${id}/${filename}`;
+    if (!req.file) throw new HTTPError("file missing");
 
-		const endpoint =
-			Config.get()?.cdn.endpointPublic || "http://localhost:3003";
+    const { buffer, mimetype, size, originalname } = req.file;
+    const { channel_id, message_id } = req.params as { [key: string]: string };
+    const filename = originalname.replaceAll(" ", "_").replace(/[^a-zA-Z0-9._]+/g, "");
+    const attachment_id = Snowflake.generate();
+    const path = `attachments/${channel_id}/${attachment_id}/${filename}`;
 
-		await storage.set(path, buffer);
-		var width;
-		var height;
-		if (mimetype.includes("image")) {
-			const dimensions = imageSize(buffer);
-			if (dimensions) {
-				width = dimensions.width;
-				height = dimensions.height;
-			}
-		}
+    const endpoint = Config.get()?.cdn.endpointPublic;
 
-		const file = {
-			id,
-			content_type: mimetype,
-			filename: filename,
-			size,
-			url: `${endpoint}/${path}`,
-			width,
-			height,
-		};
+    await storage.set(path, buffer);
+    let width;
+    let height;
+    if (mimetype.includes("image")) {
+        try {
+            const dimensions = imageSize(buffer);
+            if (dimensions) {
+                width = dimensions.width;
+                height = dimensions.height;
+            }
+        } catch (e) {
+            console.warn("Failed to get image size for attachment of type", mimetype, "because of", e);
+        }
+    }
 
-		return res.json(file);
-	},
-);
+    const finalUrl = `${endpoint}/${path}`;
 
-router.get(
-	"/:channel_id/:id/:filename",
-	async (req: Request, res: Response) => {
-		const { channel_id, id, filename } = req.params;
-		const { format } = req.query;
+    const file: InternalCdnAttachment = {
+        id: attachment_id,
+        channel_id,
+        message_id,
+        content_type: mimetype,
+        filename: filename,
+        size,
+        url: finalUrl,
+        path,
+        width,
+        height,
+    };
 
-		const path = `attachments/${channel_id}/${id}/${filename}`;
-		let file = await storage.get(path);
-		if (!file) throw new HTTPError("File not found");
-		const type = await FileType.fromBuffer(file);
-		let content_type = type?.mime || "application/octet-stream";
+    return res.json(file);
+});
 
-		if (SANITIZED_CONTENT_TYPE.includes(content_type)) {
-			content_type = "application/octet-stream";
-		}
+router.get("/:channel_id/:attachment_id/:filename", setCacheControl, async (req: Request, res: Response) => {
+    const { channel_id, attachment_id, filename } = req.params as { [key: string]: string };
+    // const { format } = req.query;
 
-		res.set("Content-Type", content_type);
-		res.set("Cache-Control", "public, max-age=31536000");
+    const path = `attachments/${channel_id}/${attachment_id}/${filename}`;
 
-		return res.send(file);
-	},
-);
+    const fullUrl = (req.headers["x-forwarded-proto"] ?? req.protocol) + "://" + (req.headers["x-forwarded-host"] ?? req.hostname) + req.originalUrl;
 
-router.delete(
-	"/:channel_id/:id/:filename",
-	async (req: Request, res: Response) => {
-		if (req.headers.signature !== Config.get().security.requestSignature)
-			throw new HTTPError("Invalid request signature");
+    let hasValidAuth = false;
+    if (req.headers.signature) {
+        hasValidAuth = req.headers.signature !== Config.get().security.requestSignature;
+        if (!hasValidAuth) console.warn("[CDN/Attachments] Client sent invalid signature header");
+    } else if (!Config.get().security.cdnSignUrls) {
+        hasValidAuth = true;
+    } else {
+        hasValidAuth = hasValidSignature(
+            new NewUrlUserSignatureData({
+                ip: req.ip,
+                userAgent: req.headers["user-agent"] as string,
+            }),
+            UrlSignResult.fromUrl(fullUrl),
+        );
+        if (!hasValidAuth) console.warn("[CDN/Attachments] Client sent invalid attachment URL signature");
+    }
 
-		const { channel_id, id, filename } = req.params;
-		const path = `attachments/${channel_id}/${id}/${filename}`;
+    if (!hasValidAuth) return res.status(404).send("This content is no longer available.");
 
-		await storage.delete(path);
+    let file = await storage.get(path);
+    if (!file) {
+        const att = await Attachment.findOne({
+            where: {
+                channel_id,
+                id: attachment_id,
+            },
+        });
 
-		return res.send({ success: true });
-	},
-);
+        if (att) {
+            const attPath = `attachments/${channel_id}/${att.message_id}/${filename}`;
+            if (!(await storage.exists(attPath))) throw new HTTPError("File not found");
+            await storage.move(attPath, path);
+            file = await storage.get(path);
+        }
+    }
+    if (!file) throw new HTTPError("File not found");
+    const type = await fileTypeFromBuffer(file);
+    let content_type = type?.mime || "application/octet-stream";
+
+    if (SANITIZED_CONTENT_TYPE.includes(content_type)) {
+        content_type = "application/octet-stream";
+    }
+
+    res.set("Content-Type", content_type);
+
+    return res.send(file);
+});
+
+router.delete("/:channel_id/:attachment_id/:filename", async (req: Request, res: Response) => {
+    if (req.headers.signature !== Config.get().security.requestSignature) throw new HTTPError("Invalid request signature");
+
+    const { channel_id, attachment_id, filename } = req.params as { [key: string]: string };
+    const path = `attachments/${channel_id}/${attachment_id}/${filename}`;
+
+    await storage.delete(path);
+
+    return res.send({ success: true });
+});
+
+// "cloud attachments"
+router.put("/:channel_id/:batch_id/:attachment_id/:filename", multer.single("file"), async (req: Request, res: Response) => {
+    const { channel_id, batch_id, attachment_id, filename } = req.params as { [key: string]: string };
+    const att = await CloudAttachment.findOneOrFail({
+        where: {
+            uploadFilename: `${channel_id}/${batch_id}/${attachment_id}/${filename}`,
+            channelId: channel_id,
+            userAttachmentId: attachment_id,
+            userFilename: filename,
+        },
+    });
+
+    const maxLength = Config.get().cdn.maxAttachmentSize;
+
+    console.log("[Cloud Upload] Uploading attachment", att.id, att.userFilename, `Max size: ${maxLength} bytes`);
+
+    const chunks: Buffer[] = [];
+    let length = 0;
+
+    req.on("data", (chunk) => {
+        console.log(`[Cloud Upload] Received chunk of size ${chunk.length} bytes`);
+        chunks.push(chunk);
+        length += chunk.length;
+        if (length > maxLength) {
+            res.status(413).send("File too large");
+            req.destroy();
+        }
+    });
+    req.on("end", async () => {
+        console.log(`[Cloud Upload] Finished receiving file, total size ${length} bytes`);
+        const buffer = Buffer.concat(chunks);
+        const path = `attachments/${channel_id}/${batch_id}/${attachment_id}/${filename}`;
+
+        await storage.set(path, buffer);
+
+        let mimeType = att.userOriginalContentType;
+        if (att.userOriginalContentType === null) {
+            const ft = await fileTypeFromBuffer(buffer);
+            mimeType = att.contentType = ft?.mime || "application/octet-stream";
+        }
+
+        if (mimeType?.includes("image")) {
+            const dimensions = imageSize(buffer);
+            if (dimensions) {
+                att.width = dimensions.width;
+                att.height = dimensions.height;
+            }
+        }
+
+        att.size = buffer.length;
+        await att.save();
+
+        console.log("[Cloud Upload] Saved attachment", att.id, att.userFilename);
+        res.status(200).end();
+    });
+});
+
+router.delete("/:channel_id/:batch_id/:attachment_id/:filename", async (req: Request, res: Response) => {
+    if (req.headers.signature !== Config.get().security.requestSignature) throw new HTTPError("Invalid request signature");
+    console.log("[Cloud Delete] Deleting attachment", req.params);
+
+    const { channel_id, batch_id, attachment_id, filename } = req.params as { [key: string]: string };
+    const path = `attachments/${channel_id}/${batch_id}/${attachment_id}/${filename}`;
+
+    const att = await CloudAttachment.findOne({
+        where: {
+            uploadFilename: `${channel_id}/${batch_id}/${attachment_id}/${filename}`,
+            channelId: channel_id,
+            userAttachmentId: attachment_id,
+            userFilename: filename,
+        },
+    });
+
+    if (att) {
+        await att.remove();
+        await storage.delete(path);
+        return res.send({ success: true });
+    }
+    return res.status(404).send("Attachment not found");
+});
+
+router.post("/:channel_id/:batch_id/:attachment_id/:filename/clone_to_message/:message_id", async (req: Request, res: Response) => {
+    if (req.headers.signature !== Config.get().security.requestSignature) throw new HTTPError("Invalid request signature");
+    console.log("[Cloud Clone] Cloning attachment to message", req.params);
+
+    const { channel_id, batch_id, attachment_id, filename, message_id } = req.params as { [key: string]: string };
+    const path = `attachments/${channel_id}/${batch_id}/${attachment_id}/${filename}`;
+    const newPath = `attachments/${channel_id}/${message_id}/${filename}`;
+
+    const att = await CloudAttachment.findOne({
+        where: {
+            uploadFilename: `${channel_id}/${batch_id}/${attachment_id}/${filename}`,
+            channelId: channel_id,
+            userAttachmentId: attachment_id,
+            userFilename: filename,
+        },
+    });
+
+    if (att) {
+        await storage.clone(path, newPath);
+        return res.send({ success: true, new_path: newPath });
+    }
+
+    return res.status(404).send("Attachment not found");
+});
 
 export default router;

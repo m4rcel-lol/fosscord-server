@@ -1,0 +1,151 @@
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany, OneToOne, RelationId } from "typeorm";
+import { BaseClass } from "./BaseClass";
+import { Team } from "./Team";
+import { User } from "./User";
+import { Guild } from "./Guild";
+import { Emoji } from "./Emoji";
+
+@Entity({
+    name: "applications",
+})
+export class Application extends BaseClass {
+    @Column()
+    name: string;
+
+    @Column({ nullable: true })
+    icon?: string;
+
+    @Column({ nullable: true })
+    description: string;
+
+    @Column({ nullable: true })
+    summary: string = "";
+
+    @Column({ type: "jsonb", nullable: true })
+    type?: object; // TODO: this type is bad
+
+    @Column()
+    hook: boolean = true;
+
+    @Column()
+    bot_public?: boolean = true;
+
+    @Column()
+    bot_require_code_grant?: boolean = false;
+
+    @Column()
+    verify_key: string;
+
+    @JoinColumn({ name: "owner_id", foreignKeyConstraintName: "FK_application_owner_id" })
+    @ManyToOne(() => User, { onDelete: "CASCADE" })
+    owner: User;
+
+    @Column({ type: "int8" })
+    @RelationId((application: Application) => application.owner)
+    owner_id: string;
+
+    // TODO: enum this? https://discord.com/developers/docs/resources/application#application-object-application-flags
+    @Column()
+    flags: number = 0;
+
+    @Column({ type: "varchar", nullable: true, array: true })
+    redirect_uris: string[] = [];
+
+    @Column({ nullable: true })
+    rpc_application_state: number = 0;
+
+    @Column({ nullable: true })
+    store_application_state: number = 1;
+
+    @Column({ nullable: true })
+    verification_state: number = 1;
+
+    @Column({ nullable: true })
+    interactions_endpoint_url?: string;
+
+    @Column({ nullable: true })
+    integration_public: boolean = true;
+
+    @Column({ nullable: true })
+    integration_require_code_grant: boolean = false;
+
+    @Column({ nullable: true })
+    discoverability_state: number = 1;
+
+    @Column({ nullable: true })
+    discovery_eligibility_flags: number = 2240;
+
+    @JoinColumn({ name: "bot_user_id", foreignKeyConstraintName: "FK_application_bot_user_id" })
+    @OneToOne(() => User, { onDelete: "CASCADE" })
+    bot?: User;
+
+    @Column({ type: "varchar", array: true, nullable: true })
+    tags?: string[];
+
+    @Column({ nullable: true })
+    cover_image?: string; // the application's default rich presence invite cover image hash
+
+    @Column({ type: "jsonb", nullable: true })
+    install_params?: { scopes: string[]; permissions: string };
+
+    @Column({ nullable: true })
+    terms_of_service_url?: string;
+
+    @Column({ nullable: true })
+    privacy_policy_url?: string;
+
+    @Column({ nullable: true })
+    @RelationId((application: Application) => application.guild)
+    guild_id?: string;
+
+    @JoinColumn({ name: "guild_id", foreignKeyConstraintName: "FK_application_guild_id" })
+    @ManyToOne(() => Guild)
+    guild?: Guild; // guild to which the app is linked, e.g. a developer support server
+
+    @Column({ nullable: true })
+    custom_install_url?: string;
+
+    //just for us
+
+    //@Column({ type: "varchar", array: true, nullable: true })
+    //rpc_origins?: string[];
+
+    //@Column({ nullable: true })
+    //primary_sku_id?: string; // if this application is a game sold, this field will be the id of the "Game SKU" that is created,
+
+    //@Column({ nullable: true })
+    //slug?: string; // if this application is a game sold, this field will be the URL slug that links to the store page
+
+    @JoinColumn({ name: "team_id", foreignKeyConstraintName: "FK_application_team_id" })
+    @ManyToOne(() => Team, {
+        onDelete: "CASCADE",
+        nullable: true,
+    })
+    team?: Team;
+
+    @JoinColumn({ name: "emoji_ids" })
+    @OneToMany(() => Emoji, (emoji: Emoji) => emoji.application, {
+        cascade: true,
+        orphanedRowAction: "delete",
+        onDelete: "CASCADE",
+    })
+    emojis: Emoji[];
+}

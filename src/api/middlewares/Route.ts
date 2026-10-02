@@ -1,0 +1,185 @@
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import { DiscordApiErrors, EVENT, FieldErrors, PermissionResolvable, Permissions, RightResolvable, Rights, SpacebarApiErrors, getPermission, getRights } from "@spacebar/util";
+import { AnyValidateFunction } from "ajv/dist/core";
+import { NextFunction, Request, Response } from "express";
+import { ajv } from "@spacebar/schemas";
+import { BigNumber } from "bignumber.js";
+
+const ignoredRequestSchemas = [
+    // skip validation for settings proto JSON updates - TODO: figure out if this even possible to fix?
+    "SettingsProtoUpdateJsonSchema",
+];
+
+declare global {
+    // TODO: fix this
+    // eslint-disable-next-line @typescript-eslint/no-namespace
+    namespace Express {
+        interface Request {
+            permission?: Permissions;
+        }
+    }
+}
+
+export type RouteResponse = {
+    status?: number;
+    body?: `${string}Response`;
+    headers?: Record<string, string>;
+};
+export type stripNulls = { [key: string]: true | stripNulls };
+export interface RouteOptions {
+    permission?: PermissionResolvable;
+    right?: RightResolvable;
+    requestBody?: `${string}Schema`; // typescript interface name
+    responses?: {
+        [status: number]: {
+            // body?: `${string}Response`;
+            body?: string;
+        };
+    };
+    stripNulls?: stripNulls | true;
+    event?: EVENT | EVENT[];
+    summary?: string;
+    description?: string;
+    query?: {
+        [key: string]: {
+            type: string;
+            required?: boolean;
+            description?: string;
+            values?: string[];
+            default?: unknown;
+        };
+    };
+    deprecated?: boolean;
+    spacebarOnly?: boolean;
+    // test?: {
+    // 	response?: RouteResponse;
+    // 	body?: unknown;
+    // 	path?: string;
+    // 	event?: EVENT | EVENT[];
+    // 	headers?: Record<string, string>;
+    // };
+
+    /**
+     * @defaultValue "required"
+     */
+    authentication?: "never" | "optional" | "required";
+}
+export function stripNull(obj: object) {
+    for (const [key, value] of Object.entries(obj)) {
+        if (value instanceof Object || (value && !value.__proto__)) {
+            stripNull(value);
+        } else if (value === null) {
+            //@ts-expect-error this is fine
+            delete obj[key];
+        }
+    }
+}
+// eslint-disable-next-line
+export function followNullPath(obj1: any, nullObj: stripNulls) {
+    for (const [key, value] of Object.entries(nullObj)) {
+        if (key in obj1)
+            if (value instanceof Object) {
+                if (obj1[key] instanceof Object)
+                    //@ts-expect-error this works lol
+                    followNullPath(obj1[key], nullObj[key]);
+                else delete obj1[key];
+            } else if (obj1[key] instanceof Object) {
+                stripNull(obj1[key]);
+            }
+    }
+}
+//It's pretty safe to assume numbers over the number limit aren't really meant to be numbers, so we turn them to strings.
+export function bigNumberToString(obj1: unknown) {
+    if (obj1 && typeof obj1 === "object") {
+        for (const [key, value] of Object.entries(obj1)) {
+            if (typeof value === "object") {
+                if (value instanceof BigNumber) {
+                    //@ts-expect-error this is fine lol
+                    obj1[key] = value.toString();
+                }
+                bigNumberToString(value);
+            }
+        }
+    }
+}
+export function route(opts: RouteOptions) {
+    let validate: AnyValidateFunction | undefined;
+    if (opts.requestBody) {
+        try {
+            validate = ajv.getSchema(opts.requestBody);
+        } catch (e) {
+            console.error("AJV getSchema failed!");
+            throw e;
+        }
+
+        if (!validate) throw new Error(`Body schema ${opts.requestBody} not found`);
+    }
+
+    opts.authentication ??= "required";
+
+    return async (req: Request, res: Response, next: NextFunction) => {
+        if (opts.authentication === "required" && !req.isAuthenticated) throw DiscordApiErrors.UNAUTHORIZED;
+
+        if (opts.permission) {
+            const { guild_id, channel_id } = req.params as { [key: string]: string };
+            req.permission = await getPermission(req.user_id, guild_id, channel_id);
+
+            const requiredPerms = Array.isArray(opts.permission) ? opts.permission : [opts.permission];
+            requiredPerms.forEach((perm) => {
+                // bitfield comparison: check if user lacks certain permission
+                if (!req.permission!.has(new Permissions(perm))) {
+                    throw DiscordApiErrors.MISSING_PERMISSIONS.withParams(perm as string);
+                }
+            });
+        }
+
+        if (opts.right) {
+            const required = new Rights(opts.right);
+            req.rights = await getRights(req.user_id);
+
+            if (!req.rights || !req.rights.has(required)) {
+                throw SpacebarApiErrors.MISSING_RIGHTS.withParams(opts.right as string);
+            }
+        }
+        bigNumberToString(req.body);
+
+        if (validate && !ignoredRequestSchemas.includes(opts.requestBody!)) {
+            if (opts.stripNulls) {
+                if (opts.stripNulls === true) stripNull(req.body);
+                else followNullPath(req.body, opts.stripNulls);
+            }
+
+            const valid = validate(req.body);
+            if (!valid) {
+                const fields: Record<string, { code?: string; message: string }> = {};
+                validate.errors?.forEach(
+                    (x) =>
+                        (fields[x.instancePath.slice(1)] = {
+                            code: x.keyword,
+                            message: x.message || "",
+                        }),
+                );
+                if (process.env.LOG_VALIDATION_ERRORS) console.log(`[VALIDATION ERROR] ${req.method} ${req.originalUrl} - SCHEMA='${opts.requestBody}' -`, validate?.errors);
+                throw FieldErrors(fields, validate.errors!);
+            }
+        }
+        next();
+    };
+}

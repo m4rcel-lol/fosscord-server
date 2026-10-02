@@ -1,35 +1,109 @@
-import { Router, Response, Request } from "express";
-import { OrmUtils, User, UserSettingsSchema } from "@fosscord/util";
-import { route } from "@fosscord/api";
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+	
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+	
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+	
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
 
-const router = Router();
+import { Request, Response, Router } from "express";
+import { route } from "@spacebar/api/middlewares";
+import { Session, User, UserSettings } from "@spacebar/database";
+import { emitEvent, PresenceUpdateEvent } from "@spacebar/util";
+import { UserSettingsUpdateSchema } from "@spacebar/schemas";
 
-router.get("/", route({}), async (req: Request, res: Response) => {
-	const user = await User.findOneOrFail({
-		where: { id: req.user_id },
-		relations: ["settings"],
-	});
-	return res.json(user.settings);
-});
+const router = Router({ mergeParams: true });
+
+router.get(
+    "/",
+    route({
+        responses: {
+            200: {
+                body: "UserSettings",
+            },
+            404: {
+                body: "APIErrorResponse",
+            },
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const settings = await UserSettings.getOrDefault(req.user_id);
+        return res.json(settings);
+    },
+);
 
 router.patch(
-	"/",
-	route({ body: "UserSettingsSchema" }),
-	async (req: Request, res: Response) => {
-		const body = req.body as UserSettingsSchema;
-		if (body.locale === "en") body.locale = "en-US"; // fix discord client crash on unkown locale
+    "/",
+    route({
+        requestBody: "UserSettingsUpdateSchema",
+        responses: {
+            200: {
+                body: "UserSettings",
+            },
+            400: {
+                body: "APIErrorResponse",
+            },
+            404: {
+                body: "APIErrorResponse",
+            },
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const body = req.body as UserSettingsUpdateSchema;
+        if (!body) return res.status(400).json({ code: 400, message: "Invalid request body" });
+        if (body.locale === "en") body.locale = "en-US"; // fix discord client crash on unknown locale
 
-		const user = await User.findOneOrFail({
-			where: { id: req.user_id, bot: false },
-			relations: ["settings"],
-		});
+        const user = await User.findOneOrFail({
+            where: { id: req.user_id, bot: false },
+            relations: { settings: true },
+        });
 
-		user.settings.assign(body);
+        if (!user.settings)
+            user.settings = UserSettings.create<UserSettings>({
+                ...body,
+                friend_source_flags: body.friend_source_flags ?? { all: true },
+            });
+        else user.settings.assign(body);
 
-		user.settings.save();
+        if (body.guild_folders) user.settings.guild_folders = body.guild_folders;
 
-		res.json(user.settings);
-	},
+        await user.settings.save();
+        await user.save();
+        if (body.status) {
+            const [session] = (await Session.find({
+                where: { user_id: user.id },
+            })) as [Session | undefined];
+            if (session) {
+                session.status = body.status;
+
+                await Promise.all([
+                    emitEvent({
+                        event: "PRESENCE_UPDATE",
+                        user_id: user.id,
+                        data: {
+                            user: user.toPublicUser(),
+                            activities: session.activities,
+                            client_status: session?.client_status,
+                            status: session.getPublicStatus(),
+                        },
+                    } satisfies PresenceUpdateEvent),
+                    session.save(),
+                ]);
+            }
+        }
+
+        res.json({ ...user.settings, index: undefined });
+    },
 );
 
 export default router;
