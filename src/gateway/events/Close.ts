@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Member, Session, User, VoiceState } from "@spacebar/database";
+import { Member, Session, User, VoiceChannels, VoiceState } from "@spacebar/database";
 import { Random } from "@spacebar/extensions";
 import { WebSocket } from "@spacebar/gateway/util";
 import { emitEvent, PresenceUpdateEvent, SessionsReplace, VoiceStateUpdateEvent, distributePresenceUpdate } from "@spacebar/util";
@@ -82,25 +82,21 @@ export async function Close(this: WebSocket, code: number, reason: Buffer) {
             voiceState.guild_id = null;
             voiceState.self_stream = false;
             voiceState.self_video = false;
+            voiceState.connected_at = null;
             await voiceState.save();
 
-            voiceState.member = await Member.findOneOrFail({
-                where: {
-                    id: voiceState.user_id,
-                    guild_id: prevGuildId,
-                },
-            });
-            // let the users in previous guild/channel know that user disconnected
+            const member = prevGuildId ? await Member.findOne({ where: { id: voiceState.user_id, guild_id: prevGuildId }, relations: { user: true, roles: true } }) : null;
             await emitEvent({
                 event: "VOICE_STATE_UPDATE",
                 data: {
                     ...voiceState.toPublicVoiceState(),
-                    guild_id: prevGuildId, // have to send the previous guild_id because that's what client expects for disconnect messages
-                    member: voiceState.member.toPublicMember(),
+                    guild_id: prevGuildId ?? null,
+                    member: member?.toPublicMember(),
                 },
-                guild_id: prevGuildId,
-                channel_id: prevChannelId,
+                guild_id: prevGuildId ?? undefined,
+                channel_id: prevGuildId ? undefined : prevChannelId,
             } satisfies VoiceStateUpdateEvent);
+            await VoiceChannels.occupancyChanged(prevGuildId, prevChannelId, this.user_id, false);
         }
     }
 

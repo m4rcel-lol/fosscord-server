@@ -1,6 +1,6 @@
 /*
 	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
-	Copyright (C) 2026 Spacebar and Spacebar Contributors
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU Affero General Public License as published
@@ -16,27 +16,18 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-//TODO: remove entity import
-import { VoiceState } from "@spacebar/database";
+import { Request, Response, Router } from "express";
+import { route } from "@spacebar/api/middlewares";
+import { PrivateCalls } from "@spacebar/database";
+import { assertRecipient } from "./index";
 
-export enum PublicVoiceStateEnum {
-    user_id,
-    suppress,
-    session_id,
-    self_video,
-    self_mute,
-    self_deaf,
-    self_stream,
-    request_to_speak_timestamp,
-    mute,
-    deaf,
-    channel_id,
-    guild_id,
-    connected_at,
-}
+const router: Router = Router({ mergeParams: true });
 
-export type PublicVoiceStateKeys = keyof typeof PublicVoiceStateEnum;
+router.post("/", route({ responses: { 204: {}, 404: {} } }), async (req: Request, res: Response) => {
+    await assertRecipient(req);
+    const recipients = Array.isArray(req.body?.recipients) ? req.body.recipients.map(String) : null;
+    await PrivateCalls.ring(req.params.channel_id as string, req.user_id, recipients);
+    res.sendStatus(204);
+});
 
-export const PublicVoiceStateProjection = Object.values(PublicVoiceStateEnum).filter((x) => typeof x === "string") as PublicVoiceStateKeys[];
-
-export type PublicVoiceState = Pick<VoiceState, PublicVoiceStateKeys>;
+export default router;

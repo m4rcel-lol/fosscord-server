@@ -31,6 +31,7 @@ import { onStreamWatch } from "./StreamWatch";
 import { onGuildSync } from "./GuildSync";
 import { onRequestChannelStatuses } from "./RequestChannelStatuses";
 import { onRequestChannelInfo } from "./RequestChannelInfo";
+import { onCallConnect } from "./CallConnect";
 
 export type OPCodeHandler = (this: WebSocket, data: Payload) => unknown;
 
@@ -46,7 +47,7 @@ export default {
     // 9: Invalid Session
     // 10: Hello
     12: onGuildSync, // technically deprecated, bt should be less finnicky?
-    // 13: Dm_update
+    13: onCallConnect,
     14: onLazyRequest,
     18: onStreamCreate,
     19: onStreamDelete,

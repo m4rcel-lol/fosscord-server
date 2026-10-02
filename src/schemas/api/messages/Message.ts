@@ -164,6 +164,11 @@ export interface MessageSnapshot {
 }
 
 export type PublicMessageListResponse = PublicMessage[];
+export interface MessageCall {
+    participants: Snowflake[];
+    ended_timestamp: string | null;
+}
+
 export interface PublicMessage {
     id: Snowflake;
     channel_id: Snowflake;
@@ -191,7 +196,7 @@ export interface PublicMessage {
     message_reference?: MessageReference;
     referenced_message?: PublicMessage | null;
     message_snapshots?: MessageSnapshot[];
-    // call?: MessageCall;
+    call?: MessageCall;
     // interaction?: PartialMessageInteraction; // TODO
     // interaction_metadata?: MessageInteraction; // TODO
     // resolved?: ResolvedData; // TODO

@@ -36,6 +36,7 @@ import {
     MessageSnapshot,
     MessageType,
     PartialMessage,
+    MessageCall,
     Poll,
     PublicMessage,
     Reaction,
@@ -290,6 +291,9 @@ export class Message extends BaseClass {
     @Column({ default: "[]", type: "jsonb" })
     message_snapshots: MessageSnapshot[];
 
+    @Column({ type: "jsonb", nullable: true })
+    call?: MessageCall | null;
+
     get isWebhook() {
         return this.webhook_id != null && this.webhook != null;
     }
@@ -358,6 +362,7 @@ export class Message extends BaseClass {
             application: this.application ?? undefined,
             components: this.components ?? [],
             poll: this.poll ?? undefined,
+            call: this.call ?? undefined,
             content: this.content ?? "",
             pinned: this.pinned,
             thread: this.thread ? this.thread.toJSON() : this.thread,

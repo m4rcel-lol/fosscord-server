@@ -1,6 +1,6 @@
 /*
 	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
-	Copyright (C) 2026 Spacebar and Spacebar Contributors
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU Affero General Public License as published
@@ -16,27 +16,14 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-//TODO: remove entity import
-import { VoiceState } from "@spacebar/database";
+import { PrivateCalls, Recipient } from "@spacebar/database";
+import { OPCODES, Payload, Send, WebSocket } from "@spacebar/gateway";
 
-export enum PublicVoiceStateEnum {
-    user_id,
-    suppress,
-    session_id,
-    self_video,
-    self_mute,
-    self_deaf,
-    self_stream,
-    request_to_speak_timestamp,
-    mute,
-    deaf,
-    channel_id,
-    guild_id,
-    connected_at,
+export async function onCallConnect(this: WebSocket, { d }: Payload) {
+    const channelId = d?.channel_id;
+    if (typeof channelId !== "string") return;
+    if (!(await Recipient.exists({ where: { channel_id: channelId, user_id: this.user_id } }))) return;
+
+    const call = await PrivateCalls.createPayload(channelId);
+    if (call) await Send(this, { op: OPCODES.Dispatch, t: "CALL_CREATE", d: call });
 }
-
-export type PublicVoiceStateKeys = keyof typeof PublicVoiceStateEnum;
-
-export const PublicVoiceStateProjection = Object.values(PublicVoiceStateEnum).filter((x) => typeof x === "string") as PublicVoiceStateKeys[];
-
-export type PublicVoiceState = Pick<VoiceState, PublicVoiceStateKeys>;
