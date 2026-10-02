@@ -240,29 +240,24 @@ export class Member extends BaseClassWithoutId {
         const [member] = await Promise.all([
             Member.findOneOrFail({
                 where: { id: user_id, guild_id },
-                relations: { user: true, roles: true }, // we don't want to load  the role objects just the ids
-                select: {
-                    index: true,
-                    roles: {
-                        id: true,
-                    },
-                },
+                relations: { user: true, roles: true },
             }),
             Role.findOneOrFail({
                 where: { id: role_id, guild_id },
                 select: { id: true },
             }),
         ]);
-        member.roles.push(Role.create({ id: role_id }));
+        if (!member.roles.some((x) => x.id === role_id)) member.roles.push(Role.create({ id: role_id }));
 
         await Promise.all([
             member.save(),
             emitEvent({
                 event: "GUILD_MEMBER_UPDATE",
                 data: {
+                    ...member.toPublicMember(),
                     guild_id,
-                    user: member.user,
-                    roles: member.roles.map((x) => x.id),
+                    user: member.user.toPublicUser(),
+                    roles: member.roles.map((x) => x.id).filter((id) => id !== guild_id),
                 },
                 guild_id,
             } satisfies GuildMemberUpdateEvent),
@@ -273,13 +268,7 @@ export class Member extends BaseClassWithoutId {
         const [member] = await Promise.all([
             Member.findOneOrFail({
                 where: { id: user_id, guild_id },
-                relations: { user: true, roles: true }, // we don't want to load  the role objects just the ids
-                select: {
-                    index: true,
-                    roles: {
-                        id: true,
-                    },
-                },
+                relations: { user: true, roles: true },
             }),
             Role.findOneOrFail({ where: { id: role_id, guild_id } }),
         ]);
@@ -290,9 +279,10 @@ export class Member extends BaseClassWithoutId {
             emitEvent({
                 event: "GUILD_MEMBER_UPDATE",
                 data: {
+                    ...member.toPublicMember(),
                     guild_id,
-                    user: member.user,
-                    roles: member.roles.map((x) => x.id),
+                    user: member.user.toPublicUser(),
+                    roles: member.roles.map((x) => x.id).filter((id) => id !== guild_id),
                 },
                 guild_id,
             } satisfies GuildMemberUpdateEvent),

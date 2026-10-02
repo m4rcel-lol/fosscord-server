@@ -19,9 +19,9 @@
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
-import { Channel, Guild, Member } from "@spacebar/database";
+import { AuditLog, Channel, Guild, Member } from "@spacebar/database";
 import { DiscordApiErrors, GuildUpdateEvent, Permissions, emitEvent, getPermission, getRights, handleFile } from "@spacebar/util";
-import { GuildCreateResponse, GuildUpdateSchema } from "@spacebar/schemas";
+import { AuditLogEvents, GuildCreateResponse, GuildUpdateSchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
 
@@ -94,6 +94,34 @@ router.patch(
                 select: { channel_ordering: true },
             })
         ).channel_ordering;
+
+        const auditKeys = [
+            "name",
+            "description",
+            "icon",
+            "splash",
+            "discovery_splash",
+            "banner",
+            "owner_id",
+            "region",
+            "preferred_locale",
+            "afk_channel_id",
+            "afk_timeout",
+            "rules_channel_id",
+            "public_updates_channel_id",
+            "safety_alerts_channel_id",
+            "mfa_level",
+            "verification_level",
+            "explicit_content_filter",
+            "default_message_notifications",
+            "system_channel_id",
+            "system_channel_flags",
+            "premium_progress_bar_enabled",
+            "widget_enabled",
+            "widget_channel_id",
+            "nsfw_level",
+        ];
+        const auditBefore = Object.fromEntries(auditKeys.map((key) => [key, (guild as unknown as Record<string, unknown>)[key]]));
 
         // TODO: guild update check image
 
@@ -202,6 +230,17 @@ router.patch(
                 select: { id: true },
             });
         }
+
+        const changes = AuditLog.diff(auditBefore, guild, auditKeys);
+        if (changes.length)
+            await AuditLog.log({
+                guild_id,
+                user_id: req.user_id,
+                action_type: AuditLogEvents.GUILD_UPDATE,
+                target_id: guild_id,
+                changes,
+                reason: req.headers["x-audit-log-reason"],
+            });
 
         const data = guild.toJSON();
         // TODO: guild hashes

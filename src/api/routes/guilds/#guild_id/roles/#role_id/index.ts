@@ -19,9 +19,9 @@
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
-import { Member, Role } from "@spacebar/database";
+import { AuditLog, Member, Role } from "@spacebar/database";
 import { emitEvent, GuildRoleDeleteEvent, GuildRoleUpdateEvent, handleFile } from "@spacebar/util";
-import { RoleModifySchema } from "@spacebar/schemas";
+import { AuditLogEvents, RoleModifySchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
 
@@ -70,8 +70,17 @@ router.delete(
     async (req: Request, res: Response) => {
         const { guild_id, role_id } = req.params as { [key: string]: string };
         if (role_id === guild_id) throw new HTTPError("You can't delete the @everyone role");
+        const deleted = await Role.findOneOrFail({ where: { id: role_id, guild_id } });
 
         await Promise.all([
+            AuditLog.log({
+                guild_id,
+                user_id: req.user_id,
+                action_type: AuditLogEvents.ROLE_DELETE,
+                target_id: role_id,
+                changes: AuditLog.diff(deleted, {}, ["name", "permissions", "color", "colors", "hoist", "mentionable"]),
+                reason: req.headers["x-audit-log-reason"],
+            }),
             Role.delete({
                 id: role_id,
                 guild_id: guild_id,
@@ -122,6 +131,8 @@ router.patch(
             where: { id: role_id, guild: { id: guild_id } },
         });
 
+        const keys = ["name", "permissions", "color", "colors", "hoist", "mentionable", "icon", "unicode_emoji"] as const;
+        const before = Object.fromEntries(keys.map((key) => [key, role[key]]));
         const { icon, unicode_emoji, permissions, color, colors, ...rest } = body;
         role.assign(rest);
         if (permissions !== undefined) role.permissions = String((req.permission?.bitfield || 0n) & BigInt(permissions || "0"));
@@ -135,8 +146,11 @@ router.patch(
             });
         } else if (color !== undefined) Object.assign(role, { color, colors: { primary_color: color } });
 
+        const changes = AuditLog.diff(before, role, [...keys]);
         await Promise.all([
             role.save(),
+            changes.length &&
+                AuditLog.log({ guild_id, user_id: req.user_id, action_type: AuditLogEvents.ROLE_UPDATE, target_id: role_id, changes, reason: req.headers["x-audit-log-reason"] }),
             emitEvent({
                 event: "GUILD_ROLE_UPDATE",
                 guild_id,

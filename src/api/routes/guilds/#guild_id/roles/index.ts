@@ -19,9 +19,9 @@
 import { Request, Response, Router } from "express";
 import { Not } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
-import { Member, Role } from "@spacebar/database";
+import { AuditLog, Member, Role } from "@spacebar/database";
 import { Config, DiscordApiErrors, emitEvent, GuildRoleCreateEvent, GuildRoleUpdateEvent, handleFile, Snowflake } from "@spacebar/util";
-import { RoleModifySchema, RolePositionUpdateSchema } from "@spacebar/schemas";
+import { AuditLogEvents, RoleModifySchema, RolePositionUpdateSchema } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
 
@@ -99,6 +99,14 @@ router.post(
                 })
                 .update({ position: () => "position + 1" })
                 .execute(),
+            AuditLog.log({
+                guild_id,
+                user_id: req.user_id,
+                action_type: AuditLogEvents.ROLE_CREATE,
+                target_id: role.id,
+                changes: AuditLog.diff({}, role, ["name", "permissions", "color", "colors", "hoist", "mentionable", "icon", "unicode_emoji"]),
+                reason: req.headers["x-audit-log-reason"],
+            }),
             emitEvent({
                 event: "GUILD_ROLE_CREATE",
                 guild_id,

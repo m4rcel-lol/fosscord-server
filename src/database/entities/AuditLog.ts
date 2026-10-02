@@ -18,7 +18,6 @@
 
 import { Column, Entity, Index, JoinColumn, ManyToOne, RelationId } from "typeorm";
 import { BaseClass } from "./BaseClass";
-import { Guild } from "./Guild";
 import { User } from "./User";
 import { AuditLogChange, AuditLogEntry, AuditLogEvents } from "@spacebar/schemas";
 
@@ -27,21 +26,11 @@ import { AuditLogChange, AuditLogEntry, AuditLogEvents } from "@spacebar/schemas
 })
 export class AuditLog extends BaseClass {
     @Column({ nullable: true })
-    @RelationId((auditlog: AuditLog) => auditlog.guild)
     @Index("IDX_audit_log_guild_id")
     guild_id: string;
 
-    @JoinColumn({ name: "target_id", foreignKeyConstraintName: "FK_audit_log_guild_id" })
-    @ManyToOne(() => Guild)
-    guild?: Guild;
-
-    @Column({ nullable: true })
-    @RelationId((auditlog: AuditLog) => auditlog.target)
+    @Column({ type: "bigint", nullable: true })
     target_id: string;
-
-    @JoinColumn({ name: "target_id", foreignKeyConstraintName: "FK_audit_log_target_user_id" })
-    @ManyToOne(() => User)
-    target?: User;
 
     @Column({ nullable: true })
     @RelationId((auditlog: AuditLog) => auditlog.user)
@@ -72,6 +61,37 @@ export class AuditLog extends BaseClass {
 
     @Column({ nullable: true })
     reason?: string;
+
+    static diff(before: object, after: object, keys: string[]): AuditLogChange[] {
+        const old = before as Record<string, unknown>;
+        const now = after as Record<string, unknown>;
+        return keys
+            .filter((key) => JSON.stringify(old[key] ?? null) !== JSON.stringify(now[key] ?? null))
+            .map((key) => ({ key, old_value: old[key] ?? undefined, new_value: now[key] ?? undefined }) as unknown as AuditLogChange);
+    }
+
+    static async log(entry: {
+        guild_id: string;
+        user_id: string;
+        action_type: AuditLogEvents;
+        target_id?: string | null;
+        changes?: AuditLogChange[];
+        options?: AuditLog["options"];
+        reason?: string | string[];
+    }) {
+        const reason = Array.isArray(entry.reason) ? entry.reason[0] : entry.reason;
+        return AuditLog.create({
+            guild_id: entry.guild_id,
+            user_id: entry.user_id,
+            action_type: entry.action_type,
+            target_id: entry.target_id ?? undefined,
+            changes: entry.changes ?? [],
+            options: entry.options,
+            reason: reason ? decodeURIComponent(reason).slice(0, 512) : undefined,
+        })
+            .save()
+            .catch((e) => console.error("[AuditLog] failed to write entry", e));
+    }
 
     toAuditLogEntry(): AuditLogEntry {
         return {

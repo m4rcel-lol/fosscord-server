@@ -17,11 +17,11 @@
 */
 
 import { route } from "@spacebar/api/middlewares";
-import { Ban, Guild, Invite, PublicInviteRelation } from "@spacebar/database";
+import { AuditLog, Ban, Guild, Invite, PublicInviteRelation } from "@spacebar/database";
 import { Config, DiscordApiErrors, emitEvent, getPermission, InviteDeleteEvent } from "@spacebar/util";
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
-import { UserFlags } from "@spacebar/schemas";
+import { AuditLogEvents, UserFlags } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
 
@@ -156,6 +156,13 @@ router.delete(
 
         await Promise.all([
             Invite.delete({ code: invite_code }),
+            AuditLog.log({
+                guild_id,
+                user_id: req.user_id,
+                action_type: AuditLogEvents.INVITE_DELETE,
+                changes: AuditLog.diff({ ...invite, inviter_id: invite.inviter_id }, {}, ["code", "channel_id", "inviter_id", "uses", "max_uses", "max_age", "temporary", "flags"]),
+                reason: req.headers["x-audit-log-reason"],
+            }),
             emitEvent({
                 event: "INVITE_DELETE",
                 guild_id: guild_id,

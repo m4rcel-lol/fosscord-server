@@ -19,9 +19,9 @@
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
-import { Channel, Invite, PublicInviteRelation } from "@spacebar/database";
+import { AuditLog, Channel, Invite, PublicInviteRelation } from "@spacebar/database";
 import { InviteCreateEvent, emitEvent } from "@spacebar/util";
-import { InviteCreateSchema, isTextChannel } from "@spacebar/schemas";
+import { AuditLogEvents, InviteCreateSchema, isTextChannel } from "@spacebar/schemas";
 import { Random } from "@spacebar/extensions";
 import { InviteListResponse } from "@spacebar/schemas/api/guilds/Invite";
 
@@ -82,6 +82,14 @@ router.post(
             })
         ).toMetadataJSON();
 
+        await AuditLog.log({
+            guild_id,
+            user_id,
+            action_type: AuditLogEvents.INVITE_CREATE,
+            target_id: null,
+            changes: AuditLog.diff({}, { ...data, inviter_id: user_id, channel_id }, ["code", "channel_id", "inviter_id", "uses", "max_uses", "max_age", "temporary", "flags"]),
+            reason: req.headers["x-audit-log-reason"],
+        });
         await emitEvent({
             event: "INVITE_CREATE",
             data: { ...data, channel_id } as unknown as InviteCreateEvent["data"],
