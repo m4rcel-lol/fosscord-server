@@ -250,6 +250,20 @@ export default definePlugin({
             },
         },
         {
+            find: 'STATUS:"https://discordstatus.com"',
+            replacement: {
+                match: /STATUS:"https:\/\/discordstatus\.com"/,
+                replace: 'STATUS:location.origin+"/status"',
+            },
+        },
+        {
+            find: ".TWITTER_SUPPORT,target:",
+            replacement: {
+                match: /\(0,\i\.jsxs\)\(\i\.Anchor,\{className:\i\.\i,href:\i\.\i\.TWITTER_SUPPORT,target:"_blank",children:\[\(0,\i\.jsx\)\(\i\.\i,\{[^{}]*\}\),\i\.intl\.string\(\i\.t\.\i\)\]\}\),/,
+                replace: "",
+            },
+        },
+        {
             find: "isFake:!0",
             replacement: {
                 match: /,\(0,\i\.jsx\)\(\i,\{text:\i,isFake:!0\}\)/,
