@@ -20,7 +20,6 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { verifyToken } from "node-2fa";
 import { route } from "@spacebar/api/middlewares";
-import { toOwnedApplication } from "@spacebar/api/util/handlers/Application";
 import { Application, User } from "@spacebar/database";
 import { DiscordApiErrors, FieldErrors, createAppBotUser, generateToken, handleFile } from "@spacebar/util";
 import { BotModifySchema } from "@spacebar/schemas";
@@ -92,7 +91,7 @@ router.patch(
         requestBody: "BotModifySchema",
         responses: {
             200: {
-                body: "Application",
+                body: "PublicUser",
             },
             400: {
                 body: "APIErrorResponse",
@@ -127,8 +126,7 @@ router.patch(
 
         await app.bot.save();
 
-        await app.save();
-        res.json(toOwnedApplication(app));
+        res.json(app.bot.toPublicUser());
     },
 );
 
