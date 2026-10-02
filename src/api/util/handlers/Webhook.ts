@@ -54,6 +54,26 @@ export async function applyWebhookUpdate(webhook: Webhook, body: WebhookUpdateSc
     }
 }
 
+export function applyWebhookComponents(webhook: Webhook, body: WebhookExecuteSchema, withComponents: boolean) {
+    if (!body.components) return;
+    if (!withComponents) {
+        delete body.components;
+        return;
+    }
+    if (webhook.application_id) return;
+    type Node = { type?: number; style?: number; components?: Node[]; accessory?: Node; component?: Node };
+    const interactive = (nodes: Node[]): boolean =>
+        nodes.some(
+            (node) =>
+                !!node &&
+                ((node.type === 2 && node.style !== 5 && node.style !== 6) ||
+                    [3, 4, 5, 6, 7, 8].includes(node.type ?? 0) ||
+                    interactive([...(node.components ?? []), ...(node.accessory ? [node.accessory] : []), ...(node.component ? [node.component] : [])])),
+        );
+    if (interactive(body.components as Node[]))
+        throw FieldErrors({ components: { code: "COMPONENT_INTERACTIVE_NOT_ALLOWED", message: "Interactive components can only be sent by application-owned webhooks." } });
+}
+
 export const executeWebhook = async (req: Request, res: Response) => {
     const body = req.body as WebhookExecuteSchema;
     const messageId = Snowflake.generate();
@@ -79,6 +99,7 @@ export const executeWebhook = async (req: Request, res: Response) => {
         return res.json(message.toJSON());
     }
     if (webhook.token !== webhook_token) throw DiscordApiErrors.INVALID_WEBHOOK_TOKEN_PROVIDED;
+    applyWebhookComponents(webhook, body, req.query.with_components === "true");
 
     if (body.username) {
         ValidateName(body.username, 1, 80);
@@ -192,6 +213,6 @@ export const executeWebhook = async (req: Request, res: Response) => {
 
     // no await as it shouldnt block the message send function and silently catch error
     postHandleMessage(message).catch((e) => console.error("[Message] post-message handler failed", e));
-    if (wait) res.json(message);
+    if (wait) res.json(message.toJSON());
     return;
 };

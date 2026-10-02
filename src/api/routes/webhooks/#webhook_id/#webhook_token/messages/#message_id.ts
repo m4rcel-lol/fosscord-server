@@ -20,6 +20,7 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import multer from "multer";
 import { handleMessage, postHandleMessage } from "@spacebar/api/util";
+import { applyWebhookComponents } from "@spacebar/api/util/handlers/Webhook";
 import { route } from "@spacebar/api/middlewares";
 import { Channel, Message, Webhook } from "@spacebar/database";
 import { MessageDeleteEvent, MessageUpdateEvent, emitEvent, DiscordApiErrors, getInteractionByToken } from "@spacebar/util";
@@ -52,6 +53,7 @@ async function assertValidWebhookAuth(webhookId: string, webhookToken: string, m
     if (!message) throw new HTTPError(`No message found with ID ${messageId}`, 404);
     if (webhook.id != message?.webhook_id) throw new HTTPError(`Message does not belong to webhook ${message.webhook_id}`, 401);
     if (webhook.channel_id != message?.channel_id) throw new HTTPError(`Message does not belong to webhook channel ${message.channel_id}`, 401);
+    return webhook;
 }
 
 const messageUpload = multer({
@@ -90,7 +92,8 @@ router.patch(
             return res.json(edited.toJSON());
         }
 
-        await assertValidWebhookAuth(webhook_id, webhook_token, message_id);
+        const webhook = await assertValidWebhookAuth(webhook_id, webhook_token, message_id);
+        applyWebhookComponents(webhook, body, req.query.with_components === "true");
 
         const message = await Message.findOneOrFail({
             where: { id: message_id, webhook_id: webhook_id },

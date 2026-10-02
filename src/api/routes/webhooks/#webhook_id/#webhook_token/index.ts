@@ -70,7 +70,6 @@ const messageUpload = multer({
 }); // max upload 50 mb
 
 // https://discord.com/developers/docs/resources/webhook#execute-webhook
-// TODO: Slack compatible hooks
 router.post(
     "/",
     messageUpload.any(),
@@ -94,6 +93,11 @@ router.post(
                 type: "string",
                 required: false,
                 description: "Send a message to the specified thread within a webhook's channel.",
+            },
+            with_components: {
+                type: "boolean",
+                required: false,
+                description: "Whether to respect the components field of the request.",
             },
         },
         responses: {
