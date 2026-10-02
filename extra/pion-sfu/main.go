@@ -129,8 +129,6 @@ func handleJoin(clientID string) error {
 	return nil
 }
 
-// forward picture loss and full intra requests from a subscriber to the
-// peer publishing the requested SSRC, so late joiners get a keyframe
 func forwardKeyframeRequests(sender *webrtc.RTPSender) {
 	for {
 		packets, _, err := sender.ReadRTCP()

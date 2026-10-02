@@ -13,6 +13,14 @@ WRTC_WS_PORT=$((port + 1000))
 NODE_ENV=development
 CONFIG_PATH=$PWD/config.json
 ENV
+if command -v go >/dev/null && (cd extra/pion-sfu && go build -o pion-sfu .); then
+    cat >> .env <<ENV
+PION_SFU_BIN=$PWD/extra/pion-sfu/pion-sfu
+WRTC_PUBLIC_IP=127.0.0.1
+WRTC_PORT_MIN=$((port + 2000))
+WRTC_PORT_MAX=$((port + 2000))
+ENV
+fi
 cat > config.json <<JSON
 {
   "general": { "serverName": "http://localhost:$port" },
