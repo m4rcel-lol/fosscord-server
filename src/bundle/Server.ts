@@ -75,6 +75,8 @@ async function main() {
         );
     }
 
+    if (Config.get().client.useTestClient) app.get("/", (req, res) => res.redirect("/app"));
+
     await new Promise((resolve) => void server.listen({ port }, () => resolve(undefined)));
     await Promise.all([api.start(), cdn.start(), gateway.start(), webrtc.start()]);
     TestClient(app);
