@@ -19,7 +19,10 @@
 import crypto from "node:crypto";
 import { Router, Response, Request } from "express";
 import { fileTypeFromBuffer } from "file-type";
-import { Config } from "@spacebar/util";
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { ASSETS_FOLDER, Config } from "@spacebar/util";
 import { HTTPError } from "lambert-server/HTTPError";
 import { storage, multer, setCacheControl } from "../util";
 
@@ -46,8 +49,18 @@ router.get("/:badge_id", setCacheControl, async (req: Request, res: Response) =>
     const { badge_id } = req.params as { [key: string]: string };
     const path = `badge-icons/${badge_id}`;
 
-    const file = await storage.get(path);
-    if (!file) return res.redirect(`https://cdn.discordapp.com/badge-icons/${encodeURIComponent(badge_id)}`);
+    if (!/^[\w-]+\.png$/.test(badge_id)) throw new HTTPError("Unknown badge", 404);
+    let file = await storage.get(path);
+    if (!file) {
+        const bundled = join(ASSETS_FOLDER, "badge-icons", badge_id);
+        if (existsSync(bundled)) file = await readFile(bundled);
+    }
+    if (!file) {
+        const upstream = await fetch(`https://cdn.discordapp.com/badge-icons/${badge_id}`).catch(() => null);
+        if (!upstream?.ok) throw new HTTPError("Unknown badge", 404);
+        file = Buffer.from(await upstream.arrayBuffer());
+        await storage.set(path, file);
+    }
     const type = await fileTypeFromBuffer(file);
 
     res.set("Content-Type", type?.mime);
