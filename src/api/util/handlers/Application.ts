@@ -39,7 +39,10 @@ export function toPublicApplication(app: Application) {
         privacy_policy_url: app.privacy_policy_url ?? undefined,
         custom_install_url: app.custom_install_url ?? undefined,
         install_params: app.install_params ?? { scopes: ["bot", "applications.commands"], permissions: "0" },
-        integration_types_config: { "0": { oauth2_install_params: app.install_params ?? { scopes: ["bot", "applications.commands"], permissions: "0" } } },
+        integration_types_config: {
+            "0": { oauth2_install_params: app.install_params ?? { scopes: ["bot", "applications.commands"], permissions: "0" } },
+            "1": { oauth2_install_params: { scopes: ["applications.commands"], permissions: "0" } },
+        },
         is_monetized: false,
         is_verified: false,
         is_discoverable: true,
@@ -70,5 +73,21 @@ export async function toDirectoryApplication(app: Application) {
             type: 1,
         },
         external_assets: [],
+    };
+}
+
+export async function profileApplication(botId: string) {
+    const app = await Application.findOne({ where: { id: botId } });
+    if (!app) return undefined;
+    const pub = toPublicApplication(app);
+    return {
+        id: app.id,
+        flags: pub.flags,
+        verified: false,
+        popular_application_command_ids: [],
+        custom_install_url: pub.custom_install_url,
+        install_params: pub.install_params,
+        integration_types_config: pub.integration_types_config,
+        storefront_available: false,
     };
 }
