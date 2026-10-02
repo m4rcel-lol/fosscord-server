@@ -20,7 +20,7 @@ import EventEmitter from "node:events";
 import path from "node:path";
 import { Channel } from "amqplib";
 import { yellow } from "picocolors";
-import { Event } from "../../interfaces";
+import { Event, EVENT } from "../../interfaces";
 import { Config } from "../Config";
 import { rabbitListen, RabbitMQ } from "./RabbitMQ";
 import { BaseEventListener } from "./listener/BaseEventListener";
@@ -34,10 +34,22 @@ export const events = new EventEmitter();
 let listener: BaseEventListener | null = null;
 let writer: BaseEventWriter | null = null;
 
-export async function emitEvent(payload: Omit<Event, "created_at">) {
-    const id = (payload.guild_id || payload.channel_id || payload.user_id || payload.session_id) as string;
-    if (!id) return console.error("event doesn't contain any id", payload);
+export const GuildCacheEventId = "sb-guild-cache";
 
+const guildCacheEvents = new Set<EVENT>([
+    "CHANNEL_CREATE",
+    "CHANNEL_UPDATE",
+    "CHANNEL_DELETE",
+    "GUILD_DELETE",
+    "GUILD_ROLE_CREATE",
+    "GUILD_ROLE_UPDATE",
+    "GUILD_ROLE_DELETE",
+    "GUILD_EMOJIS_UPDATE",
+    "GUILD_STICKERS_UPDATE",
+    "VOICE_CHANNEL_STATUS_UPDATE",
+]);
+
+async function transmit(id: string, payload: Omit<Event, "created_at">) {
     if (writer) {
         await writer.emit(payload);
     } else if (process.env.EVENT_TRANSMISSION === "process") {
@@ -47,6 +59,16 @@ export async function emitEvent(payload: Omit<Event, "created_at">) {
     } else {
         events.emit(id, payload);
     }
+}
+
+export async function emitEvent(payload: Omit<Event, "created_at">) {
+    const id = (payload.guild_id || payload.channel_id || payload.user_id || payload.session_id) as string;
+    if (!id) return console.error("event doesn't contain any id", payload);
+
+    await transmit(id, payload);
+
+    const guild_id = guildCacheEvents.has(payload.event) ? (payload.guild_id ?? payload.data?.guild_id) : undefined;
+    if (guild_id) await transmit(GuildCacheEventId, { event: "SB_GUILD_CACHE_INVALIDATE", channel_id: GuildCacheEventId, data: { guild_id } });
 }
 
 export async function initEvent() {

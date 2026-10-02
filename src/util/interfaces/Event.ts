@@ -57,6 +57,11 @@ export interface InvalidatedEvent extends Event {
     event: "INVALIDATED";
 }
 
+export interface GuildCacheInvalidateEvent extends Event {
+    event: "SB_GUILD_CACHE_INVALIDATE";
+    data: { guild_id: string };
+}
+
 // ! END Custom Events that shouldn't get sent to the client but processed by the server
 
 export interface ReadyEventData {
@@ -963,6 +968,7 @@ export type CUSTOMEVENTS =
     | "RATELIMIT"
     | "SB_SESSION_REMOVE"
     | "SB_SESSION_CLOSE"
+    | "SB_GUILD_CACHE_INVALIDATE"
     | "E2EE_DEVICES_UPDATE"
     | "E2EE_IDENTITY_UPDATE"
     | "CHANNEL_E2EE_UPDATE"

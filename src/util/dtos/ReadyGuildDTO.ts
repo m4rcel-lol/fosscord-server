@@ -226,7 +226,7 @@ export class ReadyGuildDTO implements IReadyGuildDTO {
             premium_features: guild.premium_features,
             profile: publicGuildProfile(guild.profile),
         };
-        this.roles = guild.roles.map((x) => x.toJSON());
+        this.roles = guild.roles.map((x) => (typeof x.toJSON === "function" ? x.toJSON() : x));
         this.stage_instances = (guild as { stage_instances?: unknown[] }).stage_instances ?? [];
         this.stickers = guild.stickers;
         this.threads = guild.threads;

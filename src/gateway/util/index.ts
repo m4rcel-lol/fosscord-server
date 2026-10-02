@@ -24,3 +24,4 @@ export * from "./WebSocket";
 export * from "./Capabilities";
 export * from "./Utils";
 export * from "./SessionResume";
+export * from "./GuildCache";

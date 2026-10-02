@@ -16,25 +16,22 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { In, Not } from "typeorm";
+import { In } from "typeorm";
 import { PreloadedUserSettings } from "discord-protos";
-import { Capabilities, CLOSECODES, OPCODES, Payload, resumableSockets, Send, setupListener, WebSocket } from "@spacebar/gateway";
+import { Capabilities, CLOSECODES, getGuildCache, OPCODES, Payload, resumableSockets, Send, setupListener, WebSocket } from "@spacebar/gateway";
 import { arrayGroupBy, ElapsedTime, Stopwatch, timeFunction, timePromise } from "@spacebar/extensions";
 import {
     getDatabase,
     Application,
     Channel,
-    Emoji,
     Guild,
     Member,
     MemberPrivateProjection,
     ReadState,
     Recipient,
     Relationship,
-    Role,
     SecurityKey,
     Session,
-    Sticker,
     ThreadMember,
     StageInstance,
     User,
@@ -413,10 +410,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     // select relations
     const [
         { result: memberGuilds, elapsed: queryGuildsTime },
-        { result: memberGuildChannels, elapsed: queryGuildChannelsTime },
-        { result: memberGuildEmojis, elapsed: queryGuildEmojisTime },
-        { result: memberGuildRoles, elapsed: queryGuildRolesTime },
-        { result: memberGuildStickers, elapsed: queryGuildStickersTime },
+        { result: guildCache, elapsed: guildCacheTime },
         { result: memberGuildVoiceStates, elapsed: queryGuildVoiceStatesTime },
         { result: threadMembers, elapsed: threadMemberTime },
         { result: allThreadsRaw, elapsed: queryThreadsTime },
@@ -433,34 +427,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
                 ),
             }),
         ),
-        timePromise(() =>
-            Channel.find({
-                where: {
-                    guild_id: In(memberGuildIds),
-                    type: Not(In([ChannelType.GUILD_PUBLIC_THREAD, ChannelType.GUILD_PRIVATE_THREAD, ChannelType.GUILD_NEWS_THREAD])),
-                },
-                order: { guild_id: "ASC" },
-                relations: { available_tags: true },
-            }),
-        ),
-        timePromise(() =>
-            Emoji.find({
-                where: { guild_id: In(memberGuildIds) },
-                order: { guild_id: "ASC" },
-            }),
-        ),
-        timePromise(() =>
-            Role.find({
-                where: { guild_id: In(memberGuildIds) },
-                order: { guild_id: "ASC" },
-            }),
-        ),
-        timePromise(() =>
-            Sticker.find({
-                where: { guild_id: In(memberGuildIds) },
-                order: { guild_id: "ASC" },
-            }),
-        ),
+        timePromise(() => getGuildCache(memberGuildIds)),
         timePromise(() =>
             VoiceState.find({
                 where: { guild_id: In(memberGuildIds) },
@@ -499,17 +466,9 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     const threadMemberMap = new Map(threadMembers.map((member) => [member.id, member] as const));
     const allThreads = allThreadsRaw.filter(({ id, thread_metadata }) => thread_metadata?.archived === false && threadMemberMap.has(id));
 
-    const { result: channelsByGuild, elapsed: groupChannelsTime } = timeFunction(() => arrayGroupBy(memberGuildChannels, (c) => c.guild_id!));
-    const { result: emojisByGuild, elapsed: groupEmojisTime } = timeFunction(() => arrayGroupBy(memberGuildEmojis, (e) => e.guild_id!));
-    const { result: rolesByGuild, elapsed: groupRolesTime } = timeFunction(() => arrayGroupBy(memberGuildRoles, (r) => r.guild_id!));
-    const { result: stickersByGuild, elapsed: groupStickersTime } = timeFunction(() => arrayGroupBy(memberGuildStickers, (s) => s.guild_id!));
     const { result: voiceStatesByGuild, elapsed: groupVoiceStatesTime } = timeFunction(() => arrayGroupBy(memberGuildVoiceStates, (v) => v.guild_id!));
     const { result: threadsByGuild, elapsed: groupThreadsTime } = timeFunction(() => arrayGroupBy(allThreads, (t) => t.guild_id!));
 
-    const queryGuildChannelsTimeTotal = new ElapsedTime(queryGuildChannelsTime.totalNanoseconds + groupChannelsTime.totalNanoseconds);
-    const queryGuildEmojisTimeTotal = new ElapsedTime(queryGuildEmojisTime.totalNanoseconds + groupEmojisTime.totalNanoseconds);
-    const queryGuildRolesTimeTotal = new ElapsedTime(queryGuildRolesTime.totalNanoseconds + groupRolesTime.totalNanoseconds);
-    const queryGuildStickersTimeTotal = new ElapsedTime(queryGuildStickersTime.totalNanoseconds + groupStickersTime.totalNanoseconds);
     const queryGuildVoiceStatesTimeTotal = new ElapsedTime(queryGuildVoiceStatesTime.totalNanoseconds + groupVoiceStatesTime.totalNanoseconds);
     const queryThreadsTimeTotal = new ElapsedTime(queryThreadsTime.totalNanoseconds + groupThreadsTime.totalNanoseconds);
 
@@ -533,17 +492,13 @@ export async function onIdentify(this: WebSocket, data: Payload) {
             m.guild = g;
             trace.calls.push("findGuild", { micros: sw.getElapsedAndReset().totalMicroseconds });
 
-            g.channels = channelsByGuild.get(m.guild_id) ?? [];
-            trace.calls.push(`getChannels(${g.channels.length}/${memberGuildChannels.length})`, { micros: sw.getElapsedAndReset().totalMicroseconds });
-
-            g.emojis = emojisByGuild.get(m.guild_id) ?? [];
-            trace.calls.push(`getEmojis(${g.emojis.length}/${memberGuildEmojis.length})`, { micros: sw.getElapsedAndReset().totalMicroseconds });
-
-            g.roles = rolesByGuild.get(m.guild_id) ?? [];
-            trace.calls.push(`getRoles(${g.roles.length}/${memberGuildRoles.length})`, { micros: sw.getElapsedAndReset().totalMicroseconds });
-
-            g.stickers = stickersByGuild.get(m.guild_id) ?? [];
-            trace.calls.push(`getStickers(${g.stickers.length}/${memberGuildStickers.length})`, { micros: sw.getElapsedAndReset().totalMicroseconds });
+            const cached = guildCache.get(m.guild_id);
+            g.emojis = cached?.emojis ?? [];
+            g.roles = cached?.roles ?? [];
+            g.stickers = cached?.stickers ?? [];
+            trace.calls.push(`getCachedGuild(${cached?.channels.length ?? 0}/${g.roles.length}/${g.emojis.length}/${g.stickers.length})`, {
+                micros: sw.getElapsedAndReset().totalMicroseconds,
+            });
 
             g.voice_states = voiceStatesByGuild.get(m.guild_id) ?? [];
             trace.calls.push(`getVoiceStates(${g.voice_states.length}/${memberGuildVoiceStates.length})`, { micros: sw.getElapsedAndReset().totalMicroseconds });
@@ -599,7 +554,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
 
     // Generate guilds list ( make them unavailable if user is bot )
     const guilds: GuildOrUnavailable[] = members.map((member) => {
-        member.guild.channels = (channelsByGuild.get(member.guild_id) ?? [])
+        member.guild.channels = (guildCache.get(member.guild_id)?.channels ?? [])
             /*
    			//TODO maybe implement this correctly, by causing create and delete events for users who can newly view and not view the channels, along with doing these checks correctly, as they don't currently take into account that the owner of the guild is always able to view channels, with potentially other issues
    			.filter((channel) => {
@@ -619,7 +574,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
                 channel.position = member.guild.channel_ordering.indexOf(channel.id);
                 return channel;
             })
-            .sort((a, b) => a.position - b.position);
+            .sort((a, b) => a.position! - b.position!) as unknown as Channel[];
 
         const threads: Channel[] = threadsByGuild.get(member.guild_id) ?? [];
 
@@ -885,10 +840,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
             } else if (key === "guildRelationQueryTime") {
                 val.calls = [];
                 for (const [subkey, subvalue] of Object.entries({
-                    queryGuildChannelsTime: queryGuildChannelsTimeTotal,
-                    queryGuildEmojisTime: queryGuildEmojisTimeTotal,
-                    queryGuildRolesTime: queryGuildRolesTimeTotal,
-                    queryGuildStickersTime: queryGuildStickersTimeTotal,
+                    guildCacheTime,
                     queryGuildVoiceStatesTime: queryGuildVoiceStatesTimeTotal,
                     threadMemberTime,
                     queryThreadsTime: queryThreadsTimeTotal,
