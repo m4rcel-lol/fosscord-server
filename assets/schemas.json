@@ -2362,7 +2362,10 @@
                 "type": "boolean"
             },
             "discovery_splash": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "safety_alerts_channel_id": {
                 "type": [
@@ -3141,7 +3144,10 @@
                 "$ref": "#/definitions/GuildWelcomeScreen"
             },
             "widget_channel_id": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "widget_enabled": {
                 "type": "boolean"
@@ -3240,7 +3246,10 @@
                 "type": "boolean"
             },
             "discovery_splash": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "safety_alerts_channel_id": {
                 "type": [
@@ -4186,7 +4195,10 @@
                 "description": "DEPRECATED: Look at the new Guild onboarding screens."
             },
             "widget_channel_id": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "widget_enabled": {
                 "type": "boolean"
@@ -4605,7 +4617,10 @@
                 "$ref": "#/definitions/GuildWelcomeScreen"
             },
             "widget_channel_id": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "widget_enabled": {
                 "type": "boolean"
@@ -4704,7 +4719,10 @@
                 "type": "boolean"
             },
             "discovery_splash": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "safety_alerts_channel_id": {
                 "type": [
@@ -7337,14 +7355,13 @@
                 "type": "boolean"
             },
             "channel_id": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             }
         },
         "additionalProperties": false,
-        "required": [
-            "channel_id",
-            "enabled"
-        ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "MessageThreadCreationSchema": {
@@ -14482,7 +14499,10 @@
                 "description": "DEPRECATED: Look at the new Guild onboarding screens."
             },
             "widget_channel_id": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "widget_channel": {
                 "$ref": "#/definitions/Channel"
@@ -20956,16 +20976,52 @@
             "invite": {
                 "$ref": "#/definitions/RateLimitOptions"
             },
+            "application": {
+                "$ref": "#/definitions/RateLimitOptions"
+            },
+            "expression": {
+                "$ref": "#/definitions/RateLimitOptions"
+            },
+            "interaction": {
+                "$ref": "#/definitions/RateLimitOptions"
+            },
+            "oauth2": {
+                "$ref": "#/definitions/RateLimitOptions"
+            },
+            "report": {
+                "$ref": "#/definitions/RateLimitOptions"
+            },
+            "readState": {
+                "$ref": "#/definitions/RateLimitOptions"
+            },
+            "stream": {
+                "$ref": "#/definitions/RateLimitOptions"
+            },
+            "connection": {
+                "$ref": "#/definitions/RateLimitOptions"
+            },
+            "attachment": {
+                "$ref": "#/definitions/RateLimitOptions"
+            },
             "auth": {
                 "$ref": "#/definitions/AuthRateLimit"
             }
         },
         "additionalProperties": false,
         "required": [
+            "application",
+            "attachment",
             "auth",
             "channel",
+            "connection",
+            "expression",
             "guild",
+            "interaction",
             "invite",
+            "oauth2",
+            "readState",
+            "report",
+            "stream",
             "user",
             "userProfile",
             "webhook"
@@ -20980,11 +21036,15 @@
             },
             "register": {
                 "$ref": "#/definitions/RateLimitOptions"
+            },
+            "phone": {
+                "$ref": "#/definitions/RateLimitOptions"
             }
         },
         "additionalProperties": false,
         "required": [
             "login",
+            "phone",
             "register"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"

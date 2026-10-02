@@ -34,6 +34,6 @@ export interface GuildUpdateSchema extends Omit<GuildCreateSchema, "channels" | 
     afk_channel_id?: string | null;
     preferred_locale?: string;
     premium_progress_bar_enabled?: boolean;
-    discovery_splash?: string;
+    discovery_splash?: string | null;
     safety_alerts_channel_id?: string | null;
 }

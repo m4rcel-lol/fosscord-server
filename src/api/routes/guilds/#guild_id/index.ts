@@ -17,9 +17,10 @@
 */
 
 import { Request, Response, Router } from "express";
+import { In } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
 import { AuditLog, Channel, Guild, Member } from "@spacebar/database";
-import { ApiError, DiscordApiErrors, GuildUpdateEvent, Permissions, emitEvent, getPermission, getRights, handleFile } from "@spacebar/util";
+import { ApiError, DiscordApiErrors, FieldErrors, GuildUpdateEvent, Permissions, emitEvent, getPermission, getRights, handleFile } from "@spacebar/util";
 import { AuditLogEvents, GuildCreateResponse, GuildUpdateSchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
@@ -161,7 +162,15 @@ router.patch(
             delete body.features;
         }
 
-        // TODO: check if body ids are valid
+        for (const key of ["afk_channel_id", "system_channel_id", "rules_channel_id", "public_updates_channel_id", "safety_alerts_channel_id"] as const) {
+            const value = body[key];
+            if (value == null || value === "1") continue;
+            if (!/^\d{1,20}$/.test(value)) throw FieldErrors({ [key]: { code: "NUMBER_TYPE_COERCE", message: `Value "${value}" is not snowflake.` } });
+        }
+        const referencedChannels = [...new Set([body.afk_channel_id, body.system_channel_id].filter((id): id is string => !!id))];
+        if (referencedChannels.length && (await Channel.count({ where: { guild_id, id: In(referencedChannels) } })) !== referencedChannels.length)
+            throw DiscordApiErrors.UNKNOWN_CHANNEL;
+
         guild.assign(body);
 
         if (body.public_updates_channel_id == "1") {

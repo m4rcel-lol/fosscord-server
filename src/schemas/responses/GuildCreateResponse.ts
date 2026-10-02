@@ -32,7 +32,7 @@ export interface GuildCreateResponse extends Omit<GuildUpdateSchema, "name"> {
     premium_subscription_count?: number;
     premium_tier?: number;
     welcome_screen: GuildWelcomeScreen;
-    widget_channel_id?: string;
+    widget_channel_id?: string | null;
     widget_enabled: boolean;
     nsfw_level?: number;
     nsfw: boolean;

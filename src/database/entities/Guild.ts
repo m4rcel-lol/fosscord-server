@@ -303,7 +303,7 @@ export class Guild extends BaseClass {
     welcome_screen: GuildWelcomeScreen;
 
     @Column({ nullable: true, type: "int8" })
-    widget_channel_id?: string;
+    widget_channel_id?: string | null;
 
     @JoinColumn({ name: "widget_channel_id", foreignKeyConstraintName: "FK_guild_widget_channel_id" })
     @ManyToOne(() => Channel)

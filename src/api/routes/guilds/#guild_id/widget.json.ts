@@ -88,9 +88,7 @@ async function getWidgetJsonData(guild_id: string) {
     if (!guild.widget_enabled) throw DiscordApiErrors.EMBED_DISABLED;
 
     // Fetch existing widget invite for widget channel
-    let invite = await Invite.findOne({
-        where: { channel_id: guild.widget_channel_id },
-    });
+    let invite = guild.widget_channel_id ? await Invite.findOne({ where: { channel_id: guild.widget_channel_id } }) : null;
 
     if (guild.widget_channel_id && !invite) {
         // Create invite for channel if none exists
