@@ -97,6 +97,9 @@ export const getMetaDescriptions = (text: string) => {
         height: tryParseInt(getMeta($, "og:image:height")),
         url: getMeta($, "og:url"),
         youtube_embed: getMeta($, "og:video:secure_url"),
+        video: getMeta($, "og:video:secure_url") || getMeta($, "og:video"),
+        video_width: tryParseInt(getMeta($, "og:video:width")),
+        video_height: tryParseInt(getMeta($, "og:video:height")),
         site_name: getMeta($, "og:site_name"),
         card: getMeta($, "twitter:card"),
         theme_color: getMeta($, "theme-color"),
@@ -161,6 +164,29 @@ const genericVideoHandler = async (url: URL, head: Response): Promise<Embed | nu
         },
     };
 };
+
+const gifvHandler =
+    (name: string, providerUrl: string) =>
+    async (url: URL): Promise<Embed | null> => {
+        const response = await doFetch(url);
+        if (!response) return null;
+        if (!response.headers.get("content-type")?.includes("html")) return genericImageHandler(url);
+        const metas = getMetaDescriptions(await response.text());
+        if (!metas.video || !metas.video_width || !metas.video_height) return genericImageHandler(url);
+        const video = new URL(metas.video, url);
+        return {
+            url: url.href,
+            type: EmbedType.gifv,
+            provider: { name, url: providerUrl },
+            thumbnail: makeEmbedImage(metas.image && new URL(metas.image, url).href, metas.width ?? metas.video_width, metas.height ?? metas.video_height),
+            video: {
+                url: video.href,
+                proxy_url: getProxyUrl(video, metas.video_width, metas.video_height),
+                width: metas.video_width,
+                height: metas.video_height,
+            },
+        };
+    };
 
 const genericImageHandler = async (url: URL): Promise<Embed | null> => {
     const type = await fetch(url, {
@@ -249,9 +275,9 @@ export const EmbedHandlers: {
         };
     },
 
-    "giphy.com": genericImageHandler,
+    "giphy.com": gifvHandler("GIPHY", "https://giphy.com/"),
     "media4.giphy.com": genericImageHandler,
-    "tenor.com": genericImageHandler,
+    "tenor.com": gifvHandler("Tenor", "https://tenor.co"),
     "c.tenor.com": genericImageHandler,
     "media.tenor.com": genericImageHandler,
     "media1.tenor.com": genericImageHandler,
