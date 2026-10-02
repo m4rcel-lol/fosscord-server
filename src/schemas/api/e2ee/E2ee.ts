@@ -106,7 +106,7 @@ export interface E2eeBackupKeysResponse {
     keys: E2eeBackupKeyEntry[];
 }
 
-export type E2eeLinkStage = "request" | "offer" | "reveal" | "approve" | "deny" | "cancel";
+export type E2eeLinkStage = "request" | "offer" | "reveal" | "approve" | "deny" | "cancel" | "invite";
 
 export interface E2eeLinkSchema {
     request_id: string;
@@ -152,6 +152,7 @@ export interface E2eeDeviceResponse {
     name: string | null;
     prekey: E2eePrekeySchema;
     created_at: string;
+    revoked_at?: string | null;
     session?: E2eeDeviceSession | null;
 }
 
@@ -174,6 +175,7 @@ export interface E2eeResetSchema {
 
 export interface E2eeUserKeysResponse {
     identity_key: string | null;
+    identity_created_at?: string | null;
     previous_identity?: E2eeSignedKey | null;
     backup_key?: E2eeSignedKey | null;
     devices: E2eeDeviceResponse[];
@@ -186,6 +188,7 @@ export interface E2eeKeysQueryResponse {
 
 export interface E2eeStateResponse {
     identity_key: string | null;
+    identity_created_at?: string | null;
     previous_identity?: E2eeSignedKey | null;
     backup_key?: E2eeSignedKey | null;
     devices: E2eeDeviceResponse[];

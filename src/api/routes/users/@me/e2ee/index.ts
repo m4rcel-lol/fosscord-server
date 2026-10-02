@@ -129,7 +129,7 @@ router.put(
                 device.identity_signature = valid ? signature! : null;
                 device.status = valid ? "active" : "pending";
             }
-            await E2eeIdentity.update({ user_id: req.user_id }, { public_key, previous_key: existing.public_key, rotation_signature: previous_signature, created_at: new Date() });
+            await E2eeIdentity.update({ user_id: req.user_id }, { public_key, previous_key: existing.public_key, rotation_signature: previous_signature });
             if (devices.length) await E2eeDevice.save(devices);
             await emitE2eeUserEvent("E2EE_IDENTITY_UPDATE", req.user_id);
             await emitE2eeUserEvent("E2EE_DEVICES_UPDATE", req.user_id);
