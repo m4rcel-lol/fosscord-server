@@ -19,7 +19,8 @@
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { Session, User, UserSettings } from "@spacebar/database";
-import { emitEvent, PresenceUpdateEvent } from "@spacebar/util";
+import { broadcastPresence } from "@spacebar/util";
+import { Not } from "typeorm";
 import { UserSettingsUpdateSchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
@@ -79,27 +80,9 @@ router.patch(
 
         await user.settings.save();
         await user.save();
-        if (body.status) {
-            const [session] = (await Session.find({
-                where: { user_id: user.id },
-            })) as [Session | undefined];
-            if (session) {
-                session.status = body.status;
-
-                await Promise.all([
-                    emitEvent({
-                        event: "PRESENCE_UPDATE",
-                        user_id: user.id,
-                        data: {
-                            user: user.toPublicUser(),
-                            activities: session.activities,
-                            client_status: session?.client_status,
-                            status: session.getPublicStatus(),
-                        },
-                    } satisfies PresenceUpdateEvent),
-                    session.save(),
-                ]);
-            }
+        if (body.status && ["online", "idle", "dnd", "invisible"].includes(body.status)) {
+            await Session.update({ user_id: user.id, status: Not("offline") }, { status: body.status });
+            await broadcastPresence(user.id, user.toPublicUser());
         }
 
         res.json({ ...user.settings, index: undefined });
