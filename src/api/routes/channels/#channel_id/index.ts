@@ -207,7 +207,7 @@ router.patch(
             const changesFlags = payload.flags !== undefined && payload.flags !== channel.flags;
             const changesInvitable = payload.invitable !== undefined && payload.invitable !== (meta.invitable ?? true);
             if (!manage && (changesRate || changesFlags || (changesInvitable && !isOwner))) throw DiscordApiErrors.MISSING_PERMISSIONS;
-            if (!manage && payload.locked === false && meta.locked) throw DiscordApiErrors.MISSING_PERMISSIONS;
+            if (!manage && payload.locked !== undefined && payload.locked !== !!meta.locked) throw DiscordApiErrors.MISSING_PERMISSIONS;
 
             const changes: { name?: string; rate_limit_per_user?: number; flags?: number; applied_tags?: string[] } = {};
             if (payload.applied_tags) {
