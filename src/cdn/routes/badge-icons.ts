@@ -17,12 +17,15 @@
 */
 
 import crypto from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { Router, Response, Request } from "express";
 import { fileTypeFromBuffer } from "file-type";
 import { Config } from "@spacebar/util";
 import { HTTPError } from "lambert-server/HTTPError";
 import { storage, multer, setCacheControl, setCacheControlNotFound, fetchUpstreamAsset } from "../util";
 
+const BUNDLED_BADGES = path.join(__dirname, "..", "..", "..", "assets", "badge-icons");
 const ALLOWED_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
 
 const router = Router({ mergeParams: true });
@@ -44,9 +47,13 @@ router.post("/", multer.single("file"), async (req: Request, res: Response) => {
 
 router.get("/:badge_id", setCacheControl, async (req: Request, res: Response) => {
     const { badge_id } = req.params as { [key: string]: string };
-    const path = `badge-icons/${badge_id}`;
-
-    const file = (await storage.get(path)) ?? (/^[0-9a-f]{32}\.png$/.test(badge_id) ? await fetchUpstreamAsset(path, `https://cdn.discordapp.com/badge-icons/${badge_id}`) : null);
+    const key = `badge-icons/${badge_id}`;
+    const stored = await storage.get(key);
+    if (!stored) {
+        const bundled = await fs.readFile(path.join(BUNDLED_BADGES, `${path.basename(badge_id, ".png")}.svg`)).catch(() => null);
+        if (bundled) return res.type("image/svg+xml").send(bundled);
+    }
+    const file = stored ?? (/^[0-9a-f]{32}\.png$/.test(badge_id) ? await fetchUpstreamAsset(key, `https://cdn.discordapp.com/badge-icons/${badge_id}`) : null);
     if (!file) return setCacheControlNotFound(req, res);
     const type = await fileTypeFromBuffer(file);
 

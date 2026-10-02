@@ -16,9 +16,9 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { MinimalPublicUserDTO } from "./UserDTO";
+import { In } from "typeorm";
 import { Channel, User } from "../../database/entities";
-import { PublicUserProjection } from "@spacebar/schemas";
+import { PublicUser, PublicUserProjection } from "@spacebar/schemas";
 
 export class DmChannelDTO {
     icon: string | null;
@@ -27,7 +27,7 @@ export class DmChannelDTO {
     name: string | null;
     origin_channel_id: string | null;
     owner_id?: string;
-    recipients: MinimalPublicUserDTO[];
+    recipients: PublicUser[];
     type: number;
 
     static async from(channel: Channel, excluded_recipients: string[] = [], origin_channel_id?: string) {
@@ -39,18 +39,9 @@ export class DmChannelDTO {
         obj.origin_channel_id = origin_channel_id || null;
         obj.owner_id = channel.owner_id;
         obj.type = channel.type;
-        obj.recipients = (
-            await Promise.all(
-                channel.recipients
-                    ?.filter((r) => !excluded_recipients.includes(r.user_id))
-                    .map((r) =>
-                        User.findOneOrFail({
-                            where: { id: r.user_id },
-                            select: Object.fromEntries(PublicUserProjection.map((i) => [i, true])), // TODO: clean up
-                        }),
-                    ) || [],
-            )
-        ).map((u) => new MinimalPublicUserDTO(u));
+        const ids = channel.recipients?.map((r) => r.user_id).filter((id) => !excluded_recipients.includes(id)) ?? [];
+        const users = ids.length ? await User.find({ where: { id: In(ids) }, select: Object.fromEntries(PublicUserProjection.map((i) => [i, true])) }) : [];
+        obj.recipients = ids.flatMap((id) => users.find((u) => u.id === id)?.toPublicUser() ?? []);
         return obj;
     }
 

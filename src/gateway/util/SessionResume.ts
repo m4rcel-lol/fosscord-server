@@ -38,9 +38,11 @@ export function rememberDispatch(socket: WebSocket, payload: Payload) {
     if (socket.replayBuffer.length > REPLAY_BUFFER_SIZE) socket.replayBuffer.shift();
 }
 
-export function holdForResume(socket: WebSocket, cleanup: () => Promise<void>) {
+export const isFinalClose = (code?: number) => code === 1000 || code === 1001;
+
+export function holdForResume(socket: WebSocket, cleanup: () => Promise<void>, code?: number) {
     const release = () => cleanup().catch((e) => console.error(`[Gateway/${socket.user_id}] listener cleanup failed`, e));
-    if (!socket.user_id || !socket.session_id || socket.session_id.startsWith("TEMP_")) return release();
+    if (isFinalClose(code) || !socket.user_id || !socket.session_id || socket.session_id.startsWith("TEMP_")) return release();
 
     socket.resumeBuffer = [];
     resumableSockets.set(socket.session_id, socket);

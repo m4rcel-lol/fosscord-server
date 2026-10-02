@@ -17,7 +17,7 @@
 */
 
 import { Member, Session, VoiceChannels, VoiceState } from "@spacebar/database";
-import { WebSocket } from "@spacebar/gateway/util";
+import { isFinalClose, WebSocket } from "@spacebar/gateway/util";
 import { broadcastPresence, emitEvent, emitSessionsReplace, VoiceStateUpdateEvent } from "@spacebar/util";
 import { ProcessLifecycle } from "@spacebar/util/util/ProcessLifecycle";
 import { openConnections } from "./Connection";
@@ -35,22 +35,25 @@ export async function Close(this: WebSocket, code: number, reason: Buffer) {
         const closedAt = Date.now();
 
         if (!(ProcessLifecycle.state === "stopping" || ProcessLifecycle.state === "stopped"))
-            setTimeout(async () => {
-                try {
-                    if (authSessionId && this.user_id) {
-                        const s = await Session.findOne({
-                            where: { user_id: this.user_id, session_id: authSessionId },
-                        });
-                        if (s && (s.last_seen?.getTime() ?? 0) <= closedAt && !openConnections.some((x) => x.session_id === authSessionId && x.user_id === this.user_id)) {
-                            await Session.update({ user_id: this.user_id, session_id: authSessionId }, { status: "offline", activities: [], client_status: {} });
-                            await emitSessionsReplace(this.user_id);
-                            await broadcastPresence(this.user_id);
+            setTimeout(
+                async () => {
+                    try {
+                        if (authSessionId && this.user_id) {
+                            const s = await Session.findOne({
+                                where: { user_id: this.user_id, session_id: authSessionId },
+                            });
+                            if (s && (s.last_seen?.getTime() ?? 0) <= closedAt && !openConnections.some((x) => x.session_id === authSessionId && x.user_id === this.user_id)) {
+                                await Session.update({ user_id: this.user_id, session_id: authSessionId }, { status: "offline", activities: [], client_status: {} });
+                                await emitSessionsReplace(this.user_id);
+                                await broadcastPresence(this.user_id);
+                            }
                         }
+                    } catch (e) {
+                        console.error("[WebSocket] Close session cleanup failed", code, e);
                     }
-                } catch (e) {
-                    console.error("[WebSocket] Close session cleanup failed", code, e);
-                }
-            }, 10_000);
+                },
+                isFinalClose(code) ? 0 : 10_000,
+            );
 
         if (!this.user_id) console.error("No user id in websocket???", this);
         const voiceState = await VoiceState.findOne({

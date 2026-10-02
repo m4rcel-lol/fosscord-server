@@ -321,10 +321,10 @@ export class Member extends BaseClassWithoutId {
             emitEvent({
                 event: "GUILD_MEMBER_UPDATE",
                 data: {
+                    ...member.toPublicMember(),
                     guild_id,
-                    user: member.user,
-                    nick: nickname || undefined,
-                    roles: member.roles.map((x) => x.id),
+                    user: member.user.toPublicUser(),
+                    roles: member.roles.map((x) => x.id).filter((id) => id !== guild_id),
                 },
                 guild_id,
             } satisfies GuildMemberUpdateEvent),

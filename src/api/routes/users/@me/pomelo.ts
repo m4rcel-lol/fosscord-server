@@ -19,7 +19,7 @@
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { User } from "@spacebar/database";
-import { emitEvent, FieldErrors, UserUpdateEvent } from "@spacebar/util";
+import { broadcastUserUpdate, emitEvent, FieldErrors, UserUpdateEvent } from "@spacebar/util";
 import { PrivateUserProjection } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
@@ -38,6 +38,7 @@ router.post("/", route({}), async (req: Request, res: Response) => {
     await user.save();
 
     await emitEvent({ event: "USER_UPDATE", user_id: req.user_id, data: user } satisfies UserUpdateEvent);
+    await broadcastUserUpdate(req.user_id);
     res.json(user.toPrivateUser());
 });
 

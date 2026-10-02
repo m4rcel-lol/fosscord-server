@@ -42,18 +42,8 @@ export async function onHeartbeat(this: WebSocket, data: Payload) {
         this.qos = (data.d as QoSData).qos;
     }
 
-    const newSessionData: Partial<Session> = {
-        last_seen: new Date(),
-    };
-
-    await Promise.all([
-        Send(this, { op: 11, d: {} }),
-        Session.update(
-            {
-                session_id: this.session_id!,
-                user_id: this.user_id,
-            } as FindOptionsWhere<Session>,
-            newSessionData,
-        ),
-    ]);
+    await Send(this, { op: 11, d: {} });
+    Session.update({ session_id: this.session_id!, user_id: this.user_id } as FindOptionsWhere<Session>, { last_seen: new Date() }).catch((e) =>
+        console.error(`[Gateway/${this.user_id}] failed to record heartbeat`, e),
+    );
 }

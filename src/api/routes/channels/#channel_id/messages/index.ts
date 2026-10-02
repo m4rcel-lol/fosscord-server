@@ -465,13 +465,13 @@ router.post(
         await Promise.all([
             read_state.save(),
             message.save(),
-            emitEvent({
-                event: "MESSAGE_CREATE",
-                channel_id: channel_id,
-                data: message.toJSON(),
-            } satisfies MessageCreateEvent),
             message.guild_id ? Member.update({ id: req.user_id, guild_id: message.guild_id }, { last_message_id: message.id }) : undefined,
         ]);
+        await emitEvent({
+            event: "MESSAGE_CREATE",
+            channel_id: channel_id,
+            data: message.toJSON(),
+        } satisfies MessageCreateEvent);
 
         // no await as it shouldnt block the message send function and silently catch error
         postHandleMessage(message).catch((e) => console.error("[Message] post-message handler failed", e));

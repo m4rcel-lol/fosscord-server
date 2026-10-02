@@ -97,7 +97,6 @@ router.get("/", route({ responses: { 200: { body: "UserProfileResponse" } } }), 
             id: "premium",
             description: `Subscriber since ${new Date(user.premium_since).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`,
             icon: PREMIUM_BADGE_ICON,
-            link: "https://discord.com/settings/premium",
         });
     if (user.badge_ids?.length) badges.push(...(await Badge.find({ where: { id: In(user.badge_ids) } })));
 
