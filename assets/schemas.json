@@ -2701,6 +2701,53 @@
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
+    "DiscoverableGuildsSearchResponse": {
+        "type": "object",
+        "properties": {
+            "guilds": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/DiscoverableGuild"
+                }
+            },
+            "total_count": {
+                "type": "integer"
+            },
+            "offset": {
+                "type": "integer"
+            },
+            "limit": {
+                "type": "integer"
+            },
+            "categories": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "integer"
+                        },
+                        "count": {
+                            "type": "integer"
+                        }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                        "count",
+                        "id"
+                    ]
+                }
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "guilds",
+            "limit",
+            "offset",
+            "total_count"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
     "DmMessagesResponseSchema": {
         "type": "array",
         "items": {
