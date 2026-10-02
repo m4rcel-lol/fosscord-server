@@ -129,6 +129,9 @@ export class User extends BaseClass {
     @Column()
     deleted: boolean = false; // if the user was deleted
 
+    @Column({ default: false })
+    hide_premium_badge: boolean = false; // admin-controlled: keeps premium, just leaves the badge off their profile
+
     @Column({ nullable: true, select: false })
     email?: string; // email of the user
 

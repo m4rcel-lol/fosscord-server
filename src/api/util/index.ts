@@ -34,3 +34,4 @@ export * from "./utility/pomelo";
 export * from "./utility/StickerPacks";
 export * from "./utility/Soundboard";
 export * from "./utility/mfa";
+export * from "./utility/statusPage";

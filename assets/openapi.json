@@ -8190,6 +8190,351 @@
                     "version"
                 ]
             },
+            "AdminSettingsUpdateSchema": {
+                "type": "object",
+                "properties": {
+                    "general": {
+                        "type": "object",
+                        "properties": {
+                            "instanceName": {
+                                "type": "string"
+                            },
+                            "instanceDescription": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            },
+                            "image": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            },
+                            "frontPage": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            },
+                            "tosPage": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            },
+                            "correspondenceEmail": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            },
+                            "correspondenceUserID": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            }
+                        },
+                        "additionalProperties": false
+                    },
+                    "register": {
+                        "type": "object",
+                        "properties": {
+                            "disabled": {
+                                "type": "boolean"
+                            },
+                            "allowNewRegistration": {
+                                "type": "boolean"
+                            },
+                            "requireInvite": {
+                                "type": "boolean"
+                            },
+                            "requireCaptcha": {
+                                "type": "boolean"
+                            },
+                            "allowMultipleAccounts": {
+                                "type": "boolean"
+                            }
+                        },
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "AdminUserUpdateSchema": {
+                "type": "object",
+                "properties": {
+                    "global_name": {
+                        "maxLength": 32,
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "bio": {
+                        "type": "string"
+                    },
+                    "disabled": {
+                        "type": "boolean"
+                    },
+                    "verified": {
+                        "type": "boolean"
+                    },
+                    "premium_type": {
+                        "minimum": 0,
+                        "maximum": 3,
+                        "type": "integer"
+                    },
+                    "hide_premium_badge": {
+                        "description": "Leave the premium badge off their profile without touching their premium itself",
+                        "type": "boolean"
+                    },
+                    "rights": {
+                        "description": "Bitfield of instance rights, as a decimal string. Requires OPERATOR to change.",
+                        "type": "string"
+                    },
+                    "tag": {
+                        "description": "The tag shown next to the user's name. BOT tags only render for bot accounts; AI tags render for anyone.",
+                        "enum": [
+                            "ai",
+                            "none",
+                            "verified_ai",
+                            "verified_bot"
+                        ],
+                        "type": "string"
+                    },
+                    "badge_ids": {
+                        "description": "Instance badges shown on the user's profile, in display order",
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "AdminBadgeCreateSchema": {
+                "type": "object",
+                "properties": {
+                    "description": {
+                        "description": "Tooltip text shown when hovering the badge",
+                        "minLength": 1,
+                        "maxLength": 120,
+                        "type": "string"
+                    },
+                    "icon": {
+                        "description": "An existing icon hash (served from /badge-icons/<icon>.png; unknown hashes fall back to discord's CDN)",
+                        "type": "string"
+                    },
+                    "icon_data": {
+                        "description": "A data: URI image to upload as the icon instead",
+                        "type": "string"
+                    },
+                    "link": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "description"
+                ]
+            },
+            "AdminBadgeUpdateSchema": {
+                "type": "object",
+                "properties": {
+                    "description": {
+                        "minLength": 1,
+                        "maxLength": 120,
+                        "type": "string"
+                    },
+                    "icon": {
+                        "type": "string"
+                    },
+                    "icon_data": {
+                        "type": "string"
+                    },
+                    "link": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                }
+            },
+            "AdminGuildUpdateSchema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "minLength": 2,
+                        "maxLength": 100,
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "features": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "owner_id": {
+                        "type": "string"
+                    }
+                }
+            },
+            "AdminStatusComponentSchema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "minLength": 1,
+                        "maxLength": 100,
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "status": {
+                        "enum": [
+                            "degraded_performance",
+                            "major_outage",
+                            "operational",
+                            "partial_outage",
+                            "under_maintenance"
+                        ],
+                        "type": "string"
+                    },
+                    "position": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "name"
+                ]
+            },
+            "AdminStatusComponentUpdateSchema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "minLength": 1,
+                        "maxLength": 100,
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "status": {
+                        "enum": [
+                            "degraded_performance",
+                            "major_outage",
+                            "operational",
+                            "partial_outage",
+                            "under_maintenance"
+                        ],
+                        "type": "string"
+                    },
+                    "position": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "AdminStatusIncidentCreateSchema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "minLength": 1,
+                        "maxLength": 200,
+                        "type": "string"
+                    },
+                    "impact": {
+                        "$ref": "#/components/schemas/AdminStatusIncidentImpact"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/AdminStatusIncidentState"
+                    },
+                    "body": {
+                        "minLength": 1,
+                        "type": "string"
+                    },
+                    "component_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "component_status": {
+                        "description": "Status to set the affected components to while the incident is open",
+                        "enum": [
+                            "degraded_performance",
+                            "major_outage",
+                            "operational",
+                            "partial_outage",
+                            "under_maintenance"
+                        ],
+                        "type": "string"
+                    },
+                    "scheduled_for": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "scheduled_until": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "body",
+                    "impact",
+                    "name",
+                    "status"
+                ]
+            },
+            "AdminStatusIncidentUpdateSchema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "impact": {
+                        "enum": [
+                            "critical",
+                            "maintenance",
+                            "major",
+                            "minor",
+                            "none"
+                        ],
+                        "type": "string"
+                    },
+                    "component_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "scheduled_for": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "scheduled_until": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                }
+            },
+            "AdminStatusIncidentPostUpdateSchema": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "$ref": "#/components/schemas/AdminStatusIncidentState"
+                    },
+                    "body": {
+                        "minLength": 1,
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "body",
+                    "status"
+                ]
+            },
             "AttachmentListResponse": {
                 "type": "object",
                 "properties": {
@@ -11043,6 +11388,10 @@
                         "type": "boolean",
                         "default": false
                     },
+                    "hide_premium_badge": {
+                        "type": "boolean",
+                        "default": false
+                    },
                     "email": {
                         "type": "string"
                     },
@@ -11184,6 +11533,7 @@
                     "discriminator",
                     "fingerprints",
                     "flags",
+                    "hide_premium_badge",
                     "id",
                     "mfa_enabled",
                     "mobile",
@@ -19280,6 +19630,29 @@
                     "next"
                 ]
             },
+            "AdminStatusIncidentImpact": {
+                "enum": [
+                    "critical",
+                    "maintenance",
+                    "major",
+                    "minor",
+                    "none"
+                ],
+                "type": "string"
+            },
+            "AdminStatusIncidentState": {
+                "enum": [
+                    "completed",
+                    "identified",
+                    "in_progress",
+                    "investigating",
+                    "monitoring",
+                    "resolved",
+                    "scheduled",
+                    "verifying"
+                ],
+                "type": "string"
+            },
             "MessageReferenceIds": {
                 "type": "object",
                 "properties": {
@@ -19304,6 +19677,9 @@
             "name": "_spacebar"
         },
         {
+            "name": "admin"
+        },
+        {
             "name": "api"
         },
         {
@@ -19317,6 +19693,9 @@
         },
         {
             "name": "static"
+        },
+        {
+            "name": "status"
         },
         {
             "name": "verify-email"
@@ -23447,6 +23826,28 @@
                 ],
                 "tags": [
                     "api"
+                ]
+            }
+        },
+        "/api/status/summary.json/": {
+            "get": {
+                "security": [
+                    {}
+                ],
+                "description": "Public status page summary (statuspage.io compatible): overall status, components, open incidents, maintenance and recent history",
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
                 ]
             }
         },
@@ -37403,6 +37804,871 @@
                 ]
             }
         },
+        "/api/admin/users/": {
+            "get": {
+                "x-right-required": "MANAGE_USERS",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Search users on this instance. `q` matches an exact id, or part of a username, display name or email.",
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "q",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "filter",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "all | disabled | bots | verified | unverified"
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "number"
+                        }
+                    },
+                    {
+                        "name": "offset",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "number"
+                        }
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/admin/users/{user_id}/": {
+            "get": {
+                "x-right-required": "MANAGE_USERS",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Get a user with their servers, session count and instance bans",
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "user_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            },
+            "patch": {
+                "x-right-required": "MANAGE_USERS",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Edit a user. Changing rights, or editing an operator, requires OPERATOR.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminUserUpdateSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "user_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/admin/status/incidents/": {
+            "get": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "List incidents and maintenance windows, newest first",
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "number"
+                        }
+                    },
+                    {
+                        "name": "offset",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "number"
+                        }
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            },
+            "post": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Open an incident, or schedule maintenance (impact: maintenance)",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminStatusIncidentCreateSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/admin/status/incidents/{incident_id}/updates/": {
+            "post": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Post a timeline update to an incident, which also moves it to the given status",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminStatusIncidentPostUpdateSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "incident_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "incident_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/admin/status/incidents/{incident_id}/": {
+            "patch": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Edit an incident's title, impact, components or maintenance window (post an update to change its status)",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminStatusIncidentUpdateSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "incident_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "incident_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            },
+            "delete": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Delete an incident entirely",
+                "responses": {
+                    "204": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "incident_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "incident_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/admin/status/components/": {
+            "get": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "List status page components",
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            },
+            "post": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Add a status page component",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminStatusComponentSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/admin/status/components/{component_id}/": {
+            "patch": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Edit a status page component",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminStatusComponentUpdateSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "component_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "component_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            },
+            "delete": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Remove a status page component",
+                "responses": {
+                    "204": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "component_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "component_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/admin/settings/": {
+            "get": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Get the instance settings editable from the admin dashboard",
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            },
+            "patch": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Update instance information and registration settings",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminSettingsUpdateSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/admin/": {
+            "get": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Instance overview for the admin dashboard, including which admin areas the caller can access",
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/admin/guilds/": {
+            "get": {
+                "x-right-required": "MANAGE_GUILDS",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Search servers on this instance. `q` matches an exact id or part of the name.",
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "q",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "number"
+                        }
+                    },
+                    {
+                        "name": "offset",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "number"
+                        }
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/admin/guilds/{guild_id}/": {
+            "get": {
+                "x-right-required": "MANAGE_GUILDS",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Get a server with its owner and member/channel counts",
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "guild_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "guild_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            },
+            "patch": {
+                "x-right-required": "MANAGE_GUILDS",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Edit a server's name, description, feature flags or owner",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminGuildUpdateSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "guild_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "guild_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            },
+            "delete": {
+                "x-right-required": "MANAGE_GUILDS",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Delete a server regardless of ownership",
+                "responses": {
+                    "204": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "guild_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "guild_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/admin/badges/": {
+            "get": {
+                "x-right-required": "MANAGE_USERS",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "List instance profile badges with how many users have each",
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            },
+            "post": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Create a profile badge",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminBadgeCreateSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/admin/badges/{badge_id}/": {
+            "patch": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Edit a profile badge",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminBadgeUpdateSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "badge_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "badge_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            },
+            "delete": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Delete a profile badge and take it off everyone who has it",
+                "responses": {
+                    "204": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "badge_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "badge_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
         "/api/activities/shelf/": {
             "get": {
                 "security": [
@@ -37497,6 +38763,27 @@
                 },
                 "tags": [
                     "verify-email"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/status/": {
+            "get": {
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "tags": [
+                    "status"
                 ],
                 "x-badges": [
                     {
@@ -37602,6 +38889,27 @@
                 },
                 "tags": [
                     "error-reporting-proxy"
+                ]
+            }
+        },
+        "/admin/": {
+            "get": {
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "tags": [
+                    "admin"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
                 ]
             }
         },
