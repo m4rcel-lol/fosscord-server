@@ -17,13 +17,57 @@
 */
 
 import { route } from "@spacebar/api/middlewares";
-import { AuditLog, Ban, Guild, Invite, PublicInviteRelation } from "@spacebar/database";
-import { Config, DiscordApiErrors, emitEvent, getPermission, InviteDeleteEvent } from "@spacebar/util";
+import { AuditLog, Ban, Channel, Guild, Invite, PublicInviteRelation, Recipient, User } from "@spacebar/database";
+import { ChannelRecipientAddEvent, Config, DiscordApiErrors, DmChannelDTO, emitEvent, getPermission, InviteDeleteEvent } from "@spacebar/util";
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
-import { AuditLogEvents, UserFlags } from "@spacebar/schemas";
+import { AuditLogEvents, ChannelType, MessageType, UserFlags } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
+
+async function joinGroupDm(found: Invite, user_id: string) {
+    if (found.isExpired()) {
+        await Invite.delete({ code: found.code });
+        throw DiscordApiErrors.UNKNOWN_INVITE;
+    }
+    const channel = await Channel.findOne({ where: { id: found.channel_id }, relations: { recipients: true } });
+    if (!channel || channel.type !== ChannelType.GROUP_DM) throw DiscordApiErrors.UNKNOWN_INVITE;
+
+    let new_member = false;
+    const existing = channel.recipients?.find((r) => r.user_id === user_id);
+    if (!existing) {
+        if ((channel.recipients?.length ?? 0) >= 10) throw DiscordApiErrors.MAXIMUM_NUMBER_OF_RECIPIENTS_REACHED.withDefaultParams();
+        const recipient = await Recipient.create({ channel_id: channel.id, user_id }).save();
+        channel.recipients = [...(channel.recipients ?? []), recipient];
+        new_member = true;
+        found.uses++;
+        await found.save();
+
+        await emitEvent({
+            event: "CHANNEL_CREATE",
+            data: await DmChannelDTO.from(channel, [user_id]),
+            user_id,
+        });
+        await emitEvent({
+            event: "CHANNEL_RECIPIENT_ADD",
+            data: { channel_id: channel.id, user: await User.getPublicUser(user_id) },
+            channel_id: channel.id,
+        } satisfies ChannelRecipientAddEvent);
+        await Channel.sendSystemMessage(channel, found.inviter_id ?? user_id, MessageType.RECIPIENT_ADD, { mention_ids: [user_id] });
+    } else if (existing.closed) {
+        existing.closed = false;
+        await existing.save();
+        await emitEvent({
+            event: "CHANNEL_CREATE",
+            data: await DmChannelDTO.from(channel, [user_id]),
+            user_id,
+        });
+    }
+
+    const invite = await Invite.findOneOrFail({ where: { code: found.code }, relations: { inviter: true, channel: true } });
+    await invite.loadGroupRecipients();
+    return { ...invite.toPublicJSON(), new_member };
+}
 
 router.get(
     "/:invite_code",
@@ -45,11 +89,12 @@ router.get(
             where: { code: invite_code },
             relations: Object.fromEntries(PublicInviteRelation.map((i) => [i, true])), //TODO: clean up
         });
-        if (!invite?.guild || !invite.channel) throw DiscordApiErrors.UNKNOWN_INVITE;
+        if (!invite?.channel || (!invite.guild && invite.channel.type !== ChannelType.GROUP_DM)) throw DiscordApiErrors.UNKNOWN_INVITE;
         if (invite.isExpired()) {
             await Invite.delete({ code: invite_code });
             throw DiscordApiErrors.UNKNOWN_INVITE;
         }
+        await invite.loadGroupRecipients();
 
         res.status(200).send(invite.toPublicJSON());
     },
@@ -83,6 +128,7 @@ router.post(
             where: { code: invite_code },
         });
         if (!found) throw DiscordApiErrors.UNKNOWN_INVITE;
+        if (!found.guild_id) return res.json(await joinGroupDm(found, req.user_id));
         const { guild_id } = found;
         const { features } = await Guild.findOneOrFail({
             where: { id: guild_id },
@@ -149,6 +195,13 @@ router.delete(
         });
         if (!invite) throw DiscordApiErrors.UNKNOWN_INVITE;
         const { guild_id, channel_id } = invite;
+
+        if (!guild_id) {
+            if (!(await Recipient.exists({ where: { channel_id, user_id: req.user_id } }))) throw DiscordApiErrors.UNKNOWN_INVITE;
+            await Invite.delete({ code: invite_code });
+            await invite.loadGroupRecipients();
+            return res.json(invite.toMetadataJSON());
+        }
 
         const permission = await getPermission(req.user_id, guild_id, channel_id);
 

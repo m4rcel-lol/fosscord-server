@@ -23,6 +23,8 @@ import { Guild } from "./Guild";
 import { Member } from "./Member";
 import { User } from "./User";
 import { InviteType, PublicInvite } from "@spacebar/schemas/api/guilds/Invite";
+import { PublicChannel } from "@spacebar/schemas";
+import { Recipient } from "./Recipient";
 import { DiscordApiErrors } from "@spacebar/util/util";
 
 export const PublicInviteRelation = ["inviter", "guild", "channel"];
@@ -106,7 +108,31 @@ export class Invite extends BaseClassWithoutId {
         if (this.max_uses !== 0 && this.uses >= this.max_uses) return true;
         return false;
     }
+    async loadGroupRecipients() {
+        if (this.guild_id || !this.channel) return this;
+        this.channel.recipients = await Recipient.find({ where: { channel_id: this.channel_id }, relations: { user: true } });
+        return this;
+    }
+
     toPublicJSON(): PublicInvite {
+        if (!this.guild_id)
+            return {
+                code: this.code,
+                type: InviteType.GROUP_DM,
+                channel: {
+                    id: this.channel.id,
+                    type: this.channel.type,
+                    name: this.channel.name ?? null,
+                    icon: this.channel.icon ?? null,
+                    recipients: this.channel.recipients
+                        ?.filter((r) => r.user)
+                        .map((r) => ({ id: r.user.id, username: r.user.username, global_name: r.user.global_name ?? null, avatar: r.user.avatar ?? null })),
+                } as unknown as PublicChannel,
+                inviter: this.inviter?.toPartialUser(),
+                flags: this.flags,
+                expires_at: this.expires_at ? new Date(this.expires_at).toISOString() : null,
+                approximate_member_count: this.channel.recipients?.length,
+            };
         return {
             code: this.code,
             type: InviteType.GUILD, // TODO: support other invite types
