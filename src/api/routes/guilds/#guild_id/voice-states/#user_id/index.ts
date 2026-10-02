@@ -18,12 +18,39 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { Channel, VoiceChannels, VoiceState } from "@spacebar/database";
+import { Channel, Member, StageInstances, VoiceChannels, VoiceState } from "@spacebar/database";
 import { DiscordApiErrors, getPermission } from "@spacebar/util";
 import { ChannelType, VoiceStateModifySchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
 //TODO need more testing when community guild and voice stage channel are working
+
+router.get(
+    "/",
+    route({
+        responses: {
+            200: {},
+            403: {
+                body: "APIErrorResponse",
+            },
+            404: {
+                body: "APIErrorResponse",
+            },
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const { guild_id } = req.params as { [key: string]: string };
+        const user_id = req.params.user_id === "@me" ? req.user_id : (req.params.user_id as string);
+
+        if (!(await Member.existsBy({ id: req.user_id, guild_id }))) throw DiscordApiErrors.UNKNOWN_GUILD;
+        const voiceState = await VoiceState.findOne({ where: { guild_id, user_id } });
+        if (!voiceState?.channel_id) throw DiscordApiErrors.UNKNOWN_VOICE_STATE;
+        if (user_id !== req.user_id && !(await getPermission(req.user_id, guild_id, voiceState.channel_id)).has("VIEW_CHANNEL")) throw DiscordApiErrors.UNKNOWN_VOICE_STATE;
+
+        const member = await Member.findOne({ where: { id: user_id, guild_id }, relations: { user: true, roles: true } });
+        return res.json({ ...voiceState.toPublicVoiceState(), member: member?.toPublicMember() });
+    },
+);
 
 router.patch(
     "/",
@@ -64,7 +91,10 @@ router.patch(
         } else {
             perms.hasThrow("MUTE_MEMBERS");
             if (body.suppress === false) {
-                voiceState.request_to_speak_timestamp = (voiceState.request_to_speak_timestamp ? null : new Date()) as unknown as undefined;
+                const handRaised = voiceState.suppress && !!voiceState.request_to_speak_timestamp;
+                const invited = voiceState.suppress || !!voiceState.request_to_speak_timestamp;
+                if (handRaised) voiceState.request_to_speak_timestamp = null as unknown as undefined;
+                else if (invited) voiceState.request_to_speak_timestamp = body.request_to_speak_timestamp ? new Date(body.request_to_speak_timestamp) : new Date();
                 voiceState.suppress = false;
             } else if (body.suppress === true) {
                 voiceState.suppress = true;
@@ -74,6 +104,7 @@ router.patch(
 
         await voiceState.save();
         await VoiceChannels.publish(voiceState);
+        await StageInstances.speakersChanged(channel.id);
         return res.sendStatus(204);
     },
 );

@@ -16,16 +16,21 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+import { IsNull } from "typeorm";
 import { emitEvent } from "@spacebar/util/util";
 import { StageInstance } from "../entities/StageInstance";
+import { VoiceState } from "../entities/VoiceState";
 import { ScheduledEvents } from "./ScheduledEvents";
 
 export class StageInstances {
+    static emptyTimeout = 5 * 60 * 1000;
+    private static emptyTimers = new Map<string, NodeJS.Timeout>();
+
     static get(channelId: string) {
         return StageInstance.findOne({ where: { channel_id: channelId } });
     }
 
-    static async create(guildId: string, channelId: string, topic: string, privacyLevel = 2, scheduledEventId: string | null = null) {
+    static async create(guildId: string, channelId: string, topic: string, privacyLevel = 2, scheduledEventId: string | null = null, notifyHostId: string | null = null) {
         const instance = await StageInstance.create({
             guild_id: guildId,
             channel_id: channelId,
@@ -34,8 +39,30 @@ export class StageInstances {
             guild_scheduled_event_id: scheduledEventId,
         }).save();
         await emitEvent({ event: "STAGE_INSTANCE_CREATE", guild_id: guildId, data: instance.toJSON() });
+        if (notifyHostId)
+            await emitEvent({ event: "STAGE_INSTANCE_UPDATE", guild_id: guildId, data: { ...instance.toJSON(), host_id: notifyHostId, send_start_notification: true } });
         await ScheduledEvents.stageStarted(scheduledEventId, guildId, instance.id);
+        await StageInstances.speakersChanged(channelId);
         return instance.toJSON();
+    }
+
+    static async speakersChanged(channelId: string) {
+        if (!(await StageInstances.get(channelId))) return StageInstances.cancelEmptyTimer(channelId);
+        if (await VoiceState.exists({ where: { channel_id: channelId, suppress: false, request_to_speak_timestamp: IsNull() } })) return StageInstances.cancelEmptyTimer(channelId);
+        if (StageInstances.emptyTimers.has(channelId)) return;
+        const timer = setTimeout(() => {
+            StageInstances.emptyTimers.delete(channelId);
+            VoiceState.exists({ where: { channel_id: channelId, suppress: false, request_to_speak_timestamp: IsNull() } })
+                .then((hasSpeakers) => (hasSpeakers ? undefined : StageInstances.delete(channelId)))
+                .catch((e) => console.error("[StageInstances] Error ending stage without speakers:", e));
+        }, StageInstances.emptyTimeout);
+        timer.unref?.();
+        StageInstances.emptyTimers.set(channelId, timer);
+    }
+
+    private static cancelEmptyTimer(channelId: string) {
+        clearTimeout(StageInstances.emptyTimers.get(channelId));
+        StageInstances.emptyTimers.delete(channelId);
     }
 
     static async update(channelId: string, changes: Partial<Pick<StageInstance, "topic" | "privacy_level">>) {
@@ -49,6 +76,7 @@ export class StageInstances {
 
     static async delete(channelId: string) {
         const instance = await StageInstances.get(channelId);
+        StageInstances.cancelEmptyTimer(channelId);
         if (!instance) return;
         await StageInstance.delete({ id: instance.id });
         await emitEvent({ event: "STAGE_INSTANCE_DELETE", guild_id: instance.guild_id, data: instance.toJSON() });
