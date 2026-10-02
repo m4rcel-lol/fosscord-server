@@ -522,7 +522,7 @@ export class Guild extends BaseClass {
         guild.channel_ordering = ordered.map((c) => c.id);
         await Guild.update({ id: guild_id }, { channel_ordering: guild.channel_ordering });
 
-        const systemChannelId = (body.system_channel_id && ids.get(body.system_channel_id)) ?? ids.get(body.channels.find((c) => c.type === 0)?.id);
+        const systemChannelId = (body.system_channel_id && ids.get(body.system_channel_id)) || ids.get(body.channels.find((c) => c.type === 0)?.id);
         if (systemChannelId) {
             guild.system_channel_id = systemChannelId;
             await Guild.update({ id: guild.id }, { system_channel_id: systemChannelId });
