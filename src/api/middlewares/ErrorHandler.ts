@@ -25,6 +25,9 @@ const EntityNotFoundErrorRegex = /"(\w+)"/;
 export function ErrorHandler(error: Error & { type?: string }, req: Request, res: Response, next: NextFunction) {
     if (!error) return next();
 
+    const response = error as Error & { status?: number; body?: object };
+    if (response.name === "ResponseError" && response.status && response.body) return res.status(response.status).json(response.body);
+
     // Convert custom generic exception classes to spacebar errors
     if (error instanceof StringLengthOutOfBoundsException)
         error = FieldErrors({

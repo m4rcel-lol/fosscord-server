@@ -20,7 +20,7 @@ export interface RegisterSchema {
     /**
      * @minLength 2
      */
-    username: string;
+    username?: string;
     /**
      * @minLength 1
      * @maxLength 72

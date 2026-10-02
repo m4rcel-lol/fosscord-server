@@ -116,6 +116,7 @@ export interface ReadyEventData {
     resume_gateway_url: string;
     session_type: string;
     auth_session_id_hash: string;
+    auth?: { authenticator_types: number[] };
     required_action?:
         | "REQUIRE_VERIFIED_EMAIL"
         | "REQUIRE_VERIFIED_PHONE"

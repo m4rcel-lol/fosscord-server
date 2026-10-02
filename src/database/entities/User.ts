@@ -288,6 +288,8 @@ export class User extends BaseClass {
         });
 
         if (this.avatar_decoration) (<UserPrivate>user).avatar_decoration_data = this.avatar_decoration.toJSON();
+        user.nsfw_allowed = true;
+        user.age_verification_status = 3;
 
         return user as UserPrivate;
     }

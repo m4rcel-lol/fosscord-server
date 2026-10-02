@@ -16,13 +16,12 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import crypto from "node:crypto";
 import bcrypt from "bcrypt";
 import { Request, Response, Router } from "express";
-import { verifyCaptcha } from "@spacebar/api/util";
+import { loginMfaResponse, verifyCaptcha } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
 import { User } from "@spacebar/database";
-import { Config, FieldErrors, WebAuthn, generateToken, generateWebAuthnTicket } from "@spacebar/util";
+import { Config, FieldErrors, generateToken } from "@spacebar/util";
 import { LoginSchema } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
@@ -109,67 +108,24 @@ router.post(
             });
         }
 
-        if (user.mfa_enabled && !user.webauthn_enabled) {
-            // TODO: This is not a discord.com ticket. I'm not sure what it is but I'm lazy
-            const ticket = crypto.randomBytes(40).toString("hex");
-
-            await User.update({ id: user.id }, { totp_last_ticket: ticket });
-
-            return res.json({
-                ticket: ticket,
-                mfa: true,
-                sms: false, // TODO
-                token: null,
+        if (!undelete && user.deleted)
+            return res.status(400).json({
+                message: "This account is scheduled for deletion.",
+                code: 20011,
             });
-        }
-
-        if (user.mfa_enabled && user.webauthn_enabled) {
-            if (!WebAuthn.fido2) {
-                // TODO: I did this for typescript and I can't use !
-                throw new Error("WebAuthn not enabled");
-            }
-
-            const options = await WebAuthn.fido2.assertionOptions();
-            const challenge = JSON.stringify({
-                publicKey: {
-                    ...options,
-                    challenge: Buffer.from(options.challenge).toString("base64"),
-                    allowCredentials: user.security_keys.map((x) => ({
-                        id: x.key_id,
-                        type: "public-key",
-                    })),
-                    transports: ["usb", "ble", "nfc"],
-                    timeout: 60000,
-                },
+        if (!undelete && user.disabled)
+            return res.status(400).json({
+                message: req.t("auth:login.ACCOUNT_DISABLED"),
+                code: 20013,
             });
 
-            const ticket = await generateWebAuthnTicket(challenge);
-            await User.update({ id: user.id }, { totp_last_ticket: ticket });
-
-            return res.json({
-                ticket: ticket,
-                mfa: true,
-                sms: false, // TODO
-                token: null,
-                webauthn: challenge,
-            });
-        }
+        const mfa = await loginMfaResponse(req, user, { undelete: !!undelete });
+        if (mfa) return res.json(mfa);
 
         if (undelete) {
             // undelete refers to un'disable' here
             if (user.disabled) await User.update({ id: user.id }, { disabled: false });
             if (user.deleted) await User.update({ id: user.id }, { deleted: false });
-        } else {
-            if (user.deleted)
-                return res.status(400).json({
-                    message: "This account is scheduled for deletion.",
-                    code: 20011,
-                });
-            if (user.disabled)
-                return res.status(400).json({
-                    message: req.t("auth:login.ACCOUNT_DISABLED"),
-                    code: 20013,
-                });
         }
 
         const token = await generateToken(user.id);
@@ -178,7 +134,7 @@ router.post(
         // Discord header is just the user id as string, which is not possible with npm-jsonwebtoken package
         // https://user-images.githubusercontent.com/6506416/81051916-dd8c9900-8ec2-11ea-8794-daf12d6f31f0.png
 
-        res.json({ user_id: user.id, token, settings: { ...user.settings, index: undefined }, user_settings: { locale: user.settings?.locale, theme: user.settings?.theme } });
+        res.json({ user_id: user.id, token, user_settings: { locale: user.settings?.locale, theme: user.settings?.theme } });
     },
 );
 

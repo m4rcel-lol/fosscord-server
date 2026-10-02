@@ -206,6 +206,7 @@ export async function initRateLimits(app: Router) {
     app.use("/webhooks/:webhook_id", rateLimit(routes.webhook));
     app.use("/channels/:channel_id", rateLimit(routes.channel));
     app.use("/auth/login", rateLimit(routes.auth.login));
+    app.use(["/auth/mfa", "/mfa/finish", "/auth/conditional", "/auth/passwordless", "/auth/forgot", "/auth/reset", "/auth/verify"], rateLimit(routes.auth.login));
     app.use("/auth/register", rateLimit({ onlyIp: true, success: true, ...routes.auth.register }));
 }
 

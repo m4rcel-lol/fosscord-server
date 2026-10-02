@@ -1,6 +1,6 @@
 /*
 	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
-	Copyright (C) 2023 Spacebar and Spacebar Contributors
+	Copyright (C) 2026 Spacebar and Spacebar Contributors
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU Affero General Public License as published
@@ -18,27 +18,20 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { requireAccountPassword, revokeSessions } from "@spacebar/api/util";
-import { User } from "@spacebar/database";
+import { ResponseError, readTicket } from "@spacebar/api/util";
+import { emitRemoteAuth } from "./index";
+
+export const readHandshake = (req: Request) => {
+    const decoded = readTicket<{ typ: string; uid?: string; fp?: string }>(req.body?.handshake_token, "ra_handshake");
+    if (!decoded?.fp || decoded.uid !== req.user_id) throw new ResponseError(400, { message: "Invalid remote auth handshake token", code: 10061 });
+    return decoded.fp;
+};
 
 const router = Router({ mergeParams: true });
 
-router.post(
-    "/",
-    route({
-        responses: {
-            204: {},
-            400: {
-                body: "APIErrorResponse",
-            },
-        },
-    }),
-    async (req: Request, res: Response) => {
-        await requireAccountPassword(req);
-        await User.update({ id: req.user_id }, { disabled: true });
-        res.sendStatus(204);
-        await revokeSessions(req.user_id);
-    },
-);
+router.post("/", route({ spacebarOnly: false }), async (req: Request, res: Response) => {
+    await emitRemoteAuth(readHandshake(req), "REMOTE_AUTH_PENDING_LOGIN", { user_id: req.user_id });
+    res.sendStatus(204);
+});
 
 export default router;

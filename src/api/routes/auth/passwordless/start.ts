@@ -1,6 +1,6 @@
 /*
 	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
-	Copyright (C) 2023 Spacebar and Spacebar Contributors
+	Copyright (C) 2026 Spacebar and Spacebar Contributors
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU Affero General Public License as published
@@ -16,29 +16,12 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Request, Response, Router } from "express";
+import { Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { requireAccountPassword, revokeSessions } from "@spacebar/api/util";
-import { User } from "@spacebar/database";
+import { passwordlessStart } from "../conditional/start";
 
 const router = Router({ mergeParams: true });
 
-router.post(
-    "/",
-    route({
-        responses: {
-            204: {},
-            400: {
-                body: "APIErrorResponse",
-            },
-        },
-    }),
-    async (req: Request, res: Response) => {
-        await requireAccountPassword(req);
-        await User.update({ id: req.user_id }, { disabled: true });
-        res.sendStatus(204);
-        await revokeSessions(req.user_id);
-    },
-);
+router.post("/", route({ authentication: "never", spacebarOnly: false }), passwordlessStart());
 
 export default router;

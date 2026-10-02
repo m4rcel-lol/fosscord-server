@@ -32,6 +32,7 @@ import {
     Recipient,
     Relationship,
     Role,
+    SecurityKey,
     Session,
     Sticker,
     ThreadMember,
@@ -720,6 +721,8 @@ export async function onIdentify(this: WebSocket, data: Payload) {
         return a + (b as { micros: number }).micros;
     }, 0);
 
+    const authenticator_types = await SecurityKey.authenticatorTypes(this.user_id);
+
     // const d: ReadyEventData = {
     const { result: d, elapsed: buildReadyEventDataTime } = timeFunction<ReadyEventData>(
         () =>
@@ -771,6 +774,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
                 tutorial: null,
                 session_type: "normal", // TODO
                 auth_session_id_hash: this.session!.getDiscordDeviceInfo().id_hash,
+                auth: { authenticator_types },
                 notification_settings: {
                     // ????
                     flags: 0,

@@ -1,36 +1,31 @@
 /*
 	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
 	Copyright (C) 2023 Spacebar and Spacebar Contributors
-	
+
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU Affero General Public License as published
 	by the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
-	
+
 	This program is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU Affero General Public License for more details.
-	
+
 	You should have received a copy of the GNU Affero General Public License
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import bcrypt from "bcrypt";
 import { Request, Response, Router } from "express";
-import { HTTPError } from "lambert-server/HTTPError";
-import { verifyToken } from "node-2fa";
 import { route } from "@spacebar/api/middlewares";
-import { User, generateMfaBackupCodes } from "@spacebar/database";
-import { generateToken } from "@spacebar/util";
-import { TotpEnableSchema } from "@spacebar/schemas";
+import { MfaInvalidCode, ResponseError, currentToken, emitUserUpdate, freshBackupCodes, requireMfa, serializeBackupCodes, verifyTotp } from "@spacebar/api/util";
+import { User } from "@spacebar/database";
 
 const router = Router({ mergeParams: true });
 
 router.post(
     "/",
     route({
-        requestBody: "TotpEnableSchema",
         responses: {
             200: {
                 body: "TokenWithBackupCodesResponse",
@@ -38,42 +33,26 @@ router.post(
             400: {
                 body: "APIErrorResponse",
             },
-            404: {
-                body: "APIErrorResponse",
-            },
         },
     }),
     async (req: Request, res: Response) => {
-        const body = req.body as TotpEnableSchema;
+        const { password, secret, code } = req.body as { password?: string; secret?: string; code?: string };
 
-        const user = await User.findOneOrFail({
-            where: { id: req.user_id },
-            select: { id: true, data: true, email: true },
-        });
+        const user = await User.findOneOrFail({ where: { id: req.user_id }, select: { id: true, mfa_enabled: true, totp_secret: true } });
+        if (user.mfa_enabled && user.totp_secret) throw new ResponseError(400, { message: "Two factor is already enabled.", code: 60001 });
 
-        // TODO: Are guests allowed to enable 2fa?
-        if (user.data.hash) {
-            if (!(await bcrypt.compare(body.password, user.data.hash))) {
-                throw new HTTPError(req.t("auth:login.INVALID_PASSWORD"));
-            }
-        }
+        await requireMfa(req, { password });
 
-        if (!body.secret) throw new HTTPError(req.t("auth:login.INVALID_TOTP_SECRET"), 60005);
+        if (!secret || !/^[A-Z2-7]{16,64}$/i.test(secret)) throw new ResponseError(400, { message: "Invalid two-factor secret", code: 60005 });
+        if (!verifyTotp(secret, code)) throw MfaInvalidCode();
 
-        if (!body.code) throw new HTTPError(req.t("auth:login.INVALID_TOTP_CODE"), 60008);
+        await User.update({ id: req.user_id }, { mfa_enabled: true, totp_secret: secret.toUpperCase() });
+        const codes = await freshBackupCodes(req.user_id);
+        await emitUserUpdate(req.user_id);
 
-        if (verifyToken(body.secret, body.code)?.delta != 0) throw new HTTPError(req.t("auth:login.INVALID_TOTP_CODE"), 60008);
-
-        const backup_codes = generateMfaBackupCodes(req.user_id);
-        await Promise.all(backup_codes.map((x) => x.save()));
-        await User.update({ id: req.user_id }, { mfa_enabled: true, totp_secret: body.secret });
-
-        res.send({
-            token: await generateToken(user.id),
-            backup_codes: backup_codes.map((x) => ({
-                ...x,
-                expired: undefined,
-            })),
+        res.json({
+            token: currentToken(req),
+            backup_codes: serializeBackupCodes(req.user_id, codes),
         });
     },
 );

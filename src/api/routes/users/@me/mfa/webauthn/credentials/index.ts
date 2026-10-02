@@ -1,160 +1,91 @@
 /*
 	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
 	Copyright (C) 2023 Spacebar and Spacebar Contributors
-	
+
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU Affero General Public License as published
 	by the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
-	
+
 	This program is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU Affero General Public License for more details.
-	
+
 	You should have received a copy of the GNU Affero General Public License
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import bcrypt from "bcrypt";
 import { Request, Response, Router } from "express";
-import { ExpectedAttestationResult } from "fido2-lib";
-import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
+import {
+    MfaInvalidTicket,
+    ResponseError,
+    creationOptions,
+    emitUserEvent,
+    emitUserUpdate,
+    freshBackupCodes,
+    readTicket,
+    requestOrigin,
+    requireMfa,
+    serializeBackupCodes,
+    signTicket,
+    verifyAttestation,
+} from "@spacebar/api/util";
 import { SecurityKey, User } from "@spacebar/database";
-import { DiscordApiErrors, FieldErrors, generateWebAuthnTicket, verifyWebAuthnToken, WebAuthn } from "@spacebar/util";
-import { CreateWebAuthnCredentialSchema, GenerateWebAuthnCredentialsSchema, WebAuthnPostSchema } from "@spacebar/schemas";
+
+export const serializeAuthenticator = (key: SecurityKey) => ({
+    id: key.id,
+    type: 1,
+    name: key.name,
+    last_used: null,
+    cred_id: Buffer.from(key.key_id, "base64").toString("base64url"),
+});
 
 const router = Router({ mergeParams: true });
 
-const isGenerateSchema = (body: WebAuthnPostSchema): body is GenerateWebAuthnCredentialsSchema => "password" in body;
-const isCreateSchema = (body: WebAuthnPostSchema): body is CreateWebAuthnCredentialSchema => "credential" in body;
-
-function toArrayBuffer(buf: Buffer) {
-    const ab = new ArrayBuffer(buf.length);
-    const view = new Uint8Array(ab);
-    for (let i = 0; i < buf.length; ++i) {
-        view[i] = buf[i];
-    }
-    return ab;
-}
-
 router.get("/", route({}), async (req: Request, res: Response) => {
-    const securityKeys = await SecurityKey.find({
-        where: {
-            user_id: req.user_id,
-        },
-    });
-
-    return res.json(
-        securityKeys.map((key) => ({
-            id: key.id,
-            name: key.name,
-        })),
-    );
+    const keys = await SecurityKey.find({ where: { user_id: req.user_id } });
+    res.json(keys.map(serializeAuthenticator));
 });
 
-router.post(
-    "/",
-    route({
-        requestBody: "WebAuthnPostSchema",
-        responses: {
-            200: {
-                body: "WebAuthnCreateResponse",
-            },
-            400: {
-                body: "APIErrorResponse",
-            },
-        },
-    }),
-    async (req: Request, res: Response) => {
-        if (!WebAuthn.fido2) {
-            // TODO: I did this for typescript and I can't use !
-            throw new Error("WebAuthn not enabled");
-        }
+router.post("/", route({}), async (req: Request, res: Response) => {
+    const { name, ticket, credential, password } = req.body as { name?: string; ticket?: string; credential?: string; password?: string };
 
-        const user = await User.findOneOrFail({
-            where: {
-                id: req.user_id,
-            },
-            select: { data: true, id: true, disabled: true, deleted: true, totp_secret: true, mfa_enabled: true, username: true },
-            relations: { settings: true },
+    if (!ticket || !credential) {
+        await requireMfa(req, { password });
+        const user = await User.findOneOrFail({ where: { id: req.user_id }, select: { id: true, username: true } });
+        const origin = requestOrigin(req);
+        const { challenge, options } = await creationOptions(origin, user);
+        return res.json({ ticket: signTicket({ typ: "webauthn_create", uid: req.user_id, ch: challenge, origin }), challenge: options });
+    }
+
+    const decoded = readTicket(ticket, "webauthn_create");
+    if (!decoded?.ch || !decoded.origin || decoded.uid !== req.user_id) throw MfaInvalidTicket();
+
+    const trimmed = (name ?? "").trim();
+    if (!trimmed || trimmed.length > 32)
+        throw new ResponseError(400, {
+            message: "Invalid Form Body",
+            code: 50035,
+            errors: { name: { _errors: [{ code: "BASE_TYPE_BAD_LENGTH", message: "Must be between 1 and 32 in length." }] } },
         });
 
-        if (isGenerateSchema(req.body)) {
-            const { password } = req.body;
-            const same_password = await bcrypt.compare(password, user.data.hash || "");
-            if (!same_password) {
-                throw FieldErrors({
-                    password: {
-                        message: req.t("auth:login.INVALID_PASSWORD"),
-                        code: "INVALID_PASSWORD",
-                    },
-                });
-            }
+    const attestation = verifyAttestation(credential, decoded.ch, decoded.origin);
+    if (!attestation) throw new ResponseError(400, { message: "Invalid security key", code: 50035 });
 
-            const registrationOptions = await WebAuthn.fido2.attestationOptions();
-            const challenge = JSON.stringify({
-                publicKey: {
-                    ...registrationOptions,
-                    challenge: Buffer.from(registrationOptions.challenge).toString("base64"),
-                    user: {
-                        id: user.id,
-                        name: user.username,
-                        displayName: user.username,
-                    },
-                },
-            });
+    const user = await User.findOneOrFail({ where: { id: req.user_id }, select: { id: true, mfa_enabled: true } });
+    const firstAuthenticator = !user.mfa_enabled;
 
-            const ticket = await generateWebAuthnTicket(challenge);
+    const key = SecurityKey.create({ ...attestation, name: trimmed, user_id: req.user_id });
+    await key.save();
+    await User.update({ id: req.user_id }, { webauthn_enabled: true, mfa_enabled: true });
 
-            return res.json({
-                ticket: ticket,
-                challenge,
-            });
-        } else if (isCreateSchema(req.body)) {
-            const { credential, name, ticket } = req.body;
+    const backup_codes = firstAuthenticator ? serializeBackupCodes(req.user_id, await freshBackupCodes(req.user_id)) : undefined;
+    await emitUserUpdate(req.user_id);
+    await emitUserEvent(req.user_id, "AUTHENTICATOR_CREATE", serializeAuthenticator(key));
 
-            const verified = await verifyWebAuthnToken(ticket);
-            if (!verified) throw new HTTPError("Invalid ticket", 400);
-
-            const clientAttestationResponse = JSON.parse(credential);
-
-            if (!clientAttestationResponse.rawId) throw new HTTPError("Missing rawId", 400);
-
-            const rawIdBuffer = Buffer.from(clientAttestationResponse.rawId, "base64");
-            clientAttestationResponse.rawId = toArrayBuffer(rawIdBuffer);
-
-            const attestationExpectations: ExpectedAttestationResult = JSON.parse(Buffer.from(clientAttestationResponse.response.clientDataJSON, "base64").toString());
-
-            const regResult = await WebAuthn.fido2.attestationResult(clientAttestationResponse, {
-                ...attestationExpectations,
-                factor: "second",
-            });
-
-            const authnrData = regResult.authnrData;
-            const keyId = Buffer.from(authnrData.get("credId")).toString("base64");
-            const counter = authnrData.get("counter");
-            const publicKey = authnrData.get("credentialPublicKeyPem");
-
-            const securityKey = SecurityKey.create({
-                name,
-                counter,
-                public_key: publicKey,
-                user_id: req.user_id,
-                key_id: keyId,
-            });
-
-            await Promise.all([securityKey.save(), User.update({ id: req.user_id }, { webauthn_enabled: true })]);
-
-            return res.json({
-                name,
-                id: securityKey.id,
-            });
-        } else {
-            throw DiscordApiErrors.INVALID_AUTHENTICATION_TOKEN;
-        }
-    },
-);
+    res.json({ ...serializeAuthenticator(key), backup_codes });
+});
 
 export default router;

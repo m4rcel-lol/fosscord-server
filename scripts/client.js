@@ -34,6 +34,7 @@ const TEXT_EXT = /\.(js|css|json)$/;
 const patch = (content) =>
     content
         .replaceAll("delete window.localStorage", "void 0")
+        .replaceAll("`https://discord.com/ra/${", "`${location.origin}/ra/${")
         .replaceAll('"https:"+window.GLOBAL_ENV', " location.protocol+window.GLOBAL_ENV")
         .replaceAll("returnlocation.protocol", "return location.protocol")
         .replaceAll("`https:${window.GLOBAL_ENV", "`${location.protocol}${window.GLOBAL_ENV")
