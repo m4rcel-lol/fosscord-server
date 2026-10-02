@@ -16,10 +16,9 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import path from "node:path";
 import { Router, Response, Request } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { ASSETS_FOLDER, Config } from "@spacebar/util";
+import { DEFAULT_ICON_FILE, instanceIcon, sendBrandImage } from "@spacebar/util";
 
 const router = Router({ mergeParams: true });
 
@@ -29,12 +28,7 @@ router.get(
         spacebarOnly: true,
         authentication: "never",
     }),
-    (req: Request, res: Response) => {
-        const { image } = Config.get().general;
-        if (image && /^https?:\/\//.test(image)) return res.redirect(302, image);
-        res.set("Cache-Control", "public, max-age=21600");
-        return res.sendFile(path.join(ASSETS_FOLDER, "icon.png"), { dotfiles: "allow" });
-    },
+    (req: Request, res: Response) => sendBrandImage(res, instanceIcon() ?? { file: DEFAULT_ICON_FILE }),
 );
 
 export default router;

@@ -1,6 +1,6 @@
 /*
 	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
-	Copyright (C) 2023 Spacebar and Spacebar Contributors
+	Copyright (C) 2026 Spacebar and Spacebar Contributors
 	
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU Affero General Public License as published
@@ -16,10 +16,23 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-export class ClientConfiguration {
-    useTestClient: boolean = true;
-    instanceName: string = "Fosscord";
-    icon: string | null = null;
-    logo: string | null = null;
-    helpUrl: string | null = null;
-}
+import { Router, Response, Request } from "express";
+import { route } from "@spacebar/api/middlewares";
+import { instanceLogo, sendBrandImage, wordmarkSvg } from "@spacebar/util";
+
+const router = Router({ mergeParams: true });
+
+router.get(
+    "/",
+    route({
+        spacebarOnly: true,
+        authentication: "never",
+    }),
+    (req: Request, res: Response) => {
+        const logo = instanceLogo();
+        if (logo) return sendBrandImage(res, logo);
+        res.set("Cache-Control", "public, max-age=21600").type("image/svg+xml").send(wordmarkSvg());
+    },
+);
+
+export default router;
