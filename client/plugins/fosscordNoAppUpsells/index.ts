@@ -18,7 +18,7 @@
 
 import definePlugin from "@utils/types";
 
-import { FosscordAuthor, hideSetting } from "../fosscordCore/shared";
+import { FosscordAuthor, hideNotices, hideSetting } from "../fosscordCore/shared";
 
 export default definePlugin({
     name: "FosscordNoAppUpsells",
@@ -27,6 +27,7 @@ export default definePlugin({
     required: true,
 
     patches: [
+        hideNotices(["DOWNLOAD_NAG"]),
         {
             find: '"app-download-button"',
             replacement: {

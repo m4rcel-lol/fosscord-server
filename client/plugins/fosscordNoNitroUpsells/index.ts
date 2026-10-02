@@ -18,7 +18,7 @@
 
 import definePlugin from "@utils/types";
 
-import { FosscordAuthor, hideSetting, redirectHome } from "../fosscordCore/shared";
+import { FosscordAuthor, hideNotices, hideSetting, redirectHome } from "../fosscordCore/shared";
 
 const MAKE_IT_YOURS_ONLY_WITH_PREMIUM = "#{intl::np0X/u::raw}";
 
@@ -31,6 +31,25 @@ export default definePlugin({
     redirectHome,
 
     patches: [
+        hideNotices([
+            "GIFTING_PROMOTION_REMINDER",
+            "OUTBOUND_PROMOTION",
+            "DETECTED_OFF_PLATFORM_PREMIUM_PERK",
+            "DETECTED_OFF_PLATFORM_PREMIUM_PERK_UPSELL",
+            "PREMIUM_TIER_2_TRIAL_ENDING",
+            "PREMIUM_TIER_0_TRIAL_ENDING",
+            "PREMIUM_TIER_2_DISCOUNT_ENDING",
+            "PREMIUM_UNCANCEL",
+            "PREMIUM_MISSING_PAYMENT",
+            "PREMIUM_PAST_DUE_INVALID_PAYMENT",
+            "PREMIUM_PAST_DUE_MISSING_PAYMENT",
+            "PREMIUM_REACTIVATE",
+            "PREMIUM_PAST_DUE_ONE_TIME_PAYMENT",
+            "CHECKOUT_RECOVERY_NAGBAR",
+            "PREMIUM_MARKETING_NAGBAR",
+            "COD_3PP_NAGBAR",
+            "YOUTUBE_3P_NAGBAR",
+        ]),
         {
             find: '"nitro-tab-group"',
             replacement: {

@@ -18,7 +18,7 @@
 
 import definePlugin from "@utils/types";
 
-import { FosscordAuthor, redirectHome } from "../fosscordCore/shared";
+import { FosscordAuthor, hideNotices, redirectHome } from "../fosscordCore/shared";
 
 export default definePlugin({
     name: "FosscordNoQuests",
@@ -29,6 +29,7 @@ export default definePlugin({
     redirectHome,
 
     patches: [
+        hideNotices(["QUEST_APP_UPSELL", "QUESTS_PROGRESS_INTERRUPTION"]),
         {
             find: '"nitro-tab-group"',
             replacement: {

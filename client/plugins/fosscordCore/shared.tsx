@@ -28,7 +28,7 @@ const Router = mapMangledModuleLazy("transitionTo - Transitioning to", {
     replaceWith: filters.byCode("Replacing route with"),
 });
 
-function Redirect({ to }: { to: string; }) {
+function Redirect({ to }: { to: string }) {
     useEffect(() => Router.replaceWith(to), [to]);
     return null;
 }
@@ -41,3 +41,11 @@ export const hideSetting = (key: string, { replacesPredicate = false } = {}): Pa
     replacesPredicate
         ? { match: new RegExp(String.raw`(\.${key},\{.{0,400}?)usePredicate:`), replace: "$1usePredicate:()=>!1,_usePredicate:" }
         : { match: new RegExp(String.raw`\.${key},\{`), replace: "$&usePredicate:()=>!1," };
+
+export const hideNotices = (types: string[]) => ({
+    find: /\.DOWNLOAD_NAG\]:\{predicate:/,
+    replacement: {
+        match: new RegExp(String.raw`(\[\i\.\i\.(?:${types.join("|")})\]:\{)predicate:`, "g"),
+        replace: "$1predicate:()=>!1,_predicate:",
+    },
+});
