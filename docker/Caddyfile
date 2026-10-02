@@ -1,0 +1,25 @@
+{
+	{$CADDY_GLOBAL_OPTIONS}
+	servers {
+		protocols h1 h2 h3
+	}
+}
+
+{$DOMAIN} {
+	@websockets {
+		path / /voice /voice/* /remote-auth /remote-auth/*
+		header Connection *Upgrade*
+		header Upgrade websocket
+	}
+
+	handle @websockets {
+		reverse_proxy server:3001 {
+			stream_close_delay 5m
+		}
+	}
+
+	handle {
+		encode zstd gzip
+		reverse_proxy server:3001
+	}
+}

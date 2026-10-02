@@ -145,7 +145,11 @@ export class PionMediaServer implements SignalingDelegate {
         this._ip = publicIp;
         this._port = portMin;
         const socketPath = process.env.PION_SFU_IPC || `/tmp/spacebar-sfu-${portMin}.sock`;
-        this.ipc = new IpcClient(socketPath, (payload) => this.onEvent(payload));
+        this.ipc = new IpcClient(
+            socketPath,
+            (payload) => this.onEvent(payload),
+            () => this.onIpcClose(),
+        );
         if (process.env.PION_SFU_BIN) this.spawn(socketPath);
         await this.ipc.connect();
         console.log(`[WebRTC] connected to pion SFU at ${socketPath}, media on udp ${publicIp}:${portMin}`);
@@ -168,8 +172,7 @@ export class PionMediaServer implements SignalingDelegate {
         child.once("exit", (code) => {
             console.log(`[WebRTC] pion SFU exited with code ${code}`);
             this.ipc.close();
-            for (const room of this.rooms.values()) for (const client of room.clients.values()) (client.websocket as { close?: (code: number) => void }).close?.(4015);
-            this.rooms.clear();
+            this.dropClients();
             if (this.stopping) return;
             setTimeout(() => {
                 this.spawn(socketPath);
@@ -178,6 +181,23 @@ export class PionMediaServer implements SignalingDelegate {
         });
         this.process = child;
         process.once("exit", () => child.kill());
+    }
+
+    private dropClients() {
+        for (const room of this.rooms.values()) for (const client of room.clients.values()) (client.websocket as { close?: (code: number) => void }).close?.(4015);
+        this.rooms.clear();
+    }
+
+    private onIpcClose() {
+        if (this.process || this.stopping) return;
+        console.log(`[WebRTC] lost the pion SFU at ${this.ipc.socketPath}, reconnecting`);
+        this.dropClients();
+        const reconnect = (): Promise<void> =>
+            this.ipc.connect(60000).then(
+                () => console.log(`[WebRTC] reconnected to pion SFU at ${this.ipc.socketPath}`),
+                () => (this.stopping ? undefined : reconnect()),
+            );
+        void reconnect();
     }
 
     private onEvent(payload: IpcPayload) {

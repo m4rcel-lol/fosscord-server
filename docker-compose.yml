@@ -1,0 +1,133 @@
+name: fosscord
+
+x-server: &server
+    build:
+        context: .
+        target: server
+        args:
+            REVISION: ${REVISION:-}
+            REVISION_TIME: ${REVISION_TIME:-0}
+    image: fosscord-server:latest
+    init: true
+
+services:
+    postgres:
+        image: postgres:18-alpine
+        restart: unless-stopped
+        environment:
+            POSTGRES_USER: fosscord
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+            POSTGRES_DB: fosscord
+        volumes:
+            - postgres:/var/lib/postgresql
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U fosscord -d fosscord"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 30s
+
+    client:
+        <<: *server
+        command: ["client"]
+        restart: "no"
+        environment:
+            CLIENT_CONCURRENCY: ${CLIENT_CONCURRENCY:-8}
+        volumes:
+            - client:/data/client
+
+    sfu:
+        build:
+            context: .
+            target: sfu
+        image: fosscord-sfu:latest
+        init: true
+        restart: unless-stopped
+        environment:
+            WRTC_PUBLIC_IP: ${WRTC_PUBLIC_IP:?set WRTC_PUBLIC_IP in .env}
+            WRTC_PORT: ${WRTC_PORT:-50000}
+            PION_SFU_VERBOSE: ${PION_SFU_VERBOSE:-}
+        ports:
+            - "${WRTC_PORT:-50000}:${WRTC_PORT:-50000}/udp"
+        volumes:
+            - sfu:/run/sfu
+        healthcheck:
+            test: ["CMD", "test", "-S", "/run/sfu/sfu.sock"]
+            interval: 10s
+            timeout: 5s
+            retries: 3
+            start_period: 10s
+
+    server:
+        <<: *server
+        restart: unless-stopped
+        depends_on:
+            postgres:
+                condition: service_healthy
+            sfu:
+                condition: service_healthy
+            client:
+                condition: service_completed_successfully
+        environment:
+            DATABASE: postgres://fosscord:${POSTGRES_PASSWORD}@postgres:5432/fosscord
+            DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+            INSTANCE_NAME: ${INSTANCE_NAME:-}
+            TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+            WRTC_PUBLIC_IP: ${WRTC_PUBLIC_IP}
+            WRTC_PORT_MIN: ${WRTC_PORT:-50000}
+            WRTC_PORT_MAX: ${WRTC_PORT:-50000}
+            CAP_INSTANCE_URL: ${CAP_INSTANCE_URL:-}
+            CAP_SITE_KEY: ${CAP_SITE_KEY:-}
+            CAP_SECRET_KEY: ${CAP_SECRET_KEY:-}
+            SMTP_HOST: ${SMTP_HOST:-}
+            SMTP_PORT: ${SMTP_PORT:-}
+            SMTP_SECURE: ${SMTP_SECURE:-}
+            SMTP_STARTTLS: ${SMTP_STARTTLS:-}
+            SMTP_USERNAME: ${SMTP_USERNAME:-}
+            SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+            EMAIL_FROM: ${EMAIL_FROM:-}
+            LOG_REQUESTS: ${LOG_REQUESTS:-500,501}
+        volumes:
+            - state:/data/state
+            - storage:/data/storage
+            - client:/data/client
+            - sfu:/run/sfu
+        healthcheck:
+            test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/ping').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+            interval: 15s
+            timeout: 5s
+            retries: 3
+            start_period: 2m
+
+    caddy:
+        image: caddy:2-alpine
+        restart: unless-stopped
+        depends_on:
+            server:
+                condition: service_healthy
+        environment:
+            DOMAIN: ${DOMAIN}
+            CADDY_GLOBAL_OPTIONS: ${CADDY_GLOBAL_OPTIONS:-}
+        ports:
+            - "80:80"
+            - "443:443"
+            - "443:443/udp"
+        volumes:
+            - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+            - caddy_data:/data
+            - caddy_config:/config
+        healthcheck:
+            test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:2019/config/"]
+            interval: 15s
+            timeout: 5s
+            retries: 3
+            start_period: 10s
+
+volumes:
+    postgres:
+    state:
+    storage:
+    client:
+    sfu:
+    caddy_data:
+    caddy_config:
