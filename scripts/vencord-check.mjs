@@ -62,7 +62,17 @@ if (!ping?.ok) {
     process.exit(2);
 }
 
-const report = { badPatches: [], badFinds: [], badStarts: [], errors: [], meta: null };
+const report = { badPatches: [], badFinds: [], badStarts: [], errors: [], unmatchedAllPatches: [], meta: null };
+
+const unmatchedAllPatches = (names) => {
+    const sources = Object.values(Vencord.Webpack.wreq.m).map(String);
+    return names.flatMap((name) =>
+        (Vencord.Plugins.plugins[name]?.patches ?? [])
+            .filter((patch) => patch.all)
+            .filter((patch) => !sources.some((code) => (typeof patch.find === "string" ? code.includes(patch.find) : ((patch.find.lastIndex = 0), patch.find.test(code)))))
+            .map((patch) => ({ plugin: name, find: String(patch.find) })),
+    );
+};
 const browser = await playwright.chromium.launch({ ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: "chrome" }), headless: true });
 const page = await browser.newPage();
 await page.route(/\/assets\/vencord\/vencord\.js/, (route) => route.fulfill({ contentType: "text/javascript", body: readFileSync(reporterScript, "utf8") }));
@@ -91,7 +101,10 @@ page.on("console", async (message) => {
         else if (text === "A fatal error occurred:") {
             report.errors.push(`${tag} ${extra}`);
             finish("fatal");
-        } else if (text === "Finished test") finish("done");
+        } else if (text === "Finished test") {
+            report.unmatchedAllPatches = await page.evaluate(unmatchedAllPatches, [...ours]).catch((e) => [{ plugin: "check", find: String(e) }]);
+            finish("done");
+        }
     }
 });
 page.on("pageerror", (error) => {
@@ -110,6 +123,7 @@ writeFileSync(reportPath, JSON.stringify({ outcome, origin, seconds: Math.round(
 const groups = { fosscord: [], enabled: [], upstream: [] };
 for (const patch of report.badPatches) groups[owner(patch.plugin)].push(`${patch.plugin}: patch ${patch.type}\n      ${patch.match.slice(0, 220)}${patch.error ? `\n      ${patch.error.slice(0, 220)}` : ""}`);
 for (const start of report.badStarts) groups[owner(start.plugin)].push(`${start.plugin}: failed to start\n      ${start.error.slice(0, 220)}`);
+for (const patch of report.unmatchedAllPatches) groups.fosscord.push(`${patch.plugin}: patch found no module\n      ${patch.find.slice(0, 220)}`);
 for (const find of report.badFinds) groups[findOwner(find) ? "fosscord" : "upstream"].push(`webpack find failed\n      ${find.slice(0, 220)}`);
 
 console.log(`Vencord check against ${origin} (${outcome}, ${Math.round((Date.now() - started) / 1000)}s, build ${report.meta?.buildNumber ?? "unknown"})`);
