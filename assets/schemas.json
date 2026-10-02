@@ -4768,7 +4768,7 @@
                     "null",
                     "string"
                 ],
-                "default": "This is a Spacebar instance made in the pre-release days"
+                "default": null
             },
             "frontPage": {
                 "type": [
@@ -4778,6 +4778,20 @@
                 "default": null
             },
             "tosPage": {
+                "type": [
+                    "null",
+                    "string"
+                ],
+                "default": null
+            },
+            "privacyPage": {
+                "type": [
+                    "null",
+                    "string"
+                ],
+                "default": null
+            },
+            "guidelinesPage": {
                 "type": [
                     "null",
                     "string"
@@ -4819,10 +4833,12 @@
             "correspondenceEmail",
             "correspondenceUserID",
             "frontPage",
+            "guidelinesPage",
             "image",
             "instanceDescription",
             "instanceId",
             "instanceName",
+            "privacyPage",
             "serverName",
             "tosPage"
         ],
@@ -9493,6 +9509,18 @@
                         ]
                     },
                     "tosPage": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "privacyPage": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "guidelinesPage": {
                         "type": [
                             "null",
                             "string"

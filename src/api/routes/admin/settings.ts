@@ -32,6 +32,8 @@ const pickSettings = () => {
             image: general.image,
             frontPage: general.frontPage,
             tosPage: general.tosPage,
+            privacyPage: general.privacyPage,
+            guidelinesPage: general.guidelinesPage,
             correspondenceEmail: general.correspondenceEmail,
             correspondenceUserID: general.correspondenceUserID,
         },

@@ -23,6 +23,8 @@ export interface AdminSettingsUpdateSchema {
         image?: string | null;
         frontPage?: string | null;
         tosPage?: string | null;
+        privacyPage?: string | null;
+        guidelinesPage?: string | null;
         correspondenceEmail?: string | null;
         correspondenceUserID?: string | null;
     };

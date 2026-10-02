@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>__TITLE__ | __INSTANCE_NAME__</title>
+        <link rel="icon" href="/static/logo.png" />
+        <style>
+            @font-face {
+                font-display: swap;
+                font-family: "gg sans";
+                font-weight: 400;
+                src: url(/assets/66d715454104d24e.woff2) format("woff2");
+            }
+            @font-face {
+                font-display: swap;
+                font-family: "gg sans";
+                font-weight: 700;
+                src: url(/assets/189422196a4f8b53.woff2) format("woff2");
+            }
+            :root {
+                color-scheme: dark;
+                --color-bg: #313338;
+                --color-panel: #2b2d31;
+                --color-text: #dbdee1;
+                --color-text-strong: #f2f3f5;
+                --color-text-muted: #949ba4;
+                --color-link: #00a8fc;
+            }
+            * {
+                box-sizing: border-box;
+                margin: 0;
+            }
+            body {
+                display: grid;
+                min-height: 100vh;
+                place-items: center;
+                padding: 24px 16px;
+                background: var(--color-bg);
+                color: var(--color-text);
+                font-family: "gg sans", "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+                font-size: 16px;
+                line-height: 1.5;
+                -webkit-font-smoothing: antialiased;
+                -moz-osx-font-smoothing: grayscale;
+            }
+            main {
+                width: min(100%, 520px);
+                padding: 32px;
+                border-radius: 8px;
+                background: var(--color-panel);
+            }
+            .wordmark {
+                display: block;
+                height: 28px;
+                margin-bottom: 24px;
+            }
+            h1 {
+                margin-bottom: 8px;
+                color: var(--color-text-strong);
+                font-size: 24px;
+                font-weight: 700;
+                text-wrap: balance;
+            }
+            p {
+                color: var(--color-text-muted);
+                text-wrap: pretty;
+                overflow-wrap: break-word;
+            }
+            p + p {
+                margin-top: 12px;
+            }
+            a {
+                color: var(--color-link);
+                text-underline-position: from-font;
+            }
+            .home {
+                display: inline-block;
+                margin-top: 24px;
+                font-weight: 700;
+            }
+        </style>
+    </head>
+    <body>
+        <main>
+            <img class="wordmark" src="/static/wordmark" alt="__INSTANCE_NAME__" />
+            <h1>__TITLE__</h1>
+            <p>The operators of __INSTANCE_NAME__ have not published this document yet.</p>
+            __CONTACT__
+            <a class="home" href="__HOME__">Go to __INSTANCE_NAME__</a>
+        </main>
+    </body>
+</html>

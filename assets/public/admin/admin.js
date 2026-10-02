@@ -567,7 +567,9 @@ async function renderSettings(view) {
                             >Description<textarea name="general.instanceDescription" maxlength="1000">${s.general.instanceDescription ?? ""}</textarea></label
                         >
                         ${text("general", "frontPage", "Homepage URL", "Linked from the status page", "url")}
-                        ${text("general", "tosPage", "Terms of service URL", "", "url")}
+                        ${text("general", "tosPage", "Terms of service URL", "Opened from every Terms of Service link in the client", "url")}
+                        ${text("general", "privacyPage", "Privacy policy URL", "Falls back to the terms of service URL", "url")}
+                        ${text("general", "guidelinesPage", "Community guidelines URL", "Falls back to the terms of service URL", "url")}
                         ${text("general", "correspondenceEmail", "Contact email", "", "email")}
                         ${text("general", "correspondenceUserID", "Contact user ID", "The account users can message for help")}
                     </div>
