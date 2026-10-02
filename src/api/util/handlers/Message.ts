@@ -552,6 +552,10 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
         if (imageAttachment !== undefined) {
             image!.url = imageAttachment.toJSON().url;
             image!.proxy_url = imageAttachment.toJSON().proxy_url;
+            if (imageAttachment.width && imageAttachment.height) {
+                image!.width = imageAttachment.width;
+                image!.height = imageAttachment.height;
+            }
         }
 
         const author = embed.author;

@@ -29,6 +29,7 @@ const commands = [
     { name: "fruit", description: "Pick a fruit with autocomplete", options: [{ type: 3, name: "name", description: "Fruit name", required: true, autocomplete: true }] },
     { name: "selects", description: "Sends user, role, channel and mentionable select menus" },
     { name: "upload", description: "Echoes an uploaded file", options: [{ type: 11, name: "file", description: "Any file", required: true }] },
+    { name: "image", description: "Replies with an uploaded image and an embed" },
     { name: "Wave", type: 2 },
     { name: "Quote", type: 3 },
 ];
@@ -57,6 +58,14 @@ if (process.argv.includes("--setup-only")) process.exit(0);
 
 const bot = `Bot ${state.token}`;
 const respond = (i, body) => call("POST", `/interactions/${i.id}/${i.token}/callback`, null, body);
+const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAJUlEQVR4nGNkYPjPQApgIkn1qIZRDaMaRjWMahjVMKphVMNQ0QAAHGQBH2wLs6wAAAAASUVORK5CYII=", "base64");
+const respondWithFile = async (i, body, name, buffer) => {
+    const form = new FormData();
+    form.append("payload_json", JSON.stringify(body));
+    form.append("files[0]", new Blob([buffer], { type: "image/png" }), name);
+    const res = await fetch(`${api}/interactions/${i.id}/${i.token}/callback`, { method: "POST", body: form });
+    if (!res.ok) console.warn(`file callback -> ${res.status} ${(await res.text()).slice(0, 300)}`);
+};
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const who = (i) => i.member?.user ?? i.user;
 
@@ -156,6 +165,13 @@ const handlers = {
         const attachment = Object.values(i.data.resolved?.attachments ?? {})[0];
         return respond(i, { type: 4, data: { content: attachment ? `got ${attachment.filename} (${attachment.size} bytes) ${attachment.url}` : "no attachment resolved" } });
     },
+    image: (i) =>
+        respondWithFile(
+            i,
+            { type: 4, data: { content: "here is a picture", embeds: [{ title: "Embedded attachment", image: { url: "attachment://square.png" } }], attachments: [{ id: 0, filename: "square.png" }] } },
+            "square.png",
+            png,
+        ),
     guildonly: (i) => respond(i, { type: 4, data: { content: "guild command works" } }),
     Wave: (i) => respond(i, { type: 4, data: { content: `${who(i).username} waves at <@${i.data.target_id}>` } }),
     Quote: (i) => respond(i, { type: 4, data: { content: `> ${i.data.resolved?.messages?.[i.data.target_id]?.content ?? "(missing message)"}` } }),

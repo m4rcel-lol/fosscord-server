@@ -19,7 +19,7 @@
 import { Request, Response, Router } from "express";
 import multer from "multer";
 import { route } from "@spacebar/api/middlewares";
-import { Application, Message } from "@spacebar/database";
+import { Application, Attachment, Message } from "@spacebar/database";
 import { InteractionCallbacksSchema, InteractionCallbackType, InteractionFailureReason, InteractionType } from "@spacebar/schemas";
 import {
     ApiError,
@@ -30,6 +30,8 @@ import {
     InteractionModalCreateEvent,
     MessageFlags,
     pendingInteractions,
+    Snowflake,
+    uploadFile,
 } from "@spacebar/util";
 import {
     createInteractionMessage,
@@ -79,6 +81,13 @@ router.post(
 
         clearTimeout(interaction.timeout);
         interaction.acknowledged = true;
+
+        const files = (req.files as Express.Multer.File[]) ?? [];
+        if (files.length && "data" in body && body.data && typeof body.data === "object") {
+            const folder = Snowflake.generate();
+            const uploaded = await Promise.all(files.map((file) => uploadFile(`/attachments/${interaction.channelId}/${folder}`, file).then((f) => Attachment.create(f))));
+            (body.data as { attachments?: unknown[] }).attachments = uploaded;
+        }
 
         let message: Message | null = null;
         try {
