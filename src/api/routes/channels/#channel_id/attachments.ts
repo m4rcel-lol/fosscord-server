@@ -66,6 +66,12 @@ router.post(
                 });
             }
             seenIds.push(file.id);
+            if (file.file_size > Config.get().cdn.maxAttachmentSize) {
+                return res.status(400).json({
+                    code: 40005,
+                    message: "Request entity too large",
+                });
+            }
         }
 
         const attachments = await Promise.all(
