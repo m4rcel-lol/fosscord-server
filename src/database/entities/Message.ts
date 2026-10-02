@@ -27,7 +27,8 @@ import { Guild } from "./Guild";
 import { Webhook } from "./Webhook";
 import { Sticker } from "./Sticker";
 import { Attachment } from "./Attachment";
-import { NewUrlUserSignatureData } from "../../util/Signing";
+import { getUrlSignature, NewUrlSignatureData, NewUrlUserSignatureData } from "../../util/Signing";
+import { Config } from "@spacebar/util/util";
 import {
     ApplicationCommandType,
     BaseMessageComponents,
@@ -444,8 +445,18 @@ export class Message extends BaseClass {
     }
 
     withSignedAttachments(data: NewUrlUserSignatureData) {
+        const cdn = Config.get().cdn.endpointPublic?.replace(/\/+$/, "");
+        const sign = (url?: string) => {
+            if (!url || !cdn || !url.startsWith(`${cdn}/attachments/`)) return url;
+            const unsigned = new URL(url);
+            unsigned.search = "";
+            return getUrlSignature(new NewUrlSignatureData({ ...data, url: unsigned.toString() }))
+                .applyToUrl(unsigned)
+                .toString();
+        };
         function signMedia(media: UnfurledMediaItem) {
-            Object.assign(media, Attachment.prototype.signUrls.call(media, data));
+            media.url = sign(media.url) ?? media.url;
+            media.proxy_url = sign(media.proxy_url);
         }
         const json = this instanceof Message ? this.toJSON() : (this as unknown as PublicMessage);
         const components = this.components as BaseMessageComponents[] | undefined;
