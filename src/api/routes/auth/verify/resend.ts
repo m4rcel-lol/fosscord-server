@@ -27,7 +27,6 @@ const router = Router({ mergeParams: true });
 router.post(
     "/",
     route({
-        right: "RESEND_VERIFICATION_EMAIL",
         responses: {
             204: {},
             400: {
@@ -37,12 +36,11 @@ router.post(
                 body: "APIErrorResponse",
             },
         },
-        authentication: "never",
     }),
     async (req: Request, res: Response) => {
         const user = await User.findOneOrFail({
             where: { id: req.user_id },
-            select: { username: true, email: true, verified: true },
+            select: { id: true, username: true, discriminator: true, email: true, verified: true },
         });
 
         if (!user.email) {

@@ -20,7 +20,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { User } from "../../../database/entities";
 import { Config } from "../Config";
-import { generateToken } from "../Token";
+import crypto from "node:crypto";
+import jwt from "jsonwebtoken";
+import { JwtKeypairManager } from "../Token";
 import { IEmail, IEmailClient } from "./clients/IEmailClient";
 import { SendGridEmailClient } from "./clients/SendGridEmailClient";
 import { SMTPEmailClient } from "./clients/SMTPEmailClient";
@@ -129,12 +131,26 @@ export const Email: {
      * @param id user id
      */
     generateLink: async function (type, id) {
-        const token = (await generateToken(id, undefined, ["account.password.reset"])) as string;
-        // puyodead1: this is set to api endpoint because the verification page is on the server since no clients have one, and not all 3rd party clients will have one
-        const instanceUrl = Config.get().api.endpointPublic?.replace("/api", "");
-        const dashedType = type.replace(/([A-Z])/g, "-$1").toLowerCase();
-        const link = `${instanceUrl}/${dashedType}#token=${token}`;
-        return link;
+        const user = await User.findOne({ where: { id }, select: { id: true, email: true, data: true } });
+        const reset = type === MailTypes.resetPassword;
+        const token = jwt.sign(
+            {
+                typ: reset ? "password_reset" : "email_verify",
+                uid: id,
+                email: user?.email,
+                ph: crypto
+                    .createHash("sha256")
+                    .update(user?.data?.hash ?? "")
+                    .digest("base64url")
+                    .slice(0, 16),
+            },
+            JwtKeypairManager.keypair.privateKey,
+            { algorithm: "ES512", expiresIn: reset ? "1h" : "7d" },
+        );
+        const { frontPage, serverName } = Config.get().general;
+        const endpoint = Config.get().api.endpointPublic;
+        const origin = [frontPage, serverName, endpoint].map((x) => (x && /^https?:\/\//.test(x) ? new URL(x).origin : null)).find(Boolean) ?? "";
+        return `${origin}/${reset ? "reset" : "verify"}#token=${token}`;
     },
 
     /**
@@ -145,7 +161,10 @@ export const Email: {
      * @returns
      */
     sendMail: async function (type, user, email) {
-        if (!this.transporter) return;
+        if (!this.transporter) {
+            if (type !== MailTypes.changePassword) console.log(`[Email] No email provider configured, ${type} link for ${user.id}: ${await this.generateLink(type, user.id)}`);
+            return;
+        }
 
         const htmlTemplateNames: { [key in MailTypes]: string } = {
             verifyEmail: "verify_email.html",

@@ -20,7 +20,7 @@ import { Request, Response, Router } from "express";
 import { verifyCaptcha } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
 import { User } from "@spacebar/database";
-import { Config, Email } from "@spacebar/util";
+import { Config, Email, FieldErrors } from "@spacebar/util";
 import { ForgotPasswordSchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
@@ -30,7 +30,7 @@ router.post(
     route({
         requestBody: "ForgotPasswordSchema",
         responses: {
-            204: {},
+            200: {},
             400: {
                 body: "APIErrorOrCaptchaResponse",
             },
@@ -63,18 +63,24 @@ router.post(
             }
         }
 
-        res.sendStatus(204);
-
         const user = await User.findOne({
             where: [{ phone: login }, { email: login }],
-            select: { username: true, id: true, email: true },
-        }).catch(() => {});
+            select: { username: true, discriminator: true, id: true, email: true, deleted: true },
+        });
 
-        if (user && user.email) {
-            Email.sendResetPassword(user, user.email).catch((e) => {
-                console.error(`Failed to send password reset email to ${user.tag} (${user.id}): ${e}`);
+        if (!user?.email || user.deleted)
+            throw FieldErrors({
+                login: {
+                    code: "EMAIL_DOES_NOT_EXIST",
+                    message: "Email does not exist.",
+                },
             });
-        }
+
+        res.json({ method: "password_reset" });
+
+        Email.sendResetPassword(user, user.email).catch((e) => {
+            console.error(`Failed to send password reset email to ${user.tag} (${user.id}): ${e}`);
+        });
     },
 );
 
