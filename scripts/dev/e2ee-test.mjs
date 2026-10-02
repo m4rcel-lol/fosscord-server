@@ -40,6 +40,17 @@ const sql = (query) => execFileSync("psql", [database, "-At", "-c", query], { en
 const suffix = randomBytes(4).toString("hex");
 const accountsFile = new URL("./.e2ee-test-accounts", import.meta.url);
 const saved = existsSync(accountsFile) ? JSON.parse(readFileSync(accountsFile, "utf8")) : {};
+const seedFile = new URL("./.test-account", import.meta.url);
+if (existsSync(seedFile)) {
+    const seed = Object.fromEntries(
+        readFileSync(seedFile, "utf8")
+            .trim()
+            .split("\n")
+            .map((l) => l.split("=")),
+    );
+    saved.tester ??= { email: seed.TEST_EMAIL, password: seed.TEST_PASSWORD };
+    saved.friend ??= { email: "friend@fosscord.test", password: seed.FRIEND_PASSWORD };
+}
 const account = async (name) => {
     const known = saved[name];
     if (known) {
@@ -55,17 +66,17 @@ const account = async (name) => {
     return { name, token: res.body.token, id: (await call("GET", "/users/@me", res.body.token)).body.id };
 };
 
-const alice = await account("alice");
-const bob = await account("bob");
-await call("PUT", `/users/@me/relationships/${bob.id}`, alice.token, {});
-await call("PUT", `/users/@me/relationships/${alice.id}`, bob.token, {});
-const dm = (await call("POST", "/users/@me/channels", alice.token, { recipients: [bob.id] })).body;
+const tester = await account("tester");
+const friend = await account("friend");
+await call("PUT", `/users/@me/relationships/${friend.id}`, tester.token, {});
+await call("PUT", `/users/@me/relationships/${tester.id}`, friend.token, {});
+const dm = (await call("POST", "/users/@me/channels", tester.token, { recipients: [friend.id] })).body;
 assert.ok(dm?.id, "dm channel");
-assert.equal((await call("POST", "/users/@me/channels", bob.token, { recipients: [alice.id] })).body?.id, dm.id, "bob opens the same dm");
+assert.equal((await call("POST", "/users/@me/channels", friend.token, { recipients: [tester.id] })).body?.id, dm.id, "friend opens the same dm");
 sql(
-    `delete from e2ee_devices where user_id in ('${alice.id}', '${bob.id}'); delete from e2ee_identities where user_id in ('${alice.id}', '${bob.id}'); delete from messages where channel_id = '${dm.id}'; update channels set e2ee_enabled_at = null where id = '${dm.id}'`,
+    `delete from e2ee_devices where user_id in ('${tester.id}', '${friend.id}'); delete from e2ee_identities where user_id in ('${tester.id}', '${friend.id}'); delete from messages where channel_id = '${dm.id}' and encrypted is not null; update channels set e2ee_enabled_at = null where id = '${dm.id}'`,
 );
-log(`users ${alice.id} and ${bob.id}, dm ${dm.id}, e2ee state reset`);
+log(`users ${tester.id} and ${friend.id}, dm ${dm.id}, e2ee state reset`);
 
 const launch = async (user, extraInit) => {
     const context = await chromium.launchPersistentContext(join(profiles, user.name), {
@@ -127,19 +138,19 @@ const phase = async (name, fn) => {
     }
 };
 
-const first = `hello from alice ${suffix}`;
-const second = `reply from bob ${suffix}`;
-const edited = `edited by alice ${suffix}`;
+const first = `hello from tester ${suffix}`;
+const second = `reply from friend ${suffix}`;
+const edited = `edited by tester ${suffix}`;
 
 try {
-    await phase("both browsers register devices, alice turns encryption on and sends", async () => {
-        const [a, b] = await Promise.all([launch(alice), launch(bob)]);
+    await phase("both browsers register devices, tester turns encryption on and sends", async () => {
+        const [a, b] = await Promise.all([launch(tester), launch(friend)]);
         try {
             await Promise.all([waitReady(a), waitReady(b)]);
             const [sa, sb] = await Promise.all([status(a), status(b)]);
-            assert.equal(sa.linked, true, "alice device linked");
-            assert.equal(sb.linked, true, "bob device linked");
-            log(`alice device ${sa.deviceId}, bob device ${sb.deviceId}`);
+            assert.equal(sa.linked, true, "tester device linked");
+            assert.equal(sb.linked, true, "friend device linked");
+            log(`tester device ${sa.deviceId}, friend device ${sb.deviceId}`);
 
             if (!sa.encryptedChannels.includes(dm.id)) {
                 await a.page.locator(".fe2ee-toggle").click();
@@ -151,12 +162,12 @@ try {
             await send(a, first);
             await waitDecrypted(b, first);
             await waitDecrypted(a, first);
-            await shot(b, "1-bob-reads-alice");
-            assert.ok(a.sent.length >= 1, "alice sent a request");
+            await shot(b, "1-friend-reads-tester");
+            assert.ok(a.sent.length >= 1, "tester sent a request");
             const body = a.sent.at(-1);
             assert.equal(body.content, FALLBACK, "request body carries only the fallback");
             assert.ok(!JSON.stringify(body).includes(first), "plaintext never leaves the browser");
-            log("bob read alice's message decrypted");
+            log("friend read tester's message decrypted");
             globalThis.sentEnvelope = body.encrypted;
 
             await a.page.locator('[role="textbox"]').first().click();
@@ -166,14 +177,14 @@ try {
             await a.page.keyboard.type(edited);
             await a.page.keyboard.press("Enter");
             await waitDecrypted(b, edited);
-            log("bob read alice's edit decrypted");
+            log("friend read tester's edit decrypted");
             const edit = a.sent.at(-1);
             assert.equal(edit.content, FALLBACK, "edit carries only the fallback");
             assert.ok(edit.encrypted.mid, "edit envelope is bound to the message id");
             assert.ok(!JSON.stringify(edit).includes(edited), "edited plaintext never leaves the browser");
             globalThis.sentEnvelope = edit.encrypted;
-            assert.deepEqual(a.errors, [], "alice has no e2ee errors");
-            assert.deepEqual(b.errors, [], "bob has no e2ee errors");
+            assert.deepEqual(a.errors, [], "tester has no e2ee errors");
+            assert.deepEqual(b.errors, [], "friend has no e2ee errors");
         } catch (error) {
             await diagnose(a, b);
             throw error;
@@ -183,7 +194,7 @@ try {
     });
 
     await phase("server stores only the fallback and the envelope round-trips", async () => {
-        const history = (await call("GET", `/channels/${dm.id}/messages?limit=5`, bob.token)).body;
+        const history = (await call("GET", `/channels/${dm.id}/messages?limit=5`, friend.token)).body;
         const message = history.find((m) => m.encrypted);
         assert.ok(message, "encrypted message in history");
         assert.equal(message.content, FALLBACK);
@@ -199,27 +210,27 @@ try {
         );
         assert.equal(new Set(message.encrypted.keys.map((k) => k.user_id)).size, 2, "content key wrapped for both users");
 
-        const plain = await call("POST", `/channels/${dm.id}/messages`, alice.token, { content: "plaintext attempt" });
+        const plain = await call("POST", `/channels/${dm.id}/messages`, tester.token, { content: "plaintext attempt" });
         assert.equal(plain.status, 400, "plaintext rejected");
         assert.equal(plain.body.message, "E2EE_REQUIRED");
         const { mid, ...created } = globalThis.sentEnvelope;
         const partial = { ...created, keys: created.keys.slice(0, 1) };
-        const mismatch = await call("POST", `/channels/${dm.id}/messages`, alice.token, { content: FALLBACK, nonce: `${Date.now()}`, encrypted: partial });
+        const mismatch = await call("POST", `/channels/${dm.id}/messages`, tester.token, { content: FALLBACK, nonce: `${Date.now()}`, encrypted: partial });
         assert.equal(mismatch.status, 409, "envelope skipping a device is rejected");
         assert.equal(mismatch.body.message, "E2EE_DEVICE_MISMATCH");
-        const disable = await call("PUT", `/channels/${dm.id}/e2ee`, alice.token, { enabled: false });
+        const disable = await call("PUT", `/channels/${dm.id}/e2ee`, tester.token, { enabled: false });
         assert.equal(disable.body.message, "E2EE_CANNOT_DISABLE", "encryption can't be turned off");
         log("server checks passed");
     });
 
-    await phase("history decrypts after reload, bob replies, safety numbers match", async () => {
-        const [a, b] = await Promise.all([launch(alice), launch(bob)]);
+    await phase("history decrypts after reload, friend replies, safety numbers match", async () => {
+        const [a, b] = await Promise.all([launch(tester), launch(friend)]);
         try {
             await Promise.all([waitReady(a), waitReady(b)]);
             await waitDecrypted(b, edited);
             await send(b, second);
             await waitDecrypted(a, second);
-            log("alice read bob's reply decrypted, history decrypted for bob");
+            log("tester read friend's reply decrypted, history decrypted for friend");
 
             const numbers = [];
             for (const s of [a, b]) {
@@ -247,16 +258,16 @@ try {
             const generate = crypto.subtle.generateKey.bind(crypto.subtle);
             crypto.subtle.generateKey = (alg, ...rest) => ((alg?.name ?? alg) === "X25519" ? Promise.reject(new Error("X25519 disabled for test")) : generate(alg, ...rest));
         };
-        const a = await launch(alice, breakX25519);
+        const a = await launch(tester, breakX25519);
         try {
             await a.page.locator(".fe2ee-banner[data-id='failure']").waitFor({ timeout: 20000 });
             const text = await a.page.locator(".fe2ee-banner[data-id='failure']").innerText();
             assert.match(text, /unavailable/);
             await shot(a, "3-self-test-banner");
-            const before = (await call("GET", `/channels/${dm.id}/messages?limit=1`, alice.token)).body[0].id;
+            const before = (await call("GET", `/channels/${dm.id}/messages?limit=1`, tester.token)).body[0].id;
             await send(a, `should never be sent ${suffix}`);
             await a.page.waitForTimeout(2500);
-            const after = (await call("GET", `/channels/${dm.id}/messages?limit=1`, alice.token)).body[0].id;
+            const after = (await call("GET", `/channels/${dm.id}/messages?limit=1`, tester.token)).body[0].id;
             assert.equal(after, before, "nothing was sent while the self-test failed");
             assert.ok(!a.sent.some((b) => JSON.stringify(b).includes("should never be sent")), "no plaintext request left the browser");
             log("self-test banner shown and sending refused");
