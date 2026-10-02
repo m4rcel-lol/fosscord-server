@@ -28,6 +28,8 @@ import {
     getPermission,
     GuildIntegrationUpdateEvent,
     GuildRoleCreateEvent,
+    GuildRoleDeleteEvent,
+    GuildRoleUpdateEvent,
     OAuth2TokenCreateEvent,
 } from "@spacebar/util";
 import { emitCommandIndexUpdate } from "@spacebar/api/util/handlers/ApplicationCommands";
@@ -332,7 +334,19 @@ router.post(
             changes: AuditLog.diff({}, { type: "discord", name: app.name }, ["type", "name"]),
         });
         const permissions = (/^\d+$/.test(body.permissions ?? "") ? BigInt(body.permissions!) : 0n) & perms.bitfield;
-        if (permissions) {
+        const existingRoles = (await Role.find({ where: { guild_id: body.guild_id, managed: true } })).filter((role) => role.tags?.bot_id === app.bot!.id);
+        for (const stale of existingRoles.slice(permissions ? 1 : 0)) {
+            await Role.delete({ id: stale.id });
+            await emitEvent({ event: "GUILD_ROLE_DELETE", guild_id: body.guild_id, data: { guild_id: body.guild_id, role_id: stale.id } } satisfies GuildRoleDeleteEvent);
+        }
+        const [existingRole] = existingRoles;
+        if (permissions && existingRole) {
+            existingRole.permissions = permissions.toString();
+            existingRole.name = app.name;
+            await existingRole.save();
+            await emitEvent({ event: "GUILD_ROLE_UPDATE", guild_id: body.guild_id, data: { guild_id: body.guild_id, role: existingRole } } satisfies GuildRoleUpdateEvent);
+            await Member.addRole(app.bot.id, body.guild_id, existingRole.id);
+        } else if (permissions) {
             const role = Role.create({
                 managed: true,
                 name: app.name,
