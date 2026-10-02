@@ -75,7 +75,7 @@ export default definePlugin({
         {
             find: 'location:"BalanceWidgetMenu"',
             replacement: {
-                match: /function \i\(\i\)\{(?=let\{showNotificationBadge:\i,ctaText:\i,ctaOnClick:\i,analyticsPage:)/,
+                match: /function \i\(\i\)\{(?=let\{showNotificationBadge:\i,ctaText:\i,ctaOnClick:\i,(?:onNavigate:\i,)?analyticsPage:)/,
                 replace: "$&return null;",
             },
         },
