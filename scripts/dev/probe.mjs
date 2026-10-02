@@ -16,7 +16,7 @@ const wait = Number(flag("wait", "12")) * 1000;
 const shot = flag("shot");
 const evalSrc = flag("eval");
 const as = flag("as", "tester");
-const origin = `http://fosscord.localhost:${port}`;
+const origin = process.env.ORIGIN || `http://fosscord.localhost:${port}`;
 
 const accounts = Object.fromEntries(
     readFileSync(new URL("./.test-account", import.meta.url), "utf8")
@@ -25,7 +25,7 @@ const accounts = Object.fromEntries(
         .map((l) => l.split("=")),
 );
 const credentials = as === "friend" ? { login: "friend@fosscord.test", password: accounts.FRIEND_PASSWORD } : { login: accounts.TEST_EMAIL, password: accounts.TEST_PASSWORD };
-const login = await fetch(`http://localhost:${port}/api/v9/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(credentials) }).then((r) => r.json());
+const login = await fetch(`${process.env.ORIGIN || `http://localhost:${port}`}/api/v9/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(credentials) }).then((r) => r.json());
 if (!login.token) throw new Error(`login failed: ${JSON.stringify(login)}`);
 
 const browser = await chromium.launch({ channel: "chrome", headless: true });
