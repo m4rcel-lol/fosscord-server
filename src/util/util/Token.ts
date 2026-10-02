@@ -98,6 +98,11 @@ export const checkToken = (
                 return rejectAndLog(reject, 401, "User not found");
             }
 
+            if (decoded.did && !session) {
+                logAuth("validateUser rejected: Session revoked");
+                return rejectAndLog(reject, 401, "Invalid Token");
+            }
+
             // we need to round it to seconds as it saved as seconds in jwt iat and valid_tokens_since is stored in milliseconds
             if (decoded.iat * 1000 < new Date(user.data.valid_tokens_since).setSeconds(0, 0)) {
                 logAuth("validateUser rejected: Token not yet valid");

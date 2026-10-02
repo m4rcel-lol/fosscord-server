@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { DiscordApiErrors, EVENT, FieldErrors, PermissionResolvable, Permissions, RightResolvable, Rights, SpacebarApiErrors, getPermission, getRights } from "@spacebar/util";
+import { ApiError, DiscordApiErrors, EVENT, FieldErrors, PermissionResolvable, Permissions, RightResolvable, Rights, SpacebarApiErrors, getPermission, getRights } from "@spacebar/util";
 import { AnyValidateFunction } from "ajv/dist/core";
 import { NextFunction, Request, Response } from "express";
 import { ajv } from "@spacebar/schemas";
@@ -135,7 +135,7 @@ export function route(opts: RouteOptions) {
     opts.authentication ??= "required";
 
     return async (req: Request, res: Response, next: NextFunction) => {
-        if (opts.authentication === "required" && !req.isAuthenticated) throw DiscordApiErrors.UNAUTHORIZED;
+        if (opts.authentication === "required" && !req.isAuthenticated) throw new ApiError("401: Unauthorized", 0, 401);
 
         if (opts.permission) {
             const { guild_id, channel_id } = req.params as { [key: string]: string };
