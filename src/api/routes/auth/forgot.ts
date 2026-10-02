@@ -46,7 +46,7 @@ router.post(
         if (captcha) return res.status(400).json(captcha);
 
         const user = await User.findOne({
-            where: [{ phone: login }, { email: login }],
+            where: User.loginWhere(login),
             select: { username: true, discriminator: true, id: true, email: true, deleted: true },
         });
 
