@@ -178,7 +178,14 @@ router.get(
                 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
                 //@ts-ignore
                 if ((y.user_ids || []).includes(req.user_id)) y.me = true;
+                Object.assign(y, {
+                    me_burst: (y.burst_user_ids ?? []).includes(req.user_id),
+                    burst_count: y.burst_user_ids?.length ?? 0,
+                    burst_colors: [],
+                    count_details: { normal: y.user_ids?.length ?? y.count ?? 0, burst: y.burst_user_ids?.length ?? 0 },
+                });
                 delete y.user_ids;
+                delete y.burst_user_ids;
             });
             if (!x.author)
                 x.author = {

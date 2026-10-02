@@ -123,6 +123,7 @@ export interface Reaction {
     //// not saved in the database // me: boolean; // whether the current user reacted using this emoji
     emoji: PartialEmoji;
     user_ids: Snowflake[];
+    burst_user_ids?: Snowflake[];
 }
 
 // aka { animated } & OneOf<{id},{name}>

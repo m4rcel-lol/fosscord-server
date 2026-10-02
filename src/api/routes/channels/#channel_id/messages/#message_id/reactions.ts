@@ -159,7 +159,7 @@ router.get(
         const users = (
             await User.find({
                 where: {
-                    id: In(reaction.user_ids),
+                    id: In(String(req.query.type) === "1" ? (reaction.burst_user_ids ?? []) : reaction.user_ids),
                 },
                 select: Object.fromEntries(PublicUserProjection.map((i) => [i, true])), //TODO: cleanup
                 take: limit,
@@ -208,15 +208,18 @@ router.put(
             emoji.name = external_emoji.name;
         }
 
+        const burst = String(req.query.type) === "1";
         if (already_added) {
-            if (already_added.user_ids.includes(req.user_id)) return res.sendStatus(204); // Do not throw an error ¯\_(ツ)_/¯ as discord also doesn't throw any error
+            const reactors = burst ? (already_added.burst_user_ids ??= []) : already_added.user_ids;
+            if (reactors.includes(req.user_id)) return res.sendStatus(204); // Do not throw an error ¯\_(ツ)_/¯ as discord also doesn't throw any error
             already_added.count++;
-            already_added.user_ids.push(req.user_id);
+            reactors.push(req.user_id);
         } else
             message.reactions.push({
                 count: 1,
                 emoji,
-                user_ids: [req.user_id],
+                user_ids: burst ? [] : [req.user_id],
+                burst_user_ids: burst ? [req.user_id] : [],
             });
 
         await message.save();
@@ -248,7 +251,10 @@ router.put(
                 guild_id: channel.guild_id,
                 emoji,
                 member,
-                type: ReactionType.normal,
+                type: burst ? ReactionType.burst : ReactionType.normal,
+                burst,
+                burst_colors: [],
+                message_author_id: message.author_id,
             },
         } satisfies MessageReactionAddEvent);
 
@@ -345,13 +351,14 @@ router.delete(
             permissions.hasThrow("MANAGE_MESSAGES");
         }
 
+        const burst = req.params.burst === "1";
         const already_added = message.reactions.find((x) => (x.emoji.id === emoji.id && emoji.id) || x.emoji.name === emoji.name);
-        if (!already_added || !already_added.user_ids.includes(user_id)) throw new HTTPError("Reaction not found", 404);
+        const reactors = burst ? already_added?.burst_user_ids : already_added?.user_ids;
+        if (!already_added || !reactors?.includes(user_id)) throw new HTTPError("Reaction not found", 404);
 
         already_added.count--;
-
+        reactors.splice(reactors.indexOf(user_id), 1);
         if (already_added.count <= 0) arrayRemove(message.reactions, already_added);
-        else already_added.user_ids.splice(already_added.user_ids.indexOf(user_id), 1);
 
         await message.save();
 
@@ -364,7 +371,8 @@ router.delete(
                 message_id,
                 guild_id: channel.guild_id,
                 emoji,
-                type: ReactionType.normal,
+                type: burst ? ReactionType.burst : ReactionType.normal,
+                burst,
             },
         } satisfies MessageReactionRemoveEvent);
 
