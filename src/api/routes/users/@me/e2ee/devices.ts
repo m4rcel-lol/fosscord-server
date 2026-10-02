@@ -19,7 +19,7 @@
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
-import { decodeKey, e2eeDeviceId, e2eeDeviceMessage, E2eeErrors, e2eePrekeyMessage, e2eeRateLimit, emitE2eeUserEvent, verifyEd25519 } from "@spacebar/api/util";
+import { decodeKey, e2eeDeviceId, e2eeDeviceMessage, E2eeErrors, e2eePrekeyMessage, e2eeRateLimit, e2eeUserKeys, emitE2eeUserEvent, verifyEd25519 } from "@spacebar/api/util";
 import { E2eeDevice, E2eeIdentity } from "@spacebar/database";
 import { E2eeDeviceCreateSchema, E2eePrekeySchema } from "@spacebar/schemas";
 
@@ -37,11 +37,7 @@ router.get(
         responses: { 200: { body: "E2eeUserKeysResponse" } },
     }),
     async (req: Request, res: Response) => {
-        const [identity, devices] = await Promise.all([
-            E2eeIdentity.findOne({ where: { user_id: req.user_id } }),
-            E2eeDevice.find({ where: { user_id: req.user_id }, order: { created_at: "ASC" } }),
-        ]);
-        res.json({ identity_key: identity?.public_key ?? null, devices: devices.map((d) => d.toPublic()) });
+        res.json((await e2eeUserKeys([req.user_id]))[req.user_id]);
     },
 );
 

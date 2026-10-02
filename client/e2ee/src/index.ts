@@ -20,6 +20,7 @@ import { randomBytes, toB64u } from "./bytes";
 import { aesDecrypt, aesEncrypt, exportPublic, generateAgreementKey, generateSigningKey, hpkeOpen, hpkeSeal, sign, verify } from "./crypto";
 import { Api, Engine } from "./engine";
 import { createHooks, MessageState } from "./hooks";
+import { createLink, LinkEvent } from "./link";
 import { createUi } from "./ui";
 import { HttpClient, scan, Targets } from "./webpack";
 
@@ -61,9 +62,44 @@ const api: Api = {
 
 const engine = new Engine(api);
 
+const link = createLink(engine, api, {
+    onPrompt: (prompt) => ui.showApproval(prompt),
+    onChange: () => ui.renderUnlock(),
+    onDismiss: (requestId) => ui.dismissApproval(requestId),
+});
+
+const apiBase = () => {
+    const env = (window as unknown as { GLOBAL_ENV?: { API_ENDPOINT?: string; API_VERSION?: number } }).GLOBAL_ENV;
+    return `${env?.API_ENDPOINT ?? "/api"}/v${env?.API_VERSION ?? 9}`;
+};
+
+const tokenApi = (token: string): Api => ({
+    async request<T>(method: "get" | "post" | "put" | "patch" | "del", url: string, body?: unknown) {
+        const res = await fetch(`${apiBase()}${url}`, {
+            method: method === "del" ? "DELETE" : method.toUpperCase(),
+            headers: { "content-type": "application/json", authorization: token },
+            body: body === undefined ? undefined : JSON.stringify(body),
+        });
+        const parsed = await res.json().catch(() => null);
+        if (!res.ok) throw { ok: false, status: res.status, body: parsed };
+        return parsed as T;
+    },
+});
+
+const verifyPassword = async (password: string) => {
+    const me = await api.request<{ email?: string | null }>("get", "/users/@me");
+    const base = apiBase();
+    const res = await fetch(`${base}/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ login: me.email, password }) });
+    const body = (await res.json().catch(() => null)) as { token?: string; ticket?: string } | null;
+    if (body?.token) await fetch(`${base}/auth/logout`, { method: "POST", headers: { "content-type": "application/json", authorization: body.token }, body: "{}" }).catch(() => {});
+    return res.ok && !!(body?.token || body?.ticket);
+};
+
 const ui = createUi({
     engine,
     states,
+    link,
+    verifyPassword,
     enableChannel: async (channelId) => {
         await api.request("put", `/channels/${channelId}/e2ee`, { enabled: true });
         engine.setChannelEncrypted(channelId);
@@ -78,11 +114,26 @@ const fail = (reason: string) => {
     settle(false);
 };
 
+let readyNow = false;
+ready.then((ok) => {
+    readyNow = ok;
+    if (ok) hooks.retryAll();
+});
+
 const hooks = createHooks({
     engine,
     ready,
     states,
     failClosed: () => failure !== null,
+    isReady: () => readyNow,
+    onCredentials: (path, body, response) => {
+        const password = typeof body.password === "string" ? body.password : undefined;
+        const next = typeof body.new_password === "string" ? body.new_password : undefined;
+        if (path !== "/users/@me") return password && engine.rememberPassword(password);
+        if (!next) return;
+        const token = (response as { token?: unknown } | null)?.token;
+        engine.passwordChanged(password, next, typeof token === "string" ? tokenApi(token) : undefined).catch((error) => console.error("[e2ee] couldn't rewrap the backup", error));
+    },
     onState: () => ui.refresh(),
     onError: (error, channelId) => ui.showError(error, channelId),
 });
@@ -112,7 +163,12 @@ const start = async (userId: string) => {
         await engine.init(userId);
         await selfTest();
         initialized = true;
+        engine.onUnlock(() => hooks.retryAll());
         ui.refresh();
+        if (engine.locked) {
+            link.request().catch((error) => console.error("[e2ee] link request failed", error));
+            ui.showUnlock();
+        }
     } catch (error) {
         fail(`Self-test failed: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -130,16 +186,35 @@ const startWhenReady = () => {
 const received: Record<string, number> = {};
 const count = (type: string) => (received[type] = (received[type] ?? 0) + 1);
 
+let selfRefresh: ReturnType<typeof setTimeout> | null = null;
+const refreshSelf = (userId: string) => {
+    if (userId !== engine.userId || !initialized || selfRefresh) return;
+    selfRefresh = setTimeout(() => {
+        selfRefresh = null;
+        engine.refresh().catch((error) => console.error("[e2ee] refresh failed", error));
+    }, 500);
+};
+
 const custom = {
     E2EE_DEVICES_UPDATE: (data: Record<string, unknown>) => {
         count("E2EE_DEVICES_UPDATE");
         engine.invalidateUser(String(data.user_id));
+        refreshSelf(String(data.user_id));
         ui.refresh();
     },
     E2EE_IDENTITY_UPDATE: (data: Record<string, unknown>) => {
         count("E2EE_IDENTITY_UPDATE");
         engine.invalidateUser(String(data.user_id));
+        refreshSelf(String(data.user_id));
         ui.refresh();
+    },
+    E2EE_LINK_REQUEST: (data: Record<string, unknown>) => {
+        count("E2EE_LINK_REQUEST");
+        if (initialized) link.onEvent("E2EE_LINK_REQUEST", data as unknown as LinkEvent);
+    },
+    E2EE_LINK_RESPONSE: (data: Record<string, unknown>) => {
+        count("E2EE_LINK_RESPONSE");
+        if (initialized) link.onEvent("E2EE_LINK_RESPONSE", data as unknown as LinkEvent);
     },
     CHANNEL_E2EE_UPDATE: (data: Record<string, unknown>) => {
         count("CHANNEL_E2EE_UPDATE");
@@ -192,6 +267,12 @@ loader.status = () => ({
     deviceId: engine.device?.deviceId ?? null,
     deviceStatus: engine.deviceStatus,
     linked: engine.linked,
+    locked: engine.locked,
+    holdsIdentity: !!engine.identity,
+    trustedKey: engine.trustedKey,
+    hasSecret: engine.hasSecret,
+    backup: engine.backup ? { mode: engine.backup.mode, version: engine.backup.version, hasSecret: !!engine.backup.wrapped_secret, identityKey: engine.backup.identity_key } : null,
+    link: link.outgoing(),
     hooks: { ...installed },
     encryptedChannels: [...engine.encryptedChannels],
     states: Object.fromEntries(states),

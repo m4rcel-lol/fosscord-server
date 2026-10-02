@@ -1502,7 +1502,7 @@
     return p;
   })();
   var X25519 = class extends NativeAlgorithm {
-    constructor(hkdf) {
+    constructor(hkdf2) {
       super();
       Object.defineProperty(this, "_hkdf", {
         enumerable: true,
@@ -1541,7 +1541,7 @@
         value: void 0
       });
       this._alg = { name: ALG_NAME };
-      this._hkdf = hkdf;
+      this._hkdf = hkdf2;
       this._nPk = 32;
       this._nSk = 32;
       this._nDh = 32;
@@ -1779,6 +1779,45 @@
   var aesKey = (raw, usage) => subtle().importKey("raw", raw, { name: "AES-GCM" }, false, [usage]);
   var aesEncrypt = async (raw, iv, plaintext, aad) => new Uint8Array(await subtle().encrypt({ name: "AES-GCM", iv, additionalData: utf8(aad) }, await aesKey(raw, "encrypt"), plaintext));
   var aesDecrypt = async (raw, iv, ciphertext, aad) => new Uint8Array(await subtle().decrypt({ name: "AES-GCM", iv, additionalData: utf8(aad) }, await aesKey(raw, "decrypt"), ciphertext));
+  var generateExportable = async (name) => {
+    const pair = await subtle().generateKey({ name }, true, name === "Ed25519" ? ["sign", "verify"] : ["deriveBits"]);
+    const { kty, crv, x, d } = await subtle().exportKey("jwk", pair.privateKey);
+    return { kty, crv, x, d };
+  };
+  var importSigningJwk = (jwk) => subtle().importKey("jwk", { ...jwk, key_ops: ["sign"] }, { name: "Ed25519" }, false, ["sign"]);
+  var importAgreementJwk = async (jwk) => ({
+    privateKey: await subtle().importKey("jwk", { ...jwk, key_ops: ["deriveBits"] }, { name: "X25519" }, false, ["deriveBits"]),
+    publicKey: await subtle().importKey("raw", fromB64u(jwk.x), { name: "X25519" }, true, [])
+  });
+  var x25519 = async (privateKey, publicKey) => {
+    const peer = await subtle().importKey("raw", fromB64u(publicKey), { name: "X25519" }, false, []);
+    return new Uint8Array(await subtle().deriveBits({ name: "X25519", public: peer }, privateKey, 256));
+  };
+  var hkdf = async (ikm, salt, info) => {
+    const base = await subtle().importKey("raw", ikm, "HKDF", false, ["deriveBits"]);
+    return new Uint8Array(await subtle().deriveBits({ name: "HKDF", hash: "SHA-256", salt, info: utf8(info) }, base, 256));
+  };
+  var sealBox = async (key, plaintext, aad) => {
+    const iv = new Uint8Array(12);
+    crypto.getRandomValues(iv);
+    const ct = await aesEncrypt(key, iv, plaintext, aad);
+    const out = new Uint8Array(12 + ct.length);
+    out.set(iv);
+    out.set(ct, 12);
+    return toB64u(out);
+  };
+  var openBox = (key, box, aad) => {
+    const raw = fromB64u(box);
+    if (raw.length < 28) throw new Error("box too short");
+    return aesDecrypt(key, raw.slice(0, 12), raw.slice(12), aad);
+  };
+  var rotationMessage = (userId, previousKey, nextKey) => `fosscord-e2ee/v1/identity-rotate
+${userId}
+${previousKey}
+${nextKey}`;
+  var backupKeyMessage = (userId, publicKey) => `fosscord-e2ee/v1/backup-key
+${userId}
+${publicKey}`;
   var deviceMessage = (userId, deviceId, signingKey) => `fosscord-e2ee/v1/device
 ${userId}
 ${deviceId}
@@ -1787,6 +1826,680 @@ ${signingKey}`;
 ${deviceId}
 ${prekeyId}
 ${publicKey}`;
+
+  // node_modules/hash-wasm/dist/index.esm.js
+  function __awaiter(thisArg, _arguments, P, generator) {
+    function adopt(value) {
+      return value instanceof P ? value : new P(function(resolve) {
+        resolve(value);
+      });
+    }
+    return new (P || (P = Promise))(function(resolve, reject) {
+      function fulfilled(value) {
+        try {
+          step(generator.next(value));
+        } catch (e) {
+          reject(e);
+        }
+      }
+      function rejected(value) {
+        try {
+          step(generator["throw"](value));
+        } catch (e) {
+          reject(e);
+        }
+      }
+      function step(result) {
+        result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+      }
+      step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+  }
+  var Mutex2 = class {
+    constructor() {
+      this.mutex = Promise.resolve();
+    }
+    lock() {
+      let begin = () => {
+      };
+      this.mutex = this.mutex.then(() => new Promise(begin));
+      return new Promise((res) => {
+        begin = res;
+      });
+    }
+    dispatch(fn) {
+      return __awaiter(this, void 0, void 0, function* () {
+        const unlock = yield this.lock();
+        try {
+          return yield Promise.resolve(fn());
+        } finally {
+          unlock();
+        }
+      });
+    }
+  };
+  var _a;
+  function getGlobal() {
+    if (typeof globalThis !== "undefined")
+      return globalThis;
+    if (typeof self !== "undefined")
+      return self;
+    if (typeof window !== "undefined")
+      return window;
+    return global;
+  }
+  var globalObject = getGlobal();
+  var nodeBuffer = (_a = globalObject.Buffer) !== null && _a !== void 0 ? _a : null;
+  var textEncoder = globalObject.TextEncoder ? new globalObject.TextEncoder() : null;
+  function hexCharCodesToInt(a, b) {
+    return (a & 15) + (a >> 6 | a >> 3 & 8) << 4 | (b & 15) + (b >> 6 | b >> 3 & 8);
+  }
+  function writeHexToUInt8(buf, str) {
+    const size = str.length >> 1;
+    for (let i = 0; i < size; i++) {
+      const index = i << 1;
+      buf[i] = hexCharCodesToInt(str.charCodeAt(index), str.charCodeAt(index + 1));
+    }
+  }
+  function hexStringEqualsUInt8(str, buf) {
+    if (str.length !== buf.length * 2) {
+      return false;
+    }
+    for (let i = 0; i < buf.length; i++) {
+      const strIndex = i << 1;
+      if (buf[i] !== hexCharCodesToInt(str.charCodeAt(strIndex), str.charCodeAt(strIndex + 1))) {
+        return false;
+      }
+    }
+    return true;
+  }
+  var alpha = "a".charCodeAt(0) - 10;
+  var digit = "0".charCodeAt(0);
+  function getDigestHex(tmpBuffer, input, hashLength) {
+    let p = 0;
+    for (let i = 0; i < hashLength; i++) {
+      let nibble = input[i] >>> 4;
+      tmpBuffer[p++] = nibble > 9 ? nibble + alpha : nibble + digit;
+      nibble = input[i] & 15;
+      tmpBuffer[p++] = nibble > 9 ? nibble + alpha : nibble + digit;
+    }
+    return String.fromCharCode.apply(null, tmpBuffer);
+  }
+  var getUInt8Buffer = nodeBuffer !== null ? (data) => {
+    if (typeof data === "string") {
+      const buf = nodeBuffer.from(data, "utf8");
+      return new Uint8Array(buf.buffer, buf.byteOffset, buf.length);
+    }
+    if (nodeBuffer.isBuffer(data)) {
+      return new Uint8Array(data.buffer, data.byteOffset, data.length);
+    }
+    if (ArrayBuffer.isView(data)) {
+      return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+    }
+    throw new Error("Invalid data type!");
+  } : (data) => {
+    if (typeof data === "string") {
+      return textEncoder.encode(data);
+    }
+    if (ArrayBuffer.isView(data)) {
+      return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+    }
+    throw new Error("Invalid data type!");
+  };
+  var base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  var base64Lookup = new Uint8Array(256);
+  for (let i = 0; i < base64Chars.length; i++) {
+    base64Lookup[base64Chars.charCodeAt(i)] = i;
+  }
+  function encodeBase64(data, pad = true) {
+    const len = data.length;
+    const extraBytes = len % 3;
+    const parts = [];
+    const len2 = len - extraBytes;
+    for (let i = 0; i < len2; i += 3) {
+      const tmp = (data[i] << 16 & 16711680) + (data[i + 1] << 8 & 65280) + (data[i + 2] & 255);
+      const triplet = base64Chars.charAt(tmp >> 18 & 63) + base64Chars.charAt(tmp >> 12 & 63) + base64Chars.charAt(tmp >> 6 & 63) + base64Chars.charAt(tmp & 63);
+      parts.push(triplet);
+    }
+    if (extraBytes === 1) {
+      const tmp = data[len - 1];
+      const a = base64Chars.charAt(tmp >> 2);
+      const b = base64Chars.charAt(tmp << 4 & 63);
+      parts.push(`${a}${b}`);
+      if (pad) {
+        parts.push("==");
+      }
+    } else if (extraBytes === 2) {
+      const tmp = (data[len - 2] << 8) + data[len - 1];
+      const a = base64Chars.charAt(tmp >> 10);
+      const b = base64Chars.charAt(tmp >> 4 & 63);
+      const c = base64Chars.charAt(tmp << 2 & 63);
+      parts.push(`${a}${b}${c}`);
+      if (pad) {
+        parts.push("=");
+      }
+    }
+    return parts.join("");
+  }
+  function getDecodeBase64Length(data) {
+    let bufferLength = Math.floor(data.length * 0.75);
+    const len = data.length;
+    if (data[len - 1] === "=") {
+      bufferLength -= 1;
+      if (data[len - 2] === "=") {
+        bufferLength -= 1;
+      }
+    }
+    return bufferLength;
+  }
+  function decodeBase64(data) {
+    const bufferLength = getDecodeBase64Length(data);
+    const len = data.length;
+    const bytes = new Uint8Array(bufferLength);
+    let p = 0;
+    for (let i = 0; i < len; i += 4) {
+      const encoded1 = base64Lookup[data.charCodeAt(i)];
+      const encoded2 = base64Lookup[data.charCodeAt(i + 1)];
+      const encoded3 = base64Lookup[data.charCodeAt(i + 2)];
+      const encoded4 = base64Lookup[data.charCodeAt(i + 3)];
+      bytes[p] = encoded1 << 2 | encoded2 >> 4;
+      p += 1;
+      bytes[p] = (encoded2 & 15) << 4 | encoded3 >> 2;
+      p += 1;
+      bytes[p] = (encoded3 & 3) << 6 | encoded4 & 63;
+      p += 1;
+    }
+    return bytes;
+  }
+  var MAX_HEAP = 16 * 1024;
+  var WASM_FUNC_HASH_LENGTH = 4;
+  var wasmMutex = new Mutex2();
+  var wasmModuleCache = /* @__PURE__ */ new Map();
+  function WASMInterface(binary, hashLength) {
+    return __awaiter(this, void 0, void 0, function* () {
+      let wasmInstance = null;
+      let memoryView = null;
+      let initialized2 = false;
+      if (typeof WebAssembly === "undefined") {
+        throw new Error("WebAssembly is not supported in this environment!");
+      }
+      const writeMemory = (data, offset = 0) => {
+        memoryView.set(data, offset);
+      };
+      const getMemory = () => memoryView;
+      const getExports = () => wasmInstance.exports;
+      const setMemorySize = (totalSize) => {
+        wasmInstance.exports.Hash_SetMemorySize(totalSize);
+        const arrayOffset = wasmInstance.exports.Hash_GetBuffer();
+        const memoryBuffer = wasmInstance.exports.memory.buffer;
+        memoryView = new Uint8Array(memoryBuffer, arrayOffset, totalSize);
+      };
+      const getStateSize = () => {
+        const view = new DataView(wasmInstance.exports.memory.buffer);
+        const stateSize = view.getUint32(wasmInstance.exports.STATE_SIZE, true);
+        return stateSize;
+      };
+      const loadWASMPromise = wasmMutex.dispatch(() => __awaiter(this, void 0, void 0, function* () {
+        if (!wasmModuleCache.has(binary.name)) {
+          const asm = decodeBase64(binary.data);
+          const promise = WebAssembly.compile(asm);
+          wasmModuleCache.set(binary.name, promise);
+        }
+        const module = yield wasmModuleCache.get(binary.name);
+        wasmInstance = yield WebAssembly.instantiate(module, {
+          // env: {
+          //   emscripten_memcpy_big: (dest, src, num) => {
+          //     const memoryBuffer = wasmInstance.exports.memory.buffer;
+          //     const memView = new Uint8Array(memoryBuffer, 0);
+          //     memView.set(memView.subarray(src, src + num), dest);
+          //   },
+          //   print_memory: (offset, len) => {
+          //     const memoryBuffer = wasmInstance.exports.memory.buffer;
+          //     const memView = new Uint8Array(memoryBuffer, 0);
+          //     console.log('print_int32', memView.subarray(offset, offset + len));
+          //   },
+          // },
+        });
+      }));
+      const setupInterface = () => __awaiter(this, void 0, void 0, function* () {
+        if (!wasmInstance) {
+          yield loadWASMPromise;
+        }
+        const arrayOffset = wasmInstance.exports.Hash_GetBuffer();
+        const memoryBuffer = wasmInstance.exports.memory.buffer;
+        memoryView = new Uint8Array(memoryBuffer, arrayOffset, MAX_HEAP);
+      });
+      const init = (bits = null) => {
+        initialized2 = true;
+        wasmInstance.exports.Hash_Init(bits);
+      };
+      const updateUInt8Array = (data) => {
+        let read = 0;
+        while (read < data.length) {
+          const chunk = data.subarray(read, read + MAX_HEAP);
+          read += chunk.length;
+          memoryView.set(chunk);
+          wasmInstance.exports.Hash_Update(chunk.length);
+        }
+      };
+      const update = (data) => {
+        if (!initialized2) {
+          throw new Error("update() called before init()");
+        }
+        const Uint8Buffer = getUInt8Buffer(data);
+        updateUInt8Array(Uint8Buffer);
+      };
+      const digestChars = new Uint8Array(hashLength * 2);
+      const digest = (outputType, padding = null) => {
+        if (!initialized2) {
+          throw new Error("digest() called before init()");
+        }
+        initialized2 = false;
+        wasmInstance.exports.Hash_Final(padding);
+        if (outputType === "binary") {
+          return memoryView.slice(0, hashLength);
+        }
+        return getDigestHex(digestChars, memoryView, hashLength);
+      };
+      const save = () => {
+        if (!initialized2) {
+          throw new Error("save() can only be called after init() and before digest()");
+        }
+        const stateOffset = wasmInstance.exports.Hash_GetState();
+        const stateLength = getStateSize();
+        const memoryBuffer = wasmInstance.exports.memory.buffer;
+        const internalState = new Uint8Array(memoryBuffer, stateOffset, stateLength);
+        const prefixedState = new Uint8Array(WASM_FUNC_HASH_LENGTH + stateLength);
+        writeHexToUInt8(prefixedState, binary.hash);
+        prefixedState.set(internalState, WASM_FUNC_HASH_LENGTH);
+        return prefixedState;
+      };
+      const load = (state) => {
+        if (!(state instanceof Uint8Array)) {
+          throw new Error("load() expects an Uint8Array generated by save()");
+        }
+        const stateOffset = wasmInstance.exports.Hash_GetState();
+        const stateLength = getStateSize();
+        const overallLength = WASM_FUNC_HASH_LENGTH + stateLength;
+        const memoryBuffer = wasmInstance.exports.memory.buffer;
+        if (state.length !== overallLength) {
+          throw new Error(`Bad state length (expected ${overallLength} bytes, got ${state.length})`);
+        }
+        if (!hexStringEqualsUInt8(binary.hash, state.subarray(0, WASM_FUNC_HASH_LENGTH))) {
+          throw new Error("This state was written by an incompatible hash implementation");
+        }
+        const internalState = state.subarray(WASM_FUNC_HASH_LENGTH);
+        new Uint8Array(memoryBuffer, stateOffset, stateLength).set(internalState);
+        initialized2 = true;
+      };
+      const isDataShort = (data) => {
+        if (typeof data === "string") {
+          return data.length < MAX_HEAP / 4;
+        }
+        return data.byteLength < MAX_HEAP;
+      };
+      let canSimplify = isDataShort;
+      switch (binary.name) {
+        case "argon2":
+        case "scrypt":
+          canSimplify = () => true;
+          break;
+        case "blake2b":
+        case "blake2s":
+          canSimplify = (data, initParam) => initParam <= 512 && isDataShort(data);
+          break;
+        case "blake3":
+          canSimplify = (data, initParam) => initParam === 0 && isDataShort(data);
+          break;
+        case "xxhash64":
+        // cannot simplify
+        case "xxhash3":
+        case "xxhash128":
+        case "crc64":
+          canSimplify = () => false;
+          break;
+      }
+      const calculate = (data, initParam = null, digestParam = null) => {
+        if (!canSimplify(data, initParam)) {
+          init(initParam);
+          update(data);
+          return digest("hex", digestParam);
+        }
+        const buffer = getUInt8Buffer(data);
+        memoryView.set(buffer);
+        wasmInstance.exports.Hash_Calculate(buffer.length, initParam, digestParam);
+        return getDigestHex(digestChars, memoryView, hashLength);
+      };
+      yield setupInterface();
+      return {
+        getMemory,
+        writeMemory,
+        getExports,
+        setMemorySize,
+        init,
+        update,
+        digest,
+        save,
+        load,
+        calculate,
+        hashLength
+      };
+    });
+  }
+  var mutex$l = new Mutex2();
+  var name$k = "argon2";
+  var data$k = "AGFzbQEAAAABKQVgAX8Bf2AAAX9gEH9/f39/f39/f39/f39/f38AYAR/f39/AGACf38AAwYFAAECAwQFBgEBAoCAAgYIAX8BQZCoBAsHQQQGbWVtb3J5AgASSGFzaF9TZXRNZW1vcnlTaXplAAAOSGFzaF9HZXRCdWZmZXIAAQ5IYXNoX0NhbGN1bGF0ZQAECvEyBVgBAn9BACEBAkAgAEEAKAKICCICRg0AAkAgACACayIAQRB2IABBgIB8cSAASWoiAEAAQX9HDQBB/wHADwtBACEBQQBBACkDiAggAEEQdK18NwOICAsgAcALcAECfwJAQQAoAoAIIgANAEEAPwBBEHQiADYCgAhBACgCiAgiAUGAgCBGDQACQEGAgCAgAWsiAEEQdiAAQYCAfHEgAElqIgBAAEF/Rw0AQQAPC0EAQQApA4gIIABBEHStfDcDiAhBACgCgAghAAsgAAvcDgECfiAAIAQpAwAiECAAKQMAIhF8IBFCAYZC/v///x+DIBBC/////w+DfnwiEDcDACAMIBAgDCkDAIVCIIkiEDcDACAIIBAgCCkDACIRfCARQgGGQv7///8fgyAQQv////8Pg358IhA3AwAgBCAQIAQpAwCFQiiJIhA3AwAgACAQIAApAwAiEXwgEEL/////D4MgEUIBhkL+////H4N+fCIQNwMAIAwgECAMKQMAhUIwiSIQNwMAIAggECAIKQMAIhF8IBBC/////w+DIBFCAYZC/v///x+DfnwiEDcDACAEIBAgBCkDAIVCAYk3AwAgASAFKQMAIhAgASkDACIRfCARQgGGQv7///8fgyAQQv////8Pg358IhA3AwAgDSAQIA0pAwCFQiCJIhA3AwAgCSAQIAkpAwAiEXwgEUIBhkL+////H4MgEEL/////D4N+fCIQNwMAIAUgECAFKQMAhUIoiSIQNwMAIAEgECABKQMAIhF8IBBC/////w+DIBFCAYZC/v///x+DfnwiEDcDACANIBAgDSkDAIVCMIkiEDcDACAJIBAgCSkDACIRfCAQQv////8PgyARQgGGQv7///8fg358IhA3AwAgBSAQIAUpAwCFQgGJNwMAIAIgBikDACIQIAIpAwAiEXwgEUIBhkL+////H4MgEEL/////D4N+fCIQNwMAIA4gECAOKQMAhUIgiSIQNwMAIAogECAKKQMAIhF8IBFCAYZC/v///x+DIBBC/////w+DfnwiEDcDACAGIBAgBikDAIVCKIkiEDcDACACIBAgAikDACIRfCAQQv////8PgyARQgGGQv7///8fg358IhA3AwAgDiAQIA4pAwCFQjCJIhA3AwAgCiAQIAopAwAiEXwgEEL/////D4MgEUIBhkL+////H4N+fCIQNwMAIAYgECAGKQMAhUIBiTcDACADIAcpAwAiECADKQMAIhF8IBFCAYZC/v///x+DIBBC/////w+DfnwiEDcDACAPIBAgDykDAIVCIIkiEDcDACALIBAgCykDACIRfCARQgGGQv7///8fgyAQQv////8Pg358IhA3AwAgByAQIAcpAwCFQiiJIhA3AwAgAyAQIAMpAwAiEXwgEEL/////D4MgEUIBhkL+////H4N+fCIQNwMAIA8gECAPKQMAhUIwiSIQNwMAIAsgECALKQMAIhF8IBBC/////w+DIBFCAYZC/v///x+DfnwiEDcDACAHIBAgBykDAIVCAYk3AwAgACAFKQMAIhAgACkDACIRfCARQgGGQv7///8fgyAQQv////8Pg358IhA3AwAgDyAQIA8pAwCFQiCJIhA3AwAgCiAQIAopAwAiEXwgEUIBhkL+////H4MgEEL/////D4N+fCIQNwMAIAUgECAFKQMAhUIoiSIQNwMAIAAgECAAKQMAIhF8IBBC/////w+DIBFCAYZC/v///x+DfnwiEDcDACAPIBAgDykDAIVCMIkiEDcDACAKIBAgCikDACIRfCAQQv////8PgyARQgGGQv7///8fg358IhA3AwAgBSAQIAUpAwCFQgGJNwMAIAEgBikDACIQIAEpAwAiEXwgEUIBhkL+////H4MgEEL/////D4N+fCIQNwMAIAwgECAMKQMAhUIgiSIQNwMAIAsgECALKQMAIhF8IBFCAYZC/v///x+DIBBC/////w+DfnwiEDcDACAGIBAgBikDAIVCKIkiEDcDACABIBAgASkDACIRfCAQQv////8PgyARQgGGQv7///8fg358IhA3AwAgDCAQIAwpAwCFQjCJIhA3AwAgCyAQIAspAwAiEXwgEEL/////D4MgEUIBhkL+////H4N+fCIQNwMAIAYgECAGKQMAhUIBiTcDACACIAcpAwAiECACKQMAIhF8IBFCAYZC/v///x+DIBBC/////w+DfnwiEDcDACANIBAgDSkDAIVCIIkiEDcDACAIIBAgCCkDACIRfCARQgGGQv7///8fgyAQQv////8Pg358IhA3AwAgByAQIAcpAwCFQiiJIhA3AwAgAiAQIAIpAwAiEXwgEEL/////D4MgEUIBhkL+////H4N+fCIQNwMAIA0gECANKQMAhUIwiSIQNwMAIAggECAIKQMAIhF8IBBC/////w+DIBFCAYZC/v///x+DfnwiEDcDACAHIBAgBykDAIVCAYk3AwAgAyAEKQMAIhAgAykDACIRfCARQgGGQv7///8fgyAQQv////8Pg358IhA3AwAgDiAQIA4pAwCFQiCJIhA3AwAgCSAQIAkpAwAiEXwgEUIBhkL+////H4MgEEL/////D4N+fCIQNwMAIAQgECAEKQMAhUIoiSIQNwMAIAMgECADKQMAIhF8IBBC/////w+DIBFCAYZC/v///x+DfnwiEDcDACAOIBAgDikDAIVCMIkiEDcDACAJIBAgCSkDACIRfCAQQv////8PgyARQgGGQv7///8fg358IhA3AwAgBCAQIAQpAwCFQgGJNwMAC98aAQN/QQAhBEEAIAIpAwAgASkDAIU3A5AIQQAgAikDCCABKQMIhTcDmAhBACACKQMQIAEpAxCFNwOgCEEAIAIpAxggASkDGIU3A6gIQQAgAikDICABKQMghTcDsAhBACACKQMoIAEpAyiFNwO4CEEAIAIpAzAgASkDMIU3A8AIQQAgAikDOCABKQM4hTcDyAhBACACKQNAIAEpA0CFNwPQCEEAIAIpA0ggASkDSIU3A9gIQQAgAikDUCABKQNQhTcD4AhBACACKQNYIAEpA1iFNwPoCEEAIAIpA2AgASkDYIU3A/AIQQAgAikDaCABKQNohTcD+AhBACACKQNwIAEpA3CFNwOACUEAIAIpA3ggASkDeIU3A4gJQQAgAikDgAEgASkDgAGFNwOQCUEAIAIpA4gBIAEpA4gBhTcDmAlBACACKQOQASABKQOQAYU3A6AJQQAgAikDmAEgASkDmAGFNwOoCUEAIAIpA6ABIAEpA6ABhTcDsAlBACACKQOoASABKQOoAYU3A7gJQQAgAikDsAEgASkDsAGFNwPACUEAIAIpA7gBIAEpA7gBhTcDyAlBACACKQPAASABKQPAAYU3A9AJQQAgAikDyAEgASkD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";
+  var hash$k = "e4cdc523";
+  var wasmJson$k = {
+    name: name$k,
+    data: data$k,
+    hash: hash$k
+  };
+  var name$j = "blake2b";
+  var data$j = "AGFzbQEAAAABEQRgAAF/YAJ/fwBgAX8AYAAAAwoJAAECAwECAgABBQQBAQICBg4CfwFBsIsFC38AQYAICwdwCAZtZW1vcnkCAA5IYXNoX0dldEJ1ZmZlcgAACkhhc2hfRmluYWwAAwlIYXNoX0luaXQABQtIYXNoX1VwZGF0ZQAGDUhhc2hfR2V0U3RhdGUABw5IYXNoX0NhbGN1bGF0ZQAIClNUQVRFX1NJWkUDAQrTOAkFAEGACQvrAgIFfwF+AkAgAUEBSA0AAkACQAJAIAFBgAFBACgC4IoBIgJrIgNKDQAgASEEDAELQQBBADYC4IoBAkAgAkH/AEoNACACQeCJAWohBSAAIQRBACEGA0AgBSAELQAAOgAAIARBAWohBCAFQQFqIQUgAyAGQQFqIgZB/wFxSg0ACwtBAEEAKQPAiQEiB0KAAXw3A8CJAUEAQQApA8iJASAHQv9+Vq18NwPIiQFB4IkBEAIgACADaiEAAkAgASADayIEQYEBSA0AIAIgAWohBQNAQQBBACkDwIkBIgdCgAF8NwPAiQFBAEEAKQPIiQEgB0L/flatfDcDyIkBIAAQAiAAQYABaiEAIAVBgH9qIgVBgAJLDQALIAVBgH9qIQQMAQsgBEEATA0BC0EAIQUDQCAFQQAoAuCKAWpB4IkBaiAAIAVqLQAAOgAAIAQgBUEBaiIFQf8BcUoNAAsLQQBBACgC4IoBIARqNgLgigELC78uASR+QQBBACkD0IkBQQApA7CJASIBQQApA5CJAXwgACkDICICfCIDhULr+obav7X2wR+FQiCJIgRCq/DT9K/uvLc8fCIFIAGFQiiJIgYgA3wgACkDKCIBfCIHIASFQjCJIgggBXwiCSAGhUIBiSIKQQApA8iJAUEAKQOoiQEiBEEAKQOIiQF8IAApAxAiA3wiBYVCn9j52cKR2oKbf4VCIIkiC0K7zqqm2NDrs7t/fCIMIASFQiiJIg0gBXwgACkDGCIEfCIOfCAAKQNQIgV8Ig9BACkDwIkBQQApA6CJASIQQQApA4CJASIRfCAAKQMAIgZ8IhKFQtGFmu/6z5SH0QCFQiCJIhNCiJLznf/M+YTqAHwiFCAQhUIoiSIVIBJ8IAApAwgiEHwiFiAThUIwiSIXhUIgiSIYQQApA9iJAUEAKQO4iQEiE0EAKQOYiQF8IAApAzAiEnwiGYVC+cL4m5Gjs/DbAIVCIIkiGkLx7fT4paf9p6V/fCIbIBOFQiiJIhwgGXwgACkDOCITfCIZIBqFQjCJIhogG3wiG3wiHSAKhUIoiSIeIA98IAApA1giCnwiDyAYhUIwiSIYIB18Ih0gDiALhUIwiSIOIAx8Ih8gDYVCAYkiDCAWfCAAKQNAIgt8Ig0gGoVCIIkiFiAJfCIaIAyFQiiJIiAgDXwgACkDSCIJfCIhIBaFQjCJIhYgGyAchUIBiSIMIAd8IAApA2AiB3wiDSAOhUIgiSIOIBcgFHwiFHwiFyAMhUIoiSIbIA18IAApA2giDHwiHCAOhUIwiSIOIBd8IhcgG4VCAYkiGyAZIBQgFYVCAYkiFHwgACkDcCINfCIVIAiFQiCJIhkgH3wiHyAUhUIoiSIUIBV8IAApA3giCHwiFXwgDHwiIoVCIIkiI3wiJCAbhUIoiSIbICJ8IBJ8IiIgFyAYIBUgGYVCMIkiFSAffCIZIBSFQgGJIhQgIXwgDXwiH4VCIIkiGHwiFyAUhUIoiSIUIB98IAV8Ih8gGIVCMIkiGCAXfCIXIBSFQgGJIhR8IAF8IiEgFiAafCIWIBUgHSAehUIBiSIaIBx8IAl8IhyFQiCJIhV8Ih0gGoVCKIkiGiAcfCAIfCIcIBWFQjCJIhWFQiCJIh4gGSAOIBYgIIVCAYkiFiAPfCACfCIPhUIgiSIOfCIZIBaFQiiJIhYgD3wgC3wiDyAOhUIwiSIOIBl8Ihl8IiAgFIVCKIkiFCAhfCAEfCIhIB6FQjCJIh4gIHwiICAiICOFQjCJIiIgJHwiIyAbhUIBiSIbIBx8IAp8IhwgDoVCIIkiDiAXfCIXIBuFQiiJIhsgHHwgE3wiHCAOhUIwiSIOIBkgFoVCAYkiFiAffCAQfCIZICKFQiCJIh8gFSAdfCIVfCIdIBaFQiiJIhYgGXwgB3wiGSAfhUIwiSIfIB18Ih0gFoVCAYkiFiAVIBqFQgGJIhUgD3wgBnwiDyAYhUIgiSIYICN8IhogFYVCKIkiFSAPfCADfCIPfCAHfCIihUIgiSIjfCIkIBaFQiiJIhYgInwgBnwiIiAjhUIwiSIjICR8IiQgFoVCAYkiFiAOIBd8Ig4gDyAYhUIwiSIPICAgFIVCAYkiFCAZfCAKfCIXhUIgiSIYfCIZIBSFQiiJIhQgF3wgC3wiF3wgBXwiICAPIBp8Ig8gHyAOIBuFQgGJIg4gIXwgCHwiGoVCIIkiG3wiHyAOhUIoiSIOIBp8IAx8IhogG4VCMIkiG4VCIIkiISAdIB4gDyAVhUIBiSIPIBx8IAF8IhWFQiCJIhx8Ih0gD4VCKIkiDyAVfCADfCIVIByFQjCJIhwgHXwiHXwiHiAWhUIoiSIWICB8IA18IiAgIYVCMIkiISAefCIeIBogFyAYhUIwiSIXIBl8IhggFIVCAYkiFHwgCXwiGSAchUIgiSIaICR8IhwgFIVCKIkiFCAZfCACfCIZIBqFQjCJIhogHSAPhUIBiSIPICJ8IAR8Ih0gF4VCIIkiFyAbIB98Iht8Ih8gD4VCKIkiDyAdfCASfCIdIBeFQjCJIhcgH3wiHyAPhUIBiSIPIBsgDoVCAYkiDiAVfCATfCIVICOFQiCJIhsgGHwiGCAOhUIoiSIOIBV8IBB8IhV8IAx8IiKFQiCJIiN8IiQgD4VCKIkiDyAifCAHfCIiICOFQjCJIiMgJHwiJCAPhUIBiSIPIBogHHwiGiAVIBuFQjCJIhUgHiAWhUIBiSIWIB18IAR8IhuFQiCJIhx8Ih0gFoVCKIkiFiAbfCAQfCIbfCABfCIeIBUgGHwiFSAXIBogFIVCAYkiFCAgfCATfCIYhUIgiSIXfCIaIBSFQiiJIhQgGHwgCXwiGCAXhUIwiSIXhUIgiSIgIB8gISAVIA6FQgGJIg4gGXwgCnwiFYVCIIkiGXwiHyAOhUIoiSIOIBV8IA18IhUgGYVCMIkiGSAffCIffCIhIA+FQiiJIg8gHnwgBXwiHiAghUIwiSIgICF8IiEgGyAchUIwiSIbIB18IhwgFoVCAYkiFiAYfCADfCIYIBmFQiCJIhkgJHwiHSAWhUIoiSIWIBh8IBJ8IhggGYVCMIkiGSAfIA6FQgGJIg4gInwgAnwiHyAbhUIgiSIbIBcgGnwiF3wiGiAOhUIoiSIOIB98IAZ8Ih8gG4VCMIkiGyAafCIaIA6FQgGJIg4gFSAXIBSFQgGJIhR8IAh8IhUgI4VCIIkiFyAcfCIcIBSFQiiJIhQgFXwgC3wiFXwgBXwiIoVCIIkiI3wiJCAOhUIoiSIOICJ8IAh8IiIgGiAgIBUgF4VCMIkiFSAcfCIXIBSFQgGJIhQgGHwgCXwiGIVCIIkiHHwiGiAUhUIoiSIUIBh8IAZ8IhggHIVCMIkiHCAafCIaIBSFQgGJIhR8IAR8IiAgGSAdfCIZIBUgISAPhUIBiSIPIB98IAN8Ih2FQiCJIhV8Ih8gD4VCKIkiDyAdfCACfCIdIBWFQjCJIhWFQiCJIiEgFyAbIBkgFoVCAYkiFiAefCABfCIZhUIgiSIbfCIXIBaFQiiJIhYgGXwgE3wiGSAbhUIwiSIbIBd8Ihd8Ih4gFIVCKIkiFCAgfCAMfCIgICGFQjCJIiEgHnwiHiAiICOFQjCJIiIgJHwiIyAOhUIBiSIOIB18IBJ8Ih0gG4VCIIkiGyAafCIaIA6FQiiJIg4gHXwgC3wiHSAbhUIwiSIbIBcgFoVCAYkiFiAYfCANfCIXICKFQiCJIhggFSAffCIVfCIfIBaFQiiJIhYgF3wgEHwiFyAYhUIwiSIYIB98Ih8gFoVCAYkiFiAVIA+FQgGJIg8gGXwgCnwiFSAchUIgiSIZICN8IhwgD4VCKIkiDyAVfCAHfCIVfCASfCIihUIgiSIjfCIkIBaFQiiJIhYgInwgBXwiIiAjhUIwiSIjICR8IiQgFoVCAYkiFiAbIBp8IhogFSAZhUIwiSIVIB4gFIVCAYkiFCAXfCADfCIXhUIgiSIZfCIbIBSFQiiJIhQgF3wgB3wiF3wgAnwiHiAVIBx8IhUgGCAaIA6FQgGJIg4gIHwgC3wiGoVCIIkiGHwiHCAOhUIoiSIOIBp8IAR8IhogGIVCMIkiGIVCIIkiICAfICEgFSAPhUIBiSIPIB18IAZ8IhWFQiCJIh18Ih8gD4VCKIkiDyAVfCAKfCIVIB2FQjCJIh0gH3wiH3wiISAWhUIoiSIWIB58IAx8Ih4gIIVCMIkiICAhfCIhIBogFyAZhUIwiSIXIBt8IhkgFIVCAYkiFHwgEHwiGiAdhUIgiSIbICR8Ih0gFIVCKIkiFCAafCAJfCIaIBuFQjCJIhsgHyAPhUIBiSIPICJ8IBN8Ih8gF4VCIIkiFyAYIBx8Ihh8IhwgD4VCKIkiDyAffCABfCIfIBeFQjCJIhcgHHwiHCAPhUIBiSIPIBggDoVCAYkiDiAVfCAIfCIVICOFQiCJIhggGXwiGSAOhUIoiSIOIBV8IA18IhV8IA18IiKFQiCJIiN8IiQgD4VCKIkiDyAifCAMfCIiICOFQjCJIiMgJHwiJCAPhUIBiSIPIBsgHXwiGyAVIBiFQjCJIhUgISAWhUIBiSIWIB98IBB8IhiFQiCJIh18Ih8gFoVCKIkiFiAYfCAIfCIYfCASfCIhIBUgGXwiFSAXIBsgFIVCAYkiFCAefCAHfCIZhUIgiSIXfCIbIBSFQiiJIhQgGXwgAXwiGSAXhUIwiSIXhUIgiSIeIBwgICAVIA6FQgGJIg4gGnwgAnwiFYVCIIkiGnwiHCAOhUIoiSIOIBV8IAV8IhUgGoVCMIkiGiAcfCIcfCIgIA+FQiiJIg8gIXwgBHwiISAehUIwiSIeICB8IiAgGCAdhUIwiSIYIB98Ih0gFoVCAYkiFiAZfCAGfCIZIBqFQiCJIhogJHwiHyAWhUIoiSIWIBl8IBN8IhkgGoVCMIkiGiAcIA6FQgGJIg4gInwgCXwiHCAYhUIgiSIYIBcgG3wiF3wiGyAOhUIoiSIOIBx8IAN8IhwgGIVCMIkiGCAbfCIbIA6FQgGJIg4gFSAXIBSFQgGJIhR8IAt8IhUgI4VCIIkiFyAdfCIdIBSFQiiJIhQgFXwgCnwiFXwgBHwiIoVCIIkiI3wiJCAOhUIoiSIOICJ8IAl8IiIgGyAeIBUgF4VCMIkiFSAdfCIXIBSFQgGJIhQgGXwgDHwiGYVCIIkiHXwiGyAUhUIoiSIUIBl8IAp8IhkgHYVCMIkiHSAbfCIbIBSFQgGJIhR8IAN8Ih4gGiAffCIaIBUgICAPhUIBiSIPIBx8IAd8IhyFQiCJIhV8Ih8gD4VCKIkiDyAcfCAQfCIcIBWFQjCJIhWFQiCJIiAgFyAYIBogFoVCAYkiFiAhfCATfCIahUIgiSIYfCIXIBaFQiiJIhYgGnwgDXwiGiAYhUIwiSIYIBd8Ihd8IiEgFIVCKIkiFCAefCAFfCIeICCFQjCJIiAgIXwiISAiICOFQjCJIiIgJHwiIyAOhUIBiSIOIBx8IAt8IhwgGIVCIIkiGCAbfCIbIA6FQiiJIg4gHHwgEnwiHCAYhUIwiSIYIBcgFoVCAYkiFiAZfCABfCIXICKFQiCJIhkgFSAffCIVfCIfIBaFQiiJIhYgF3wgBnwiFyAZhUIwiSIZIB98Ih8gFoVCAYkiFiAVIA+FQgGJIg8gGnwgCHwiFSAdhUIgiSIaICN8Ih0gD4VCKIkiDyAVfCACfCIVfCANfCIihUIgiSIjfCIkIBaFQiiJIhYgInwgCXwiIiAjhUIwiSIjICR8IiQgFoVCAYkiFiAYIBt8IhggFSAahUIwiSIVICEgFIVCAYkiFCAXfCASfCIXhUIgiSIafCIbIBSFQiiJIhQgF3wgCHwiF3wgB3wiISAVIB18IhUgGSAYIA6FQgGJIg4gHnwgBnwiGIVCIIkiGXwiHSAOhUIoiSIOIBh8IAt8IhggGYVCMIkiGYVCIIkiHiAfICAgFSAPhUIBiSIPIBx8IAp8IhWFQiCJIhx8Ih8gD4VCKIkiDyAVfCAEfCIVIByFQjCJIhwgH3wiH3wiICAWhUIoiSIWICF8IAN8IiEgHoVCMIkiHiAgfCIgIBggFyAahUIwiSIXIBt8IhogFIVCAYkiFHwgBXwiGCAchUIgiSIbICR8IhwgFIVCKIkiFCAYfCABfCIYIBuFQjCJIhsgHyAPhUIBiSIPICJ8IAx8Ih8gF4VCIIkiFyAZIB18Ihl8Ih0gD4VCKIkiDyAffCATfCIfIBeFQjCJIhcgHXwiHSAPhUIBiSIPIBkgDoVCAYkiDiAVfCAQfCIVICOFQiCJIhkgGnwiGiAOhUIoiSIOIBV8IAJ8IhV8IBN8IiKFQiCJIiN8IiQgD4VCKIkiDyAifCASfCIiICOFQjCJIiMgJHwiJCAPhUIBiSIPIBsgHHwiGyAVIBmFQjCJIhUgICAWhUIBiSIWIB98IAt8IhmFQiCJIhx8Ih8gFoVCKIkiFiAZfCACfCIZfCAJfCIgIBUgGnwiFSAXIBsgFIVCAYkiFCAhfCAFfCIahUIgiSIXfCIbIBSFQiiJIhQgGnwgA3wiGiAXhUIwiSIXhUIgiSIhIB0gHiAVIA6FQgGJIg4gGHwgEHwiFYVCIIkiGHwiHSAOhUIoiSIOIBV8IAF8IhUgGIVCMIkiGCAdfCIdfCIeIA+FQiiJIg8gIHwgDXwiICAhhUIwiSIhIB58Ih4gGSAchUIwiSIZIB98IhwgFoVCAYkiFiAafCAIfCIaIBiFQiCJIhggJHwiHyAWhUIoiSIWIBp8IAp8IhogGIVCMIkiGCAdIA6FQgGJIg4gInwgBHwiHSAZhUIgiSIZIBcgG3wiF3wiGyAOhUIoiSIOIB18IAd8Ih0gGYVCMIkiGSAbfCIbIA6FQgGJIg4gFSAXIBSFQgGJIhR8IAx8IhUgI4VCIIkiFyAcfCIcIBSFQiiJIhQgFXwgBnwiFXwgEnwiIoVCIIkiI3wiJCAOhUIoiSIOICJ8IBN8IiIgGyAhIBUgF4VCMIkiFSAcfCIXIBSFQgGJIhQgGnwgBnwiGoVCIIkiHHwiGyAUhUIoiSIUIBp8IBB8IhogHIVCMIkiHCAbfCIbIBSFQgGJIhR8IA18IiEgGCAffCIYIBUgHiAPhUIBiSIPIB18IAJ8Ih2FQiCJIhV8Ih4gD4VCKIkiDyAdfCABfCIdIBWFQjCJIhWFQiCJIh8gFyAZIBggFoVCAYkiFiAgfCADfCIYhUIgiSIZfCIXIBaFQiiJIhYgGHwgBHwiGCAZhUIwiSIZIBd8Ihd8IiAgFIVCKIkiFCAhfCAIfCIhIB+FQjCJIh8gIHwiICAiICOFQjCJIiIgJHwiIyAOhUIBiSIOIB18IAd8Ih0gGYVCIIkiGSAbfCIbIA6FQiiJIg4gHXwgDHwiHSAZhUIwiSIZIBcgFoVCAYkiFiAafCALfCIXICKFQiCJIhogFSAefCIVfCIeIBaFQiiJIhYgF3wgCXwiFyAahUIwiSIaIB58Ih4gFoVCAYkiFiAVIA+FQgGJIg8gGHwgBXwiFSAchUIgiSIYICN8IhwgD4VCKIkiDyAVfCAKfCIVfCACfCIChUIgiSIifCIjIBaFQiiJIhYgAnwgC3wiAiAihUIwiSILICN8IiIgFoVCAYkiFiAZIBt8IhkgFSAYhUIwiSIVICAgFIVCAYkiFCAXfCANfCINhUIgiSIXfCIYIBSFQiiJIhQgDXwgBXwiBXwgEHwiECAVIBx8Ig0gGiAZIA6FQgGJIg4gIXwgDHwiDIVCIIkiFXwiGSAOhUIoiSIOIAx8IBJ8IhIgFYVCMIkiDIVCIIkiFSAeIB8gDSAPhUIBiSINIB18IAl8IgmFQiCJIg98IhogDYVCKIkiDSAJfCAIfCIJIA+FQjCJIgggGnwiD3wiGiAWhUIoiSIWIBB8IAd8IhAgEYUgDCAZfCIHIA6FQgGJIgwgCXwgCnwiCiALhUIgiSILIAUgF4VCMIkiBSAYfCIJfCIOIAyFQiiJIgwgCnwgE3wiEyALhUIwiSIKIA58IguFNwOAiQFBACADIAYgDyANhUIBiSINIAJ8fCICIAWFQiCJIgUgB3wiBiANhUIoiSIHIAJ8fCICQQApA4iJAYUgBCABIBIgCSAUhUIBiSIDfHwiASAIhUIgiSISICJ8IgkgA4VCKIkiAyABfHwiASAShUIwiSIEIAl8IhKFNwOIiQFBACATQQApA5CJAYUgECAVhUIwiSIQIBp8IhOFNwOQiQFBACABQQApA5iJAYUgAiAFhUIwiSICIAZ8IgGFNwOYiQFBACASIAOFQgGJQQApA6CJAYUgAoU3A6CJAUEAIBMgFoVCAYlBACkDqIkBhSAKhTcDqIkBQQAgASAHhUIBiUEAKQOwiQGFIASFNwOwiQFBACALIAyFQgGJQQApA7iJAYUgEIU3A7iJAQvdAgUBfwF+AX8BfgJ/IwBBwABrIgAkAAJAQQApA9CJAUIAUg0AQQBBACkDwIkBIgFBACgC4IoBIgKsfCIDNwPAiQFBAEEAKQPIiQEgAyABVK18NwPIiQECQEEALQDoigFFDQBBAEJ/NwPYiQELQQBCfzcD0IkBAkAgAkH/AEoNAEEAIQQDQCACIARqQeCJAWpBADoAACAEQQFqIgRBgAFBACgC4IoBIgJrSA0ACwtB4IkBEAIgAEEAKQOAiQE3AwAgAEEAKQOIiQE3AwggAEEAKQOQiQE3AxAgAEEAKQOYiQE3AxggAEEAKQOgiQE3AyAgAEEAKQOoiQE3AyggAEEAKQOwiQE3AzAgAEEAKQO4iQE3AzhBACgC5IoBIgVBAUgNAEEAIQRBACECA0AgBEGACWogACAEai0AADoAACAEQQFqIQQgBSACQQFqIgJB/wFxSg0ACwsgAEHAAGokAAv9AwMBfwF+AX8jAEGAAWsiAiQAQQBBgQI7AfKKAUEAIAE6APGKAUEAIAA6APCKAUGQfiEAA0AgAEGAiwFqQgA3AAAgAEH4igFqQgA3AAAgAEHwigFqQgA3AAAgAEEYaiIADQALQQAhAEEAQQApA/CKASIDQoiS853/zPmE6gCFNwOAiQFBAEEAKQP4igFCu86qptjQ67O7f4U3A4iJAUEAQQApA4CLAUKr8NP0r+68tzyFNwOQiQFBAEEAKQOIiwFC8e30+KWn/aelf4U3A5iJAUEAQQApA5CLAULRhZrv+s+Uh9EAhTcDoIkBQQBBACkDmIsBQp/Y+dnCkdqCm3+FNwOoiQFBAEEAKQOgiwFC6/qG2r+19sEfhTcDsIkBQQBBACkDqIsBQvnC+JuRo7Pw2wCFNwO4iQFBACADp0H/AXE2AuSKAQJAIAFBAUgNACACQgA3A3ggAkIANwNwIAJCADcDaCACQgA3A2AgAkIANwNYIAJCADcDUCACQgA3A0ggAkIANwNAIAJCADcDOCACQgA3AzAgAkIANwMoIAJCADcDICACQgA3AxggAkIANwMQIAJCADcDCCACQgA3AwBBACEEA0AgAiAAaiAAQYAJai0AADoAACAAQQFqIQAgBEEBaiIEQf8BcSABSA0ACyACQYABEAELIAJBgAFqJAALEgAgAEEDdkH/P3EgAEEQdhAECwkAQYAJIAAQAQsGAEGAiQELGwAgAUEDdkH/P3EgAUEQdhAEQYAJIAAQARADCwsLAQBBgAgLBPAAAAA=";
+  var hash$j = "c6f286e6";
+  var wasmJson$j = {
+    name: name$j,
+    data: data$j,
+    hash: hash$j
+  };
+  var mutex$k = new Mutex2();
+  function validateBits$4(bits) {
+    if (!Number.isInteger(bits) || bits < 8 || bits > 512 || bits % 8 !== 0) {
+      return new Error("Invalid variant! Valid values: 8, 16, ..., 512");
+    }
+    return null;
+  }
+  function getInitParam$1(outputBits, keyBits) {
+    return outputBits | keyBits << 16;
+  }
+  function createBLAKE2b(bits = 512, key = null) {
+    if (validateBits$4(bits)) {
+      return Promise.reject(validateBits$4(bits));
+    }
+    let keyBuffer = null;
+    let initParam = bits;
+    if (key !== null) {
+      keyBuffer = getUInt8Buffer(key);
+      if (keyBuffer.length > 64) {
+        return Promise.reject(new Error("Max key length is 64 bytes"));
+      }
+      initParam = getInitParam$1(bits, keyBuffer.length);
+    }
+    const outputSize = bits / 8;
+    return WASMInterface(wasmJson$j, outputSize).then((wasm) => {
+      if (initParam > 512) {
+        wasm.writeMemory(keyBuffer);
+      }
+      wasm.init(initParam);
+      const obj = {
+        init: initParam > 512 ? () => {
+          wasm.writeMemory(keyBuffer);
+          wasm.init(initParam);
+          return obj;
+        } : () => {
+          wasm.init(initParam);
+          return obj;
+        },
+        update: (data) => {
+          wasm.update(data);
+          return obj;
+        },
+        // biome-ignore lint/suspicious/noExplicitAny: Conflict with IHasher type
+        digest: (outputType) => wasm.digest(outputType),
+        save: () => wasm.save(),
+        load: (data) => {
+          wasm.load(data);
+          return obj;
+        },
+        blockSize: 128,
+        digestSize: outputSize
+      };
+      return obj;
+    });
+  }
+  function encodeResult(salt, options, res) {
+    const parameters = [
+      `m=${options.memorySize}`,
+      `t=${options.iterations}`,
+      `p=${options.parallelism}`
+    ].join(",");
+    return `$argon2${options.hashType}$v=19$${parameters}$${encodeBase64(salt, false)}$${encodeBase64(res, false)}`;
+  }
+  var uint32View = new DataView(new ArrayBuffer(4));
+  function int32LE(x) {
+    uint32View.setInt32(0, x, true);
+    return new Uint8Array(uint32View.buffer);
+  }
+  function hashFunc(blake512, buf, len) {
+    return __awaiter(this, void 0, void 0, function* () {
+      if (len <= 64) {
+        const blake = yield createBLAKE2b(len * 8);
+        blake.update(int32LE(len));
+        blake.update(buf);
+        return blake.digest("binary");
+      }
+      const r = Math.ceil(len / 32) - 2;
+      const ret = new Uint8Array(len);
+      blake512.init();
+      blake512.update(int32LE(len));
+      blake512.update(buf);
+      let vp = blake512.digest("binary");
+      ret.set(vp.subarray(0, 32), 0);
+      for (let i = 1; i < r; i++) {
+        blake512.init();
+        blake512.update(vp);
+        vp = blake512.digest("binary");
+        ret.set(vp.subarray(0, 32), i * 32);
+      }
+      const partialBytesNeeded = len - 32 * r;
+      let blakeSmall;
+      if (partialBytesNeeded === 64) {
+        blakeSmall = blake512;
+        blakeSmall.init();
+      } else {
+        blakeSmall = yield createBLAKE2b(partialBytesNeeded * 8);
+      }
+      blakeSmall.update(vp);
+      vp = blakeSmall.digest("binary");
+      ret.set(vp.subarray(0, partialBytesNeeded), r * 32);
+      return ret;
+    });
+  }
+  function getHashType(type) {
+    switch (type) {
+      case "d":
+        return 0;
+      case "i":
+        return 1;
+      default:
+        return 2;
+    }
+  }
+  function argon2Internal(options) {
+    return __awaiter(this, void 0, void 0, function* () {
+      var _a2;
+      const { parallelism, iterations, hashLength } = options;
+      const password = getUInt8Buffer(options.password);
+      const salt = getUInt8Buffer(options.salt);
+      const version = 19;
+      const hashType = getHashType(options.hashType);
+      const { memorySize } = options;
+      const secret = getUInt8Buffer((_a2 = options.secret) !== null && _a2 !== void 0 ? _a2 : "");
+      const [argon2Interface, blake512] = yield Promise.all([
+        WASMInterface(wasmJson$k, 1024),
+        createBLAKE2b(512)
+      ]);
+      argon2Interface.setMemorySize(memorySize * 1024 + 1024);
+      const initVector = new Uint8Array(24);
+      const initVectorView = new DataView(initVector.buffer);
+      initVectorView.setInt32(0, parallelism, true);
+      initVectorView.setInt32(4, hashLength, true);
+      initVectorView.setInt32(8, memorySize, true);
+      initVectorView.setInt32(12, iterations, true);
+      initVectorView.setInt32(16, version, true);
+      initVectorView.setInt32(20, hashType, true);
+      argon2Interface.writeMemory(initVector, memorySize * 1024);
+      blake512.init();
+      blake512.update(initVector);
+      blake512.update(int32LE(password.length));
+      blake512.update(password);
+      blake512.update(int32LE(salt.length));
+      blake512.update(salt);
+      blake512.update(int32LE(secret.length));
+      blake512.update(secret);
+      blake512.update(int32LE(0));
+      const segments = Math.floor(memorySize / (parallelism * 4));
+      const lanes = segments * 4;
+      const param = new Uint8Array(72);
+      const H0 = blake512.digest("binary");
+      param.set(H0);
+      for (let lane = 0; lane < parallelism; lane++) {
+        param.set(int32LE(0), 64);
+        param.set(int32LE(lane), 68);
+        let position = lane * lanes;
+        let chunk = yield hashFunc(blake512, param, 1024);
+        argon2Interface.writeMemory(chunk, position * 1024);
+        position += 1;
+        param.set(int32LE(1), 64);
+        chunk = yield hashFunc(blake512, param, 1024);
+        argon2Interface.writeMemory(chunk, position * 1024);
+      }
+      const C = new Uint8Array(1024);
+      writeHexToUInt8(C, argon2Interface.calculate(new Uint8Array([]), memorySize));
+      const res = yield hashFunc(blake512, C, hashLength);
+      if (options.outputType === "hex") {
+        const digestChars = new Uint8Array(hashLength * 2);
+        return getDigestHex(digestChars, res, hashLength);
+      }
+      if (options.outputType === "encoded") {
+        return encodeResult(salt, options, res);
+      }
+      return res;
+    });
+  }
+  var validateOptions$3 = (options) => {
+    var _a2;
+    if (!options || typeof options !== "object") {
+      throw new Error("Invalid options parameter. It requires an object.");
+    }
+    if (!options.password) {
+      throw new Error("Password must be specified");
+    }
+    options.password = getUInt8Buffer(options.password);
+    if (options.password.length < 1) {
+      throw new Error("Password must be specified");
+    }
+    if (!options.salt) {
+      throw new Error("Salt must be specified");
+    }
+    options.salt = getUInt8Buffer(options.salt);
+    if (options.salt.length < 8) {
+      throw new Error("Salt should be at least 8 bytes long");
+    }
+    options.secret = getUInt8Buffer((_a2 = options.secret) !== null && _a2 !== void 0 ? _a2 : "");
+    if (!Number.isInteger(options.iterations) || options.iterations < 1) {
+      throw new Error("Iterations should be a positive number");
+    }
+    if (!Number.isInteger(options.parallelism) || options.parallelism < 1) {
+      throw new Error("Parallelism should be a positive number");
+    }
+    if (!Number.isInteger(options.hashLength) || options.hashLength < 4) {
+      throw new Error("Hash length should be at least 4 bytes.");
+    }
+    if (!Number.isInteger(options.memorySize)) {
+      throw new Error("Memory size should be specified.");
+    }
+    if (options.memorySize < 8 * options.parallelism) {
+      throw new Error("Memory size should be at least 8 * parallelism.");
+    }
+    if (options.outputType === void 0) {
+      options.outputType = "hex";
+    }
+    if (!["hex", "binary", "encoded"].includes(options.outputType)) {
+      throw new Error(`Insupported output type ${options.outputType}. Valid values: ['hex', 'binary', 'encoded']`);
+    }
+  };
+  function argon2id(options) {
+    return __awaiter(this, void 0, void 0, function* () {
+      validateOptions$3(options);
+      return argon2Internal(Object.assign(Object.assign({}, options), { hashType: "id" }));
+    });
+  }
+  var mutex$j = new Mutex2();
+  var mutex$i = new Mutex2();
+  var mutex$h = new Mutex2();
+  var mutex$g = new Mutex2();
+  var polyBuffer = new Uint8Array(8);
+  var mutex$f = new Mutex2();
+  var mutex$e = new Mutex2();
+  var mutex$d = new Mutex2();
+  var mutex$c = new Mutex2();
+  var mutex$b = new Mutex2();
+  var mutex$a = new Mutex2();
+  var mutex$9 = new Mutex2();
+  var mutex$8 = new Mutex2();
+  var mutex$7 = new Mutex2();
+  var mutex$6 = new Mutex2();
+  var mutex$5 = new Mutex2();
+  var seedBuffer$2 = new Uint8Array(8);
+  var mutex$4 = new Mutex2();
+  var seedBuffer$1 = new Uint8Array(8);
+  var mutex$3 = new Mutex2();
+  var seedBuffer = new Uint8Array(8);
+  var mutex$2 = new Mutex2();
+  var mutex$1 = new Mutex2();
+  var mutex = new Mutex2();
+
+  // client/e2ee/src/backup.ts
+  var PASSWORD_KDF = { name: "argon2id", memory: 65536, iterations: 3, parallelism: 1 };
+  var RECOVERY_KDF = { name: "hkdf-sha256" };
+  var ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+  var CODE_LENGTH = 32;
+  var generateRecoveryCode = () => ([...randomBytes(CODE_LENGTH)].map((byte) => ALPHABET[byte & 31]).join("").match(/.{4}/g) ?? []).join("-");
+  var normalizeRecoveryCode = (code) => code.toUpperCase().replace(/[^0-9A-Z]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
+  var derived = /* @__PURE__ */ new Map();
+  var deriveBackupKey = (kdf, salt, input) => {
+    const cacheKey = `${kdf.name}|${kdf.memory}|${kdf.iterations}|${salt}|${input}`;
+    let pending = derived.get(cacheKey);
+    if (!pending) {
+      pending = kdf.name === "argon2id" ? argon2id({
+        password: utf8(input),
+        salt: fromB64u(salt),
+        parallelism: kdf.parallelism ?? 1,
+        iterations: kdf.iterations ?? 3,
+        memorySize: kdf.memory ?? 65536,
+        hashLength: 32,
+        outputType: "binary"
+      }).then((bytes) => new Uint8Array(bytes)) : hkdf(utf8(normalizeRecoveryCode(input)), fromB64u(salt), "fosscord-e2ee/v1/recovery-code");
+      pending.catch(() => derived.delete(cacheKey));
+      derived.clear();
+      derived.set(cacheKey, pending);
+    }
+    return pending;
+  };
+  var secretAad = (userId) => `fosscord-e2ee/v1/backup-secret
+${userId}`;
+  var wrapSecret = async (userId, mode, input, secret) => {
+    const kdf = mode === "password" ? PASSWORD_KDF : RECOVERY_KDF;
+    const salt = toB64u(randomBytes(16));
+    const key = await deriveBackupKey(kdf, salt, input);
+    return { mode, kdf, salt, wrapped_secret: await sealBox(key, secret, secretAad(userId)) };
+  };
+  var unwrapSecret = async (userId, record, input) => {
+    if (!record.wrapped_secret) throw new Error("backup has no wrapped secret");
+    const key = await deriveBackupKey(record.kdf, record.salt, input);
+    return openBox(key, record.wrapped_secret, secretAad(userId));
+  };
+  var secretKey = (secret, label) => hkdf(secret, new Uint8Array(32), `fosscord-e2ee/v1/backup/${label}`);
+  var sealJwk = async (secret, label, userId, jwk) => sealBox(await secretKey(secret, label), utf8(JSON.stringify(jwk)), `${label}
+${userId}`);
+  var openJwk = async (secret, label, userId, box) => {
+    const jwk = JSON.parse(fromUtf8(await openBox(await secretKey(secret, label), box, `${label}
+${userId}`)));
+    if (jwk.kty !== "OKP" || typeof jwk.x !== "string" || typeof jwk.d !== "string") throw new Error("bad key in backup");
+    return jwk;
+  };
 
   // client/e2ee/src/store.ts
   var database = null;
@@ -1818,9 +2531,11 @@ ${publicKey}`;
   // client/e2ee/src/engine.ts
   var FALLBACK_CONTENT = "🔒 Encrypted message";
   var WRAP_INFO = "fosscord-e2ee/v1/wrap";
+  var BACKUP_INFO = "fosscord-e2ee/v1/backup-wrap";
   var PREKEY_ROTATE_MS = 7 * 24 * 3600 * 1e3;
   var PREKEY_KEEP_MS = 30 * 24 * 3600 * 1e3;
   var DIRECTORY_TTL_MS = 5 * 60 * 1e3;
+  var PASSWORD_TTL_MS = 10 * 60 * 1e3;
   var E2eeError = class extends Error {
     constructor(code, message, userId) {
       super(message);
@@ -1836,19 +2551,37 @@ ${channelId}
 ${senderId}
 ${senderDevice}
 ${bind}`;
-  var signedPayload = (channelId, senderId, bind, env) => JSON.stringify([
-    "fosscord-e2ee/v1/sig",
-    channelId,
-    senderId,
-    bind,
-    env.v,
-    env.alg,
-    env.sender_device,
-    env.mid ?? null,
-    env.iv,
-    env.ct,
-    [...env.keys].sort((a, b) => a.device_id < b.device_id ? -1 : 1).map((k) => [k.user_id, k.device_id, k.prekey_id, k.enc, k.wrapped])
-  ]);
+  var storedKeyAad = (userId, messageId, sig) => `fosscord-e2ee/v1/backup-key
+${userId}
+${messageId}
+${sig}`;
+  var sameBytes = (a, b) => a.length === b.length && a.every((byte, i) => byte === b[i]);
+  var sleep = (ms) => new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+  var signedPayload = (channelId, senderId, bind, env) => {
+    const base = [
+      "fosscord-e2ee/v1/sig",
+      channelId,
+      senderId,
+      bind,
+      env.v,
+      env.alg,
+      env.sender_device,
+      env.mid ?? null,
+      env.iv,
+      env.ct,
+      [...env.keys].sort((a, b) => a.device_id < b.device_id ? -1 : 1).map((k) => [k.user_id, k.device_id, k.prekey_id, k.enc, k.wrapped])
+    ];
+    if (env.backup) base.push([...env.backup].sort((a, b) => a.user_id < b.user_id ? -1 : 1).map((b) => [b.user_id, b.enc, b.wrapped]));
+    return JSON.stringify(base);
+  };
+  var deviceName = () => {
+    const ua = navigator.userAgent;
+    const browser = /Edg\//.test(ua) ? "Edge" : /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "a browser";
+    const os = /Windows/.test(ua) ? "Windows" : /Mac OS X|Macintosh/.test(ua) ? "macOS" : /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iOS" : /Linux/.test(ua) ? "Linux" : "";
+    return os ? `${browser} on ${os}` : browser;
+  };
   var Engine = class {
     constructor(api2) {
       this.api = api2;
@@ -1858,29 +2591,94 @@ ${bind}`;
     linked = false;
     deviceStatus = "unregistered";
     identity = null;
+    trustedKey = null;
+    serverKey = null;
     device = null;
+    devices = [];
     prekeys = [];
     contacts = {};
     encryptedChannels = /* @__PURE__ */ new Set();
+    backup = null;
+    backupKeyPair = null;
+    secret = null;
+    password = null;
     store = null;
+    queue = Promise.resolve();
     directory = /* @__PURE__ */ new Map();
     members = /* @__PURE__ */ new Map();
     profiles = /* @__PURE__ */ new Map();
     plaintext = /* @__PURE__ */ new Map();
     listeners = /* @__PURE__ */ new Set();
+    unlockListeners = /* @__PURE__ */ new Set();
+    uploads = /* @__PURE__ */ new Map();
+    uploadTimer = null;
+    lookups = /* @__PURE__ */ new Map();
+    lookupTimer = null;
+    storedKeys = /* @__PURE__ */ new Map();
+    backfilling = false;
     onChange(listener) {
       this.listeners.add(listener);
       return () => this.listeners.delete(listener);
     }
+    onUnlock(listener) {
+      this.unlockListeners.add(listener);
+      return () => this.unlockListeners.delete(listener);
+    }
     emit() {
       this.listeners.forEach((listener) => listener());
+    }
+    get hasSecret() {
+      return !!this.secret;
+    }
+    get locked() {
+      return !!this.userId && !this.linked;
+    }
+    rememberPassword(value) {
+      this.password = { value, at: Date.now() };
+      if (this.userId) this.refresh().catch((error) => console.error("[e2ee] password refresh failed", error));
+    }
+    async passwordChanged(previous, next, api2 = this.api) {
+      if (!this.userId) return this.rememberPassword(next);
+      await this.serialized(async () => {
+        const backup = this.backup = await this.fetchBackup(api2);
+        if (!backup || backup.mode !== "password") return;
+        let secret = this.secret;
+        if (!secret && previous && backup.wrapped_secret) secret = await unwrapSecret(this.userId, backup, previous).catch(() => null);
+        if (!secret) {
+          this.password = { value: next, at: Date.now() };
+          return;
+        }
+        this.backup = await api2.request("patch", "/users/@me/e2ee/backup", {
+          version: backup.version,
+          ...await wrapSecret(this.userId, "password", next, secret)
+        });
+        this.password = null;
+      });
+      this.emit();
     }
     async init(userId) {
       this.userId = userId;
       this.store = scoped(userId);
       this.contacts = await this.store.get("contacts") ?? {};
-      await this.ensureKeys();
+      await this.refresh();
+    }
+    serialized(task) {
+      const run2 = this.queue.then(task);
+      this.queue = run2.then(
+        () => {
+        },
+        () => {
+        }
+      );
+      return run2;
+    }
+    async refresh() {
+      const wasLinked = this.linked;
+      const hadBackupKey = !!this.backupKeyPair;
+      await this.serialized(() => this.ensureKeys());
       this.emit();
+      if (!wasLinked && this.linked || !hadBackupKey && this.backupKeyPair) this.unlockListeners.forEach((listener) => listener());
+      if (this.linked && this.backupKeyPair) this.backfill().catch((error) => console.error("[e2ee] backfill failed", error));
     }
     async saveContacts() {
       await this.store.set("contacts", this.contacts);
@@ -1894,20 +2692,146 @@ ${bind}`;
     currentPrekey() {
       return this.prekeys.reduce((a, b) => b.id > a.id ? b : a);
     }
+    async fetchBackup(api2 = this.api) {
+      try {
+        return await api2.request("get", "/users/@me/e2ee/backup");
+      } catch (error) {
+        if (error?.status === 404) return null;
+        throw error;
+      }
+    }
+    async adoptIdentity(jwk) {
+      const identity = { publicKey: jwk.x, privateKey: await importSigningJwk(jwk) };
+      await this.store.set("identity", identity);
+      await this.trust(jwk.x);
+      this.identity = identity;
+      return identity;
+    }
+    async trust(key) {
+      if (this.trustedKey === key) return;
+      this.trustedKey = key;
+      await this.store.set("trusted-identity", key);
+    }
+    async restoreFromSecret(secret, backup) {
+      const identityJwk = await openJwk(secret, "identity", this.userId, backup.wrapped_identity);
+      if (identityJwk.x !== backup.identity_key) throw new Error("backup identity doesn't match");
+      const backupJwk = await openJwk(secret, "backup-key", this.userId, backup.wrapped_backup_key);
+      if (backupJwk.x !== backup.backup_public_key) throw new Error("backup key doesn't match");
+      await this.adoptIdentity(identityJwk);
+      this.backupKeyPair = { publicKey: backupJwk.x, keyPair: await importAgreementJwk(backupJwk) };
+      this.secret = secret;
+      await this.store.set("backup-secret", secret);
+      return identityJwk;
+    }
+    passwordValue() {
+      if (this.password && Date.now() - this.password.at > PASSWORD_TTL_MS) this.password = null;
+      return this.password?.value ?? null;
+    }
+    async createBackup(state, identityJwk) {
+      const userId = this.userId;
+      let identity = this.identity;
+      if (!identityJwk) {
+        identityJwk = await generateExportable("Ed25519");
+        const next = { publicKey: identityJwk.x, privateKey: await importSigningJwk(identityJwk) };
+        const devices = [];
+        for (const d of state.devices) {
+          if (d.status === "revoked" || !d.identity_signature) continue;
+          if (!await verify(identity.publicKey, deviceMessage(userId, d.device_id, d.signing_key), d.identity_signature)) continue;
+          devices.push({ device_id: d.device_id, identity_signature: await sign(next.privateKey, deviceMessage(userId, d.device_id, d.signing_key)) });
+        }
+        const previous_signature = await sign(identity.privateKey, rotationMessage(userId, identity.publicKey, next.publicKey));
+        Object.assign(state, await this.api.request("put", "/users/@me/e2ee/identity", { public_key: next.publicKey, previous_signature, devices }));
+        identity = await this.adoptIdentity(identityJwk);
+        this.directory.delete(userId);
+      }
+      const secret = randomBytes(32);
+      const backupJwk = await generateExportable("X25519");
+      const password = this.passwordValue();
+      const secretFields = password ? await wrapSecret(userId, "password", password, secret) : { mode: "password", kdf: PASSWORD_KDF, salt: toB64u(randomBytes(16)), wrapped_secret: null };
+      this.backup = await this.api.request("put", "/users/@me/e2ee/backup", {
+        version: this.backup?.version ?? 0,
+        ...secretFields,
+        identity_key: identity.publicKey,
+        wrapped_identity: await sealJwk(secret, "identity", userId, identityJwk),
+        backup_public_key: backupJwk.x,
+        backup_key_signature: await sign(identity.privateKey, backupKeyMessage(userId, backupJwk.x)),
+        wrapped_backup_key: await sealJwk(secret, "backup-key", userId, backupJwk)
+      });
+      if (password) this.password = null;
+      this.secret = secret;
+      await this.store.set("backup-secret", secret);
+      this.backupKeyPair = { publicKey: backupJwk.x, keyPair: await importAgreementJwk(backupJwk) };
+    }
+    async syncPassword() {
+      const password = this.passwordValue();
+      const backup = this.backup;
+      if (!password || !this.secret || !backup) return;
+      if (backup.mode !== "password") {
+        this.password = null;
+        return;
+      }
+      const current = backup.wrapped_secret ? await unwrapSecret(this.userId, backup, password).catch(() => null) : null;
+      if (!current || !sameBytes(current, this.secret))
+        this.backup = await this.api.request("patch", "/users/@me/e2ee/backup", {
+          version: backup.version,
+          ...await wrapSecret(this.userId, "password", password, this.secret)
+        });
+      this.password = null;
+    }
     async ensureKeys() {
       const store = this.store;
-      const state = await this.api.request("get", "/users/@me/e2ee");
+      const userId = this.userId;
+      let state = await this.api.request("get", "/users/@me/e2ee");
       this.encryptedChannels = new Set(state.channels);
       this.identity = await store.get("identity") ?? null;
+      this.trustedKey = await store.get("trusted-identity") ?? null;
       this.device = await store.get("device") ?? null;
       this.prekeys = await store.get("prekeys") ?? [];
-      if (!this.identity && !state.identity_key) {
-        const pair = await generateSigningKey();
-        this.identity = { publicKey: await exportPublic(pair.publicKey), privateKey: pair.privateKey };
-        await store.set("identity", this.identity);
+      this.secret = await store.get("backup-secret") ?? null;
+      this.backup = await this.fetchBackup();
+      let identityJwk = null;
+      if (!state.identity_key) {
+        identityJwk = await generateExportable("Ed25519");
+        await this.adoptIdentity(identityJwk);
+        state = await this.api.request("put", "/users/@me/e2ee/identity", { public_key: identityJwk.x });
+        this.secret = null;
+        this.backupKeyPair = null;
       }
-      if (this.identity && !state.identity_key) await this.api.request("put", "/users/@me/e2ee/identity", { public_key: this.identity.publicKey });
-      const identityMatches = !!this.identity && (!state.identity_key || state.identity_key === this.identity.publicKey);
+      const serverKey = state.identity_key;
+      this.serverKey = serverKey;
+      if (this.identity && this.identity.publicKey !== serverKey) {
+        const previous = state.previous_identity;
+        const rotated = previous?.public_key === this.identity.publicKey && await verify(previous.public_key, rotationMessage(userId, previous.public_key, serverKey), previous.signature);
+        this.identity = null;
+        await store.del("identity");
+        if (rotated) await this.trust(serverKey);
+      }
+      if (this.identity) await this.trust(this.identity.publicKey);
+      const backup = this.backup?.identity_key === serverKey ? this.backup : null;
+      if (backup && this.secret && (!this.identity || !this.backupKeyPair || this.backupKeyPair.publicKey !== backup.backup_public_key)) {
+        try {
+          identityJwk = await this.restoreFromSecret(this.secret, backup);
+        } catch (error) {
+          console.error("[e2ee] stored backup secret doesn't open the backup", error);
+          this.secret = null;
+          this.backupKeyPair = null;
+          await store.del("backup-secret");
+        }
+      }
+      const password = this.passwordValue();
+      if (backup && !this.secret && password && backup.mode === "password" && backup.wrapped_secret) {
+        const secret = await unwrapSecret(userId, backup, password).catch(() => null);
+        if (secret) identityJwk = await this.restoreFromSecret(secret, backup);
+      }
+      if (this.identity && !backup) {
+        try {
+          await this.createBackup(state, identityJwk);
+        } catch (error) {
+          console.error("[e2ee] couldn't create the key backup", error);
+        }
+      }
+      await this.syncPassword().catch((error) => console.error("[e2ee] couldn't update the backup password", error));
+      const trusted = this.trustedKey === state.identity_key ? this.trustedKey : null;
       let serverDevice = this.device ? state.devices.find((d) => d.device_id === this.device.deviceId) : void 0;
       if (!this.device || serverDevice?.status === "revoked") {
         const pair = await generateSigningKey();
@@ -1931,20 +2855,67 @@ ${bind}`;
         serverDevice.prekey = { id: next.id, public_key: next.publicKey, signature: next.signature };
         current = next;
       }
-      const needsSignature = identityMatches && serverDevice?.status !== "active";
-      if (!serverDevice || serverDevice.prekey.id !== current.id || needsSignature) {
-        const identitySignature = identityMatches ? await sign(this.identity.privateKey, deviceMessage(this.userId, this.device.deviceId, this.device.signingKey)) : void 0;
+      const message = deviceMessage(userId, this.device.deviceId, this.device.signingKey);
+      const signedBy = async (device) => !!trusted && device?.status === "active" && !!device.identity_signature && await verify(trusted, message, device.identity_signature);
+      const canSign = !!this.identity && this.identity.publicKey === trusted;
+      if (!serverDevice || serverDevice.prekey.id !== current.id || canSign && !await signedBy(serverDevice)) {
         serverDevice = await this.api.request("post", "/users/@me/e2ee/devices", {
           device_id: this.device.deviceId,
           signing_key: this.device.signingKey,
-          identity_signature: identitySignature,
-          name: navigator.userAgent.slice(0, 64),
+          identity_signature: canSign ? await sign(this.identity.privateKey, message) : void 0,
+          name: deviceName(),
           prekey: { id: current.id, public_key: current.publicKey, signature: current.signature }
         });
+        state.devices = [...state.devices.filter((d) => d.device_id !== serverDevice.device_id), serverDevice];
       }
+      this.devices = state.devices;
       this.deviceStatus = serverDevice.status;
-      this.linked = identityMatches && serverDevice.status === "active";
+      this.linked = await signedBy(serverDevice);
+      this.directory.delete(userId);
+    }
+    async unlockWith(kind, input) {
+      const backup = this.backup = await this.fetchBackup();
+      if (!backup?.wrapped_secret || backup.mode !== kind) throw new E2eeError("BAD_SECRET", "There's no backup to unlock with that");
+      const secret = await unwrapSecret(this.userId, backup, input).catch(() => null);
+      if (!secret) throw new E2eeError("BAD_SECRET", kind === "password" ? "That password didn't unlock your keys" : "That recovery code didn't work");
+      await this.unlockWithSecret(secret);
+    }
+    async unlockWithSecret(secret) {
+      await this.store.set("backup-secret", secret);
+      this.secret = secret;
+      await this.refresh();
+      if (!this.linked) throw new E2eeError("BAD_SECRET", "That key didn't unlock this browser");
+    }
+    exportSecret() {
+      return this.secret;
+    }
+    async useRecoveryCode() {
+      const code = generateRecoveryCode();
+      await this.setBackupMode("recovery", code);
+      return code;
+    }
+    async setBackupMode(mode, input) {
+      if (!this.secret) throw new E2eeError("LOCKED", "Unlock this browser first");
+      await this.serialized(async () => {
+        const backup = this.backup = await this.fetchBackup();
+        if (!backup) throw new E2eeError("LOCKED", "There's no backup yet");
+        this.backup = await this.api.request("patch", "/users/@me/e2ee/backup", {
+          version: backup.version,
+          ...await wrapSecret(this.userId, mode, input, this.secret)
+        });
+      });
+      this.emit();
+    }
+    async removeDevice(deviceId) {
+      await this.api.request("del", `/users/@me/e2ee/devices/${deviceId}`);
+      this.devices = this.devices.filter((d) => d.device_id !== deviceId);
       this.directory.delete(this.userId);
+      this.emit();
+    }
+    async reloadBackup() {
+      this.backup = await this.fetchBackup();
+      this.emit();
+      return this.backup;
     }
     invalidateUser(userId) {
       this.directory.delete(userId);
@@ -2005,11 +2976,16 @@ ${bind}`;
     async verifyEntry(userId, keys) {
       const identityKey = keys.identity_key;
       let identityChanged = false;
-      if (identityKey && userId === this.userId) identityChanged = identityKey !== this.identity?.publicKey;
+      if (identityKey && userId === this.userId) identityChanged = identityKey !== this.trustedKey;
       else if (identityKey) {
         const contact = this.contacts[userId];
+        const previous = keys.previous_identity;
         if (!contact) {
           this.contacts[userId] = { identityKey, verified: false, pendingKey: null, firstSeen: Date.now() };
+          await this.saveContacts();
+        } else if (contact.identityKey !== identityKey && previous?.public_key === contact.identityKey && await verify(previous.public_key, rotationMessage(userId, previous.public_key, identityKey), previous.signature)) {
+          contact.identityKey = identityKey;
+          contact.pendingKey = null;
           await this.saveContacts();
         } else if (contact.identityKey !== identityKey) {
           if (contact.pendingKey !== identityKey) {
@@ -2022,6 +2998,7 @@ ${bind}`;
         }
       }
       const devices = [];
+      let backupKey = null;
       if (identityKey) {
         for (const device of keys.devices) {
           if (!device.identity_signature) continue;
@@ -2037,8 +3014,10 @@ ${bind}`;
             prekeyPublic: device.prekey.public_key
           });
         }
+        const backup = keys.backup_key;
+        if (backup && await verify(identityKey, backupKeyMessage(userId, backup.public_key), backup.signature)) backupKey = backup.public_key;
       }
-      return { userId, identityKey, identityChanged, devices, fetchedAt: Date.now() };
+      return { userId, identityKey, identityChanged, backupKey, devices, fetchedAt: Date.now() };
     }
     async acceptIdentity(userId) {
       const contact = this.contacts[userId];
@@ -2059,7 +3038,7 @@ ${bind}`;
     }
     async encrypt(channelId, content, opts) {
       if (!this.device || !this.userId) throw new E2eeError("NOT_READY", "Encryption is still starting up");
-      if (!this.linked) throw new E2eeError("NOT_LINKED", "This browser is not linked to your encryption identity");
+      if (!this.linked) throw new E2eeError("NOT_LINKED", "This browser isn't unlocked for encrypted messages yet");
       const members = [this.userId, ...await this.channelMembers(channelId)];
       const entries = await this.keysFor(members);
       const targets2 = [];
@@ -2090,7 +3069,20 @@ ${bind}`;
 ${device.deviceId}`)
         }))
       );
-      const unsigned = { v: 1, alg: ALGORITHM, sender_device: this.device.deviceId, ...opts.mid ? { mid: opts.mid } : {}, iv: toB64u(iv), ct: toB64u(ct), keys };
+      const backup = await Promise.all(
+        entries.filter((e) => e.backupKey).map(async (e) => ({ user_id: e.userId, ...await hpkeSeal(e.backupKey, contentKey, BACKUP_INFO, `${aad}
+backup:${e.userId}`) }))
+      );
+      const unsigned = {
+        v: 1,
+        alg: ALGORITHM,
+        sender_device: this.device.deviceId,
+        ...opts.mid ? { mid: opts.mid } : {},
+        iv: toB64u(iv),
+        ct: toB64u(ct),
+        keys,
+        ...backup.length ? { backup } : {}
+      };
       const sig = await sign(this.device.privateKey, signedPayload(channelId, this.userId, bind, unsigned));
       const envelope = { ...unsigned, sig };
       this.plaintext.set(`${opts.mid ?? ""}:${sig}`, content);
@@ -2100,7 +3092,7 @@ ${device.deviceId}`)
       const env = message.encrypted;
       return env ? this.plaintext.get(`${message.id}:${env.sig}`) ?? this.plaintext.get(`${env.mid ?? ""}:${env.sig}`) : void 0;
     }
-    async decrypt(message) {
+    async decrypt(message, remember = true) {
       const env = message.encrypted;
       if (!env || env.v !== 1 || env.alg !== ALGORITHM || !Array.isArray(env.keys)) throw new E2eeError("BAD_ENVELOPE", "Unsupported envelope");
       const hit = this.cached(message);
@@ -2124,22 +3116,115 @@ ${device.deviceId}`)
       const bind = binding(env.mid, nonce);
       const { sig, ...unsigned } = env;
       if (!await verify(sender.signingKey, signedPayload(message.channel_id, senderId, bind, unsigned), sig)) throw new E2eeError("BAD_SIGNATURE", "Signature check failed");
-      const mine = env.keys.find((k) => k.device_id === this.device.deviceId);
-      if (!mine) throw new E2eeError("NO_KEY", "This message was not encrypted for this browser");
-      const prekey = this.prekeys.find((p) => p.id === mine.prekey_id);
-      if (!prekey) throw new E2eeError("NO_KEY", "The key for this message has expired");
       const aad = messageAad(message.channel_id, senderId, env.sender_device, bind);
-      const contentKey = await hpkeOpen(prekey.keyPair, mine.enc, mine.wrapped, WRAP_INFO, `${aad}
+      const mine = env.keys.find((k) => k.device_id === this.device.deviceId);
+      const prekey = mine && this.prekeys.find((p) => p.id === mine.prekey_id);
+      let contentKey = null;
+      if (mine && prekey) contentKey = await hpkeOpen(prekey.keyPair, mine.enc, mine.wrapped, WRAP_INFO, `${aad}
 ${mine.device_id}`);
+      const backupEntry = env.backup?.find((b) => b.user_id === this.userId);
+      const backupKey = this.backupKeyPair;
+      if (!contentKey && backupEntry && backupKey)
+        contentKey = await hpkeOpen(backupKey.keyPair, backupEntry.enc, backupEntry.wrapped, BACKUP_INFO, `${aad}
+backup:${this.userId}`).catch(() => null);
+      if (!contentKey && backupKey) {
+        const stored = await this.lookupStoredKey(message.id);
+        if (stored) contentKey = await hpkeOpen(backupKey.keyPair, stored.enc, stored.wrapped, BACKUP_INFO, storedKeyAad(this.userId, message.id, sig)).catch(() => null);
+      }
+      if (!contentKey) {
+        if (!this.linked || !backupKey) throw new E2eeError("LOCKED", "This browser isn't unlocked yet");
+        throw new E2eeError("NO_KEY", "Sent before this browser was set up");
+      }
       const payload = JSON.parse(fromUtf8(await aesDecrypt(contentKey, fromB64u(env.iv), fromB64u(env.ct), aad)));
       const content = typeof payload.content === "string" ? payload.content : "";
-      this.plaintext.set(`${message.id}:${env.sig}`, content);
+      if (mine && prekey && backupKey) {
+        const covered = !!backupEntry && !!await hpkeOpen(backupKey.keyPair, backupEntry.enc, backupEntry.wrapped, BACKUP_INFO, `${aad}
+backup:${this.userId}`).catch(() => null);
+        if (!covered) await this.queueBackup(message.id, sig, contentKey);
+      }
+      if (remember) this.plaintext.set(`${message.id}:${env.sig}`, content);
       return content;
+    }
+    lookupStoredKey(messageId) {
+      const known = this.storedKeys.get(messageId);
+      if (known) return Promise.resolve(known);
+      const existing = this.lookups.get(messageId);
+      if (existing) return existing.promise;
+      let resolve = () => {
+      };
+      const promise = new Promise((r) => {
+        resolve = r;
+      });
+      this.lookups.set(messageId, { promise, resolve });
+      this.lookupTimer ??= setTimeout(() => this.flushLookups(), 25);
+      return promise;
+    }
+    async flushLookups() {
+      this.lookupTimer = null;
+      const batch = [...this.lookups.entries()].slice(0, 100);
+      batch.forEach(([id]) => this.lookups.delete(id));
+      if (this.lookups.size) this.lookupTimer = setTimeout(() => this.flushLookups(), 0);
+      try {
+        const res = await this.api.request("post", "/users/@me/e2ee/backup/keys/query", {
+          message_ids: batch.map(([id]) => id)
+        });
+        for (const key of res.keys) this.storedKeys.set(key.message_id, { user_id: this.userId, enc: key.enc, wrapped: key.wrapped });
+      } catch (error) {
+        console.error("[e2ee] backup key lookup failed", error);
+      }
+      batch.forEach(([id, { resolve }]) => resolve(this.storedKeys.get(id) ?? null));
+    }
+    async queueBackup(messageId, sig, contentKey) {
+      const marker = `bk:${messageId}`;
+      if (this.uploads.has(messageId) || await this.store.get(marker) === sig || !this.backupKeyPair) return;
+      const sealed = await hpkeSeal(this.backupKeyPair.publicKey, contentKey, BACKUP_INFO, storedKeyAad(this.userId, messageId, sig));
+      this.uploads.set(messageId, { message_id: messageId, ...sealed, sig });
+      this.uploadTimer ??= setTimeout(() => this.flushBackups(), 1e3);
+    }
+    async flushBackups() {
+      if (this.uploadTimer) clearTimeout(this.uploadTimer);
+      this.uploadTimer = null;
+      while (this.uploads.size) {
+        const batch = [...this.uploads.values()].slice(0, 100);
+        batch.forEach((entry) => this.uploads.delete(entry.message_id));
+        try {
+          await this.api.request("post", "/users/@me/e2ee/backup/keys", { keys: batch.map(({ message_id, enc, wrapped }) => ({ message_id, enc, wrapped })) });
+          await Promise.all(batch.map((entry) => this.store.set(`bk:${entry.message_id}`, entry.sig)));
+        } catch (error) {
+          console.error("[e2ee] backup upload failed", error);
+          return;
+        }
+      }
+    }
+    async backfill() {
+      const key = this.backupKeyPair?.publicKey;
+      if (!key || this.backfilling) return;
+      const marker = `backfill:${key}`;
+      if (await this.store.get(marker)) return;
+      this.backfilling = true;
+      try {
+        for (const channelId of [...this.encryptedChannels]) {
+          let before = "";
+          for (let page = 0; page < 50; page++) {
+            const batch = await this.api.request("get", `/channels/${channelId}/messages?limit=100${before && `&before=${before}`}`);
+            for (const message of batch) if (message.encrypted) await this.decrypt(message, false).catch(() => {
+            });
+            await this.flushBackups();
+            if (batch.length < 100) break;
+            before = batch[batch.length - 1].id;
+            await sleep(250);
+          }
+        }
+        await this.store.set(marker, true);
+      } finally {
+        this.backfilling = false;
+      }
     }
     async safetyNumber(userId) {
       const [entry] = await this.keysFor([userId]);
       const theirs = this.contacts[userId]?.pendingKey ?? entry.identityKey;
-      if (!theirs || !this.identity) return null;
+      const mine = this.trustedKey;
+      if (!theirs || !mine) return null;
       const part = async (id, key) => {
         let digest = new Uint8Array(await crypto.subtle.digest("SHA-512", new Uint8Array([0, 0, ...fromB64u(key), ...utf8(id)])));
         for (let i = 0; i < 5200; i++) digest = new Uint8Array(await crypto.subtle.digest("SHA-512", new Uint8Array([...digest, ...fromB64u(key)])));
@@ -2150,12 +3235,15 @@ ${mine.device_id}`);
         }
         return out;
       };
-      const [mine, other] = await Promise.all([part(this.userId, this.identity.publicKey), part(userId, theirs)]);
-      return mine < other ? mine + other : other + mine;
+      const [own, other] = await Promise.all([part(this.userId, mine), part(userId, theirs)]);
+      return own < other ? own + other : other + own;
     }
   };
 
   // client/e2ee/src/hooks.ts
+  var DECRYPTING_CONTENT = "Decrypting…";
+  var MISSING_CONTENT = "Sent before this browser was set up";
+  var AUTH_URL = /^\/auth\/(login|register)$/;
   var MESSAGE_URL = /^\/channels\/(\d+)\/messages(?:\/(\d+))?$/;
   var isEncryptedMessage = (value) => {
     const message = value;
@@ -2177,25 +3265,48 @@ ${mine.device_id}`);
   var createHooks = (ctx) => {
     const { engine: engine2, states: states2 } = ctx;
     const inflight = /* @__PURE__ */ new Map();
+    const retry = /* @__PURE__ */ new Map();
+    let dispatcher = null;
+    const clone = (message) => JSON.parse(JSON.stringify(message));
     const decryptOne = (message) => {
       const key = `${message.id}:${message.encrypted?.sig}`;
       const sync = engine2.cached(message);
       if (sync !== void 0) {
         message.content = sync;
         states2.set(message.id, { state: "decrypted" });
+        retry.delete(message.id);
+        return Promise.resolve();
+      }
+      if (!ctx.isReady()) {
+        if (ctx.failClosed()) {
+          states2.set(message.id, { state: "failed", reason: "Encryption is unavailable in this client build" });
+          message.content = FALLBACK_CONTENT;
+        } else {
+          retry.set(message.id, clone(message));
+          states2.set(message.id, { state: "pending" });
+          message.content = DECRYPTING_CONTENT;
+        }
         return Promise.resolve();
       }
       let pending = inflight.get(key);
       if (!pending) {
+        const original = clone(message);
         pending = (async () => {
           try {
-            if (!await ctx.ready) throw new E2eeError("NOT_READY", "Encryption is unavailable in this client build");
             const content = await engine2.decrypt(message);
             states2.set(message.id, { state: "decrypted" });
+            retry.delete(message.id);
             message.content = content;
           } catch (error) {
-            states2.set(message.id, { state: "failed", reason: error instanceof Error ? error.message : String(error) });
-            message.content = FALLBACK_CONTENT;
+            const code = error instanceof E2eeError ? error.code : null;
+            if (code === "LOCKED" || code === "NO_KEY") {
+              states2.set(message.id, { state: "missing", reason: error instanceof Error ? error.message : String(error) });
+              retry.set(message.id, original);
+              message.content = MISSING_CONTENT;
+            } else {
+              states2.set(message.id, { state: "failed", reason: error instanceof Error ? error.message : String(error) });
+              message.content = FALLBACK_CONTENT;
+            }
           }
         })().finally(() => inflight.delete(key));
         inflight.set(key, pending);
@@ -2203,9 +3314,24 @@ ${mine.device_id}`);
       }
       return pending.then(() => {
         const again = engine2.cached(message);
-        if (again !== void 0) message.content = again;
+        const state = states2.get(message.id)?.state;
+        message.content = again ?? (state === "missing" ? MISSING_CONTENT : state === "failed" ? FALLBACK_CONTENT : message.content);
         ctx.onState();
       });
+    };
+    const retryAll = () => {
+      if (!ctx.isReady()) return;
+      const queued = [...retry.values()];
+      retry.clear();
+      for (const copy of queued) {
+        const before = states2.get(copy.id)?.state;
+        decryptOne(copy).then(() => {
+          const after = states2.get(copy.id)?.state;
+          if (after === before && after !== "pending") return;
+          dispatcher?.dispatch({ type: "MESSAGE_UPDATE", message: copy, e2eeLocal: true });
+          ctx.onState();
+        });
+      }
     };
     const decryptAll = async (value) => {
       const messages = collect(value, []);
@@ -2236,6 +3362,17 @@ ${mine.device_id}`);
         const wrapped = (input, callback) => {
           const opts = typeof input === "string" ? { url: input, rejectWithError: false } : input;
           const url = typeof opts?.url === "string" ? opts.url : "";
+          const path = url.split("?")[0];
+          if (method === "post" && AUTH_URL.test(path) || method === "patch" && path === "/users/@me") {
+            const body = opts.body ?? {};
+            const result = original(input, callback);
+            result.then(
+              (res) => res?.ok && ctx.onCredentials(path, body, res.body),
+              () => {
+              }
+            );
+            return result;
+          }
           const relevant = url.startsWith("/channels/") || url.startsWith("/users/@me/mentions") || url.includes("/messages");
           if (!relevant) return original(input, callback);
           return (async () => {
@@ -2307,8 +3444,9 @@ ${mine.device_id}`);
         }
       });
     };
-    const watchDispatcher = (dispatcher) => {
-      dispatcher.addInterceptor((action) => {
+    const watchDispatcher = (target) => {
+      dispatcher = target;
+      target.addInterceptor((action) => {
         if (action.e2eeLocal || !/MESSAGE|SEARCH|PIN|MENTION|THREAD/.test(action.type)) return false;
         const messages = collect(action, []).filter((m) => m.content === FALLBACK_CONTENT && !states2.has(m.id));
         for (const message of messages) {
@@ -2318,16 +3456,144 @@ ${mine.device_id}`);
             states2.set(message.id, { state: "decrypted" });
             continue;
           }
-          const copy = JSON.parse(JSON.stringify(message));
+          const copy = clone(message);
+          message.content = DECRYPTING_CONTENT;
           decryptOne(copy).then(() => {
-            if (states2.get(copy.id)?.state !== "decrypted") return;
-            dispatcher.dispatch({ type: "MESSAGE_UPDATE", message: copy, e2eeLocal: true });
+            if (states2.get(copy.id)?.state === "pending") return;
+            target.dispatch({ type: "MESSAGE_UPDATE", message: copy, e2eeLocal: true });
           });
         }
         return false;
       });
     };
-    return { wrapHttp, wrapGateway, watchDispatcher, decryptAll };
+    return { wrapHttp, wrapGateway, watchDispatcher, decryptAll, retryAll };
+  };
+
+  // client/e2ee/src/link.ts
+  var sasFor = async (requestId, requester, approver) => {
+    const digest = await sha256(utf8(`fosscord-e2ee/v1/sas
+${requestId}
+${requester}
+${approver}`));
+    const value = (digest[0] << 24 | digest[1] << 16 | digest[2] << 8 | digest[3]) >>> 0;
+    const digits = String(value % 1e6).padStart(6, "0");
+    return `${digits.slice(0, 3)} ${digits.slice(3)}`;
+  };
+  var channelKey = async (pair, peer, requestId) => hkdf(await x25519(pair.privateKey, peer), utf8(requestId), "fosscord-e2ee/v1/link");
+  var channelAad = (requestId, requester, approver) => `fosscord-e2ee/v1/link
+${requestId}
+${requester}
+${approver}`;
+  var createLink = (engine2, api2, hooks2) => {
+    let outgoing = null;
+    const incoming = /* @__PURE__ */ new Map();
+    const post = (body) => api2.request("post", "/users/@me/e2ee/link", { ...body, device_id: engine2.device.deviceId });
+    const request = async () => {
+      if (!engine2.device || engine2.linked) return;
+      const pair = await generateAgreementKey();
+      const publicKey = await exportPublic(pair.publicKey);
+      const current = {
+        requestId: toB64u(randomBytes(16)),
+        state: "waiting",
+        sas: null,
+        approverName: null,
+        pair,
+        publicKey,
+        approver: null,
+        approverKey: null
+      };
+      outgoing = current;
+      hooks2.onChange();
+      const body = { request_id: current.requestId, stage: "request", name: deviceName(), commit: toB64u(await sha256(fromB64u(publicKey))) };
+      await post(body);
+      let attempts = 0;
+      const timer = setInterval(() => {
+        if (outgoing !== current || current.state !== "waiting" || engine2.linked || ++attempts > 30) return clearInterval(timer);
+        post(body).catch(() => {
+        });
+      }, 1e4);
+    };
+    const cancel = async () => {
+      const current = outgoing;
+      outgoing = null;
+      hooks2.onChange();
+      if (current && current.state !== "done") await post({ request_id: current.requestId, stage: "cancel" }).catch(() => {
+      });
+    };
+    const onRequest = async (event) => {
+      if (!engine2.device || event.device_id === engine2.device.deviceId || !engine2.linked || !engine2.exportSecret() || !event.commit) return;
+      if (incoming.has(event.request_id) || incoming.size > 8) return;
+      const pair = await generateAgreementKey();
+      const publicKey = await exportPublic(pair.publicKey);
+      incoming.set(event.request_id, { deviceId: event.device_id, name: event.name ?? "a new browser", commit: event.commit, pair, publicKey });
+      setTimeout(() => incoming.delete(event.request_id), 10 * 60 * 1e3);
+      await post({ request_id: event.request_id, stage: "offer", to_device: event.device_id, public_key: publicKey });
+    };
+    const onResponse = async (event) => {
+      const mine = engine2.device?.deviceId;
+      if (event.stage === "cancel") {
+        if (incoming.delete(event.request_id)) hooks2.onDismiss(event.request_id);
+        return;
+      }
+      if (!mine || event.to_device !== mine) return;
+      const current = outgoing?.requestId === event.request_id ? outgoing : null;
+      if (event.stage === "offer" && current && !current.approver && event.public_key) {
+        current.approver = event.device_id;
+        current.approverKey = event.public_key;
+        current.approverName = engine2.devices.find((d) => d.device_id === event.device_id)?.name ?? null;
+        current.sas = await sasFor(current.requestId, current.publicKey, event.public_key);
+        current.state = "comparing";
+        hooks2.onChange();
+        await post({ request_id: current.requestId, stage: "reveal", to_device: event.device_id, public_key: current.publicKey });
+        return;
+      }
+      if (event.stage === "reveal" && event.public_key) {
+        const pending = incoming.get(event.request_id);
+        if (!pending || pending.deviceId !== event.device_id) return;
+        if (toB64u(await sha256(fromB64u(event.public_key))) !== pending.commit) {
+          incoming.delete(event.request_id);
+          return;
+        }
+        const requester = event.public_key;
+        const sas = await sasFor(event.request_id, requester, pending.publicKey);
+        const respond = async (stage) => {
+          if (!incoming.delete(event.request_id)) return;
+          if (stage === "deny") return void await post({ request_id: event.request_id, stage, to_device: pending.deviceId });
+          const secret = engine2.exportSecret();
+          if (!secret) throw new Error("This browser can't approve logins");
+          const key = await channelKey(pending.pair, requester, event.request_id);
+          const iv = randomBytes(12);
+          const ct = await aesEncrypt(key, iv, secret, channelAad(event.request_id, requester, pending.publicKey));
+          await post({ request_id: event.request_id, stage, to_device: pending.deviceId, iv: toB64u(iv), ct: toB64u(ct) });
+        };
+        hooks2.onPrompt({ requestId: event.request_id, name: pending.name, sas, approve: () => respond("approve"), deny: () => respond("deny") });
+        return;
+      }
+      if (!current || event.device_id !== current.approver) return;
+      if (event.stage === "deny") {
+        current.state = "denied";
+        hooks2.onChange();
+        return;
+      }
+      if (event.stage === "approve" && event.iv && event.ct && current.approverKey) {
+        try {
+          const key = await channelKey(current.pair, current.approverKey, current.requestId);
+          const secret = await aesDecrypt(key, fromB64u(event.iv), fromB64u(event.ct), channelAad(current.requestId, current.publicKey, current.approverKey));
+          await engine2.unlockWithSecret(secret);
+          current.state = "done";
+        } catch (error) {
+          console.error("[e2ee] approval didn't unlock this browser", error);
+          current.state = "failed";
+        }
+        hooks2.onChange();
+      }
+    };
+    return {
+      request,
+      cancel,
+      onEvent: (type, event) => (type === "E2EE_LINK_REQUEST" ? onRequest(event) : onResponse(event)).catch((error) => console.error("[e2ee] link", error)),
+      outgoing: () => outgoing ? { requestId: outgoing.requestId, state: outgoing.state, sas: outgoing.sas, approverName: outgoing.approverName } : null
+    };
   };
 
   // client/e2ee/src/ui.ts
@@ -2371,18 +3637,40 @@ ${mine.device_id}`);
 .fe2ee-member-actions{display:flex;gap:8px;flex-wrap:wrap}
 @media (prefers-reduced-motion:no-preference){.fe2ee-banner{animation:fe2ee-in 180ms ease-out}}
 @keyframes fe2ee-in{from{opacity:0;translate:0 -6px}}
+.fe2ee-lock[data-state="pending"],.fe2ee-lock[data-state="missing"]{color:var(--text-muted,#949ba4)}
+.fe2ee-unlock{font:inherit;font-size:13px;font-weight:500;line-height:18px;margin-inline-start:8px;padding:2px 8px;border:0;border-radius:4px;cursor:pointer;color:var(--text-default,#dbdee1);background:var(--button-secondary-background,#4e5058);transition:background-color 120ms ease-out,scale 200ms ease-out}
+.fe2ee-unlock:active{scale:.97}
+.fe2ee-unlock:focus-visible{outline:2px solid var(--focus-primary,#00a8fc);outline-offset:2px}
+@media (hover:hover){.fe2ee-unlock:hover{background:var(--button-secondary-background-hover,#6d6f78)}}
+.fe2ee-section{display:flex;flex-direction:column;gap:8px;padding-top:16px;border-top:1px solid var(--border-subtle,rgb(255 255 255 / .06))}
+.fe2ee-section h3{margin:0;font-size:16px;line-height:20px;font-weight:600;color:var(--header-primary,#f2f3f5)}
+.fe2ee-section > .fe2ee-button{align-self:flex-start}
+.fe2ee-field{display:flex;flex-direction:column;gap:6px}
+.fe2ee-field label{font-size:14px;font-weight:500;color:var(--text-default,#dbdee1)}
+.fe2ee-row{display:flex;gap:8px;align-items:center}
+.fe2ee-input{flex:1;min-width:0;font:inherit;font-size:15px;line-height:20px;padding:8px 10px;border-radius:6px;border:0;color:var(--text-default,#dbdee1);background:var(--input-background,var(--background-base-lowest,#1e1f22));box-shadow:inset 0 0 0 1px var(--border-subtle,rgb(255 255 255 / .06))}
+.fe2ee-input:focus-visible{outline:2px solid var(--focus-primary,#00a8fc);outline-offset:0}
+.fe2ee-input[aria-invalid="true"]{box-shadow:inset 0 0 0 1px var(--status-danger,#f23f43)}
+.fe2ee-error{margin:0;font-size:14px;color:var(--status-danger,#f23f43)}
+.fe2ee-code{font-size:28px;line-height:36px;font-weight:600;letter-spacing:.08em;font-variant-numeric:tabular-nums;color:var(--header-primary,#f2f3f5)}
+.fe2ee-recovery{font-size:18px;line-height:28px;font-weight:600;letter-spacing:.06em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;user-select:all;padding:12px;border-radius:8px;color:var(--header-primary,#f2f3f5);background:var(--background-base-lowest,#1e1f22)}
+.fe2ee-device{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:32px}
+.fe2ee-device span{overflow-wrap:anywhere}
+.fe2ee-device small{display:block;font-size:13px;color:var(--text-muted,#b5bac1)}
 `;
   var svg = (path, label) => `<svg viewBox="0 0 24 24" fill="currentColor" ${label ? `role="img" aria-label="${label}"` : 'aria-hidden="true"'}><path fill-rule="evenodd" d="${path}"/></svg>`;
   var escape = (text) => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
   var currentChannel = () => /^\/channels\/@me\/(\d+)/.exec(location.pathname)?.[1] ?? null;
   var memberName = (m) => m.global_name || m.username;
-  var createUi = ({ engine: engine2, states: states2, enableChannel }) => {
+  var createUi = ({ engine: engine2, states: states2, enableChannel, link: link2, verifyPassword: verifyPassword2 }) => {
     const style = document.createElement("style");
     style.textContent = css;
     const banners = document.createElement("div");
     banners.className = "fe2ee-banners";
     let failure2 = null;
     let transient = null;
+    let unlockOpen = null;
+    const approvals = /* @__PURE__ */ new Map();
     let members = null;
     let scheduled = false;
     const mount = () => {
@@ -2468,20 +3756,20 @@ ${mine.device_id}`);
           "<p>Compare these numbers with each person in a call or face to face. If they match, nobody is intercepting your messages. Mark them as verified so you're warned if they change.</p>"
         );
         for (const member of list) {
-          const section = document.createElement("section");
-          section.className = "fe2ee-member";
-          section.innerHTML = `<div class="fe2ee-member-head"><span class="fe2ee-member-name">${escape(memberName(member))}</span><span class="fe2ee-status"></span></div><div class="fe2ee-digits" aria-label="Safety number for ${escape(memberName(member))}">Calculating…</div><div class="fe2ee-member-actions"></div>`;
-          body.append(section);
+          const section2 = document.createElement("section");
+          section2.className = "fe2ee-member";
+          section2.innerHTML = `<div class="fe2ee-member-head"><span class="fe2ee-member-name">${escape(memberName(member))}</span><span class="fe2ee-status"></span></div><div class="fe2ee-digits" aria-label="Safety number for ${escape(memberName(member))}">Calculating…</div><div class="fe2ee-member-actions"></div>`;
+          body.append(section2);
           const render = async () => {
             const contact = engine2.contacts[member.id];
-            const status = section.querySelector(".fe2ee-status");
+            const status = section2.querySelector(".fe2ee-status");
             status.dataset.verified = String(!!contact?.verified && !contact.pendingKey);
             status.innerHTML = contact?.pendingKey ? `${svg(OPEN_LOCK_PATH)}Safety number changed` : contact?.verified ? `${svg(LOCK_PATH)}Verified` : `${svg(OPEN_LOCK_PATH)}Not verified`;
             const digits = await engine2.safetyNumber(member.id);
-            const grid = section.querySelector(".fe2ee-digits");
+            const grid = section2.querySelector(".fe2ee-digits");
             grid.innerHTML = digits ? (digits.match(/\d{5}/g) ?? []).map((g) => `<span>${g}</span>`).join("") : "This person hasn't set up encryption yet.";
             grid.dataset.number = digits ?? "";
-            const row = section.querySelector(".fe2ee-member-actions");
+            const row = section2.querySelector(".fe2ee-member-actions");
             row.replaceChildren();
             if (!contact) return;
             if (contact.pendingKey)
@@ -2501,9 +3789,271 @@ ${mine.device_id}`);
           };
           render();
         }
-        actions.append(button("Close", "secondary", close));
+        actions.append(
+          button("Encryption settings", "secondary", () => {
+            close();
+            showSettings();
+          }),
+          button("Close", "secondary", close)
+        );
       });
     };
+    const field = (labelText, type, autocomplete) => {
+      const id = `fe2ee-${Math.random().toString(36).slice(2)}`;
+      const wrap = document.createElement("div");
+      wrap.className = "fe2ee-field";
+      wrap.innerHTML = `<label for="${id}">${escape(labelText)}</label><div class="fe2ee-row"></div><p class="fe2ee-error" id="${id}-error" hidden></p>`;
+      const input = document.createElement("input");
+      input.className = "fe2ee-input";
+      input.id = id;
+      input.type = type;
+      input.autocomplete = autocomplete;
+      input.spellcheck = false;
+      input.setAttribute("aria-describedby", `${id}-error`);
+      const row = wrap.querySelector(".fe2ee-row");
+      row.append(input);
+      const error = wrap.querySelector(".fe2ee-error");
+      const setError = (text) => {
+        error.hidden = !text;
+        error.textContent = text ?? "";
+        input.setAttribute("aria-invalid", String(!!text));
+        if (text) input.focus();
+      };
+      return { wrap, input, row, setError };
+    };
+    const section = (title, text) => {
+      const el = document.createElement("section");
+      el.className = "fe2ee-section";
+      el.innerHTML = `<h3>${escape(title)}</h3>${text ? `<p>${escape(text)}</p>` : ""}`;
+      return el;
+    };
+    const unlockForm = (kind) => {
+      const { wrap, input, row, setError } = kind === "password" ? field("Account password", "password", "current-password") : field("Recovery code", "text", "off");
+      if (kind === "recovery") input.placeholder = "XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX";
+      const submit = button("Unlock", "primary", async () => {
+        if (!input.value.trim()) return setError(kind === "password" ? "Enter your password." : "Enter your recovery code.");
+        submit.disabled = true;
+        setError(null);
+        try {
+          await engine2.unlockWith(kind, input.value.trim());
+        } catch (error) {
+          setError(error instanceof Error ? error.message : String(error));
+        } finally {
+          submit.disabled = false;
+        }
+      });
+      input.addEventListener("keydown", (event) => event.key === "Enter" && submit.click());
+      row.append(submit);
+      return wrap;
+    };
+    const showUnlock = () => {
+      if (unlockOpen) return;
+      const current = link2.outgoing();
+      if (!current || current.state === "denied" || current.state === "failed") link2.request().catch(() => {
+      });
+      dialog("Unlock encrypted messages", (body, actions, close) => {
+        const backup = engine2.backup;
+        const intro = document.createElement("p");
+        intro.textContent = "This browser can't read your encrypted messages yet. Bring your keys over with one of these.";
+        body.append(intro);
+        if (backup?.wrapped_secret && backup.identity_key === engine2.serverKey) {
+          const own = section(
+            backup.mode === "recovery" ? "Enter your recovery code" : "Enter your password",
+            backup.mode === "recovery" ? "Use the code you saved when you switched to a recovery code." : void 0
+          );
+          own.append(unlockForm(backup.mode));
+          body.append(own);
+        }
+        const approval = section("Approve from another device");
+        const status = document.createElement("p");
+        status.setAttribute("role", "status");
+        const code = document.createElement("div");
+        code.className = "fe2ee-code";
+        const again = button("Ask again", "secondary", () => link2.request().catch(() => {
+        }));
+        approval.append(status, code, again);
+        body.append(approval);
+        const render = () => {
+          const state = link2.outgoing();
+          code.hidden = state?.state !== "comparing";
+          code.textContent = state?.sas ?? "";
+          again.hidden = !state || state.state !== "denied" && state.state !== "failed";
+          status.textContent = state?.state === "comparing" ? `${state.approverName ?? "Your other device"} is asking you to approve this browser. Check that it shows this code, then approve it there.` : state?.state === "denied" ? "Your other device declined this login." : state?.state === "failed" ? "The approval didn't unlock this browser. Ask again to retry." : "Open the app on a browser where you're already signed in. It will ask you to approve this one.";
+          if (engine2.linked) {
+            done();
+            transient = { text: "This browser is unlocked. Your encrypted messages are loading.", until: Date.now() + 5e3 };
+            refresh();
+            setTimeout(refresh, 5100);
+          }
+        };
+        const stop = engine2.onChange(render);
+        const done = () => {
+          stop();
+          unlockOpen = null;
+          close();
+        };
+        unlockOpen = { render, close: done };
+        body.closest("dialog")?.addEventListener("close", () => {
+          stop();
+          unlockOpen = null;
+        });
+        actions.append(button("Not now", "secondary", done));
+        render();
+      });
+    };
+    const showApproval = (prompt) => {
+      dialog(`New login on ${prompt.name}`, (body, actions, close) => {
+        body.insertAdjacentHTML(
+          "beforeend",
+          `<p>Approve it only if you just signed in there yourself, because it gets access to your encrypted messages. The other browser should show this code:</p><div class="fe2ee-code">${escape(prompt.sas)}</div>`
+        );
+        const finish = () => {
+          approvals.delete(prompt.requestId);
+          close();
+        };
+        approvals.set(prompt.requestId, finish);
+        const approve = button("Approve login", "primary", async () => {
+          approve.disabled = true;
+          try {
+            await prompt.approve();
+          } catch (error) {
+            transient = { text: `Couldn't approve that login: ${error instanceof Error ? error.message : String(error)}`, until: Date.now() + 8e3 };
+            refresh();
+          }
+          finish();
+        });
+        actions.append(
+          button("Deny", "secondary", () => {
+            finish();
+            prompt.deny().catch(() => {
+            });
+          }),
+          approve
+        );
+      });
+    };
+    const dismissApproval = (requestId) => approvals.get(requestId)?.();
+    const showRecoveryCode = () => dialog("Use a recovery code", (body, actions, close) => {
+      const intro = document.createElement("p");
+      intro.textContent = "We'll make a code that locks your key backup instead of your password. You'll need it to set up a new browser when no other device is around to approve it. We only show it once.";
+      body.append(intro);
+      const create = button("Make recovery code", "primary", async () => {
+        create.disabled = true;
+        try {
+          const code = await engine2.useRecoveryCode();
+          intro.textContent = "Save this code somewhere safe, like a password manager. Anyone with it and access to your account can read your encrypted messages.";
+          const box = document.createElement("div");
+          box.className = "fe2ee-recovery";
+          box.dataset.code = code;
+          box.textContent = code;
+          body.append(box);
+          actions.replaceChildren(
+            button("Copy code", "secondary", () => navigator.clipboard?.writeText(code).catch(() => {
+            })),
+            button("I saved it", "primary", close)
+          );
+        } catch (error) {
+          create.disabled = false;
+          transient = { text: `Couldn't make a recovery code: ${error instanceof Error ? error.message : String(error)}`, until: Date.now() + 8e3 };
+          refresh();
+        }
+      });
+      actions.append(button("Cancel", "secondary", close), create);
+    });
+    const showSettings = () => dialog("Encryption settings", (body, actions, close) => {
+      const browser = section("This browser");
+      const backupSection = section("Key backup");
+      const devices = section("Your devices");
+      body.append(browser, backupSection, devices);
+      const describe = (el, text) => {
+        const p = document.createElement("p");
+        p.textContent = text;
+        el.append(p);
+      };
+      const clear = (el) => el.querySelectorAll(":scope > :not(h3)").forEach((child) => child.remove());
+      const renderBrowser = () => {
+        clear(browser);
+        describe(browser, engine2.linked ? "Unlocked. This browser can read and send encrypted messages." : "Locked. This browser can't read encrypted messages yet.");
+        if (!engine2.linked)
+          browser.append(
+            button("Unlock this browser", "primary", () => {
+              close();
+              showUnlock();
+            })
+          );
+      };
+      const renderBackup = () => {
+        clear(backupSection);
+        const backup = engine2.backup;
+        backupSection.dataset.mode = backup?.mode ?? "none";
+        if (!backup) return describe(backupSection, "Your keys aren't backed up yet. Sign in on a browser that can read your messages to create the backup.");
+        if (backup.mode === "recovery")
+          describe(backupSection, "Your keys are backed up and locked with a recovery code. New browsers ask for that code, and your password can't unlock them.");
+        else if (backup.wrapped_secret)
+          describe(
+            backupSection,
+            "Your keys are backed up and locked with your account password, so new browsers unlock as soon as you sign in. Someone with a copy of the server's database could try to guess a weak password offline."
+          );
+        else describe(backupSection, "Your keys are backed up. The password lock gets added the next time you sign in.");
+        if (!engine2.hasSecret) return;
+        if (backup.mode === "password") {
+          backupSection.append(
+            button("Use a recovery code instead", "secondary", () => {
+              close();
+              showRecoveryCode();
+            })
+          );
+          return;
+        }
+        const { wrap, input, row, setError } = field("Account password", "password", "current-password");
+        const save = button("Use my password instead", "secondary", async () => {
+          if (!input.value) return setError("Enter your password.");
+          save.disabled = true;
+          setError(null);
+          try {
+            if (!await verifyPassword2(input.value)) return setError("That password isn't right.");
+            await engine2.setBackupMode("password", input.value);
+            renderBackup();
+          } catch (error) {
+            setError(error instanceof Error ? error.message : String(error));
+          } finally {
+            save.disabled = false;
+          }
+        });
+        row.append(save);
+        backupSection.append(
+          wrap,
+          button("Make a new recovery code", "secondary", () => {
+            close();
+            showRecoveryCode();
+          })
+        );
+      };
+      const renderDevices = () => {
+        clear(devices);
+        for (const device of engine2.devices.filter((d) => d.status !== "revoked")) {
+          const row = document.createElement("div");
+          row.className = "fe2ee-device";
+          const current = device.device_id === engine2.device?.deviceId;
+          row.innerHTML = `<span>${escape(device.name ?? "Unknown browser")}<small>${current ? "This browser" : device.status === "active" ? "Can read encrypted messages" : "Waiting for approval"}</small></span>`;
+          if (!current)
+            row.append(
+              button("Remove", "secondary", async () => {
+                await engine2.removeDevice(device.device_id).catch(() => {
+                });
+                renderDevices();
+              })
+            );
+          devices.append(row);
+        }
+      };
+      renderBrowser();
+      renderBackup();
+      renderDevices();
+      engine2.reloadBackup().then(renderBackup, () => {
+      });
+      actions.append(button("Close", "secondary", close));
+    });
     const showError = (error, channelId) => {
       const name = (id) => id && members?.channelId === channelId ? members.list.find((m) => m.id === id) ?? null : null;
       let text = "Your message couldn't be encrypted, so it wasn't sent.";
@@ -2513,8 +4063,16 @@ ${mine.device_id}`);
           text = `${who ? memberName(who) : "Someone here"} hasn't set up encryption yet, so your message wasn't sent. Ask them to open the app once.`;
         else if (error.code === "IDENTITY_CHANGED") text = `${who ? memberName(who) : "Someone"}'s safety number changed. Review it before sending more messages.`;
         else if (error.code === "UNSUPPORTED") text = error.message;
-        else if (error.code === "NOT_LINKED") text = "This browser isn't linked to your encryption identity yet, so it can't send encrypted messages.";
-        else if (error.code === "NOT_READY") text = "End-to-end encryption is unavailable right now, so your message wasn't sent.";
+        else if (error.code === "NOT_LINKED") {
+          transient = {
+            text: "This browser can't send encrypted messages until you unlock it, so your message wasn't sent.",
+            until: Date.now() + 8e3,
+            action: { label: "Unlock", run: showUnlock }
+          };
+          refresh();
+          setTimeout(refresh, 8100);
+          return;
+        } else if (error.code === "NOT_READY") text = "End-to-end encryption is unavailable right now, so your message wasn't sent.";
       } else if (error?.body?.message === "E2EE_RECIPIENT_NO_DEVICES")
         text = "Everyone here needs to open the app once before encryption can be turned on.";
       transient = { text, until: Date.now() + 8e3 };
@@ -2528,13 +4086,26 @@ ${mine.device_id}`);
         const existing = content.querySelector(":scope > .fe2ee-lock");
         if (existing?.dataset.state === info.state) continue;
         existing?.remove();
+        content.querySelector(":scope > .fe2ee-unlock")?.remove();
         const lock = document.createElement("span");
         lock.className = "fe2ee-lock";
         lock.dataset.state = info.state;
-        const label = info.state === "decrypted" ? "End-to-end encrypted" : `Couldn't decrypt: ${info.reason ?? "unknown error"}`;
+        const label = info.state === "decrypted" ? "End-to-end encrypted" : info.state === "pending" ? "Decrypting" : info.state === "missing" ? "This browser doesn't have the key for this message" : `Couldn't decrypt: ${info.reason ?? "unknown error"}`;
         lock.title = label;
-        lock.innerHTML = svg(info.state === "decrypted" ? LOCK_PATH : OPEN_LOCK_PATH, label);
+        lock.innerHTML = svg(info.state === "decrypted" || info.state === "pending" ? LOCK_PATH : OPEN_LOCK_PATH, label);
         content.append(lock);
+        if (info.state === "missing") {
+          const unlock = document.createElement("button");
+          unlock.type = "button";
+          unlock.className = "fe2ee-unlock";
+          unlock.textContent = engine2.linked ? "Get keys" : "Unlock";
+          unlock.addEventListener("click", (event) => {
+            event.stopPropagation();
+            if (engine2.linked && engine2.hasSecret) showSettings();
+            else showUnlock();
+          });
+          content.append(unlock);
+        }
       }
     };
     const decorateHeader = (channelId) => {
@@ -2572,7 +4143,7 @@ ${mine.device_id}`);
     const decorateBanners = (channelId) => {
       if (failure2) banner("failure", "danger", failure2);
       else dropBanner("failure");
-      if (transient && transient.until > Date.now()) banner("transient", "warning", transient.text);
+      if (transient && transient.until > Date.now()) banner("transient", "warning", transient.text, transient.action);
       else dropBanner("transient");
       if (channelId && engine2.isEncrypted(channelId) && members?.channelId === channelId) {
         const changed = members.list.find((m) => engine2.contacts[m.id]?.pendingKey);
@@ -2582,8 +4153,7 @@ ${mine.device_id}`);
             run: () => showSafety(channelId)
           });
         else dropBanner("changed");
-        if (!engine2.linked && !failure2)
-          banner("linked", "warning", "This browser isn't linked to your encryption identity yet, so it can't read or send encrypted messages here.");
+        if (engine2.locked && !failure2) banner("linked", "info", "Unlock this browser to read and send encrypted messages here.", { label: "Unlock", run: showUnlock });
         else dropBanner("linked");
       } else {
         dropBanner("changed");
@@ -2621,6 +4191,11 @@ ${mine.device_id}`);
     return {
       refresh,
       showError,
+      showUnlock,
+      showApproval,
+      dismissApproval,
+      showSettings,
+      renderUnlock: () => unlockOpen?.render(),
       fail: (text) => {
         failure2 = text;
         refresh();
@@ -2703,9 +4278,41 @@ ${mine.device_id}`);
     }
   };
   var engine = new Engine(api);
+  var link = createLink(engine, api, {
+    onPrompt: (prompt) => ui.showApproval(prompt),
+    onChange: () => ui.renderUnlock(),
+    onDismiss: (requestId) => ui.dismissApproval(requestId)
+  });
+  var apiBase = () => {
+    const env = window.GLOBAL_ENV;
+    return `${env?.API_ENDPOINT ?? "/api"}/v${env?.API_VERSION ?? 9}`;
+  };
+  var tokenApi = (token) => ({
+    async request(method, url, body) {
+      const res = await fetch(`${apiBase()}${url}`, {
+        method: method === "del" ? "DELETE" : method.toUpperCase(),
+        headers: { "content-type": "application/json", authorization: token },
+        body: body === void 0 ? void 0 : JSON.stringify(body)
+      });
+      const parsed = await res.json().catch(() => null);
+      if (!res.ok) throw { ok: false, status: res.status, body: parsed };
+      return parsed;
+    }
+  });
+  var verifyPassword = async (password) => {
+    const me = await api.request("get", "/users/@me");
+    const base = apiBase();
+    const res = await fetch(`${base}/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ login: me.email, password }) });
+    const body = await res.json().catch(() => null);
+    if (body?.token) await fetch(`${base}/auth/logout`, { method: "POST", headers: { "content-type": "application/json", authorization: body.token }, body: "{}" }).catch(() => {
+    });
+    return res.ok && !!(body?.token || body?.ticket);
+  };
   var ui = createUi({
     engine,
     states,
+    link,
+    verifyPassword,
     enableChannel: async (channelId) => {
       await api.request("put", `/channels/${channelId}/e2ee`, { enabled: true });
       engine.setChannelEncrypted(channelId);
@@ -2718,11 +4325,25 @@ ${mine.device_id}`);
     ui.fail(UNAVAILABLE);
     settle(false);
   };
+  var readyNow = false;
+  ready.then((ok) => {
+    readyNow = ok;
+    if (ok) hooks.retryAll();
+  });
   var hooks = createHooks({
     engine,
     ready,
     states,
     failClosed: () => failure !== null,
+    isReady: () => readyNow,
+    onCredentials: (path, body, response) => {
+      const password = typeof body.password === "string" ? body.password : void 0;
+      const next = typeof body.new_password === "string" ? body.new_password : void 0;
+      if (path !== "/users/@me") return password && engine.rememberPassword(password);
+      if (!next) return;
+      const token = response?.token;
+      engine.passwordChanged(password, next, typeof token === "string" ? tokenApi(token) : void 0).catch((error) => console.error("[e2ee] couldn't rewrap the backup", error));
+    },
     onState: () => ui.refresh(),
     onError: (error, channelId) => ui.showError(error, channelId)
   });
@@ -2750,7 +4371,12 @@ ${mine.device_id}`);
       await engine.init(userId);
       await selfTest();
       initialized = true;
+      engine.onUnlock(() => hooks.retryAll());
       ui.refresh();
+      if (engine.locked) {
+        link.request().catch((error) => console.error("[e2ee] link request failed", error));
+        ui.showUnlock();
+      }
     } catch (error) {
       fail(`Self-test failed: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -2766,16 +4392,34 @@ ${mine.device_id}`);
   };
   var received = {};
   var count = (type) => received[type] = (received[type] ?? 0) + 1;
+  var selfRefresh = null;
+  var refreshSelf = (userId) => {
+    if (userId !== engine.userId || !initialized || selfRefresh) return;
+    selfRefresh = setTimeout(() => {
+      selfRefresh = null;
+      engine.refresh().catch((error) => console.error("[e2ee] refresh failed", error));
+    }, 500);
+  };
   var custom = {
     E2EE_DEVICES_UPDATE: (data) => {
       count("E2EE_DEVICES_UPDATE");
       engine.invalidateUser(String(data.user_id));
+      refreshSelf(String(data.user_id));
       ui.refresh();
     },
     E2EE_IDENTITY_UPDATE: (data) => {
       count("E2EE_IDENTITY_UPDATE");
       engine.invalidateUser(String(data.user_id));
+      refreshSelf(String(data.user_id));
       ui.refresh();
+    },
+    E2EE_LINK_REQUEST: (data) => {
+      count("E2EE_LINK_REQUEST");
+      if (initialized) link.onEvent("E2EE_LINK_REQUEST", data);
+    },
+    E2EE_LINK_RESPONSE: (data) => {
+      count("E2EE_LINK_RESPONSE");
+      if (initialized) link.onEvent("E2EE_LINK_RESPONSE", data);
     },
     CHANNEL_E2EE_UPDATE: (data) => {
       count("CHANNEL_E2EE_UPDATE");
@@ -2823,6 +4467,12 @@ ${mine.device_id}`);
     deviceId: engine.device?.deviceId ?? null,
     deviceStatus: engine.deviceStatus,
     linked: engine.linked,
+    locked: engine.locked,
+    holdsIdentity: !!engine.identity,
+    trustedKey: engine.trustedKey,
+    hasSecret: engine.hasSecret,
+    backup: engine.backup ? { mode: engine.backup.mode, version: engine.backup.version, hasSecret: !!engine.backup.wrapped_secret, identityKey: engine.backup.identity_key } : null,
+    link: link.outgoing(),
     hooks: { ...installed },
     encryptedChannels: [...engine.encryptedChannels],
     states: Object.fromEntries(states),

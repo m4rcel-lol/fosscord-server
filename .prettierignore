@@ -10,4 +10,4 @@ extra/admin-api
 discord-response-samples
 src/util/migration/postgres-initial.ts
 temp
-scripts/schemaExclusions.json
+scripts/schemaExclusions.jsonassets/public/e2ee/e2ee.js
