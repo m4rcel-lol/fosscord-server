@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { CLOSECODES, Payload, WebSocket } from "@spacebar/gateway";
+import { CLOSECODES, OPCODES, Payload, WebSocket } from "@spacebar/gateway";
 import * as erlpack from "harmony-erlpack";
 import fs from "node:fs/promises";
 import BigIntJson from "json-bigint";
@@ -28,6 +28,8 @@ import { PayloadSchema } from "@spacebar/schemas";
 import { HTTPError } from "lambert-server";
 
 const bigIntJson = BigIntJson({ storeAsString: true });
+const CommandWindow = 60_000;
+const CommandLimit = 120;
 
 export async function Message(this: WebSocket, buffer: WS.Data) {
     // TODO: compression
@@ -78,6 +80,12 @@ export async function Message(this: WebSocket, buffer: WS.Data) {
     }
 
     check.call(this, PayloadSchema, data);
+
+    if (data.op !== OPCODES.Heartbeat && data.op !== OPCODES.SetQoS) {
+        const now = Date.now();
+        if (!this.commandWindow || now - this.commandWindow.start >= CommandWindow) this.commandWindow = { start: now, count: 0 };
+        if (++this.commandWindow.count > CommandLimit) return this.close(CLOSECODES.Rate_limited, "Rate limited.");
+    }
 
     const OPCodeHandler = OPCodeHandlers[data.op];
     if (!OPCodeHandler) {

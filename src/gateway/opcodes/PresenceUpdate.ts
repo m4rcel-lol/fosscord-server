@@ -23,6 +23,8 @@ import { ActivitySchema, PrivateStatus } from "@spacebar/schemas";
 import { check } from "./instanceOf";
 
 const SettableStatuses = ["online", "idle", "dnd", "invisible"];
+const PresenceWindow = 20_000;
+const PresenceLimit = 5;
 
 export async function onPresenceUpdate(this: WebSocket, { d }: Payload) {
     check.call(this, ActivitySchema, d);
@@ -39,6 +41,26 @@ export async function onPresenceUpdate(this: WebSocket, { d }: Payload) {
 
     if (previous === JSON.stringify([this.session.status, this.session.activities, this.session.client_status])) return;
 
+    const now = Date.now();
+    this.presenceHistory = (this.presenceHistory ?? []).filter((time) => now - time < PresenceWindow);
+    if (this.presenceHistory.length >= PresenceLimit) {
+        this.presenceTimer ??= setTimeout(
+            () => {
+                this.presenceTimer = undefined;
+                if (this.readyState !== this.OPEN) return;
+                this.presenceHistory = [...(this.presenceHistory ?? []), Date.now()];
+                savePresence.call(this).catch((e) => console.error(`[Gateway/${this.user_id}] failed to save throttled presence`, e));
+            },
+            PresenceWindow - (now - this.presenceHistory[0]),
+        );
+        return;
+    }
+    this.presenceHistory.push(now);
+    await savePresence.call(this);
+}
+
+async function savePresence(this: WebSocket) {
+    if (!this.session) return;
     await Session.update(
         { session_id: this.session_id },
         { status: this.session.status, activities: this.session.activities, client_status: this.session.client_status, last_seen: this.session.last_seen },

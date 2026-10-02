@@ -26,6 +26,7 @@ export async function Close(this: WebSocket, code: number, reason: Buffer) {
     console.log("[WebSocket] closed", code, reason.toString());
     if (this.heartbeatTimeout) clearTimeout(this.heartbeatTimeout);
     if (this.readyTimeout) clearTimeout(this.readyTimeout);
+    if (this.presenceTimer) clearTimeout(this.presenceTimer);
     this.deflate?.close();
     this.inflate?.close();
     this.removeAllListeners();
