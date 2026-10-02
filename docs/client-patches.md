@@ -45,9 +45,9 @@ A patch has a `find`, a string or regex that picks the one module to patch, and 
 
 ## Checking patches after a Discord update
 
-`npm run check:client` builds Vencord's reporter variant and runs `scripts/vencord-check.mjs`. It needs a running server (`ORIGIN`, default `http://localhost:$PORT`) and `playwright-core` (from the repo or `~/.cache/fosscord-tools`). The check opens `/login` in headless Chrome with the reporter build in place of the normal one. The reporter enables every Vencord plugin, loads every lazy chunk, runs every lazy webpack lookup and logs each patch that matched no module, had no effect or threw.
+`npm run check:client` builds Vencord's reporter variant and runs `scripts/vencord-check.mjs`. It needs a running server (`ORIGIN`, default `http://localhost:$PORT`) and `playwright-core` (from the repo or `~/.cache/fosscord-tools`). The check opens `/login` in headless Chrome with the reporter build in place of the normal one. The reporter enables every Vencord plugin, loads every lazy chunk, runs every lazy webpack lookup and logs each patch that matched no module, had no effect or threw. The check script adds the one case the reporter skips, a patch marked `all` whose `find` matches no module at all.
 
-The output groups problems into our plugins, upstream plugins in our default set and the other upstream plugins. It exits with code 1 when either of the first two groups has a problem or the reporter never finishes, so a Discord update that breaks a patch fails loudly. The full result is written to `assets/vencord/report.json`. A run takes about three minutes.
+The output groups problems into our plugins, upstream plugins in our default set and the other upstream plugins. It exits with code 1 when either of the first two groups has a problem or the reporter never finishes, so a Discord update that breaks a patch fails loudly. The full result is written to `assets/vencord/report.json`. A run takes one to four minutes.
 
 Google Chrome 154 on macOS quits headless sessions after about 30 seconds. Point `CHROME_PATH` at another Chromium build, for example `CHROME_PATH="/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"`.
 
