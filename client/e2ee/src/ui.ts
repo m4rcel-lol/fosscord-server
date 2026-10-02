@@ -381,7 +381,7 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
             if (error.code === "NO_DEVICES")
                 text = `${who ? memberName(who) : "Someone here"} hasn't set up encryption yet, so your message wasn't sent. Ask them to open the app once.`;
             else if (error.code === "IDENTITY_CHANGED") text = `${who ? memberName(who) : "Someone"}'s safety number changed. Review it before sending more messages.`;
-            else if (error.code === "UNSUPPORTED") text = "Files, stickers and polls can't be sent in encrypted conversations yet.";
+            else if (error.code === "UNSUPPORTED") text = `${error.message}. Your message wasn't sent.`;
             else if (error.code === "NOT_LINKED") {
                 text = "Unlock this browser to send encrypted messages. Your message wasn't sent.";
                 action = { label: "Unlock", run: showUnlock };
@@ -394,7 +394,7 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
         dialog("Turn on end-to-end encryption?", (body, actions, { close }) => {
             body.insertAdjacentHTML(
                 "beforeend",
-                "<p>New messages in this conversation are encrypted in your browser before they're sent, and only the people in it can read them. Encryption can't be turned off later.</p><p>Files, stickers and polls can't be sent here until encrypted attachments ship.</p>",
+                "<p>New messages, files and stickers in this conversation are encrypted in your browser before they're sent, and only the people in it can read them. Encryption can't be turned off later.</p><p>Polls can't be sent in encrypted conversations.</p>",
             );
             const confirm = button("Turn on encryption", "primary", async () => {
                 confirm.disabled = true;
@@ -914,14 +914,10 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
         };
     };
 
-    const beforeSend = (channelId: string, extras: { hasAttachments?: boolean; hasStickers?: boolean }) => {
+    const beforeSend = (channelId: string) => {
         if (!engine.isEncrypted(channelId)) return false;
         if (failure) {
             flash(channelId, { tone: "danger", text: failure });
-            return true;
-        }
-        if (extras.hasAttachments || extras.hasStickers) {
-            flash(channelId, { tone: "warning", text: "Files and stickers can't be sent in encrypted conversations yet. Remove them to send your message." });
             return true;
         }
         const changed = members?.channelId === channelId ? members.list.find((m) => engine.contacts[m.id]?.pendingKey) : undefined;

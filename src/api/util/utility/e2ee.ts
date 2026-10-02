@@ -19,7 +19,7 @@
 import { createHash, createPublicKey, verify } from "node:crypto";
 import { NextFunction, Request, Response } from "express";
 import { In, IsNull, Not } from "typeorm";
-import { Channel, E2eeDevice, E2eeIdentity, E2eeKeyBackup, Message, Recipient, Relationship, Session } from "@spacebar/database";
+import { Attachment, Channel, E2eeDevice, E2eeIdentity, E2eeKeyBackup, Message, Recipient, Relationship, Session } from "@spacebar/database";
 import { ApiError, Config, emitEvent, MessageFlags } from "@spacebar/util";
 import { ChannelType, E2eeDeviceResponse, E2eeEnvelope, E2eeUserKeysResponse, MessageType } from "@spacebar/schemas";
 import { MessageOptions } from "@spacebar/util/dtos/MessageOptions";
@@ -47,6 +47,7 @@ export const E2eeErrors = {
     NO_BACKUP: new ApiError("E2EE_NO_BACKUP", 90013, 404),
     INVALID_BACKUP: new ApiError("E2EE_INVALID_BACKUP", 90014, 400),
     INVALID_LINK: new ApiError("E2EE_INVALID_LINK", 90015, 400),
+    PLAINTEXT_ATTACHMENT: new ApiError("E2EE_PLAINTEXT_ATTACHMENT", 90016, 400),
 };
 
 export const e2eeRateLimit = (bucket: string, count: number, window: number) => {
@@ -225,6 +226,34 @@ const isEnvelope = (value: unknown): value is E2eeEnvelope => {
     });
 };
 
+const OPAQUE_FILENAME = /^[a-z0-9]{8,64}\.bin$/;
+const PLAINTEXT_ATTACHMENT_FIELDS = [
+    "title",
+    "description",
+    "duration_secs",
+    "waveform",
+    "is_clip",
+    "is_remix",
+    "is_thumbnail",
+    "is_spoiler",
+    "clip_created_at",
+    "clip_participant_ids",
+];
+
+const opaqueAttachments = (opts: MessageOptions, message: Message) =>
+    (message.attachments ?? []).every(
+        (attachment) =>
+            OPAQUE_FILENAME.test(attachment.filename) &&
+            !attachment.width &&
+            !attachment.height &&
+            (!attachment.content_type || attachment.content_type === "application/octet-stream") &&
+            !attachment.description &&
+            !attachment.waveform,
+    ) &&
+    (opts.attachments ?? []).every(
+        (reference) => reference instanceof Attachment || PLAINTEXT_ATTACHMENT_FIELDS.every((field) => !(reference as unknown as Record<string, unknown>)[field]),
+    );
+
 export async function applyE2eeToMessage(opts: MessageOptions, channel: Channel, message: Message) {
     const envelope = opts.encrypted ?? null;
     const encryptedChannel = channel.e2ee_enabled_at != null;
@@ -241,8 +270,8 @@ export async function applyE2eeToMessage(opts: MessageOptions, channel: Channel,
 
     const content = opts.content?.trim();
     if (content && content !== E2EE_FALLBACK_CONTENT) throw E2eeErrors.REQUIRED;
-    if (opts.attachments?.length || opts.sticker_ids?.length || opts.poll || opts.components?.length || opts.tts || opts.message_reference?.type === 1)
-        throw E2eeErrors.UNSUPPORTED;
+    if (opts.sticker_ids?.length || opts.poll || opts.components?.length || opts.tts || opts.message_reference?.type === 1) throw E2eeErrors.UNSUPPORTED;
+    if (!opaqueAttachments(opts, message)) throw E2eeErrors.PLAINTEXT_ATTACHMENT;
 
     const editing = !!opts.edited_timestamp;
     if (envelope.mid !== undefined && (!editing || envelope.mid !== opts.id)) throw E2eeErrors.INVALID_ENVELOPE;

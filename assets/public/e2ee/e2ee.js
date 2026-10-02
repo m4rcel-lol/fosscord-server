@@ -52,7 +52,280 @@
   var randomBytes = (length) => crypto.getRandomValues(new Uint8Array(length));
   var sha256 = async (data) => new Uint8Array(await crypto.subtle.digest("SHA-256", data));
 
-  // node_modules/@hpke/common/esm/src/errors.js
+  // client/e2ee/src/files.ts
+  var FILE_CHUNK = 64 * 1024;
+  var FILE_PREFIX = "/e2ee/attachments/";
+  var SW_PATH = "/e2ee-sw.js";
+  var TAG = 16;
+  var encryptedSize = (size) => size + TAG * Math.max(1, Math.ceil(size / FILE_CHUNK));
+  var chunkNonce = (iv, index) => {
+    const nonce = iv.slice();
+    const view = new DataView(nonce.buffer);
+    view.setUint32(8, (view.getUint32(8) ^ index) >>> 0);
+    return nonce;
+  };
+  var chunkAad = (index, final) => utf8(`fosscord-e2ee/v1/file
+${index}
+${final ? 1 : 0}`);
+  var fileKey = (raw, usage) => crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, [usage]);
+  var encryptFile = async (blob, raw, iv) => {
+    const key = await fileKey(raw, "encrypt");
+    const count2 = Math.max(1, Math.ceil(blob.size / FILE_CHUNK));
+    const parts = [];
+    for (let i = 0; i < count2; i++) {
+      const plain = await blob.slice(i * FILE_CHUNK, (i + 1) * FILE_CHUNK).arrayBuffer();
+      parts.push(await crypto.subtle.encrypt({ name: "AES-GCM", iv: chunkNonce(iv, i), additionalData: chunkAad(i, i === count2 - 1) }, key, plain));
+    }
+    return new Blob(parts, { type: "application/octet-stream" });
+  };
+  var str = (value, max) => typeof value === "string" && value.length <= max ? value : void 0;
+  var num = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : void 0;
+  var parseFile = (item) => {
+    const name = str(item?.name, 200);
+    const filename = str(item?.filename, 1024);
+    const key = str(item?.key, 64);
+    const iv = str(item?.iv, 32);
+    const size = num(item?.size);
+    if (!item || !name || !filename || !key || !iv || size === void 0) return [];
+    const meta = { name, filename, key, iv, size, content_type: str(item.content_type, 255) ?? "application/octet-stream" };
+    const width = num(item.width);
+    const height = num(item.height);
+    if (width && height) Object.assign(meta, { width, height });
+    const duration = num(item.duration_secs);
+    if (duration !== void 0) meta.duration_secs = duration;
+    const waveform = str(item.waveform, 4096);
+    if (waveform) meta.waveform = waveform;
+    const description = str(item.description, 1024);
+    if (description) meta.description = description;
+    if (item.spoiler === true) meta.spoiler = true;
+    return [meta];
+  };
+  var parsePayload = (raw) => {
+    const value = raw && typeof raw === "object" ? raw : {};
+    const payload = { content: typeof value.content === "string" ? value.content : "" };
+    if (Array.isArray(value.attachments)) payload.attachments = value.attachments.flatMap(parseFile);
+    if (Array.isArray(value.stickers))
+      payload.stickers = value.stickers.flatMap((item) => {
+        const id = str(item?.id, 32);
+        if (!id || !/^\d+$/.test(id)) return [];
+        return [{ id, name: str(item?.name, 100) ?? "", format_type: num(item?.format_type) ?? 1 }];
+      });
+    return payload;
+  };
+
+  // client/e2ee/src/attachments.ts
+  var CONTROL_TIMEOUT_MS = 8e3;
+  var SPOILER_FLAG = 1 << 3;
+  var describe = async (file, type) => {
+    if (type.startsWith("image/"))
+      try {
+        const bitmap = await createImageBitmap(file);
+        const size = { width: bitmap.width, height: bitmap.height };
+        bitmap.close();
+        return size;
+      } catch {
+        return {};
+      }
+    if (!type.startsWith("video/") && !type.startsWith("audio/")) return {};
+    return new Promise((resolve) => {
+      const media = document.createElement(type.startsWith("video/") ? "video" : "audio");
+      const src = URL.createObjectURL(file);
+      const done = (value) => {
+        clearTimeout(timer);
+        media.removeAttribute("src");
+        URL.revokeObjectURL(src);
+        resolve(value);
+      };
+      const timer = setTimeout(() => done({}), 5e3);
+      media.preload = "metadata";
+      media.muted = true;
+      media.onloadedmetadata = () => {
+        const video = media instanceof HTMLVideoElement && media.videoWidth ? { width: media.videoWidth, height: media.videoHeight } : {};
+        done({ ...video, ...Number.isFinite(media.duration) ? { duration_secs: media.duration } : {} });
+      };
+      media.onerror = () => done({});
+      media.src = src;
+    });
+  };
+  var POSTER_WIDTH = 1280;
+  var renderPoster = (blob, type) => new Promise((resolve) => {
+    const video = document.createElement("video");
+    const src = URL.createObjectURL(new Blob([blob], { type }));
+    const done = (image) => {
+      clearTimeout(timer);
+      video.removeAttribute("src");
+      URL.revokeObjectURL(src);
+      resolve(image);
+    };
+    const timer = setTimeout(() => done(null), 1e4);
+    video.muted = true;
+    video.preload = "auto";
+    video.onloadeddata = () => {
+      const scale = Math.min(1, POSTER_WIDTH / (video.videoWidth || POSTER_WIDTH));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+      canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+      canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(done, "image/jpeg", 0.85);
+    };
+    video.onerror = () => done(null);
+    video.src = src;
+  });
+  var createAttachments = () => {
+    const registry = /* @__PURE__ */ new Map();
+    const uploads = /* @__PURE__ */ new Map();
+    const names = /* @__PURE__ */ new Map();
+    let controlled = Promise.resolve(false);
+    const start2 = () => {
+      const container = navigator.serviceWorker;
+      if (!container) return;
+      container.addEventListener("message", (event) => {
+        const data = event.data;
+        const port = event.ports[0];
+        if (!port) return;
+        if (data?.type === "fosscord-e2ee-file") port.postMessage(registry.get(String(data.path)) ?? null);
+        if (data?.type === "fosscord-e2ee-poster" && data.blob instanceof Blob)
+          renderPoster(data.blob, String(data.content_type)).then(
+            (image) => port.postMessage(image),
+            () => port.postMessage(null)
+          );
+      });
+      container.startMessages();
+      controlled = new Promise((resolve) => {
+        if (container.controller) {
+          resolve(true);
+          return;
+        }
+        const timer = setTimeout(() => resolve(false), CONTROL_TIMEOUT_MS);
+        container.addEventListener(
+          "controllerchange",
+          () => {
+            clearTimeout(timer);
+            resolve(true);
+          },
+          { once: true }
+        );
+      });
+      container.register(SW_PATH, { scope: "/" }).then(
+        (registration) => {
+          if (!container.controller) registration.active?.postMessage({ type: "fosscord-e2ee-claim" });
+        },
+        (error) => console.error("[e2ee] couldn't register the attachment service worker", error)
+      );
+    };
+    const prepareCreate = (body) => {
+      const created = [];
+      const files = (body.files ?? []).map((file) => {
+        const type = typeof file.original_content_type === "string" && file.original_content_type ? file.original_content_type : "application/octet-stream";
+        const upload = {
+          name: `${toB64u(randomBytes(12)).replace(/[-_]/g, "0").toLowerCase()}.bin`,
+          filename: String(file.filename ?? "file"),
+          content_type: type,
+          size: Number(file.file_size) || 0,
+          key: randomBytes(32),
+          iv: randomBytes(12),
+          encrypted: null,
+          uploaded: false
+        };
+        created.push({ id: file.id, upload });
+        return { id: file.id, filename: upload.name, file_size: encryptedSize(upload.size), is_clip: false, original_content_type: "application/octet-stream" };
+      });
+      const track = (response) => {
+        const attachments2 = response?.attachments ?? [];
+        attachments2.forEach((attachment, i) => {
+          const upload = created.find((c) => String(c.id) === String(attachment.id))?.upload ?? created[i]?.upload;
+          if (!upload) return;
+          uploads.set(attachment.upload_url, upload);
+          uploads.set(attachment.upload_filename, upload);
+        });
+      };
+      return { body: { ...body, files }, track };
+    };
+    const isUpload = (url) => uploads.has(url);
+    const prepareUpload = async (opts) => {
+      const upload = uploads.get(opts.url);
+      const { "Content-Range": contentRange, ...headers } = opts.headers ?? {};
+      const resumeAt = Number(/^bytes (\d+)-/.exec(contentRange ?? "")?.[1] ?? 0);
+      if (!upload.encrypted) {
+        if (resumeAt || !(opts.body instanceof Blob)) throw new Error("an upload can only be encrypted from its first byte");
+        const file = opts.body;
+        upload.size = file.size;
+        upload.encrypted = encryptFile(file, upload.key, upload.iv);
+        Object.assign(upload, await describe(file, upload.content_type));
+      }
+      const blob = await upload.encrypted;
+      const body = resumeAt ? blob.slice(resumeAt) : blob;
+      return {
+        ...opts,
+        body,
+        headers: { ...headers, "Content-Type": "application/octet-stream", ...resumeAt ? { "Content-Range": `bytes ${resumeAt}-${blob.size - 1}/${blob.size}` } : {} }
+      };
+    };
+    const uploaded = (url) => {
+      const upload = uploads.get(url);
+      if (!upload) return;
+      upload.uploaded = true;
+      upload.encrypted = null;
+    };
+    const metaFor = (ref) => {
+      const upload = uploads.get(String(ref.uploaded_filename ?? ""));
+      if (!upload?.uploaded) return null;
+      const meta = {
+        name: upload.name,
+        filename: typeof ref.filename === "string" && ref.filename ? ref.filename : upload.filename,
+        content_type: upload.content_type,
+        size: upload.size,
+        key: toB64u(upload.key),
+        iv: toB64u(upload.iv)
+      };
+      if (upload.width && upload.height) Object.assign(meta, { width: upload.width, height: upload.height });
+      const duration = typeof ref.duration_secs === "number" ? ref.duration_secs : upload.duration_secs;
+      if (duration !== void 0) meta.duration_secs = duration;
+      if (typeof ref.waveform === "string") meta.waveform = ref.waveform;
+      if (typeof ref.description === "string" && ref.description) meta.description = ref.description;
+      if (ref.is_spoiler) meta.spoiler = true;
+      return meta;
+    };
+    const sent = (refs) => {
+      for (const ref of refs) {
+        const upload = uploads.get(String(ref.uploaded_filename ?? ""));
+        if (!upload) continue;
+        for (const [key, value] of uploads) if (value === upload) uploads.delete(key);
+      }
+    };
+    const apply = (message, payload) => {
+      message.content = payload.content;
+      const metas = payload.attachments ?? [];
+      if (metas.length && Array.isArray(message.attachments))
+        message.attachments = message.attachments.map((attachment) => {
+          const meta = metas.find((m) => m.name === attachment.filename);
+          if (!meta || typeof attachment.url !== "string") return attachment;
+          const path = new URL(`${FILE_PREFIX}${message.channel_id}/${attachment.id}/${encodeURIComponent(meta.filename)}`, location.origin).pathname;
+          names.set(String(attachment.id), meta.name);
+          registry.set(path, { url: attachment.url, key: meta.key, iv: meta.iv, content_type: meta.content_type, filename: meta.filename, size: meta.size });
+          const url = `${location.origin}${path}`;
+          const spoiler = meta.spoiler && !meta.filename.startsWith("SPOILER_");
+          const decrypted = {
+            ...attachment,
+            filename: spoiler ? `SPOILER_${meta.filename}` : meta.filename,
+            content_type: meta.content_type,
+            size: meta.size,
+            url,
+            proxy_url: url,
+            width: meta.width,
+            height: meta.height,
+            flags: meta.spoiler ? (attachment.flags ?? 0) | SPOILER_FLAG : attachment.flags
+          };
+          for (const field of ["duration_secs", "waveform", "description"]) if (meta[field] !== void 0) decrypted[field] = meta[field];
+          for (const field of ["placeholder", "placeholder_version"]) delete decrypted[field];
+          return decrypted;
+        });
+      if (payload.stickers?.length) message.sticker_items = payload.stickers.map(({ id, name, format_type }) => ({ id, name, format_type }));
+    };
+    return { start: start2, ready: () => controlled, prepareCreate, isUpload, prepareUpload, uploaded, metaFor, sent, apply, nameOf: (id) => names.get(id) };
+  };
+
+  // ../../../node_modules/@hpke/common/esm/src/errors.js
   var HpkeError = class extends Error {
     constructor(e) {
       let message;
@@ -90,7 +363,7 @@
   var NotSupportedError = class extends HpkeError {
   };
 
-  // node_modules/@hpke/common/esm/_dnt.shims.js
+  // ../../../node_modules/@hpke/common/esm/_dnt.shims.js
   var dntGlobals = {};
   var dntGlobalThis = createMergeProxy(globalThis, dntGlobals);
   function createMergeProxy(baseObj, extObj) {
@@ -147,7 +420,7 @@
     });
   }
 
-  // node_modules/@hpke/common/esm/src/algorithm.js
+  // ../../../node_modules/@hpke/common/esm/src/algorithm.js
   async function loadSubtleCrypto() {
     if (dntGlobalThis !== void 0 && globalThis.crypto !== void 0) {
       return globalThis.crypto.subtle;
@@ -176,7 +449,7 @@
     }
   };
 
-  // node_modules/@hpke/common/esm/src/identifiers.js
+  // ../../../node_modules/@hpke/common/esm/src/identifiers.js
   var Mode = {
     Base: 0,
     Psk: 1,
@@ -216,13 +489,13 @@
     ExportOnly: 65535
   };
 
-  // node_modules/@hpke/common/esm/src/consts.js
+  // ../../../node_modules/@hpke/common/esm/src/consts.js
   var INPUT_LENGTH_LIMIT = 8192;
   var INFO_LENGTH_LIMIT = 268435456;
   var MINIMUM_PSK_LENGTH = 32;
   var EMPTY = /* @__PURE__ */ new Uint8Array(0);
 
-  // node_modules/@hpke/common/esm/src/interfaces/kemInterface.js
+  // ../../../node_modules/@hpke/common/esm/src/interfaces/kemInterface.js
   var SUITE_ID_HEADER_KEM = /* @__PURE__ */ new Uint8Array([
     75,
     69,
@@ -231,7 +504,7 @@
     0
   ]);
 
-  // node_modules/@hpke/common/esm/src/kdfs/hkdf.js
+  // ../../../node_modules/@hpke/common/esm/src/kdfs/hkdf.js
   var HPKE_VERSION = /* @__PURE__ */ new Uint8Array([
     72,
     80,
@@ -401,7 +674,7 @@
     }
   };
 
-  // node_modules/@hpke/common/esm/src/utils/misc.js
+  // ../../../node_modules/@hpke/common/esm/src/utils/misc.js
   var isCryptoKeyPair = (x) => typeof x === "object" && x !== null && typeof x.privateKey === "object" && typeof x.publicKey === "object";
   function i2Osp(n, w) {
     if (w <= 0) {
@@ -443,7 +716,7 @@
     return buf;
   }
 
-  // node_modules/@hpke/common/esm/src/kems/dhkem.js
+  // ../../../node_modules/@hpke/common/esm/src/kems/dhkem.js
   var LABEL_EAE_PRK = /* @__PURE__ */ new Uint8Array([
     101,
     97,
@@ -626,7 +899,7 @@
     }
   };
 
-  // node_modules/@hpke/common/esm/src/interfaces/dhkemPrimitives.js
+  // ../../../node_modules/@hpke/common/esm/src/interfaces/dhkemPrimitives.js
   var KEM_USAGES = ["deriveBits"];
   var LABEL_DKP_PRK = /* @__PURE__ */ new Uint8Array([
     100,
@@ -639,7 +912,7 @@
   ]);
   var LABEL_SK = /* @__PURE__ */ new Uint8Array([115, 107]);
 
-  // node_modules/@hpke/common/esm/src/kems/dhkemPrimitives/ec.js
+  // ../../../node_modules/@hpke/common/esm/src/kems/dhkemPrimitives/ec.js
   var EC_P_521_PARAMS = {
     p: (1n << 521n) - 1n,
     b: 0x0051953eb9618e1c9a1f929a21a0b68540eea2da725b99b315f3b8b489918ef109e156193951ec7e937b1652c0bd3bb1bf073573df883d2c34f1ef451fd46b503f00n,
@@ -648,10 +921,10 @@
     coordinateSize: 66
   };
 
-  // node_modules/@hpke/common/esm/src/interfaces/aeadEncryptionContext.js
+  // ../../../node_modules/@hpke/common/esm/src/interfaces/aeadEncryptionContext.js
   var AEAD_USAGES = ["encrypt", "decrypt"];
 
-  // node_modules/@hpke/common/esm/src/utils/noble.js
+  // ../../../node_modules/@hpke/common/esm/src/utils/noble.js
   function isBytes(a) {
     return a instanceof Uint8Array || ArrayBuffer.isView(a) && a.constructor.name === "Uint8Array";
   }
@@ -689,7 +962,7 @@
   var _endianTestBytes = /* @__PURE__ */ new Uint8Array(_endianTestBuffer.buffer);
   var isLE = _endianTestBytes[0] === 68;
 
-  // node_modules/@hpke/common/esm/src/hash/hash.js
+  // ../../../node_modules/@hpke/common/esm/src/hash/hash.js
   function ahash(h) {
     if (typeof h !== "function" || typeof h.create !== "function") {
       throw new Error("Hash must wrapped by utils.createHasher");
@@ -698,7 +971,7 @@
     anumber(h.blockLen);
   }
 
-  // node_modules/@hpke/common/esm/src/hash/hmac.js
+  // ../../../node_modules/@hpke/common/esm/src/hash/hmac.js
   var _HMAC = class {
     constructor(hash, key) {
       Object.defineProperty(this, "oHash", {
@@ -800,7 +1073,7 @@
   var hmac = (hash, key, message) => new _HMAC(hash, key).update(message).digest();
   hmac.create = (hash, key) => new _HMAC(hash, key);
 
-  // node_modules/@hpke/common/esm/src/hash/u64.js
+  // ../../../node_modules/@hpke/common/esm/src/hash/u64.js
   var U32_MASK64 = 0xffffffffn;
   var _32n = 32n;
   function fromBig(n, le = false) {
@@ -823,7 +1096,7 @@
     return [Ah, Al];
   }
 
-  // node_modules/@hpke/common/esm/src/hash/sha3.js
+  // ../../../node_modules/@hpke/common/esm/src/hash/sha3.js
   var _0n = 0n;
   var _1n = 1n;
   var _2n = 2n;
@@ -849,7 +1122,7 @@
   var SHA3_IOTA_H = IOTAS[0];
   var SHA3_IOTA_L = IOTAS[1];
 
-  // node_modules/@hpke/core/esm/src/aeads/aesGcm.js
+  // ../../../node_modules/@hpke/core/esm/src/aeads/aesGcm.js
   var AesGcmContext = class extends NativeAlgorithm {
     constructor(key) {
       super();
@@ -962,14 +1235,14 @@
     }
   };
 
-  // node_modules/@hpke/core/esm/src/utils/emitNotSupported.js
+  // ../../../node_modules/@hpke/core/esm/src/utils/emitNotSupported.js
   function emitNotSupported() {
     return new Promise((_resolve, reject) => {
       reject(new NotSupportedError("Not supported"));
     });
   }
 
-  // node_modules/@hpke/core/esm/src/exporterContext.js
+  // ../../../node_modules/@hpke/core/esm/src/exporterContext.js
   var LABEL_SEC = new Uint8Array([115, 101, 99]);
   var ExporterContextImpl = class {
     constructor(api2, kdf, exporterSecret) {
@@ -1029,7 +1302,7 @@
     }
   };
 
-  // node_modules/@hpke/core/esm/src/encryptionContext.js
+  // ../../../node_modules/@hpke/core/esm/src/encryptionContext.js
   var EncryptionContextImpl = class extends ExporterContextImpl {
     constructor(api2, kdf, params) {
       super(api2, kdf, params.exporterSecret);
@@ -1090,7 +1363,7 @@
     }
   };
 
-  // node_modules/@hpke/core/esm/src/mutex.js
+  // ../../../node_modules/@hpke/core/esm/src/mutex.js
   var __classPrivateFieldGet = function(receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
@@ -1120,7 +1393,7 @@
   };
   _Mutex_locked = /* @__PURE__ */ new WeakMap();
 
-  // node_modules/@hpke/core/esm/src/recipientContext.js
+  // ../../../node_modules/@hpke/core/esm/src/recipientContext.js
   var __classPrivateFieldGet2 = function(receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
@@ -1155,7 +1428,7 @@
   };
   _RecipientContextImpl_mutex = /* @__PURE__ */ new WeakMap();
 
-  // node_modules/@hpke/core/esm/src/senderContext.js
+  // ../../../node_modules/@hpke/core/esm/src/senderContext.js
   var __classPrivateFieldGet3 = function(receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
@@ -1197,7 +1470,7 @@
   };
   _SenderContextImpl_mutex = /* @__PURE__ */ new WeakMap();
 
-  // node_modules/@hpke/core/esm/src/cipherSuiteNative.js
+  // ../../../node_modules/@hpke/core/esm/src/cipherSuiteNative.js
   var LABEL_BASE_NONCE = new Uint8Array([
     98,
     97,
@@ -1470,13 +1743,13 @@
     }
   };
 
-  // node_modules/@hpke/core/esm/src/native.js
+  // ../../../node_modules/@hpke/core/esm/src/native.js
   var CipherSuite = class extends CipherSuiteNative {
   };
   var HkdfSha256 = class extends HkdfSha256Native {
   };
 
-  // node_modules/@hpke/core/esm/src/kems/dhkemPrimitives/x25519.js
+  // ../../../node_modules/@hpke/core/esm/src/kems/dhkemPrimitives/x25519.js
   var ALG_NAME = "X25519";
   var PKCS8_ALG_ID_X25519 = new Uint8Array([
     48,
@@ -1692,7 +1965,7 @@
     }
   };
 
-  // node_modules/@hpke/core/esm/src/kems/dhkemX25519.js
+  // ../../../node_modules/@hpke/core/esm/src/kems/dhkemX25519.js
   var DhkemX25519HkdfSha256 = class extends Dhkem {
     constructor() {
       const kdf = new HkdfSha256Native();
@@ -1730,7 +2003,7 @@
     }
   };
 
-  // node_modules/@hpke/core/esm/src/kems/dhkemPrimitives/x448.js
+  // ../../../node_modules/@hpke/core/esm/src/kems/dhkemPrimitives/x448.js
   var PKCS8_ALG_ID_X448 = new Uint8Array([
     48,
     70,
@@ -1827,7 +2100,7 @@ ${deviceId}
 ${prekeyId}
 ${publicKey}`;
 
-  // node_modules/hash-wasm/dist/index.esm.js
+  // ../../../node_modules/hash-wasm/dist/index.esm.js
   function __awaiter(thisArg, _arguments, P, generator) {
     function adopt(value) {
       return value instanceof P ? value : new P(function(resolve) {
@@ -1894,20 +2167,20 @@ ${publicKey}`;
   function hexCharCodesToInt(a, b) {
     return (a & 15) + (a >> 6 | a >> 3 & 8) << 4 | (b & 15) + (b >> 6 | b >> 3 & 8);
   }
-  function writeHexToUInt8(buf, str) {
-    const size = str.length >> 1;
+  function writeHexToUInt8(buf, str2) {
+    const size = str2.length >> 1;
     for (let i = 0; i < size; i++) {
       const index = i << 1;
-      buf[i] = hexCharCodesToInt(str.charCodeAt(index), str.charCodeAt(index + 1));
+      buf[i] = hexCharCodesToInt(str2.charCodeAt(index), str2.charCodeAt(index + 1));
     }
   }
-  function hexStringEqualsUInt8(str, buf) {
-    if (str.length !== buf.length * 2) {
+  function hexStringEqualsUInt8(str2, buf) {
+    if (str2.length !== buf.length * 2) {
       return false;
     }
     for (let i = 0; i < buf.length; i++) {
       const strIndex = i << 1;
-      if (buf[i] !== hexCharCodesToInt(str.charCodeAt(strIndex), str.charCodeAt(strIndex + 1))) {
+      if (buf[i] !== hexCharCodesToInt(str2.charCodeAt(strIndex), str2.charCodeAt(strIndex + 1))) {
         return false;
       }
     }
@@ -3080,7 +3353,7 @@ ${sig}`;
       await this.saveContacts();
       this.emit();
     }
-    async encrypt(channelId, content, opts) {
+    async encrypt(channelId, payload, opts) {
       if (!this.device || !this.userId) throw new E2eeError("NOT_READY", "Encryption is still starting up");
       if (!this.linked) throw new E2eeError("NOT_LINKED", "This browser isn't unlocked for encrypted messages yet");
       const members = [this.userId, ...await this.channelMembers(channelId)];
@@ -3103,7 +3376,7 @@ ${sig}`;
       const aad = messageAad(channelId, this.userId, this.device.deviceId, bind);
       const contentKey = randomBytes(32);
       const iv = randomBytes(12);
-      const ct = await aesEncrypt(contentKey, iv, utf8(JSON.stringify({ content })), aad);
+      const ct = await aesEncrypt(contentKey, iv, utf8(JSON.stringify(payload)), aad);
       const keys = await Promise.all(
         targets2.map(async ({ userId, device }) => ({
           user_id: userId,
@@ -3129,7 +3402,7 @@ backup:${e.userId}`) }))
       };
       const sig = await sign(this.device.privateKey, signedPayload(channelId, this.userId, bind, unsigned));
       const envelope = { ...unsigned, sig };
-      this.plaintext.set(`${opts.mid ?? ""}:${sig}`, content);
+      this.plaintext.set(`${opts.mid ?? ""}:${sig}`, parsePayload(JSON.parse(JSON.stringify(payload))));
       return envelope;
     }
     cached(message) {
@@ -3179,15 +3452,14 @@ backup:${this.userId}`).catch(() => null);
         if (!this.linked || !backupKey) throw new E2eeError("LOCKED", "This browser isn't unlocked yet");
         throw new E2eeError("NO_KEY", "Sent before this browser was set up");
       }
-      const payload = JSON.parse(fromUtf8(await aesDecrypt(contentKey, fromB64u(env.iv), fromB64u(env.ct), aad)));
-      const content = typeof payload.content === "string" ? payload.content : "";
+      const payload = parsePayload(JSON.parse(fromUtf8(await aesDecrypt(contentKey, fromB64u(env.iv), fromB64u(env.ct), aad))));
       if (mine && prekey && backupKey) {
         const covered = !!backupEntry && !!await hpkeOpen(backupKey.keyPair, backupEntry.enc, backupEntry.wrapped, BACKUP_INFO, `${aad}
 backup:${this.userId}`).catch(() => null);
         if (!covered) await this.queueBackup(message.id, sig, contentKey);
       }
-      if (remember) this.plaintext.set(`${message.id}:${env.sig}`, content);
-      return content;
+      if (remember) this.plaintext.set(`${message.id}:${env.sig}`, payload);
+      return payload;
     }
     lookupStoredKey(messageId) {
       const known = this.storedKeys.get(messageId);
@@ -3292,6 +3564,7 @@ backup:${this.userId}`).catch(() => null);
   var SEARCH_PAGES = 10;
   var AUTH_URL = /^\/auth\/(login|register)$/;
   var MESSAGE_URL = /^\/channels\/(\d+)\/messages(?:\/(\d+))?$/;
+  var CREATE_ATTACHMENTS_URL = /^\/channels\/(\d+)\/attachments$/;
   var isEncryptedMessage = (value) => {
     const message = value;
     return !!message && typeof message === "object" && !!message.encrypted && typeof message.id === "string" && typeof message.channel_id === "string";
@@ -3315,6 +3588,7 @@ backup:${this.userId}`).catch(() => null);
     const retry = /* @__PURE__ */ new Map();
     const readable = /* @__PURE__ */ new Map();
     const searched = /* @__PURE__ */ new Map();
+    const payloads = /* @__PURE__ */ new Map();
     let dispatcher = null;
     const clone = (message) => JSON.parse(JSON.stringify(message));
     const remember = (message) => {
@@ -3322,11 +3596,15 @@ backup:${this.userId}`).catch(() => null);
       if (!channel) readable.set(message.channel_id, channel = /* @__PURE__ */ new Map());
       channel.set(message.id, clone(message));
     };
+    const show = (message, payload) => {
+      ctx.attachments.apply(message, payload);
+      payloads.set(message.id, payload);
+    };
     const decryptOne = (message) => {
       const key = `${message.id}:${message.encrypted?.sig}`;
       const sync = engine2.cached(message);
       if (sync !== void 0) {
-        message.content = sync;
+        show(message, sync);
         states2.set(message.id, { state: "decrypted" });
         retry.delete(message.id);
         remember(message);
@@ -3348,10 +3626,10 @@ backup:${this.userId}`).catch(() => null);
         const original = clone(message);
         pending = (async () => {
           try {
-            const content = await engine2.decrypt(message);
+            const payload = await engine2.decrypt(message);
             states2.set(message.id, { state: "decrypted" });
             retry.delete(message.id);
-            message.content = content;
+            show(message, payload);
             remember(message);
           } catch (error) {
             const code = error instanceof E2eeError ? error.code : null;
@@ -3372,9 +3650,14 @@ backup:${this.userId}`).catch(() => null);
       return pending.then(() => {
         const again = engine2.cached(message);
         const state = states2.get(message.id)?.state;
-        message.content = again ?? (state === "missing" ? MISSING_CONTENT : state === "locked" ? LOCKED_CONTENT : state === "failed" ? FALLBACK_CONTENT : message.content);
+        if (again) show(message, again);
+        else message.content = state === "missing" ? MISSING_CONTENT : state === "locked" ? LOCKED_CONTENT : state === "failed" ? FALLBACK_CONTENT : message.content;
         ctx.onState();
       });
+    };
+    const redispatch = (copy) => {
+      dispatcher?.dispatch({ type: "MESSAGE_UPDATE", message: copy, e2eeLocal: true });
+      if (states2.get(copy.id)?.state === "decrypted") ctx.updateRecord(copy);
     };
     const retryAll = () => {
       if (!ctx.isReady()) return;
@@ -3385,7 +3668,7 @@ backup:${this.userId}`).catch(() => null);
         decryptOne(copy).then(() => {
           const after = states2.get(copy.id)?.state;
           if (after === before && after !== "pending") return;
-          dispatcher?.dispatch({ type: "MESSAGE_UPDATE", message: copy, e2eeLocal: true });
+          redispatch(copy);
           ctx.onState();
         });
       }
@@ -3403,12 +3686,37 @@ backup:${this.userId}`).catch(() => null);
       if (ctx.failClosed()) throw new E2eeError("NOT_READY", "Encryption is unavailable in this client build");
       if (!await ctx.ready) throw new E2eeError("NOT_READY", "Encryption is unavailable in this client build");
       const body = { ...opts.body ?? {} };
-      if (method === "patch" && body.content === void 0) return opts;
-      if (opts.attachments?.length || body.attachments?.length || body.sticker_ids?.length || body.poll)
-        throw new E2eeError("UNSUPPORTED", "Attachments, stickers and polls can't be sent in encrypted conversations yet");
+      if (method === "patch" && body.content === void 0 && body.attachments === void 0) return opts;
+      if (body.poll) throw new E2eeError("UNSUPPORTED", "Polls can't be sent in encrypted conversations yet");
+      if (opts.attachments?.length) throw new E2eeError("UNSUPPORTED", "This file couldn't be encrypted");
       const nonce = method === "post" ? String(body.nonce ?? `${Date.now()}${Math.floor(Math.random() * 1e3)}`) : void 0;
       if (nonce) body.nonce = nonce;
-      body.encrypted = await engine2.encrypt(channelId, String(body.content ?? ""), { nonce, mid: method === "patch" ? messageId : void 0 });
+      const payload = { content: String(body.content ?? "") };
+      const refs = Array.isArray(body.attachments) ? body.attachments : [];
+      if (method === "post") {
+        const metas = refs.map((ref) => ctx.attachments.metaFor(ref));
+        if (metas.some((meta) => !meta)) throw new E2eeError("UNSUPPORTED", "A file wasn't encrypted before it was uploaded");
+        if (metas.length) {
+          payload.attachments = metas.map((meta) => meta);
+          body.attachments = refs.map((ref, i) => ({ id: ref.id, filename: metas[i].name, uploaded_filename: ref.uploaded_filename }));
+        }
+        const stickers = Array.isArray(body.sticker_ids) ? body.sticker_ids.map(String) : [];
+        if (stickers.length) payload.stickers = stickers.map((id) => ctx.sticker(id) ?? { id, name: "", format_type: 1 });
+        delete body.sticker_ids;
+      } else {
+        const previous = payloads.get(messageId);
+        if (!previous) throw new E2eeError("NOT_READY", "This message isn't decrypted in this browser yet");
+        if (body.content === void 0) payload.content = previous.content;
+        let kept = previous.attachments;
+        if (Array.isArray(body.attachments)) {
+          const names = refs.map((ref) => ctx.attachments.nameOf(String(ref.id)));
+          kept = kept?.filter((meta) => names.includes(meta.name));
+          body.attachments = refs.map((ref, i) => ({ id: ref.id, filename: names[i] ?? "file.bin" }));
+        }
+        if (kept?.length) payload.attachments = kept;
+        if (previous.stickers?.length) payload.stickers = previous.stickers;
+      }
+      body.encrypted = await engine2.encrypt(channelId, payload, { nonce, mid: method === "patch" ? messageId : void 0 });
       body.content = FALLBACK_CONTENT;
       return { ...opts, body };
     };
@@ -3463,6 +3771,35 @@ backup:${this.userId}`).catch(() => null);
             );
             return result;
           }
+          if (method === "put" && ctx.attachments.isUpload(url)) {
+            const upload = (async () => {
+              const prepared = await ctx.attachments.prepareUpload(opts);
+              const result = await original(prepared, callback);
+              if (result?.ok) ctx.attachments.uploaded(url);
+              return result;
+            })();
+            upload.catch(() => {
+            });
+            return upload;
+          }
+          const create = method === "post" ? CREATE_ATTACHMENTS_URL.exec(path) : null;
+          if (create && engine2.isEncrypted(create[1])) {
+            const created = (async () => {
+              if (ctx.failClosed() || !await ctx.ready) {
+                const error = new E2eeError("NOT_READY", "Encryption is unavailable in this client build");
+                ctx.onError(error, create[1]);
+                throw error;
+              }
+              const { body, track } = ctx.attachments.prepareCreate(opts.body ?? {});
+              const headers = Object.fromEntries(Object.entries(opts.headers ?? {}).filter(([name]) => !/md5/i.test(name)));
+              const result = await original({ ...opts, body, headers }, callback);
+              if (result?.ok) track(result.body);
+              return result;
+            })();
+            created.catch(() => {
+            });
+            return created;
+          }
           const relevant = url.startsWith("/channels/") || url.startsWith("/users/@me/mentions") || url.includes("/messages");
           if (!relevant) return original(input, callback);
           const search = SEARCH_URL.exec(path);
@@ -3507,6 +3844,8 @@ backup:${this.userId}`).catch(() => null);
               let response;
               try {
                 const result = await original(prepared, (res) => response = res);
+                if (prepared !== opts && result?.ok)
+                  ctx.attachments.sent((opts.body?.attachments ?? []).filter(Boolean));
                 await decryptAll(result?.body);
                 callback?.(response ?? { ...result, hasErr: false });
                 return result;
@@ -3573,15 +3912,14 @@ backup:${this.userId}`).catch(() => null);
         for (const message of messages) {
           const hit = engine2.cached(message);
           if (hit !== void 0) {
-            message.content = hit;
+            show(message, hit);
             states2.set(message.id, { state: "decrypted" });
             continue;
           }
           const copy = clone(message);
           message.content = DECRYPTING_CONTENT;
           decryptOne(copy).then(() => {
-            if (states2.get(copy.id)?.state === "pending") return;
-            target.dispatch({ type: "MESSAGE_UPDATE", message: copy, e2eeLocal: true });
+            if (states2.get(copy.id)?.state !== "pending") redispatch(copy);
           });
         }
         return false;
@@ -4312,7 +4650,7 @@ ${approver}`;
       el.innerHTML = `<h3>${escape(title)}</h3>${text ? `<p>${escape(text)}</p>` : ""}`;
       return el;
     };
-    const describe = (el, text) => {
+    const describe2 = (el, text) => {
       const p = document.createElement("p");
       p.textContent = text;
       el.append(p);
@@ -4344,7 +4682,7 @@ ${approver}`;
         if (error.code === "NO_DEVICES")
           text = `${who ? memberName(who) : "Someone here"} hasn't set up encryption yet, so your message wasn't sent. Ask them to open the app once.`;
         else if (error.code === "IDENTITY_CHANGED") text = `${who ? memberName(who) : "Someone"}'s safety number changed. Review it before sending more messages.`;
-        else if (error.code === "UNSUPPORTED") text = "Files, stickers and polls can't be sent in encrypted conversations yet.";
+        else if (error.code === "UNSUPPORTED") text = `${error.message}. Your message wasn't sent.`;
         else if (error.code === "NOT_LINKED") {
           text = "Unlock this browser to send encrypted messages. Your message wasn't sent.";
           action = { label: "Unlock", run: showUnlock };
@@ -4355,7 +4693,7 @@ ${approver}`;
     const confirmEnable = (channelId) => dialog("Turn on end-to-end encryption?", (body, actions, { close }) => {
       body.insertAdjacentHTML(
         "beforeend",
-        "<p>New messages in this conversation are encrypted in your browser before they're sent, and only the people in it can read them. Encryption can't be turned off later.</p><p>Files, stickers and polls can't be sent here until encrypted attachments ship.</p>"
+        "<p>New messages, files and stickers in this conversation are encrypted in your browser before they're sent, and only the people in it can read them. Encryption can't be turned off later.</p><p>Polls can't be sent in encrypted conversations.</p>"
       );
       const confirm = button("Turn on encryption", "primary", async () => {
         confirm.disabled = true;
@@ -4426,11 +4764,11 @@ ${approver}`;
       });
     };
     const showReset = (onDone) => dialog("Reset encryption?", (body, actions, { close }) => {
-      describe(
+      describe2(
         body,
         "Only do this if you lost your recovery code and no other signed-in browser can approve this one. You get new encryption keys and can keep chatting, but nobody can read the messages sent before the reset anymore, on any device."
       );
-      describe(body, "Your other browsers have to be approved again, and the people you talk to are told that your safety number changed.");
+      describe2(body, "Your other browsers have to be approved again, and the people you talk to are told that your safety number changed.");
       const { wrap, input, setError } = field("Account password", "password", "current-password");
       body.append(wrap);
       const confirm = button("Reset encryption", "danger", async () => {
@@ -4480,7 +4818,7 @@ ${approver}`;
       });
       dialog("Unlock encrypted messages", (body, actions, { el, close }) => {
         const backup = engine2.backup;
-        describe(body, "This browser can't read your encrypted messages yet. Bring your keys over with one of these.");
+        describe2(body, "This browser can't read your encrypted messages yet. Bring your keys over with one of these.");
         if (!backup || backup.mode === "password" && !backup.wrapped_secret) {
           const own = section(
             "Enter your password",
@@ -4506,7 +4844,7 @@ ${approver}`;
         approval.append(status, code, again);
         body.append(approval);
         const lost = section(backup?.mode === "recovery" ? "Lost your code?" : "Can't unlock this browser?");
-        describe(lost, "If you can't use any of these, reset encryption to keep chatting. Messages sent before the reset can't be read anymore.");
+        describe2(lost, "If you can't use any of these, reset encryption to keep chatting. Messages sent before the reset can't be read anymore.");
         lost.append(button("Reset encryption", "link", () => showReset(done)));
         body.append(lost);
         const render = () => {
@@ -4601,7 +4939,7 @@ ${approver}`;
       return wrap;
     };
     const showBackupPassword = () => dialog("Back up your encryption keys", (body, actions, { close }) => {
-      describe(
+      describe2(
         body,
         "Your encryption keys only exist in this browser right now. Enter your account password to lock a backup of them with it, so any browser you sign in to can read your encrypted messages."
       );
@@ -4615,7 +4953,7 @@ ${approver}`;
       actions.append(button("Not now", "secondary", close));
     });
     const showRecoveryCode = () => dialog("Use a recovery code", (body, actions, { close, setDismissable }) => {
-      const intro = describe(
+      const intro = describe2(
         body,
         "We'll make a code that locks your key backup instead of your password. You'll need it to set up a new browser when no other device is around to approve it. We only show it once."
       );
@@ -4667,7 +5005,7 @@ ${approver}`;
       return { current, text: [state, session?.location, added].filter(Boolean).join(" · ") };
     };
     const confirmRemove = (device, onDone) => dialog("Remove this device?", (body, actions, { close }) => {
-      describe(
+      describe2(
         body,
         `${device.name ?? "This browser"} is signed out and can't read new encrypted messages. To read them there again, it needs your recovery code, your password, or approval from another device.`
       );
@@ -4706,7 +5044,7 @@ ${approver}`;
       const clear = (el) => el.querySelectorAll(":scope > :not(h3)").forEach((child) => child.remove());
       const renderBrowser = () => {
         clear(browser);
-        describe(browser, engine2.linked ? "Unlocked. This browser can read and send encrypted messages." : "Locked. This browser can't read encrypted messages yet.");
+        describe2(browser, engine2.linked ? "Unlocked. This browser can read and send encrypted messages." : "Locked. This browser can't read encrypted messages yet.");
         if (!engine2.linked)
           browser.append(
             button("Unlock this browser", "primary", () => {
@@ -4724,20 +5062,20 @@ ${approver}`;
         clear(backupSection);
         backupSection.dataset.mode = backup?.mode ?? "none";
         if (engine2.backupNeedsPassword) {
-          describe(backupSection, "Your keys aren't backed up yet, so new browsers can't read your encrypted messages. Enter your account password to back them up.");
+          describe2(backupSection, "Your keys aren't backed up yet, so new browsers can't read your encrypted messages. Enter your account password to back them up.");
           backupSection.append(backupPasswordForm(() => renderBackup(true)));
           return;
         }
-        if (!backup) return void describe(backupSection, "Your keys aren't backed up yet. Open the app on a browser that can read your messages to back them up.");
+        if (!backup) return void describe2(backupSection, "Your keys aren't backed up yet. Open the app on a browser that can read your messages to back them up.");
         if (backup.mode === "recovery")
-          describe(backupSection, "Your keys are backed up and locked with a recovery code. New browsers ask for that code, and your password can't unlock them.");
+          describe2(backupSection, "Your keys are backed up and locked with a recovery code. New browsers ask for that code, and your password can't unlock them.");
         else if (backup.wrapped_secret)
-          describe(
+          describe2(
             backupSection,
             "Your keys are backed up and locked with your account password, so new browsers unlock as soon as you sign in. Someone with a copy of the server's database could try to guess a weak password offline."
           );
         else
-          describe(
+          describe2(
             backupSection,
             "Your keys are backed up, but they aren't locked with your password yet. Open the app on a browser that can read your messages to finish the backup."
           );
@@ -4815,7 +5153,7 @@ ${approver}`;
       root.className = "fe2ee-page";
       container.replaceChildren(root);
       if (!engine2.userId) {
-        describe(root, failure2 ?? "Encryption is still starting up.");
+        describe2(root, failure2 ?? "Encryption is still starting up.");
         return () => {
         };
       }
@@ -4825,14 +5163,10 @@ ${approver}`;
         root.remove();
       };
     };
-    const beforeSend = (channelId, extras) => {
+    const beforeSend = (channelId) => {
       if (!engine2.isEncrypted(channelId)) return false;
       if (failure2) {
         flash(channelId, { tone: "danger", text: failure2 });
-        return true;
-      }
-      if (extras.hasAttachments || extras.hasStickers) {
-        flash(channelId, { tone: "warning", text: "Files and stickers can't be sent in encrypted conversations yet. Remove them to send your message." });
         return true;
       }
       const changed = members?.channelId === channelId ? members.list.find((m) => engine2.contacts[m.id]?.pendingKey) : void 0;
@@ -5065,6 +5399,25 @@ ${approver}`;
     }
     return found;
   };
+  var findStore = (reqs, methods) => {
+    const req = pickRequire(reqs);
+    if (!req?.c) return null;
+    for (const id of Object.keys(req.c)) {
+      const exports = req.c[id]?.exports;
+      for (const name of keysOf(exports)) {
+        let value;
+        try {
+          value = exports[name];
+        } catch {
+          continue;
+        }
+        if (!value || typeof value !== "object") continue;
+        const proto = protoKeysOf(value);
+        if (methods.every((m) => proto.includes(m))) return value;
+      }
+    }
+    return null;
+  };
 
   // client/e2ee/src/index.ts
   var HOOK_TIMEOUT_MS = 2e4;
@@ -5091,6 +5444,14 @@ ${approver}`;
     }
   };
   var engine = new Engine(api);
+  var attachments = createAttachments();
+  attachments.start();
+  var stickerStore = null;
+  var sticker = (id) => {
+    stickerStore ??= findStore(loader.reqs, ["getStickerById", "getStickerPack"]);
+    const found = stickerStore?.getStickerById(id);
+    return found ? { id, name: String(found.name ?? ""), format_type: Number(found.format_type ?? 1) } : null;
+  };
   var apiBase = () => {
     const env = window.GLOBAL_ENV;
     return `${env?.API_ENDPOINT ?? "/api"}/v${env?.API_VERSION ?? 9}`;
@@ -5168,6 +5529,8 @@ ${approver}`;
   });
   var hooks = createHooks({
     engine,
+    attachments,
+    sticker,
     ready,
     states,
     failClosed: () => failure !== null,
@@ -5181,6 +5544,13 @@ ${approver}`;
       engine.passwordChanged(password, next, typeof token === "string" ? tokenApi(token) : void 0).catch((error) => console.error("[e2ee] couldn't rewrap the backup", error));
     },
     onState: () => ui.refresh(),
+    updateRecord: (message) => {
+      try {
+        loader.updateMessage?.(message.channel_id, message.id, { content: message.content ?? "", stickerItems: message.sticker_items ?? [] });
+      } catch (error) {
+        console.error("[e2ee] couldn't refresh a decrypted message", error);
+      }
+    },
     onError: (error, channelId) => ui.showError(error, channelId)
   });
   var selfTest = async () => {
@@ -5206,6 +5576,7 @@ ${approver}`;
     try {
       await engine.init(userId);
       await selfTest();
+      if (!await attachments.ready()) console.warn("[e2ee] the attachment service worker isn't controlling this page, so encrypted files won't load");
       initialized = true;
       link.start(userId);
       engine.onUnlock(() => {
@@ -5319,7 +5690,7 @@ ${approver}`;
     received: { ...received }
   });
   loader.isEncrypted = (channelId) => engine.isEncrypted(channelId);
-  loader.beforeSend = (channelId, extras) => ui.beforeSend(channelId, extras);
+  loader.beforeSend = (channelId) => ui.beforeSend(channelId);
   loader.mountSettings = (container) => ui.mountSettings(container);
   loader.openSettings = () => ui.showSettings();
   tick();

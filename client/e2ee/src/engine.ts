@@ -39,6 +39,7 @@ import {
     sign,
     verify,
 } from "./crypto";
+import { parsePayload, Payload } from "./files";
 import { Contact, scoped, Store, StoredDevice, StoredIdentity, StoredPrekey } from "./store";
 
 export const FALLBACK_CONTENT = "🔒 Encrypted message";
@@ -75,12 +76,24 @@ export interface Envelope {
     sig: string;
 }
 
+export interface RawAttachment {
+    id: string;
+    filename: string;
+    url?: string;
+    proxy_url?: string;
+    flags?: number;
+    [key: string]: unknown;
+}
+
 export interface RawMessage {
     id: string;
     channel_id: string;
     content?: string;
     nonce?: string | number | null;
     author?: { id: string };
+    flags?: number;
+    attachments?: RawAttachment[];
+    sticker_items?: unknown[];
     encrypted?: Envelope | null;
 }
 
@@ -233,7 +246,7 @@ export class Engine {
     private directory = new Map<string, Promise<DirectoryEntry>>();
     private members = new Map<string, Promise<string[]>>();
     private profiles = new Map<string, Promise<ChannelMember>>();
-    private plaintext = new Map<string, string>();
+    private plaintext = new Map<string, Payload>();
     private listeners = new Set<() => void>();
     private unlockListeners = new Set<() => void>();
     private uploads = new Map<string, { message_id: string; enc: string; wrapped: string; sig: string }>();
@@ -762,7 +775,7 @@ export class Engine {
         this.emit();
     }
 
-    async encrypt(channelId: string, content: string, opts: { nonce?: string; mid?: string }): Promise<Envelope> {
+    async encrypt(channelId: string, payload: Payload, opts: { nonce?: string; mid?: string }): Promise<Envelope> {
         if (!this.device || !this.userId) throw new E2eeError("NOT_READY", "Encryption is still starting up");
         if (!this.linked) throw new E2eeError("NOT_LINKED", "This browser isn't unlocked for encrypted messages yet");
         const members = [this.userId, ...(await this.channelMembers(channelId))];
@@ -786,7 +799,7 @@ export class Engine {
         const aad = messageAad(channelId, this.userId, this.device.deviceId, bind);
         const contentKey = randomBytes(32);
         const iv = randomBytes(12);
-        const ct = await aesEncrypt(contentKey, iv, utf8(JSON.stringify({ content })), aad);
+        const ct = await aesEncrypt(contentKey, iv, utf8(JSON.stringify(payload)), aad);
         const keys = await Promise.all(
             targets.map(async ({ userId, device }) => ({
                 user_id: userId,
@@ -810,7 +823,7 @@ export class Engine {
         };
         const sig = await sign(this.device.privateKey, signedPayload(channelId, this.userId, bind, unsigned));
         const envelope = { ...unsigned, sig };
-        this.plaintext.set(`${opts.mid ?? ""}:${sig}`, content);
+        this.plaintext.set(`${opts.mid ?? ""}:${sig}`, parsePayload(JSON.parse(JSON.stringify(payload))));
         return envelope;
     }
 
@@ -819,7 +832,7 @@ export class Engine {
         return env ? (this.plaintext.get(`${message.id}:${env.sig}`) ?? this.plaintext.get(`${env.mid ?? ""}:${env.sig}`)) : undefined;
     }
 
-    async decrypt(message: RawMessage, remember = true): Promise<string> {
+    async decrypt(message: RawMessage, remember = true): Promise<Payload> {
         const env = message.encrypted;
         if (!env || env.v !== 1 || env.alg !== ALGORITHM || !Array.isArray(env.keys)) throw new E2eeError("BAD_ENVELOPE", "Unsupported envelope");
         const hit = this.cached(message);
@@ -862,15 +875,14 @@ export class Engine {
             if (!this.linked || !backupKey) throw new E2eeError("LOCKED", "This browser isn't unlocked yet");
             throw new E2eeError("NO_KEY", "Sent before this browser was set up");
         }
-        const payload = JSON.parse(fromUtf8(await aesDecrypt(contentKey, fromB64u(env.iv), fromB64u(env.ct), aad))) as { content?: unknown };
-        const content = typeof payload.content === "string" ? payload.content : "";
+        const payload = parsePayload(JSON.parse(fromUtf8(await aesDecrypt(contentKey, fromB64u(env.iv), fromB64u(env.ct), aad))));
         if (mine && prekey && backupKey) {
             const covered =
                 !!backupEntry && !!(await hpkeOpen(backupKey.keyPair, backupEntry.enc, backupEntry.wrapped, BACKUP_INFO, `${aad}\nbackup:${this.userId}`).catch(() => null));
             if (!covered) await this.queueBackup(message.id, sig, contentKey);
         }
-        if (remember) this.plaintext.set(`${message.id}:${env.sig}`, content);
-        return content;
+        if (remember) this.plaintext.set(`${message.id}:${env.sig}`, payload);
+        return payload;
     }
 
     private lookupStoredKey(messageId: string) {

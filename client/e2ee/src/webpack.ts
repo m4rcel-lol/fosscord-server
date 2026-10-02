@@ -122,3 +122,23 @@ export const scan = (reqs: WebpackRequire[], found: Targets) => {
     }
     return found;
 };
+
+export const findStore = <T>(reqs: WebpackRequire[], methods: string[]): T | null => {
+    const req = pickRequire(reqs);
+    if (!req?.c) return null;
+    for (const id of Object.keys(req.c)) {
+        const exports = req.c[id]?.exports;
+        for (const name of keysOf(exports)) {
+            let value: unknown;
+            try {
+                value = (exports as Record<string, unknown>)[name];
+            } catch {
+                continue;
+            }
+            if (!value || typeof value !== "object") continue;
+            const proto = protoKeysOf(value);
+            if (methods.every((m) => proto.includes(m))) return value as T;
+        }
+    }
+    return null;
+};

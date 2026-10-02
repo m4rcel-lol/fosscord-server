@@ -16,21 +16,24 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+import { createAttachments } from "./attachments";
 import { randomBytes, toB64u } from "./bytes";
 import { aesDecrypt, aesEncrypt, exportPublic, generateAgreementKey, generateSigningKey, hpkeOpen, hpkeSeal, sign, verify } from "./crypto";
 import { Api, Engine } from "./engine";
 import { createHooks, MessageState } from "./hooks";
 import { createLink, LinkEvent } from "./link";
 import { createUi } from "./ui";
-import { HttpClient, scan, Targets } from "./webpack";
+import { StickerMeta } from "./files";
+import { findStore, HttpClient, scan, Targets } from "./webpack";
 
 interface LoaderState {
     reqs: { c?: Record<string, { exports: unknown }> }[];
     status?: () => unknown;
     isEncrypted?: (channelId: string) => boolean;
-    beforeSend?: (channelId: string, extras: { hasAttachments?: boolean; hasStickers?: boolean }) => boolean;
+    beforeSend?: (channelId: string) => boolean;
     mountSettings?: (container: HTMLElement) => () => void;
     openSettings?: () => void;
+    updateMessage?: (channelId: string, messageId: string, fields: Record<string, unknown>) => void;
 }
 
 declare global {
@@ -65,6 +68,19 @@ const api: Api = {
 };
 
 const engine = new Engine(api);
+const attachments = createAttachments();
+attachments.start();
+
+interface StickerStore {
+    getStickerById(id: string): { id: string; name?: string; format_type?: number } | undefined;
+}
+
+let stickerStore: StickerStore | null = null;
+const sticker = (id: string): StickerMeta | null => {
+    stickerStore ??= findStore<StickerStore>(loader.reqs, ["getStickerById", "getStickerPack"]);
+    const found = stickerStore?.getStickerById(id);
+    return found ? { id, name: String(found.name ?? ""), format_type: Number(found.format_type ?? 1) } : null;
+};
 
 const apiBase = () => {
     const env = (window as unknown as { GLOBAL_ENV?: { API_ENDPOINT?: string; API_VERSION?: number } }).GLOBAL_ENV;
@@ -150,6 +166,8 @@ ready.then((ok) => {
 
 const hooks = createHooks({
     engine,
+    attachments,
+    sticker,
     ready,
     states,
     failClosed: () => failure !== null,
@@ -163,6 +181,13 @@ const hooks = createHooks({
         engine.passwordChanged(password, next, typeof token === "string" ? tokenApi(token) : undefined).catch((error) => console.error("[e2ee] couldn't rewrap the backup", error));
     },
     onState: () => ui.refresh(),
+    updateRecord: (message) => {
+        try {
+            loader.updateMessage?.(message.channel_id, message.id, { content: message.content ?? "", stickerItems: message.sticker_items ?? [] });
+        } catch (error) {
+            console.error("[e2ee] couldn't refresh a decrypted message", error);
+        }
+    },
     onError: (error, channelId) => ui.showError(error, channelId),
 });
 
@@ -190,6 +215,7 @@ const start = async (userId: string) => {
     try {
         await engine.init(userId);
         await selfTest();
+        if (!(await attachments.ready())) console.warn("[e2ee] the attachment service worker isn't controlling this page, so encrypted files won't load");
         initialized = true;
         link.start(userId);
         engine.onUnlock(() => {
@@ -312,7 +338,7 @@ loader.status = () => ({
 });
 
 loader.isEncrypted = (channelId) => engine.isEncrypted(channelId);
-loader.beforeSend = (channelId, extras) => ui.beforeSend(channelId, extras);
+loader.beforeSend = (channelId) => ui.beforeSend(channelId);
 loader.mountSettings = (container) => ui.mountSettings(container);
 loader.openSettings = () => ui.showSettings();
 
