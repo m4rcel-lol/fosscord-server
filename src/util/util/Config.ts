@@ -112,7 +112,11 @@ export class Config {
     }
 }
 
-const StaleDefaults: [string, JsonValue, JsonValue][] = [["limits.absoluteRate.register.enabled", true, false]];
+const StaleDefaults: [string, JsonValue, JsonValue][] = [
+    ["limits.absoluteRate.register.enabled", true, false],
+    ["limits.rate.enabled", false, true],
+    ["limits.rate.error", { count: 10, window: 5 }, { count: 10000, window: 600 }],
+];
 
 function replaceStaleDefaults(config: ConfigValue) {
     for (const [path, previous, next] of StaleDefaults) {
