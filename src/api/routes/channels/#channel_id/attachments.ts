@@ -53,7 +53,7 @@ router.post(
             });
         }
 
-        const cdnUrl = Config.get().cdn.endpointPublic;
+        const cdnUrl = Config.get().cdn.endpointPublic?.replace(/\/+$/, "");
         const batchId = `CLOUD_${user.id}_${Random.getString("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789", 128)}`;
 
         // validate IDs
@@ -70,7 +70,7 @@ router.post(
 
         const attachments = await Promise.all(
             payload.files.map(async (attachment) => {
-                attachment.filename = attachment.filename.replaceAll(" ", "_").replace(/[^a-zA-Z0-9._]+/g, "");
+                attachment.filename = attachment.filename.replaceAll(" ", "_").replace(/[^a-zA-Z0-9._-]+/g, "");
                 const uploadFilename = `${channel_id}/${batchId}/${attachment.id ?? "0"}/${attachment.filename}`;
                 const newAttachment = CloudAttachment.create({
                     user: user,

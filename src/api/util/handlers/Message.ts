@@ -129,7 +129,7 @@ async function processMedia(media: UnfurledMediaItem, messageId: string, batchId
             userIsClip: false,
         });
         await attEnt.save();
-        const cdnUrl = Config.get().cdn.endpointPublic;
+        const cdnUrl = Config.get().cdn.endpointPublic?.replace(/\/+$/, "");
         const fetchUrl = `${cdnUrl}/attachments/${attEnt.uploadFilename}`;
         await (
             await fetch(fetchUrl, {
@@ -146,7 +146,7 @@ async function processMedia(media: UnfurledMediaItem, messageId: string, batchId
         delWhenDone = true;
     }
 
-    const cloneResponse = await fetch(`${Config.get().cdn.endpointPrivate}/attachments/${attEnt.uploadFilename}/clone_to_message/${messageId}`, {
+    const cloneResponse = await fetch(`${Config.get().cdn.endpointPrivate?.replace(/\/+$/, "")}/attachments/${attEnt.uploadFilename}/clone_to_message/${messageId}`, {
         method: "POST",
         headers: {
             signature: Config.get().security.requestSignature || "",
@@ -159,7 +159,7 @@ async function processMedia(media: UnfurledMediaItem, messageId: string, batchId
     }
 
     const cloneRespBody = (await cloneResponse.json()) as { success: boolean; new_path: string };
-    media.proxy_url = `${Config.get().cdn.endpointPublic}/${cloneRespBody.new_path}`;
+    media.proxy_url = `${Config.get().cdn.endpointPublic?.replace(/\/+$/, "")}/${cloneRespBody.new_path}`;
     if (url.protocol === "attachment:") media.url = media.proxy_url;
 
     const realAtt = Attachment.create({
@@ -185,7 +185,7 @@ async function processMedia(media: UnfurledMediaItem, messageId: string, batchId
 
     if (delWhenDone) {
         return () =>
-            fetch(`${Config.get().cdn.endpointPrivate}/attachments/${attEnt.uploadFilename}`, {
+            fetch(`${Config.get().cdn.endpointPrivate?.replace(/\/+$/, "")}/attachments/${attEnt.uploadFilename}`, {
                 headers: {
                     signature: Config.get().security.requestSignature,
                 },
@@ -614,10 +614,10 @@ export async function processMessageOptionAttachments(source: MessageOptions, de
             const result = logPassthru(await convertCloudAttachmentToAttachment(src, destination.channel_id!, destination.id), logp, "Got MessageCreateCloudAttachment contents");
 
             result.flags = 0 as AttachmentFlags;
-            result.flags &= (src.is_clip ? 1 : 0) * (AttachmentFlags.IS_CLIP as number);
-            result.flags &= (src.is_remix ? 1 : 0) * (AttachmentFlags.IS_REMIX as number);
-            result.flags &= (src.is_thumbnail ? 1 : 0) * (AttachmentFlags.IS_THUMBNAIL as number);
-            result.flags &= (src.is_spoiler ? 1 : 0) * (AttachmentFlags.IS_SPOILER as number);
+            result.flags |= (src.is_clip ? 1 : 0) * (AttachmentFlags.IS_CLIP as number);
+            result.flags |= (src.is_remix ? 1 : 0) * (AttachmentFlags.IS_REMIX as number);
+            result.flags |= (src.is_thumbnail ? 1 : 0) * (AttachmentFlags.IS_THUMBNAIL as number);
+            result.flags |= (src.is_spoiler ? 1 : 0) * (AttachmentFlags.IS_SPOILER as number);
             return logPassthru(result, logp, "Got MessageCreateCloudAttachment contents");
         }
         if (isInternalCdnAttachment(src)) {
@@ -656,12 +656,15 @@ export async function convertCloudAttachmentToAttachment(cloudAttachmentReferenc
         },
     });
 
-    const cloneResponse = await fetch(`${Config.get().cdn.endpointPrivate}/attachments/${cloudAttachment.uploadFilename}/clone_to_message/${destinationMessageId}`, {
-        method: "POST",
-        headers: {
-            signature: Config.get().security.requestSignature || "",
+    const cloneResponse = await fetch(
+        `${Config.get().cdn.endpointPrivate?.replace(/\/+$/, "")}/attachments/${cloudAttachment.uploadFilename}/clone_to_message/${destinationMessageId}`,
+        {
+            method: "POST",
+            headers: {
+                signature: Config.get().security.requestSignature || "",
+            },
         },
-    });
+    );
 
     if (!cloneResponse.ok) {
         console.error(`[Message] Failed to clone attachment ${cloudAttachment.userFilename} to message ${destinationMessageId}`);

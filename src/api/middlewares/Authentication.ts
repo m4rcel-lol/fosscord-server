@@ -20,6 +20,7 @@ import { NextFunction, Request, Response } from "express";
 import { Session, User } from "@spacebar/database";
 import { Random } from "@spacebar/extensions";
 import { checkToken, Rights, UserTokenData } from "@spacebar/util";
+import { CORS } from "./CORS";
 
 declare global {
     // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -39,7 +40,7 @@ declare global {
 }
 
 export async function Authentication(req: Request, res: Response, next: NextFunction) {
-    if (req.method === "OPTIONS") return res.sendStatus(204);
+    if (req.method === "OPTIONS") return CORS(req, res, next);
 
     if (req.headers.cookie?.split("; ").find((x) => x.startsWith("__sb_sessid=")))
         req.fingerprint = req.headers.cookie

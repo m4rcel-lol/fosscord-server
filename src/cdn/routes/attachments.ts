@@ -36,11 +36,11 @@ router.post("/:channel_id/:message_id", multer.single("file"), async (req: Reque
 
     const { buffer, mimetype, size, originalname } = req.file;
     const { channel_id, message_id } = req.params as { [key: string]: string };
-    const filename = originalname.replaceAll(" ", "_").replace(/[^a-zA-Z0-9._]+/g, "");
+    const filename = originalname.replaceAll(" ", "_").replace(/[^a-zA-Z0-9._-]+/g, "");
     const attachment_id = Snowflake.generate();
     const path = `attachments/${channel_id}/${attachment_id}/${filename}`;
 
-    const endpoint = Config.get()?.cdn.endpointPublic;
+    const endpoint = Config.get()?.cdn.endpointPublic?.replace(/\/+$/, "");
 
     await storage.set(path, buffer);
     let width;
