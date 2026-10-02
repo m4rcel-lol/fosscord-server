@@ -175,7 +175,7 @@ const start = async (userId: string) => {
 };
 
 const startWhenReady = () => {
-    if (started || !http || Date.now() - lastProbe < 10000) return;
+    if (started || !http || !targets.gateway?.getSocket()?.isSessionEstablished?.() || Date.now() - lastProbe < 10000) return;
     lastProbe = Date.now();
     api.request<{ id: string }>("get", "/users/@me").then(
         (me) => start(me.id),
