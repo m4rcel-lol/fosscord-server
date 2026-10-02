@@ -20,7 +20,16 @@ import { HTTPError } from "lambert-server/HTTPError";
 import { BeforeInsert, BeforeUpdate, Column, Entity, Index, JoinColumn, JoinTable, ManyToMany, ManyToOne, Not, PrimaryGeneratedColumn, RelationId } from "typeorm";
 import { Stopwatch } from "@spacebar/extensions";
 import { Config, emitEvent, DiscordApiErrors } from "@spacebar/util/util";
-import { AvatarDecorationData, Collectibles, DisplayNameStyle, PublicMember, PublicMemberProjection, UserGuildSettings } from "@spacebar/schemas";
+import {
+    AvatarDecorationData,
+    ChannelOverride,
+    Collectibles,
+    DefaultUserGuildSettings,
+    DisplayNameStyle,
+    PublicMember,
+    PublicMemberProjection,
+    UserGuildSettings,
+} from "@spacebar/schemas";
 import { ReadyGuildDTO } from "../../util/dtos/ReadyGuildDTO";
 import { GuildCreateEvent, GuildDeleteEvent, GuildMemberAddEvent, GuildMemberRemoveEvent, GuildMemberUpdateEvent, MessageCreateEvent } from "../../util/interfaces/Event";
 import { BaseClassWithoutId } from "./BaseClass";
@@ -505,6 +514,32 @@ export class Member extends BaseClassWithoutId {
         if (this.user) member.user = this.user.toPublicUser();
 
         return member as PublicMember;
+    }
+
+    static async updateGuildSettings(user_id: string, guild_id: string, body: Partial<UserGuildSettings>) {
+        const member = await Member.findOneOrFail({
+            where: { id: user_id, guild_id },
+            select: { settings: true, index: true, id: true, guild_id: true },
+        });
+        const settings = { ...DefaultUserGuildSettings, ...(member.settings ?? {}) };
+        const { channel_overrides, ...rest } = body;
+        Object.assign(settings, rest);
+        if (channel_overrides) {
+            settings.channel_overrides = { ...(settings.channel_overrides ?? {}) };
+            for (const [channel_id, override] of Object.entries(channel_overrides))
+                settings.channel_overrides[channel_id] = { ...(settings.channel_overrides[channel_id] ?? {}), ...override, channel_id } as ChannelOverride;
+        }
+        settings.version = (settings.version ?? 0) + 1;
+        settings.guild_id = guild_id;
+        member.settings = settings;
+        await member.save();
+
+        const entry = {
+            ...settings,
+            channel_overrides: Object.entries(settings.channel_overrides ?? {}).map(([channel_id, override]) => ({ ...override, channel_id })),
+        };
+        await emitEvent({ event: "USER_GUILD_SETTINGS_UPDATE", user_id, data: entry });
+        return entry;
     }
 
     toSupplementalMember() {
