@@ -22,7 +22,7 @@ import { InteractionCallbackType } from "./InteractionCallbackType";
 
 export interface InteractionCallbackSchema {
     type: InteractionCallbackType;
-    data: unknown;
+    data?: unknown;
 }
 export interface PongCallback extends InteractionCallbackSchema {
     type: InteractionCallbackType.PONG;
@@ -32,6 +32,7 @@ export interface AckCallback extends InteractionCallbackSchema {
 }
 export interface MessageCallback extends InteractionCallbackSchema {
     type: InteractionCallbackType.CHANNEL_MESSAGE;
+    data?: InteractionMessage;
 }
 export interface MessageWSourceCallback extends InteractionCallbackSchema {
     type: InteractionCallbackType.CHANNEL_MESSAGE_WITH_SOURCE;
@@ -39,7 +40,7 @@ export interface MessageWSourceCallback extends InteractionCallbackSchema {
 }
 export interface MessageDWSourceCallback extends InteractionCallbackSchema {
     type: InteractionCallbackType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE;
-    data: InteractionMessage;
+    data?: InteractionMessage;
 }
 export interface MessageUpdateCallback extends InteractionCallbackSchema {
     type: InteractionCallbackType.UPDATE_MESSAGE;
@@ -47,7 +48,35 @@ export interface MessageUpdateCallback extends InteractionCallbackSchema {
 }
 export interface MessageDUpdateCallback extends InteractionCallbackSchema {
     type: InteractionCallbackType.DEFERRED_UPDATE_MESSAGE;
-    data: InteractionMessage;
+    data?: InteractionMessage;
+}
+export interface AutocompleteResultCallback extends InteractionCallbackSchema {
+    type: InteractionCallbackType.APPLICATION_COMMAND_AUTOCOMPLETE_RESULT;
+    data: {
+        choices: {
+            name: string;
+            name_localizations?: { [key: string]: string } | null;
+            value: string | number;
+        }[];
+    };
+}
+export interface ModalCallback extends InteractionCallbackSchema {
+    type: InteractionCallbackType.MODAL;
+    data: {
+        custom_id: string;
+        title: string;
+        components: object[];
+    };
+}
+export interface PremiumRequiredCallback extends InteractionCallbackSchema {
+    type: InteractionCallbackType.PREMIUM_REQUIRED;
+}
+export interface IframeModalCallback extends InteractionCallbackSchema {
+    type: InteractionCallbackType.IFRAME_MODAL;
+    data?: object;
+}
+export interface LaunchActivityCallback extends InteractionCallbackSchema {
+    type: InteractionCallbackType.LAUNCH_ACTIVITY;
 }
 export type InteractionCallbacksSchema =
     | PongCallback
@@ -56,7 +85,12 @@ export type InteractionCallbacksSchema =
     | MessageWSourceCallback
     | MessageDWSourceCallback
     | MessageUpdateCallback
-    | MessageDUpdateCallback;
+    | MessageDUpdateCallback
+    | AutocompleteResultCallback
+    | ModalCallback
+    | PremiumRequiredCallback
+    | IframeModalCallback
+    | LaunchActivityCallback;
 
 export interface InteractionMessage {
     content?: string;

@@ -328,7 +328,7 @@ export class Message extends BaseClass {
             author_id: undefined,
             member_id: undefined,
             webhook_id: this.webhook_id ?? undefined,
-            application_id: undefined,
+            application_id: this.application_id ?? undefined,
             mentions: this.mentions?.map((user) => {
                 if (user && !user.toPublicUser) console.trace("toPublic user missing!!!");
                 return (user?.toPublicUser?.() ?? user ?? undefined) as unknown as PartialUser;

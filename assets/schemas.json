@@ -6836,7 +6836,6 @@
         },
         "additionalProperties": false,
         "required": [
-            "data",
             "type"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
@@ -6863,6 +6862,21 @@
             },
             {
                 "$ref": "#/definitions/MessageDUpdateCallback"
+            },
+            {
+                "$ref": "#/definitions/AutocompleteResultCallback"
+            },
+            {
+                "$ref": "#/definitions/ModalCallback"
+            },
+            {
+                "$ref": "#/definitions/PremiumRequiredCallback"
+            },
+            {
+                "$ref": "#/definitions/IframeModalCallback"
+            },
+            {
+                "$ref": "#/definitions/LaunchActivityCallback"
             }
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
@@ -17539,7 +17553,6 @@
         },
         "additionalProperties": false,
         "required": [
-            "data",
             "type"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
@@ -17559,7 +17572,6 @@
         },
         "additionalProperties": false,
         "required": [
-            "data",
             "type"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
@@ -17575,11 +17587,12 @@
             "type": {
                 "$ref": "#/definitions/InteractionCallbackType.CHANNEL_MESSAGE"
             },
-            "data": {}
+            "data": {
+                "$ref": "#/definitions/InteractionMessage"
+            }
         },
         "additionalProperties": false,
         "required": [
-            "data",
             "type"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
@@ -17587,28 +17600,6 @@
     "InteractionCallbackType.CHANNEL_MESSAGE": {
         "type": "number",
         "const": 3,
-        "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "MessageWSourceCallback": {
-        "type": "object",
-        "properties": {
-            "type": {
-                "$ref": "#/definitions/InteractionCallbackType.CHANNEL_MESSAGE_WITH_SOURCE"
-            },
-            "data": {
-                "$ref": "#/definitions/InteractionMessage"
-            }
-        },
-        "additionalProperties": false,
-        "required": [
-            "data",
-            "type"
-        ],
-        "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "InteractionCallbackType.CHANNEL_MESSAGE_WITH_SOURCE": {
-        "type": "number",
-        "const": 4,
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "InteractionMessage": {
@@ -17658,6 +17649,28 @@
         "additionalProperties": false,
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
+    "MessageWSourceCallback": {
+        "type": "object",
+        "properties": {
+            "type": {
+                "$ref": "#/definitions/InteractionCallbackType.CHANNEL_MESSAGE_WITH_SOURCE"
+            },
+            "data": {
+                "$ref": "#/definitions/InteractionMessage"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "data",
+            "type"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "InteractionCallbackType.CHANNEL_MESSAGE_WITH_SOURCE": {
+        "type": "number",
+        "const": 4,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
     "MessageDWSourceCallback": {
         "type": "object",
         "properties": {
@@ -17670,7 +17683,6 @@
         },
         "additionalProperties": false,
         "required": [
-            "data",
             "type"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
@@ -17714,7 +17726,6 @@
         },
         "additionalProperties": false,
         "required": [
-            "data",
             "type"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
@@ -17722,6 +17733,174 @@
     "InteractionCallbackType.DEFERRED_UPDATE_MESSAGE": {
         "type": "number",
         "const": 6,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AutocompleteResultCallback": {
+        "type": "object",
+        "properties": {
+            "type": {
+                "$ref": "#/definitions/InteractionCallbackType.APPLICATION_COMMAND_AUTOCOMPLETE_RESULT"
+            },
+            "data": {
+                "type": "object",
+                "properties": {
+                    "choices": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string"
+                                },
+                                "name_localizations": {
+                                    "anyOf": [
+                                        {
+                                            "type": "object",
+                                            "additionalProperties": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        {
+                                            "type": "null"
+                                        }
+                                    ]
+                                },
+                                "value": {
+                                    "type": [
+                                        "string",
+                                        "integer"
+                                    ]
+                                }
+                            },
+                            "additionalProperties": false,
+                            "required": [
+                                "name",
+                                "value"
+                            ]
+                        }
+                    }
+                },
+                "additionalProperties": false,
+                "required": [
+                    "choices"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "data",
+            "type"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "InteractionCallbackType.APPLICATION_COMMAND_AUTOCOMPLETE_RESULT": {
+        "type": "number",
+        "const": 8,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "ModalCallback": {
+        "type": "object",
+        "properties": {
+            "type": {
+                "$ref": "#/definitions/InteractionCallbackType.MODAL"
+            },
+            "data": {
+                "type": "object",
+                "properties": {
+                    "custom_id": {
+                        "type": "string"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "components": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": true
+                        }
+                    }
+                },
+                "additionalProperties": false,
+                "required": [
+                    "components",
+                    "custom_id",
+                    "title"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "data",
+            "type"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "InteractionCallbackType.MODAL": {
+        "type": "number",
+        "const": 9,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "PremiumRequiredCallback": {
+        "type": "object",
+        "properties": {
+            "type": {
+                "$ref": "#/definitions/InteractionCallbackType.PREMIUM_REQUIRED"
+            },
+            "data": {}
+        },
+        "additionalProperties": false,
+        "required": [
+            "type"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "InteractionCallbackType.PREMIUM_REQUIRED": {
+        "type": "number",
+        "const": 10,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "IframeModalCallback": {
+        "type": "object",
+        "properties": {
+            "type": {
+                "$ref": "#/definitions/InteractionCallbackType.IFRAME_MODAL"
+            },
+            "data": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": true
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "type"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "InteractionCallbackType.IFRAME_MODAL": {
+        "type": "number",
+        "const": 11,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "LaunchActivityCallback": {
+        "type": "object",
+        "properties": {
+            "type": {
+                "$ref": "#/definitions/InteractionCallbackType.LAUNCH_ACTIVITY"
+            },
+            "data": {}
+        },
+        "additionalProperties": false,
+        "required": [
+            "type"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "InteractionCallbackType.LAUNCH_ACTIVITY": {
+        "type": "number",
+        "const": 12,
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "InteractionGuild": {

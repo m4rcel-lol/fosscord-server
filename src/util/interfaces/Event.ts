@@ -564,6 +564,27 @@ export interface InteractionFailureEvent extends Event {
     };
 }
 
+export interface InteractionModalCreateEvent extends Event {
+    event: "INTERACTION_MODAL_CREATE";
+    data: {
+        id: Snowflake;
+        nonce?: string;
+        channel_id: Snowflake;
+        custom_id: string;
+        title: string;
+        components: object[];
+        application: object;
+    };
+}
+
+export interface ApplicationCommandAutocompleteResponseEvent extends Event {
+    event: "APPLICATION_COMMAND_AUTOCOMPLETE_RESPONSE";
+    data: {
+        nonce?: string;
+        choices: object[];
+    };
+}
+
 export interface MessageAckEvent extends Event {
     event: "MESSAGE_ACK";
     data: {
@@ -841,6 +862,8 @@ export type EVENT =
     | "INTERACTION_CREATE"
     | "INTERACTION_SUCCESS"
     | "INTERACTION_FAILURE"
+    | "INTERACTION_MODAL_CREATE"
+    | "APPLICATION_COMMAND_AUTOCOMPLETE_RESPONSE"
     | "VOICE_STATE_UPDATE"
     | "VOICE_SERVER_UPDATE"
     | "STREAM_CREATE"

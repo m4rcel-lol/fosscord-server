@@ -20,9 +20,10 @@ import { Request, Response } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { MoreThan } from "typeorm";
 import { handleMessage, postHandleMessage } from "./Message";
+import { createInteractionMessage, editInteractionMessage, fetchInteractionMessage } from "./Interaction";
 import { Attachment, Channel, Message, Webhook } from "@spacebar/database";
-import { Config, DiscordApiErrors, emitEvent, FieldErrors, MessageCreateEvent, Snowflake, uploadFile, ValidateName } from "@spacebar/util";
-import { WebhookExecuteSchema } from "@spacebar/schemas";
+import { Config, DiscordApiErrors, emitEvent, FieldErrors, getInteractionByToken, MessageCreateEvent, Snowflake, uploadFile, ValidateName } from "@spacebar/util";
+import { InteractionMessage, WebhookExecuteSchema } from "@spacebar/schemas";
 
 export const executeWebhook = async (req: Request, res: Response) => {
     const body = req.body as WebhookExecuteSchema;
@@ -37,7 +38,17 @@ export const executeWebhook = async (req: Request, res: Response) => {
         relations: { channel: true, guild: true, application: true },
     });
 
-    if (!webhook) throw DiscordApiErrors.UNKNOWN_WEBHOOK;
+    if (!webhook) {
+        const interaction = getInteractionByToken(webhook_id, webhook_token);
+        if (!interaction?.acknowledged) throw DiscordApiErrors.UNKNOWN_WEBHOOK;
+        const files = (req.files as Express.Multer.File[]) ?? [];
+        const uploaded = await Promise.all(files.map((file) => uploadFile(`/attachments/${interaction.channelId}/${messageId}`, file).then((f) => Attachment.create(f))));
+        const data = { ...body, attachments: uploaded.length ? uploaded : body.attachments } as InteractionMessage;
+        const original = interaction.responseLoading && interaction.responseMessageId ? await fetchInteractionMessage(interaction.responseMessageId) : null;
+        interaction.responseLoading = false;
+        const message = original ? await editInteractionMessage(interaction, original, data) : await createInteractionMessage(interaction, data, { followup: true });
+        return res.json(message.toJSON());
+    }
     if (webhook.token !== webhook_token) throw DiscordApiErrors.INVALID_WEBHOOK_TOKEN_PROVIDED;
 
     if (body.username) {

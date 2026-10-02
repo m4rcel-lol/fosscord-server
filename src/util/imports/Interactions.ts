@@ -19,17 +19,55 @@
 import { ApplicationCommandType, InteractionType } from "@spacebar/schemas";
 import { Snowflake } from "@spacebar/util";
 
-interface PendingInteraction {
-    timeout: NodeJS.Timeout;
+export interface PendingInteraction {
+    id: Snowflake;
+    token: string;
+    timeout?: NodeJS.Timeout;
+    expires: NodeJS.Timeout;
     applicationId: string;
     userId: string;
-    channelId?: string;
+    sessionId?: string;
+    channelId: string;
     guildId?: string;
     nonce?: string;
     messageId?: string;
+    messageEphemeral?: boolean;
     type: InteractionType;
-    commandType: ApplicationCommandType;
-    commandName: string;
+    commandType?: ApplicationCommandType;
+    commandName?: string;
+    commandId?: string;
+    targetId?: string;
+    customId?: string;
+    componentType?: number;
+    triggeringInteraction?: Omit<PendingInteraction, "expires" | "timeout" | "triggeringInteraction">;
+    acknowledged: boolean;
+    responseMessageId?: string;
+    responseEphemeral?: boolean;
+    responseLoading?: boolean;
 }
 
+export const INTERACTION_TOKEN_LIFETIME = 15 * 60 * 1000;
+
 export const pendingInteractions = new Map<Snowflake, PendingInteraction>();
+const interactionsByToken = new Map<string, Snowflake>();
+
+export function storeInteraction(interaction: Omit<PendingInteraction, "expires" | "acknowledged">) {
+    const stored: PendingInteraction = {
+        ...interaction,
+        acknowledged: false,
+        expires: setTimeout(() => {
+            pendingInteractions.delete(interaction.id);
+            interactionsByToken.delete(interaction.token);
+        }, INTERACTION_TOKEN_LIFETIME),
+    };
+    pendingInteractions.set(interaction.id, stored);
+    interactionsByToken.set(interaction.token, interaction.id);
+    return stored;
+}
+
+export function getInteractionByToken(applicationId: string, token: string) {
+    const id = interactionsByToken.get(token);
+    const interaction = id ? pendingInteractions.get(id) : undefined;
+    if (!interaction || interaction.applicationId !== applicationId) return undefined;
+    return interaction;
+}

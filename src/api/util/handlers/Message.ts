@@ -17,7 +17,7 @@
 */
 
 import { HTTPError } from "lambert-server/HTTPError";
-import { Equal, In, Or } from "typeorm";
+import { In } from "typeorm";
 // noinspection ES6PreferShortImport -- Causes a circular reference...
 import { fillMessageUrlEmbeds } from "../utility/EmbedHandlers";
 import { getDatabase, Application, Attachment, Channel, CloudAttachment, Guild, Member, Message, ReadState, Role, Session, Sticker, User, Webhook } from "@spacebar/database";
@@ -474,6 +474,7 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
     // TODO: stickers/activity
     if (
         !allow_empty &&
+        !((opts.flags ?? 0) & Number(MessageFlags.FLAGS.LOADING)) &&
         !opts.content &&
         !opts.embeds?.length &&
         !opts.attachments?.length &&
@@ -866,7 +867,8 @@ async function handleMessageMentionsAsync(message: Message) {
             let pinged = mention_everyone || channel.type === ChannelType.DM || channel.type === ChannelType.GROUP_DM;
             if (!pinged) pinged = !!message.mentions.find((user) => user.id === id);
             // TODO: can we somehow rewrite this into an In(...) query?
-            if (!pinged) pinged = !!(await Member.find({ where: { id, roles: Or(...message.mention_roles.map(({ id }) => Equal(id))) } }));
+            if (!pinged && message.mention_roles?.length)
+                pinged = (await Member.count({ where: { id, guild_id: channel.guild_id, roles: { id: In(message.mention_roles.map((r) => r.id)) } } })) > 0;
             if (pinged) {
                 //stuff
             }
