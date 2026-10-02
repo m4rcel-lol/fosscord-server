@@ -19,9 +19,9 @@
 import { createHash, createPublicKey, verify } from "node:crypto";
 import { NextFunction, Request, Response } from "express";
 import { In, IsNull, Not } from "typeorm";
-import { Channel, E2eeDevice, Message, Recipient, Relationship } from "@spacebar/database";
+import { Channel, E2eeDevice, E2eeIdentity, E2eeKeyBackup, Message, Recipient, Relationship } from "@spacebar/database";
 import { ApiError, Config, emitEvent, MessageFlags } from "@spacebar/util";
-import { ChannelType, E2eeEnvelope, MessageType } from "@spacebar/schemas";
+import { ChannelType, E2eeEnvelope, E2eeUserKeysResponse, MessageType } from "@spacebar/schemas";
 import { MessageOptions } from "@spacebar/util/dtos/MessageOptions";
 import rateLimit from "../../middlewares/RateLimit";
 
@@ -42,6 +42,10 @@ export const E2eeErrors = {
     INVALID_SIGNATURE: new ApiError("E2EE_INVALID_SIGNATURE", 90009, 400),
     NO_IDENTITY: new ApiError("E2EE_NO_IDENTITY", 90010, 400),
     CANNOT_DISABLE: new ApiError("E2EE_CANNOT_DISABLE", 90011, 400),
+    BACKUP_CONFLICT: new ApiError("E2EE_BACKUP_CONFLICT", 90012, 409),
+    NO_BACKUP: new ApiError("E2EE_NO_BACKUP", 90013, 404),
+    INVALID_BACKUP: new ApiError("E2EE_INVALID_BACKUP", 90014, 400),
+    INVALID_LINK: new ApiError("E2EE_INVALID_LINK", 90015, 400),
 };
 
 export const e2eeRateLimit = (bucket: string, count: number, window: number) => {
@@ -62,6 +66,31 @@ export const e2eeDeviceId = (signingKey: string) => createHash("sha256").update(
 export const e2eeDeviceMessage = (userId: string, deviceId: string, signingKey: string) => `fosscord-e2ee/v1/device\n${userId}\n${deviceId}\n${signingKey}`;
 
 export const e2eePrekeyMessage = (deviceId: string, prekeyId: number, publicKey: string) => `fosscord-e2ee/v1/prekey\n${deviceId}\n${prekeyId}\n${publicKey}`;
+
+export const e2eeRotationMessage = (userId: string, previousKey: string, nextKey: string) => `fosscord-e2ee/v1/identity-rotate\n${userId}\n${previousKey}\n${nextKey}`;
+
+export const e2eeBackupKeyMessage = (userId: string, publicKey: string) => `fosscord-e2ee/v1/backup-key\n${userId}\n${publicKey}`;
+
+export async function e2eeUserKeys(ids: string[]) {
+    const users: Record<string, E2eeUserKeysResponse> = {};
+    if (!ids.length) return users;
+    const [identities, backups, devices] = await Promise.all([
+        E2eeIdentity.find({ where: { user_id: In(ids) } }),
+        E2eeKeyBackup.find({ where: { user_id: In(ids) }, select: { user_id: true, identity_key: true, backup_public_key: true, backup_key_signature: true } }),
+        E2eeDevice.find({ where: { user_id: In(ids) }, order: { created_at: "ASC" } }),
+    ]);
+    for (const id of ids) {
+        const identity = identities.find((i) => i.user_id === id);
+        const backup = backups.find((b) => b.user_id === id && b.identity_key === identity?.public_key);
+        users[id] = {
+            identity_key: identity?.public_key ?? null,
+            previous_identity: identity?.previous_key && identity.rotation_signature ? { public_key: identity.previous_key, signature: identity.rotation_signature } : null,
+            backup_key: backup ? { public_key: backup.backup_public_key, signature: backup.backup_key_signature } : null,
+            devices: devices.filter((d) => d.user_id === id).map((d) => d.toPublic()),
+        };
+    }
+    return users;
+}
 
 export const verifyEd25519 = (publicKey: string, message: string, signature: string) => {
     if (!decodeKey(publicKey, 32) || !decodeKey(signature, 64)) return false;
@@ -116,6 +145,16 @@ const isEnvelope = (value: unknown): value is E2eeEnvelope => {
     if (typeof env.sender_device !== "string" || !Array.isArray(env.keys) || !env.keys.length || env.keys.length > E2EE_MAX_DEVICES) return false;
     if (!decodeKey(env.iv, 12) || typeof env.ct !== "string" || !b64url.test(env.ct) || !decodeKey(env.sig, 64)) return false;
     if (env.mid !== undefined && (typeof env.mid !== "string" || !/^\d+$/.test(env.mid))) return false;
+    if (env.backup !== undefined) {
+        if (!Array.isArray(env.backup) || env.backup.length > E2EE_MAX_DEVICES) return false;
+        const users = new Set<string>();
+        const valid = env.backup.every((entry) => {
+            if (!entry || typeof entry.user_id !== "string" || users.has(entry.user_id)) return false;
+            users.add(entry.user_id);
+            return !!decodeKey(entry.enc, 32) && typeof entry.wrapped === "string" && b64url.test(entry.wrapped);
+        });
+        if (!valid) return false;
+    }
     const seen = new Set<string>();
     return env.keys.every((key) => {
         if (seen.has(key.device_id)) return false;
@@ -167,6 +206,7 @@ export async function applyE2eeToMessage(opts: MessageOptions, channel: Channel,
             return !device || device.user_id !== k.user_id || device.prekey_id !== k.prekey_id;
         });
         if (missing || unknown) throw E2eeErrors.DEVICE_MISMATCH;
+        if (envelope.backup?.some((b) => !memberIds.includes(b.user_id))) throw E2eeErrors.INVALID_ENVELOPE;
     }
 
     opts.content = E2EE_FALLBACK_CONTENT;

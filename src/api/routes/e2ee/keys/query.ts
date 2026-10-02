@@ -17,10 +17,9 @@
 */
 
 import { Request, Response, Router } from "express";
-import { In } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
-import { e2eeRateLimit, sharesE2eeContext } from "@spacebar/api/util";
-import { E2eeDevice, E2eeIdentity, Recipient } from "@spacebar/database";
+import { e2eeRateLimit, e2eeUserKeys, sharesE2eeContext } from "@spacebar/api/util";
+import { Recipient } from "@spacebar/database";
 import { E2eeKeysQueryResponse, E2eeKeysQuerySchema } from "@spacebar/schemas";
 import { DiscordApiErrors, FieldErrors } from "@spacebar/util";
 
@@ -48,17 +47,7 @@ router.post(
         const allowed = await sharesE2eeContext(req.user_id, requested);
         channelMembers?.forEach((id) => allowed.add(id));
         const ids = requested.filter((id) => allowed.has(id));
-        const [identities, devices] = ids.length
-            ? await Promise.all([E2eeIdentity.find({ where: { user_id: In(ids) } }), E2eeDevice.find({ where: { user_id: In(ids) }, order: { created_at: "ASC" } })])
-            : [[], []];
-
-        const users: E2eeKeysQueryResponse["users"] = {};
-        for (const id of ids) {
-            users[id] = {
-                identity_key: identities.find((i) => i.user_id === id)?.public_key ?? null,
-                devices: devices.filter((d) => d.user_id === id).map((d) => d.toPublic()),
-            };
-        }
+        const users = await e2eeUserKeys(ids);
         res.json({ users, ...(channelMembers && { channel_members: channelMembers }) } satisfies E2eeKeysQueryResponse);
     },
 );

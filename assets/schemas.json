@@ -7840,11 +7840,247 @@
         "properties": {
             "public_key": {
                 "type": "string"
+            },
+            "previous_signature": {
+                "type": "string"
+            },
+            "devices": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/E2eeDeviceSignature"
+                }
             }
         },
         "additionalProperties": false,
         "required": [
             "public_key"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeBackupSecretSchema": {
+        "type": "object",
+        "properties": {
+            "version": {
+                "type": "integer"
+            },
+            "mode": {
+                "$ref": "#/definitions/E2eeBackupMode"
+            },
+            "kdf": {
+                "$ref": "#/definitions/E2eeBackupKdf"
+            },
+            "salt": {
+                "type": "string"
+            },
+            "wrapped_secret": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "kdf",
+            "mode",
+            "salt",
+            "version",
+            "wrapped_secret"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeBackupSchema": {
+        "type": "object",
+        "properties": {
+            "identity_key": {
+                "type": "string"
+            },
+            "wrapped_identity": {
+                "type": "string"
+            },
+            "backup_public_key": {
+                "type": "string"
+            },
+            "backup_key_signature": {
+                "type": "string"
+            },
+            "wrapped_backup_key": {
+                "type": "string"
+            },
+            "version": {
+                "type": "integer"
+            },
+            "mode": {
+                "$ref": "#/definitions/E2eeBackupMode"
+            },
+            "kdf": {
+                "$ref": "#/definitions/E2eeBackupKdf"
+            },
+            "salt": {
+                "type": "string"
+            },
+            "wrapped_secret": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "backup_key_signature",
+            "backup_public_key",
+            "identity_key",
+            "kdf",
+            "mode",
+            "salt",
+            "version",
+            "wrapped_backup_key",
+            "wrapped_identity",
+            "wrapped_secret"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeBackupResponse": {
+        "type": "object",
+        "properties": {
+            "updated_at": {
+                "type": "string"
+            },
+            "identity_key": {
+                "type": "string"
+            },
+            "wrapped_identity": {
+                "type": "string"
+            },
+            "backup_public_key": {
+                "type": "string"
+            },
+            "backup_key_signature": {
+                "type": "string"
+            },
+            "wrapped_backup_key": {
+                "type": "string"
+            },
+            "version": {
+                "type": "integer"
+            },
+            "mode": {
+                "$ref": "#/definitions/E2eeBackupMode"
+            },
+            "kdf": {
+                "$ref": "#/definitions/E2eeBackupKdf"
+            },
+            "salt": {
+                "type": "string"
+            },
+            "wrapped_secret": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "backup_key_signature",
+            "backup_public_key",
+            "identity_key",
+            "kdf",
+            "mode",
+            "salt",
+            "updated_at",
+            "version",
+            "wrapped_backup_key",
+            "wrapped_identity",
+            "wrapped_secret"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeBackupKeysUploadSchema": {
+        "type": "object",
+        "properties": {
+            "keys": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/E2eeBackupKeyEntry"
+                }
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "keys"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeBackupKeysQuerySchema": {
+        "type": "object",
+        "properties": {
+            "message_ids": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "message_ids"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeBackupKeysResponse": {
+        "type": "object",
+        "properties": {
+            "keys": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/E2eeBackupKeyEntry"
+                }
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "keys"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeLinkSchema": {
+        "type": "object",
+        "properties": {
+            "request_id": {
+                "type": "string"
+            },
+            "stage": {
+                "$ref": "#/definitions/E2eeLinkStage"
+            },
+            "device_id": {
+                "type": "string"
+            },
+            "to_device": {
+                "type": "string"
+            },
+            "name": {
+                "type": "string"
+            },
+            "commit": {
+                "type": "string"
+            },
+            "public_key": {
+                "type": "string"
+            },
+            "iv": {
+                "type": "string"
+            },
+            "ct": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "device_id",
+            "request_id",
+            "stage"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -7956,6 +8192,26 @@
                     "string"
                 ]
             },
+            "previous_identity": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/E2eeSignedKey"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "backup_key": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/E2eeSignedKey"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
             "devices": {
                 "type": "array",
                 "items": {
@@ -7999,6 +8255,26 @@
                 "type": [
                     "null",
                     "string"
+                ]
+            },
+            "previous_identity": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/E2eeSignedKey"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "backup_key": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/E2eeSignedKey"
+                    },
+                    {
+                        "type": "null"
+                    }
                 ]
             },
             "devices": {
@@ -15587,6 +15863,12 @@
                     "$ref": "#/definitions/E2eeEnvelopeKey"
                 }
             },
+            "backup": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/E2eeEnvelopeBackupKey"
+                }
+            },
             "sig": {
                 "type": "string"
             }
@@ -15627,6 +15909,27 @@
             "device_id",
             "enc",
             "prekey_id",
+            "user_id",
+            "wrapped"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeEnvelopeBackupKey": {
+        "type": "object",
+        "properties": {
+            "user_id": {
+                "type": "string"
+            },
+            "enc": {
+                "type": "string"
+            },
+            "wrapped": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "enc",
             "user_id",
             "wrapped"
         ],
@@ -18914,6 +19217,90 @@
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
+    "E2eeDeviceSignature": {
+        "type": "object",
+        "properties": {
+            "device_id": {
+                "type": "string"
+            },
+            "identity_signature": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "device_id",
+            "identity_signature"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeBackupMode": {
+        "enum": [
+            "password",
+            "recovery"
+        ],
+        "type": "string",
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeBackupKdf": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "enum": [
+                    "argon2id",
+                    "hkdf-sha256"
+                ],
+                "type": "string"
+            },
+            "memory": {
+                "type": "integer"
+            },
+            "iterations": {
+                "type": "integer"
+            },
+            "parallelism": {
+                "type": "integer"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "name"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeBackupKeyEntry": {
+        "type": "object",
+        "properties": {
+            "message_id": {
+                "type": "string"
+            },
+            "enc": {
+                "type": "string"
+            },
+            "wrapped": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "enc",
+            "message_id",
+            "wrapped"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeLinkStage": {
+        "enum": [
+            "approve",
+            "cancel",
+            "deny",
+            "offer",
+            "request",
+            "reveal"
+        ],
+        "type": "string",
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
     "E2eeDeviceStatus": {
         "enum": [
             "active",
@@ -18921,6 +19308,23 @@
             "revoked"
         ],
         "type": "string",
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeSignedKey": {
+        "type": "object",
+        "properties": {
+            "public_key": {
+                "type": "string"
+            },
+            "signature": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "public_key",
+            "signature"
+        ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "AuditLogEntry": {

@@ -32,7 +32,14 @@ export interface E2eeEnvelope {
     iv: string;
     ct: string;
     keys: E2eeEnvelopeKey[];
+    backup?: E2eeEnvelopeBackupKey[];
     sig: string;
+}
+
+export interface E2eeEnvelopeBackupKey {
+    user_id: string;
+    enc: string;
+    wrapped: string;
 }
 
 export interface E2eePrekeySchema {
@@ -41,8 +48,81 @@ export interface E2eePrekeySchema {
     signature: string;
 }
 
+export interface E2eeDeviceSignature {
+    device_id: string;
+    identity_signature: string;
+}
+
 export interface E2eeIdentityUpdateSchema {
     public_key: string;
+    previous_signature?: string;
+    devices?: E2eeDeviceSignature[];
+}
+
+export type E2eeBackupMode = "password" | "recovery";
+
+export interface E2eeBackupKdf {
+    name: "argon2id" | "hkdf-sha256";
+    memory?: number;
+    iterations?: number;
+    parallelism?: number;
+}
+
+export interface E2eeBackupSecretSchema {
+    version: number;
+    mode: E2eeBackupMode;
+    kdf: E2eeBackupKdf;
+    salt: string;
+    wrapped_secret: string | null;
+}
+
+export interface E2eeBackupSchema extends E2eeBackupSecretSchema {
+    identity_key: string;
+    wrapped_identity: string;
+    backup_public_key: string;
+    backup_key_signature: string;
+    wrapped_backup_key: string;
+}
+
+export interface E2eeBackupResponse extends E2eeBackupSchema {
+    updated_at: string;
+}
+
+export interface E2eeBackupKeyEntry {
+    message_id: string;
+    enc: string;
+    wrapped: string;
+}
+
+export interface E2eeBackupKeysUploadSchema {
+    keys: E2eeBackupKeyEntry[];
+}
+
+export interface E2eeBackupKeysQuerySchema {
+    message_ids: string[];
+}
+
+export interface E2eeBackupKeysResponse {
+    keys: E2eeBackupKeyEntry[];
+}
+
+export type E2eeLinkStage = "request" | "offer" | "reveal" | "approve" | "deny" | "cancel";
+
+export interface E2eeLinkSchema {
+    request_id: string;
+    stage: E2eeLinkStage;
+    device_id: string;
+    to_device?: string;
+    name?: string;
+    commit?: string;
+    public_key?: string;
+    iv?: string;
+    ct?: string;
+}
+
+export interface E2eeSignedKey {
+    public_key: string;
+    signature: string;
 }
 
 export interface E2eeDeviceCreateSchema {
@@ -76,6 +156,8 @@ export interface E2eeDeviceResponse {
 
 export interface E2eeUserKeysResponse {
     identity_key: string | null;
+    previous_identity?: E2eeSignedKey | null;
+    backup_key?: E2eeSignedKey | null;
     devices: E2eeDeviceResponse[];
 }
 
@@ -86,6 +168,8 @@ export interface E2eeKeysQueryResponse {
 
 export interface E2eeStateResponse {
     identity_key: string | null;
+    previous_identity?: E2eeSignedKey | null;
+    backup_key?: E2eeSignedKey | null;
     devices: E2eeDeviceResponse[];
     channels: string[];
 }

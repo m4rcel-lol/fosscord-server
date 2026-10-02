@@ -7242,10 +7242,226 @@
                 "properties": {
                     "public_key": {
                         "type": "string"
+                    },
+                    "previous_signature": {
+                        "type": "string"
+                    },
+                    "devices": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/E2eeDeviceSignature"
+                        }
                     }
                 },
                 "required": [
                     "public_key"
+                ]
+            },
+            "E2eeBackupSecretSchema": {
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "integer"
+                    },
+                    "mode": {
+                        "$ref": "#/components/schemas/E2eeBackupMode"
+                    },
+                    "kdf": {
+                        "$ref": "#/components/schemas/E2eeBackupKdf"
+                    },
+                    "salt": {
+                        "type": "string"
+                    },
+                    "wrapped_secret": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "kdf",
+                    "mode",
+                    "salt",
+                    "version",
+                    "wrapped_secret"
+                ]
+            },
+            "E2eeBackupSchema": {
+                "type": "object",
+                "properties": {
+                    "identity_key": {
+                        "type": "string"
+                    },
+                    "wrapped_identity": {
+                        "type": "string"
+                    },
+                    "backup_public_key": {
+                        "type": "string"
+                    },
+                    "backup_key_signature": {
+                        "type": "string"
+                    },
+                    "wrapped_backup_key": {
+                        "type": "string"
+                    },
+                    "version": {
+                        "type": "integer"
+                    },
+                    "mode": {
+                        "$ref": "#/components/schemas/E2eeBackupMode"
+                    },
+                    "kdf": {
+                        "$ref": "#/components/schemas/E2eeBackupKdf"
+                    },
+                    "salt": {
+                        "type": "string"
+                    },
+                    "wrapped_secret": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "backup_key_signature",
+                    "backup_public_key",
+                    "identity_key",
+                    "kdf",
+                    "mode",
+                    "salt",
+                    "version",
+                    "wrapped_backup_key",
+                    "wrapped_identity",
+                    "wrapped_secret"
+                ]
+            },
+            "E2eeBackupResponse": {
+                "type": "object",
+                "properties": {
+                    "updated_at": {
+                        "type": "string"
+                    },
+                    "identity_key": {
+                        "type": "string"
+                    },
+                    "wrapped_identity": {
+                        "type": "string"
+                    },
+                    "backup_public_key": {
+                        "type": "string"
+                    },
+                    "backup_key_signature": {
+                        "type": "string"
+                    },
+                    "wrapped_backup_key": {
+                        "type": "string"
+                    },
+                    "version": {
+                        "type": "integer"
+                    },
+                    "mode": {
+                        "$ref": "#/components/schemas/E2eeBackupMode"
+                    },
+                    "kdf": {
+                        "$ref": "#/components/schemas/E2eeBackupKdf"
+                    },
+                    "salt": {
+                        "type": "string"
+                    },
+                    "wrapped_secret": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "backup_key_signature",
+                    "backup_public_key",
+                    "identity_key",
+                    "kdf",
+                    "mode",
+                    "salt",
+                    "updated_at",
+                    "version",
+                    "wrapped_backup_key",
+                    "wrapped_identity",
+                    "wrapped_secret"
+                ]
+            },
+            "E2eeBackupKeysUploadSchema": {
+                "type": "object",
+                "properties": {
+                    "keys": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/E2eeBackupKeyEntry"
+                        }
+                    }
+                },
+                "required": [
+                    "keys"
+                ]
+            },
+            "E2eeBackupKeysQuerySchema": {
+                "type": "object",
+                "properties": {
+                    "message_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "message_ids"
+                ]
+            },
+            "E2eeBackupKeysResponse": {
+                "type": "object",
+                "properties": {
+                    "keys": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/E2eeBackupKeyEntry"
+                        }
+                    }
+                },
+                "required": [
+                    "keys"
+                ]
+            },
+            "E2eeLinkSchema": {
+                "type": "object",
+                "properties": {
+                    "request_id": {
+                        "type": "string"
+                    },
+                    "stage": {
+                        "$ref": "#/components/schemas/E2eeLinkStage"
+                    },
+                    "device_id": {
+                        "type": "string"
+                    },
+                    "to_device": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "commit": {
+                        "type": "string"
+                    },
+                    "public_key": {
+                        "type": "string"
+                    },
+                    "iv": {
+                        "type": "string"
+                    },
+                    "ct": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "device_id",
+                    "request_id",
+                    "stage"
                 ]
             },
             "E2eeDeviceCreateSchema": {
@@ -7342,6 +7558,26 @@
                         "type": "string",
                         "nullable": true
                     },
+                    "previous_identity": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/E2eeSignedKey"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "backup_key": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/E2eeSignedKey"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
                     "devices": {
                         "type": "array",
                         "items": {
@@ -7380,6 +7616,26 @@
                     "identity_key": {
                         "type": "string",
                         "nullable": true
+                    },
+                    "previous_identity": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/E2eeSignedKey"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "backup_key": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/E2eeSignedKey"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
                     },
                     "devices": {
                         "type": "array",
@@ -14543,6 +14799,12 @@
                             "$ref": "#/components/schemas/E2eeEnvelopeKey"
                         }
                     },
+                    "backup": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/E2eeEnvelopeBackupKey"
+                        }
+                    },
                     "sig": {
                         "type": "string"
                     }
@@ -14580,6 +14842,25 @@
                     "device_id",
                     "enc",
                     "prekey_id",
+                    "user_id",
+                    "wrapped"
+                ]
+            },
+            "E2eeEnvelopeBackupKey": {
+                "type": "object",
+                "properties": {
+                    "user_id": {
+                        "type": "string"
+                    },
+                    "enc": {
+                        "type": "string"
+                    },
+                    "wrapped": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "enc",
                     "user_id",
                     "wrapped"
                 ]
@@ -17581,6 +17862,82 @@
                     "name"
                 ]
             },
+            "E2eeDeviceSignature": {
+                "type": "object",
+                "properties": {
+                    "device_id": {
+                        "type": "string"
+                    },
+                    "identity_signature": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "device_id",
+                    "identity_signature"
+                ]
+            },
+            "E2eeBackupMode": {
+                "enum": [
+                    "password",
+                    "recovery"
+                ],
+                "type": "string"
+            },
+            "E2eeBackupKdf": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "enum": [
+                            "argon2id",
+                            "hkdf-sha256"
+                        ],
+                        "type": "string"
+                    },
+                    "memory": {
+                        "type": "integer"
+                    },
+                    "iterations": {
+                        "type": "integer"
+                    },
+                    "parallelism": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "name"
+                ]
+            },
+            "E2eeBackupKeyEntry": {
+                "type": "object",
+                "properties": {
+                    "message_id": {
+                        "type": "string"
+                    },
+                    "enc": {
+                        "type": "string"
+                    },
+                    "wrapped": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "enc",
+                    "message_id",
+                    "wrapped"
+                ]
+            },
+            "E2eeLinkStage": {
+                "enum": [
+                    "approve",
+                    "cancel",
+                    "deny",
+                    "offer",
+                    "request",
+                    "reveal"
+                ],
+                "type": "string"
+            },
             "E2eeDeviceStatus": {
                 "enum": [
                     "active",
@@ -17588,6 +17945,21 @@
                     "revoked"
                 ],
                 "type": "string"
+            },
+            "E2eeSignedKey": {
+                "type": "object",
+                "properties": {
+                    "public_key": {
+                        "type": "string"
+                    },
+                    "signature": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "public_key",
+                    "signature"
+                ]
             },
             "AuditLogEntry": {
                 "type": "object",
@@ -18803,6 +19175,23 @@
                                 }
                             }
                         }
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            }
+        },
+        "/api/users/@me/virtual-currency/balance/": {
+            "get": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": "No description available"
                     }
                 },
                 "tags": [
@@ -20316,6 +20705,49 @@
                 ]
             }
         },
+        "/api/users/@me/e2ee/link/": {
+            "post": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/E2eeLinkSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "No description available"
+                    },
+                    "400": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
         "/api/users/@me/e2ee/": {
             "get": {
                 "security": [
@@ -20588,6 +21020,275 @@
                         "description": "device_id"
                     }
                 ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/users/@me/e2ee/backup/keys/query/": {
+            "post": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/E2eeBackupKeysQuerySchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/E2eeBackupKeysResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/users/@me/e2ee/backup/keys/": {
+            "post": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/E2eeBackupKeysUploadSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "No description available"
+                    },
+                    "400": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/users/@me/e2ee/backup/": {
+            "get": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/E2eeBackupResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            },
+            "put": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/E2eeBackupSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/E2eeBackupResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            },
+            "patch": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/E2eeBackupSecretSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/E2eeBackupResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
                 "tags": [
                     "api"
                 ],
@@ -20955,6 +21656,23 @@
                                 }
                             }
                         }
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            }
+        },
+        "/api/users/@me/claim-premium-collectibles-product/": {
+            "put": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": "No description available"
                     }
                 },
                 "tags": [
@@ -29178,6 +29896,23 @@
                 ]
             }
         },
+        "/api/collectibles-categories/v2/": {
+            "get": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            }
+        },
         "/api/collectibles-categories/": {
             "get": {
                 "security": [
@@ -29195,23 +29930,6 @@
                                 }
                             }
                         }
-                    }
-                },
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/collectibles-categories/v2/": {
-            "get": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "responses": {
-                    "default": {
-                        "description": "No description available"
                     }
                 },
                 "tags": [

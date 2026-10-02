@@ -17,7 +17,7 @@
 */
 
 import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from "typeorm";
-import { E2eeDeviceResponse, E2eeDeviceStatus } from "@spacebar/schemas";
+import { E2eeBackupKdf, E2eeBackupMode, E2eeBackupResponse, E2eeDeviceResponse, E2eeDeviceStatus } from "@spacebar/schemas";
 import { BaseClassWithoutId } from "./BaseClass";
 import { User } from "./User";
 
@@ -34,6 +34,12 @@ export class E2eeIdentity extends BaseClassWithoutId {
 
     @Column()
     public_key: string;
+
+    @Column({ type: "varchar", nullable: true })
+    previous_key: string | null;
+
+    @Column({ type: "varchar", nullable: true })
+    rotation_signature: string | null;
 
     @Column({ type: "timestamp with time zone" })
     created_at: Date;
@@ -95,4 +101,89 @@ export class E2eeDevice extends BaseClassWithoutId {
             created_at: this.created_at.toISOString(),
         };
     }
+}
+
+@Entity({
+    name: "e2ee_key_backups",
+})
+export class E2eeKeyBackup extends BaseClassWithoutId {
+    @PrimaryColumn({ type: "int8" })
+    user_id: string;
+
+    @JoinColumn({ name: "user_id", foreignKeyConstraintName: "FK_e2ee_key_backup_user_id" })
+    @ManyToOne(() => User, { onDelete: "CASCADE" })
+    user: User;
+
+    @Column({ type: "int" })
+    version: number;
+
+    @Column({ type: "varchar" })
+    mode: E2eeBackupMode;
+
+    @Column({ type: "jsonb" })
+    kdf: E2eeBackupKdf;
+
+    @Column()
+    salt: string;
+
+    @Column({ type: "varchar", nullable: true })
+    wrapped_secret: string | null;
+
+    @Column()
+    identity_key: string;
+
+    @Column()
+    wrapped_identity: string;
+
+    @Column()
+    backup_public_key: string;
+
+    @Column()
+    backup_key_signature: string;
+
+    @Column()
+    wrapped_backup_key: string;
+
+    @Column({ type: "timestamp with time zone" })
+    updated_at: Date;
+
+    toPublic(): E2eeBackupResponse {
+        return {
+            version: this.version,
+            mode: this.mode,
+            kdf: this.kdf,
+            salt: this.salt,
+            wrapped_secret: this.wrapped_secret,
+            identity_key: this.identity_key,
+            wrapped_identity: this.wrapped_identity,
+            backup_public_key: this.backup_public_key,
+            backup_key_signature: this.backup_key_signature,
+            wrapped_backup_key: this.wrapped_backup_key,
+            updated_at: this.updated_at.toISOString(),
+        };
+    }
+}
+
+@Entity({
+    name: "e2ee_backup_keys",
+})
+export class E2eeBackupKey extends BaseClassWithoutId {
+    @PrimaryColumn({ type: "int8" })
+    user_id: string;
+
+    @PrimaryColumn({ type: "int8" })
+    message_id: string;
+
+    @JoinColumn({ name: "user_id", foreignKeyConstraintName: "FK_e2ee_backup_key_user_id" })
+    @ManyToOne(() => User, { onDelete: "CASCADE" })
+    user: User;
+
+    @Column()
+    enc: string;
+
+    @Column()
+    wrapped: string;
+
+    @Column({ type: "timestamp with time zone" })
+    created_at: Date;
 }
