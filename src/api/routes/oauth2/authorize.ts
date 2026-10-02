@@ -21,11 +21,33 @@ import { route } from "@spacebar/api/middlewares";
 import { Application, ApplicationAuthorization, Member, Role, User } from "@spacebar/database";
 import { DiscordApiErrors, FieldErrors, Permissions, Snowflake, emitEvent, getPermission, GuildRoleCreateEvent } from "@spacebar/util";
 import { emitCommandIndexUpdate } from "@spacebar/api/util/handlers/ApplicationCommands";
+import { signTicket } from "@spacebar/api/util";
 import { ApplicationAuthorizeSchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
 
-// TODO: scopes, other oauth types
+const requestedScopes = (scope: unknown, fallback: string[] = []) => {
+    const scopes = String(scope ?? "")
+        .split(/[\s+]+/)
+        .filter(Boolean);
+    return [...new Set(scopes.length ? scopes : fallback)];
+};
+
+const integrationTypeOf = (req: Request, body?: ApplicationAuthorizeSchema) => {
+    if (body?.integration_type !== undefined && body.integration_type !== null) return Number(body.integration_type);
+    return req.query.integration_type === undefined ? 0 : Number(req.query.integration_type);
+};
+
+const invalidRedirect = () => FieldErrors({ redirect_uri: { code: "INVALID_OAUTH2_REDIRECT_URI", message: "Invalid OAuth2 redirect_uri" } });
+
+const redirectFor = (app: Application, redirect_uri: unknown) => {
+    if (typeof redirect_uri === "string" && redirect_uri) {
+        if (!app.redirect_uris?.includes(redirect_uri)) throw invalidRedirect();
+        return redirect_uri;
+    }
+    if (redirect_uri !== undefined) throw invalidRedirect();
+    return app.redirect_uris?.length === 1 ? app.redirect_uris[0] : null;
+};
 
 router.get(
     "/",
@@ -68,7 +90,11 @@ router.get(
         // TODO: use DiscordApiErrors
         // findOneOrFail throws code 404
         if (!app) throw DiscordApiErrors.UNKNOWN_APPLICATION;
-        if (!app.bot && req.query.integration_type !== "1") throw DiscordApiErrors.OAUTH2_APPLICATION_BOT_ABSENT;
+        const integrationType = integrationTypeOf(req);
+        const scopes = requestedScopes(req.query.scope, integrationType === 1 ? ["applications.commands"] : ["bot"]);
+        if (!app.bot && scopes.includes("bot") && integrationType !== 1) throw DiscordApiErrors.OAUTH2_APPLICATION_BOT_ABSENT;
+        if (req.query.response_type === "code") redirectFor(app, req.query.redirect_uri);
+        const existing = await ApplicationAuthorization.findOne({ where: { user_id: req.user_id, application_id: app.id } });
 
         const bot = app.bot;
         delete app.bot;
@@ -151,10 +177,9 @@ router.get(
                 bot: true,
                 approximated_guild_count: await Member.count({ where: { id: bot.id } }),
             },
+            redirect_uri: typeof req.query.redirect_uri === "string" ? req.query.redirect_uri : undefined,
             authorized:
-                req.query.integration_type === "1"
-                    ? await ApplicationAuthorization.exists({ where: { user_id: req.user_id, application_id: app.id, integration_type: 1 } })
-                    : false,
+                integrationType === 1 ? existing?.integration_type === 1 : !scopes.includes("bot") && !!existing && scopes.every((scope) => existing.scopes.includes(scope)),
         });
     },
 );
@@ -206,19 +231,38 @@ router.post(
             relations: { bot: true },
         });
         if (!app) throw DiscordApiErrors.UNKNOWN_APPLICATION;
-        if (body.integration_type === 1) {
-            const scopes = String(req.query.scope ?? "applications.commands")
-                .split(/[\s+]+/)
-                .filter(Boolean);
+        const integrationType = integrationTypeOf(req, body);
+        const scopes = requestedScopes(req.query.scope, integrationType === 1 ? ["applications.commands"] : ["bot"]);
+        const authorizeUser = async (type: number) => {
             const existing = await ApplicationAuthorization.findOne({ where: { user_id: req.user_id, application_id: app.id } });
             await ApplicationAuthorization.save({
                 ...(existing ?? { id: Snowflake.generate(), created_at: new Date() }),
                 user_id: req.user_id,
                 application_id: app.id,
-                integration_type: 1,
-                scopes: [...new Set([...(existing?.scopes ?? []), ...scopes])],
+                integration_type: type === 1 ? 1 : (existing?.integration_type ?? 0),
+                scopes: [...new Set([...(existing?.scopes ?? []), ...scopes.filter((scope) => scope !== "bot")])],
             } as ApplicationAuthorization);
+        };
+        if (integrationType === 1) {
+            await authorizeUser(1);
             return res.json({ location: "/oauth2/authorized" });
+        }
+        if (!scopes.includes("bot") && !body.guild_id) {
+            const response_type = req.query.response_type ?? "code";
+            if (response_type !== "code") throw FieldErrors({ response_type: { code: "INVALID_RESPONSE_TYPE", message: "Invalid response_type" } });
+            const redirect = redirectFor(app, req.query.redirect_uri);
+            await authorizeUser(0);
+            if (!redirect) return res.json({ location: "/oauth2/authorized" });
+            const location = new URL(redirect);
+            location.searchParams.set(
+                "code",
+                signTicket(
+                    { typ: "oauth2_code", uid: req.user_id, app: app.id, scopes, redirect_uri: typeof req.query.redirect_uri === "string" ? req.query.redirect_uri : undefined },
+                    600,
+                ),
+            );
+            if (typeof req.query.state === "string") location.searchParams.set("state", req.query.state);
+            return res.json({ location: location.toString() });
         }
         if (!app.bot) throw DiscordApiErrors.OAUTH2_APPLICATION_BOT_ABSENT;
         if (!body.guild_id) throw FieldErrors({ guild_id: { code: "BASE_TYPE_REQUIRED", message: req.t("common:field.BASE_TYPE_REQUIRED") } });

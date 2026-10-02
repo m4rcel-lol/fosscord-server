@@ -32,6 +32,10 @@ export interface ApplicationModifySchema {
     flags?: number;
     custom_install_url?: string;
     guild_id?: string;
+    /**
+     * @maxItems 10
+     */
+    redirect_uris?: string[];
     /*install_params?: { TODO: Validation
 		scopes: string[];
 		permissions: string;

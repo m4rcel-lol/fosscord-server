@@ -1219,6 +1219,12 @@
             "captcha_key": {
                 "type": "string"
             },
+            "connected_account_provider": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
             "code": {
                 "minLength": 6,
                 "maxLength": 6,
@@ -7938,6 +7944,13 @@
             },
             "guild_id": {
                 "type": "string"
+            },
+            "redirect_uris": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
             }
         },
         "additionalProperties": false,

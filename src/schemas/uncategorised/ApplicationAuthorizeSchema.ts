@@ -26,6 +26,7 @@ export interface ApplicationAuthorizeSchema {
     location_context?: object;
     dm_settings?: object;
     captcha_key?: string;
+    connected_account_provider?: string | null;
     /**
      * @minLength 6
      * @maxLength 6
