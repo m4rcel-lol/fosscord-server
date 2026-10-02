@@ -5,6 +5,7 @@
 import { Channel, Guild, Member, Role, User } from "../../database/entities";
 import { BitField, BitFieldResolvable, BitFlag } from "./BitField";
 import { HTTPError } from "lambert-server/HTTPError";
+import { DiscordApiErrors } from "./Constants";
 import { ChannelPermissionOverwrite, ChannelPermissionOverwriteType, ChannelType, UserFlags } from "@spacebar/schemas";
 import { ArrayContains, EntityNotFoundError, FindOneOptions } from "typeorm";
 import { OrmUtils } from "@spacebar/util";
@@ -108,7 +109,7 @@ export class Permissions extends BitField {
      */
     hasThrow(permission: PermissionResolvable) {
         if (this.has(permission) && this.has("VIEW_CHANNEL")) return true;
-        throw new HTTPError(`You are missing the following permissions ${permission}`, 403);
+        throw DiscordApiErrors.MISSING_PERMISSIONS;
     }
 
     overwriteChannel(overwrites: ChannelPermissionOverwrite[]) {
