@@ -31,6 +31,22 @@ const commands = [
     { name: "upload", description: "Echoes an uploaded file", options: [{ type: 11, name: "file", description: "Any file", required: true }] },
     { name: "image", description: "Replies with an uploaded image and an embed" },
     { name: "gallery", description: "Sends a Components V2 message with media" },
+    {
+        name: "settings",
+        description: "Subcommand example",
+        options: [
+            { type: 1, name: "view", description: "Show settings" },
+            {
+                type: 1,
+                name: "set",
+                description: "Change a setting",
+                options: [
+                    { type: 3, name: "key", description: "Setting name", required: true, choices: [{ name: "Colour", value: "colour" }, { name: "Size", value: "size" }] },
+                    { type: 4, name: "value", description: "New value", required: true, min_value: 1, max_value: 10 },
+                ],
+            },
+        ],
+    },
     { name: "Wave", type: 2 },
     { name: "Quote", type: 3 },
 ];
@@ -197,6 +213,11 @@ const handlers = {
             "square.png",
             png,
         ),
+    settings: (i) => {
+        const sub = i.data.options[0];
+        const opts = Object.fromEntries((sub.options ?? []).map((o) => [o.name, o.value]));
+        return respond(i, { type: 4, data: { content: sub.name === "view" ? "colour=blue size=3" : `set ${opts.key} to ${opts.value}` } });
+    },
     guildonly: (i) => respond(i, { type: 4, data: { content: "guild command works" } }),
     Wave: (i) => respond(i, { type: 4, data: { content: `${who(i).username} waves at <@${i.data.target_id}>` } }),
     Quote: (i) => respond(i, { type: 4, data: { content: `> ${i.data.resolved?.messages?.[i.data.target_id]?.content ?? "(missing message)"}` } }),
