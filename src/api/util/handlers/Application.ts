@@ -20,7 +20,7 @@ import { createPrivateKey, generateKeyPairSync, randomBytes, sign } from "node:c
 import { ILike, In, Not, IsNull } from "typeorm";
 import { Application, ApplicationCommand, EmbeddedActivity, Member } from "@spacebar/database";
 import { serializeCommand } from "./ApplicationCommands";
-import { Snowflake } from "@spacebar/util";
+import { isPublicUrl, Snowflake } from "@spacebar/util";
 
 export async function ensureInteractionKeys(applicationId: string) {
     const app = await Application.findOneOrFail({ where: { id: applicationId }, select: { id: true, verify_key: true, interactions_private_key: true } });
@@ -36,8 +36,10 @@ export async function postSignedInteraction(url: string, privateKeyPem: string, 
     const body = JSON.stringify(payload);
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const signature = signatureOverride ?? sign(null, Buffer.from(timestamp + body), createPrivateKey(privateKeyPem)).toString("hex");
+    if (!(await isPublicUrl(url, { httpsOnly: true }))) throw new Error(`interactions endpoint ${url} is not a public https url`);
     return fetch(url, {
         method: "POST",
+        redirect: "error",
         headers: {
             "content-type": "application/json",
             "user-agent": "Discord-Interactions/1.0 (+https://discord.com)",

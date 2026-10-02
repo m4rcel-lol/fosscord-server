@@ -31,6 +31,7 @@ import {
     EVERYONE_MENTION,
     FieldError,
     FieldErrors,
+    fetchPublicUrl,
     getPermission,
     getRights,
     handleFile,
@@ -453,7 +454,7 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
             message.author.username = message.username;
         }
         if (opts.avatar_url && URL.canParse(opts.avatar_url) && /^https?:$/.test(new URL(opts.avatar_url).protocol)) {
-            const avatar = await fetch(opts.avatar_url, { signal: AbortSignal.timeout(10_000) })
+            const avatar = await fetchPublicUrl(opts.avatar_url, { signal: AbortSignal.timeout(10_000) })
                 .then(async (res) => {
                     const type = res.headers.get("content-type");
                     if (!res.ok || !type?.startsWith("image/")) return undefined;
