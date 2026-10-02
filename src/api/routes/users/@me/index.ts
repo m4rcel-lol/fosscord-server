@@ -19,6 +19,7 @@
 import bcrypt from "bcrypt";
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
+import { EmailChange } from "@spacebar/api/util";
 import { AvatarDecoration, User } from "@spacebar/database";
 import { CollectibleItemType, Collectibles, Config, emitEvent, FieldErrors, generateToken, handleFile, UserUpdateEvent } from "@spacebar/util";
 import { PrivateUserProjection, UserFlags, UserModifySchema } from "@spacebar/schemas";
@@ -92,6 +93,8 @@ router.patch(
 
         if (body.email && body.email !== user.email) {
             await checkPassword();
+            if (body.email_token !== undefined && !EmailChange.consumeToken(req.user_id, body.email_token))
+                throw FieldErrors({ email_token: { code: "INVALID_EMAIL_TOKEN", message: "Invalid email verification token" } });
             if (await User.findOne({ where: { email: body.email }, select: { id: true } }))
                 throw FieldErrors({
                     email: {
