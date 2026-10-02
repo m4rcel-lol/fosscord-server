@@ -321,6 +321,7 @@ export class Message extends BaseClass {
             ...this,
             channel_id: this.channel_id ?? this.channel.id,
             channel: undefined,
+            message_snapshots: this.message_snapshots?.length ? this.message_snapshots : undefined,
 
             timestamp: this.timestamp.toISOString(),
             edited_timestamp: this.edited_timestamp ? this.edited_timestamp.toISOString() : null,

@@ -606,7 +606,7 @@ export class Channel extends BaseClass {
             user_limit: this.user_limit || undefined,
             rate_limit_per_user: this.rate_limit_per_user || undefined,
             owner_id: this.owner_id || undefined,
-            ...(this.isThread() && this.thread_members ? { member_ids_preview: this.thread_members.map((_) => _.member.id) } : {}),
+            ...(this.isThread() && this.thread_members ? { member_ids_preview: this.thread_members.slice(0, 10).map((m) => m.user_id ?? m.member?.id) } : {}),
             default_auto_archive_duration: this.default_auto_archive_duration ?? undefined,
             retention_policy_id: undefined,
             thread_metadata: this.thread_metadata
@@ -619,8 +619,14 @@ export class Channel extends BaseClass {
             member_count: this.member_count ?? undefined,
             message_count: this.message_count ?? undefined,
             total_message_sent: this.total_message_sent ?? undefined,
-            applied_tags: this.applied_tags ?? undefined,
+            applied_tags: this.isThread() ? (this.applied_tags ?? []) : undefined,
             permission_overwrites: this.isThread() ? undefined : this.permission_overwrites,
+            available_tags: this.isForum() ? [...(this.available_tags ?? [])].sort((a, b) => (BigInt(a.id) < BigInt(b.id) ? -1 : 1)) : undefined,
+            default_reaction_emoji: this.isForum() ? (this.default_reaction_emoji ?? null) : undefined,
+            default_sort_order: this.isForum() ? (this.default_sort_order ?? null) : undefined,
+            default_forum_layout: this.isForum() ? (this.default_forum_layout ?? 0) : undefined,
+            default_tag_setting: this.isForum() ? (this.default_tag_setting ?? "match_some") : undefined,
+            default_thread_rate_limit_per_user: this.isForum() || this.type === ChannelType.GUILD_TEXT ? (this.default_thread_rate_limit_per_user ?? 0) : undefined,
         };
     }
 
