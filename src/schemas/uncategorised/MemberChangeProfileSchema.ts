@@ -18,11 +18,12 @@
 
 export interface MemberChangeProfileSchema {
     banner?: string | null;
-    nick?: string;
-    bio?: string;
-    pronouns?: string;
-    /**
-     * @items.type integer
-     */
-    theme_colors?: [number, number];
+    nick?: string | null;
+    bio?: string | null;
+    pronouns?: string | null;
+    theme_colors?: number[] | null;
+    accent_color?: number | null;
+    profile_effect_id?: string | null;
+    popout_animation_particle_type?: string | null;
+    emoji_id?: string | null;
 }

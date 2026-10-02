@@ -262,7 +262,7 @@ export class User extends BaseClass {
             system: this.system,
             banner: this.banner,
             accent_color: this.accent_color,
-            public_flags: this.public_flags,
+            public_flags: Number(this.public_flags),
         } satisfies PartialUser;
     }
 

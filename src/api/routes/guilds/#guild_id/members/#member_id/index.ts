@@ -19,7 +19,7 @@
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { Emoji, Guild, Member, Role, Sticker } from "@spacebar/database";
-import { Config, DiscordApiErrors, emitEvent, getPermission, getRights, GuildMemberUpdateEvent, handleFile } from "@spacebar/util";
+import { CollectibleItemType, Collectibles, Config, DiscordApiErrors, emitEvent, FieldErrors, getPermission, getRights, GuildMemberUpdateEvent, handleFile } from "@spacebar/util";
 import { MemberChangeSchema, PublicMemberProjection, PublicUserProjection } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
@@ -116,9 +116,37 @@ router.patch(
             rights.hasThrow("MANAGE_USERS");
         }
 
-        if (body.avatar) body.avatar = await handleFile(`/guilds/${guild_id}/users/${member_id}/avatars`, body.avatar as string);
+        const { avatar_decoration_sku_id, collectibles, display_name_font_id, display_name_effect_id, display_name_colors, avatar_description, avatar_id, vad_colors, ...changes } =
+            body;
 
-        member.assign(body);
+        if (changes.avatar) changes.avatar = await handleFile(`/guilds/${guild_id}/users/${member_id}/avatars`, changes.avatar);
+        else if (changes.avatar === null) Object.assign(member, { avatar: null });
+
+        if (avatar_decoration_sku_id !== undefined) {
+            const decoration = avatar_decoration_sku_id ? await Collectibles.item(avatar_decoration_sku_id, CollectibleItemType.AVATAR_DECORATION) : undefined;
+            if (avatar_decoration_sku_id && !decoration?.asset) throw FieldErrors({ avatar_decoration_sku_id: { code: "50057", message: "Invalid SKU" } });
+            Object.assign(member, { avatar_decoration_data: decoration?.asset ? { asset: decoration.asset, sku_id: decoration.sku_id, expires_at: null } : null });
+        }
+
+        if (collectibles !== undefined) {
+            const nameplate = collectibles?.nameplate ? await Collectibles.item(collectibles.nameplate.sku_id, CollectibleItemType.NAMEPLATE) : undefined;
+            if (collectibles?.nameplate && !nameplate?.asset) throw FieldErrors({ collectibles: { code: "50057", message: "Invalid SKU" } });
+            Object.assign(member, {
+                collectibles: nameplate?.asset
+                    ? { nameplate: { asset: nameplate.asset, sku_id: nameplate.sku_id, label: nameplate.label ?? "", palette: nameplate.palette ?? "", expires_at: null } }
+                    : null,
+            });
+        }
+
+        if (display_name_font_id !== undefined || display_name_effect_id !== undefined || display_name_colors !== undefined)
+            Object.assign(member, {
+                display_name_styles:
+                    display_name_font_id == null && display_name_effect_id == null && !display_name_colors?.length
+                        ? null
+                        : { font_id: display_name_font_id ?? 0, effect_id: display_name_effect_id ?? 0, colors: display_name_colors ?? [] },
+            });
+
+        member.assign(changes);
 
         // must do this after the assign because the body roles array
         // is string[] not Role[]
@@ -142,14 +170,16 @@ router.patch(
 
         member.roles = member.roles.filter((x) => x.id !== guild_id);
 
+        const data = { ...member.toPublicMember(), user: member.user.toPublicUser(), roles: member.roles.map((x) => x.id) };
+
         // do not use promise.all as we have to first write to db before emitting the event to catch errors
         await emitEvent({
             event: "GUILD_MEMBER_UPDATE",
             guild_id,
-            data: { ...member, roles: member.roles.map((x) => x.id) },
+            data,
         } satisfies GuildMemberUpdateEvent);
 
-        res.json(member);
+        res.json(data);
     },
 );
 

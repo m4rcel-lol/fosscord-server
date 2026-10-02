@@ -230,15 +230,8 @@ export class UserProfileModifySchema {
     pronouns?: string | null;
     bio?: string | null;
     banner?: base64str | null;
-    /**
-     * @type integer
-     */
     accent_color?: number | null;
-    /**
-     * @type array
-     * @items.type integer
-     */
-    theme_colors?: [number, number] | null;
+    theme_colors?: number[] | null;
     //@deprecated - what even was this
     popout_animation_particle_type?: Snowflake | null;
     //@deprecated - what even was this

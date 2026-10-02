@@ -18,20 +18,58 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { Member } from "@spacebar/database";
-import { emitEvent, getPermission, getRights, GuildMemberUpdateEvent, handleFile, OrmUtils, Permissions } from "@spacebar/util";
-import { MemberChangeProfileSchema } from "@spacebar/schemas";
+import { Guild, Member } from "@spacebar/database";
+import { Config, emitEvent, FieldErrors, getPermission, getRights, GuildMemberUpdateEvent, handleFile, Permissions } from "@spacebar/util";
+import { GuildProfileResponse, GuildVisibilityLevel, MemberChangeProfileSchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
+
+router.get(
+    "/",
+    route({
+        responses: {
+            "200": {
+                body: "GuildProfileResponse",
+            },
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const { guild_id } = req.params as { [key: string]: string };
+        const guild = await Guild.findOneOrFail({ where: { id: guild_id } });
+        const profileResponse: GuildProfileResponse = {
+            id: guild_id,
+            name: guild.name,
+            icon_hash: guild.icon ?? null,
+            member_count: guild.member_count!,
+            online_count: guild.member_count!,
+            description: guild.description ?? "A Spacebar guild",
+            brand_color_primary: "#FF00FF",
+            banner_hash: null,
+            game_application_ids: [], // We don't track this
+            game_activity: {}, // We don't track this
+            tag: guild.name.substring(0, 4).toUpperCase(), // TODO: allow custom tags
+            badge: 0,
+            badge_color_primary: "#FF00FF",
+            badge_color_secondary: "#00FFFF",
+            badge_hash: "",
+            traits: [],
+            features: guild.features ?? [],
+            visibility: GuildVisibilityLevel.PUBLIC,
+            custom_banner_hash: guild.banner ?? null,
+            premium_subscription_count: guild.premium_subscription_count ?? 0,
+            premium_tier: guild.premium_tier ?? 0,
+        };
+
+        res.send(profileResponse);
+    },
+);
 
 router.patch(
     "/:member_id",
     route({
         requestBody: "MemberChangeProfileSchema",
         responses: {
-            200: {
-                body: "Member",
-            },
+            200: {},
             400: {
                 body: "APIErrorResponse",
             },
@@ -61,25 +99,41 @@ router.patch(
             }
         }
 
-        let member = await Member.findOneOrFail({
+        const member = await Member.findOneOrFail({
             where: { id: member_id, guild_id },
             relations: { roles: true, user: true },
         });
 
-        if (body.banner) body.banner = await handleFile(`/guilds/${guild_id}/users/${member_id}/avatars`, body.banner as string);
+        const { maxBio, maxPronouns } = Config.get().limits.user;
+        if (body.bio && body.bio.length > maxBio) throw FieldErrors({ bio: { code: "BIO_INVALID", message: `Bio must be less than ${maxBio} in length` } });
+        if (body.pronouns && body.pronouns.length > maxPronouns)
+            throw FieldErrors({ pronouns: { code: "PRONOUNS_INVALID", message: `Pronouns must be less than ${maxPronouns} in length` } });
 
-        member = await OrmUtils.mergeDeep(member, body);
+        if (body.nick !== undefined) Object.assign(member, { nick: body.nick || null });
+        if (body.bio !== undefined) member.bio = body.bio ?? "";
+        if (body.pronouns !== undefined) Object.assign(member, { pronouns: body.pronouns || null });
+        if (body.theme_colors !== undefined) Object.assign(member, { theme_colors: body.theme_colors });
+        if (body.banner !== undefined) Object.assign(member, { banner: body.banner ? await handleFile(`/guilds/${guild_id}/users/${member_id}/banners`, body.banner) : null });
 
         await member.save();
 
-        // do not use promise.all as we have to first write to db before emitting the event to catch errors
         await emitEvent({
             event: "GUILD_MEMBER_UPDATE",
             guild_id,
-            data: { ...member, roles: member.roles.map((x) => x.id) },
+            data: { ...member.toPublicMember(), user: member.user.toPublicUser(), roles: member.roles.map((x) => x.id) },
         } satisfies GuildMemberUpdateEvent);
 
-        res.json(member);
+        res.json({
+            guild_id,
+            bio: member.bio ?? "",
+            pronouns: member.pronouns ?? "",
+            banner: member.banner ?? null,
+            accent_color: null,
+            theme_colors: member.theme_colors?.length ? member.theme_colors.map(Number) : null,
+            popout_animation_particle_type: null,
+            emoji: null,
+            profile_effect: null,
+        });
     },
 );
 

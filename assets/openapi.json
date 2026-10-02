@@ -666,13 +666,21 @@
                         "nullable": true
                     },
                     "accent_color": {
-                        "type": "integer"
+                        "type": "integer",
+                        "nullable": true
                     },
                     "theme_colors": {
-                        "type": "array",
-                        "items": {
-                            "type": "integer"
-                        }
+                        "anyOf": [
+                            {
+                                "type": "array",
+                                "items": {
+                                    "type": "integer"
+                                }
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
                     },
                     "popout_animation_particle_type": {
                         "type": "string",
@@ -3821,6 +3829,15 @@
                     "pronouns": {
                         "type": "string"
                     },
+                    "avatar_decoration_data": {
+                        "$ref": "#/components/schemas/AvatarDecorationData"
+                    },
+                    "collectibles": {
+                        "$ref": "#/components/schemas/Collectibles"
+                    },
+                    "display_name_styles": {
+                        "$ref": "#/components/schemas/DisplayNameStyle"
+                    },
                     "username": {
                         "type": "string"
                     },
@@ -3848,15 +3865,6 @@
                         "items": {
                             "type": "string"
                         }
-                    },
-                    "avatar_decoration_data": {
-                        "$ref": "#/components/schemas/AvatarDecorationData"
-                    },
-                    "display_name_styles": {
-                        "$ref": "#/components/schemas/DisplayNameStyle"
-                    },
-                    "collectibles": {
-                        "$ref": "#/components/schemas/Collectibles"
                     },
                     "primary_guild": {
                         "$ref": "#/components/schemas/PrimaryGuild"
@@ -4573,26 +4581,45 @@
                         "nullable": true
                     },
                     "nick": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "bio": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "pronouns": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "theme_colors": {
-                        "items": [
+                        "anyOf": [
                             {
-                                "type": "integer"
+                                "type": "array",
+                                "items": {
+                                    "type": "integer"
+                                }
                             },
                             {
-                                "type": "integer"
+                                "type": "null"
                             }
-                        ],
-                        "type": "array",
-                        "minItems": 2,
-                        "maxItems": 2
+                        ]
+                    },
+                    "accent_color": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "profile_effect_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "popout_animation_particle_type": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "emoji_id": {
+                        "type": "string",
+                        "nullable": true
                     }
                 }
             },
@@ -4606,7 +4633,8 @@
                         }
                     },
                     "nick": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "avatar": {
                         "type": "string",
@@ -4622,6 +4650,87 @@
                     "channel_id": {
                         "type": "string",
                         "nullable": true
+                    },
+                    "avatar_description": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "avatar_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "avatar_decoration_sku_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "collectibles": {
+                        "anyOf": [
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "nameplate": {
+                                        "anyOf": [
+                                            {
+                                                "type": "object",
+                                                "properties": {
+                                                    "sku_id": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "additionalProperties": false,
+                                                "required": [
+                                                    "sku_id"
+                                                ]
+                                            },
+                                            {
+                                                "type": "null"
+                                            }
+                                        ]
+                                    }
+                                },
+                                "additionalProperties": false,
+                                "required": [
+                                    "nameplate"
+                                ]
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "display_name_font_id": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "display_name_effect_id": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "display_name_colors": {
+                        "anyOf": [
+                            {
+                                "type": "array",
+                                "items": {
+                                    "type": "integer"
+                                }
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "vad_colors": {
+                        "anyOf": [
+                            {
+                                "type": "array",
+                                "items": {
+                                    "type": "integer"
+                                }
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
                     }
                 }
             },
@@ -8659,6 +8768,15 @@
                             }
                         ]
                     },
+                    "avatar_decoration_data": {
+                        "$ref": "#/components/schemas/AvatarDecorationData"
+                    },
+                    "collectibles": {
+                        "$ref": "#/components/schemas/Collectibles"
+                    },
+                    "display_name_styles": {
+                        "$ref": "#/components/schemas/DisplayNameStyle"
+                    },
                     "user": {
                         "$ref": "#/components/schemas/PublicUser"
                     },
@@ -8684,87 +8802,6 @@
                     "user"
                 ]
             },
-            "PublicUser": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "description": "A Twitter-like snowflake, except the epoch is 2015-01-01T00:00:00.000Z\n```\nIf we have a snowflake '266241948824764416' we can represent it as binary:\n\n64                                          22     17     12          0\n 000000111011000111100001101001000101000000  00001  00000  000000000000\n      number of ms since Discord epoch       worker  pid    increment\n```",
-                        "type": "string"
-                    },
-                    "premium_since": {
-                        "type": "string",
-                        "format": "date-time"
-                    },
-                    "avatar": {
-                        "type": "string"
-                    },
-                    "banner": {
-                        "type": "string"
-                    },
-                    "bio": {
-                        "type": "string"
-                    },
-                    "theme_colors": {
-                        "type": "array",
-                        "items": {
-                            "type": "integer"
-                        }
-                    },
-                    "pronouns": {
-                        "type": "string"
-                    },
-                    "username": {
-                        "type": "string"
-                    },
-                    "discriminator": {
-                        "type": "string"
-                    },
-                    "global_name": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "public_flags": {
-                        "type": "integer"
-                    },
-                    "accent_color": {
-                        "type": "integer"
-                    },
-                    "bot": {
-                        "type": "boolean"
-                    },
-                    "premium_type": {
-                        "type": "integer"
-                    },
-                    "badge_ids": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        }
-                    },
-                    "avatar_decoration_data": {
-                        "$ref": "#/components/schemas/AvatarDecorationData"
-                    },
-                    "display_name_styles": {
-                        "$ref": "#/components/schemas/DisplayNameStyle"
-                    },
-                    "collectibles": {
-                        "$ref": "#/components/schemas/Collectibles"
-                    },
-                    "primary_guild": {
-                        "$ref": "#/components/schemas/PrimaryGuild"
-                    }
-                },
-                "required": [
-                    "bio",
-                    "bot",
-                    "discriminator",
-                    "id",
-                    "premium_since",
-                    "premium_type",
-                    "public_flags",
-                    "username"
-                ]
-            },
             "AvatarDecorationData": {
                 "type": "object",
                 "properties": {
@@ -8784,28 +8821,6 @@
                     "asset",
                     "expires_at",
                     "sku_id"
-                ]
-            },
-            "DisplayNameStyle": {
-                "type": "object",
-                "properties": {
-                    "font_id": {
-                        "type": "integer"
-                    },
-                    "effect_id": {
-                        "type": "integer"
-                    },
-                    "colors": {
-                        "type": "array",
-                        "items": {
-                            "type": "integer"
-                        }
-                    }
-                },
-                "required": [
-                    "colors",
-                    "effect_id",
-                    "font_id"
                 ]
             },
             "Collectibles": {
@@ -8853,6 +8868,109 @@
                     "label",
                     "palette",
                     "sku_id"
+                ]
+            },
+            "DisplayNameStyle": {
+                "type": "object",
+                "properties": {
+                    "font_id": {
+                        "type": "integer"
+                    },
+                    "effect_id": {
+                        "type": "integer"
+                    },
+                    "colors": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "required": [
+                    "colors",
+                    "effect_id",
+                    "font_id"
+                ]
+            },
+            "PublicUser": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "description": "A Twitter-like snowflake, except the epoch is 2015-01-01T00:00:00.000Z\n```\nIf we have a snowflake '266241948824764416' we can represent it as binary:\n\n64                                          22     17     12          0\n 000000111011000111100001101001000101000000  00001  00000  000000000000\n      number of ms since Discord epoch       worker  pid    increment\n```",
+                        "type": "string"
+                    },
+                    "premium_since": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "avatar": {
+                        "type": "string"
+                    },
+                    "banner": {
+                        "type": "string"
+                    },
+                    "bio": {
+                        "type": "string"
+                    },
+                    "theme_colors": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "pronouns": {
+                        "type": "string"
+                    },
+                    "avatar_decoration_data": {
+                        "$ref": "#/components/schemas/AvatarDecorationData"
+                    },
+                    "collectibles": {
+                        "$ref": "#/components/schemas/Collectibles"
+                    },
+                    "display_name_styles": {
+                        "$ref": "#/components/schemas/DisplayNameStyle"
+                    },
+                    "username": {
+                        "type": "string"
+                    },
+                    "discriminator": {
+                        "type": "string"
+                    },
+                    "global_name": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "public_flags": {
+                        "type": "integer"
+                    },
+                    "accent_color": {
+                        "type": "integer"
+                    },
+                    "bot": {
+                        "type": "boolean"
+                    },
+                    "premium_type": {
+                        "type": "integer"
+                    },
+                    "badge_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "primary_guild": {
+                        "$ref": "#/components/schemas/PrimaryGuild"
+                    }
+                },
+                "required": [
+                    "bio",
+                    "bot",
+                    "discriminator",
+                    "id",
+                    "premium_since",
+                    "premium_type",
+                    "public_flags",
+                    "username"
                 ]
             },
             "PrimaryGuild": {
@@ -17311,6 +17429,9 @@
         },
         {
             "name": "store"
+        },
+        {
+            "name": "storefront"
         },
         {
             "name": "teams"

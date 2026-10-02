@@ -1,34 +1,28 @@
 /*
 	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
 	Copyright (C) 2023 Spacebar and Spacebar Contributors
-	
+
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU Affero General Public License as published
 	by the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
-	
+
 	This program is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU Affero General Public License for more details.
-	
+
 	You should have received a copy of the GNU Affero General Public License
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-export interface MemberChangeSchema {
-    roles?: string[];
-    nick?: string | null;
-    avatar?: string | null;
-    bio?: string;
-    communication_disabled_until?: string | null;
-    channel_id?: string | null;
-    avatar_description?: string | null;
-    avatar_id?: string | null;
-    avatar_decoration_sku_id?: string | null;
-    collectibles?: { nameplate: { sku_id: string } | null } | null;
-    display_name_font_id?: number | null;
-    display_name_effect_id?: number | null;
-    display_name_colors?: number[] | null;
-    vad_colors?: number[] | null;
-}
+import { route } from "@spacebar/api/middlewares";
+import { Request, Response, Router } from "express";
+
+const router = Router({ mergeParams: true });
+
+router.get("/", route({}), (req: Request, res: Response) => {
+    res.json({ products: [] });
+});
+
+export default router;
