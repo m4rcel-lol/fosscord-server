@@ -102,7 +102,7 @@ router.post(
 
         const files = (req.files as Express.Multer.File[]) ?? [];
         const attachments: (Attachment | MessageCreateAttachment | MessageCreateCloudAttachment)[] = body.message.attachments ?? [];
-        for (const currFile of files) attachments.push(await uploadFile(`/attachments/${thread.id}`, currFile));
+        for (const currFile of files) attachments.push(await uploadFile(`/attachments/${thread.id}/${thread.id}`, currFile));
 
         const message = await handleMessage({
             ...body.message,

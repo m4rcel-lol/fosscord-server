@@ -8,6 +8,7 @@ import { HTTPError } from "lambert-server/HTTPError";
 import { ChannelPermissionOverwrite, ChannelPermissionOverwriteType, ChannelType, UserFlags } from "@spacebar/schemas";
 import { ArrayContains, EntityNotFoundError, FindOneOptions } from "typeorm";
 import { OrmUtils } from "@spacebar/util";
+import { DiscordApiErrors } from "./Constants";
 
 export type PermissionResolvable = bigint | number | Permissions | PermissionResolvable[] | PermissionString;
 
@@ -107,8 +108,9 @@ export class Permissions extends BitField {
      * Checks whether the bitfield has a permission, or multiple permissions, but throws an Error if user fails to match auth criteria.
      */
     hasThrow(permission: PermissionResolvable) {
-        if (this.has(permission) && this.has("VIEW_CHANNEL")) return true;
-        throw new HTTPError(`You are missing the following permissions ${permission}`, 403);
+        if (!this.has("VIEW_CHANNEL")) throw DiscordApiErrors.MISSING_ACCESS;
+        if (this.has(permission)) return true;
+        throw DiscordApiErrors.MISSING_PERMISSIONS;
     }
 
     overwriteChannel(overwrites: ChannelPermissionOverwrite[]) {

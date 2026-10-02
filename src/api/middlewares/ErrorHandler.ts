@@ -18,9 +18,23 @@
 
 import { NextFunction, Request, Response } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
-import { ApiError, FieldError, FieldErrors } from "@spacebar/util";
+import { ApiError, DiscordApiErrors, FieldError, FieldErrors } from "@spacebar/util";
 import { StringLengthOutOfBoundsException } from "@spacebar/extensions";
 const EntityNotFoundErrorRegex = /"(\w+)"/;
+const UNKNOWN_ENTITY_ERRORS: Record<string, ApiError> = {
+    Channel: DiscordApiErrors.UNKNOWN_CHANNEL,
+    Message: DiscordApiErrors.UNKNOWN_MESSAGE,
+    Guild: DiscordApiErrors.UNKNOWN_GUILD,
+    Member: DiscordApiErrors.UNKNOWN_MEMBER,
+    Role: DiscordApiErrors.UNKNOWN_ROLE,
+    User: DiscordApiErrors.UNKNOWN_USER,
+    Webhook: DiscordApiErrors.UNKNOWN_WEBHOOK,
+    Emoji: DiscordApiErrors.UNKNOWN_EMOJI,
+    Sticker: DiscordApiErrors.UNKNOWN_STICKER,
+    Invite: DiscordApiErrors.UNKNOWN_INVITE,
+    StageInstance: DiscordApiErrors.UNKNOWN_STAGE_INSTANCE,
+    GuildScheduledEvent: DiscordApiErrors.UNKNOWN_GUILD_SCHEDULED_EVENT,
+};
 
 export function ErrorHandler(error: Error & { type?: string }, req: Request, res: Response, next: NextFunction) {
     if (!error) return next();
@@ -54,8 +68,11 @@ export function ErrorHandler(error: Error & { type?: string }, req: Request, res
             message = error.message;
             httpcode = error.httpStatus;
         } else if (error.name === "EntityNotFoundError") {
-            message = `${error.message.match(EntityNotFoundErrorRegex)?.[1] || "Item"} could not be found`;
-            code = httpcode = 404;
+            const entity = error.message.match(EntityNotFoundErrorRegex)?.[1] || "Item";
+            const known = UNKNOWN_ENTITY_ERRORS[entity];
+            message = known?.message ?? `${entity} could not be found`;
+            code = known?.code ?? 404;
+            httpcode = 404;
         } else if (error instanceof FieldError) {
             code = Number(error.code);
             message = error.message;

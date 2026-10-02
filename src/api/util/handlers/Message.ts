@@ -17,7 +17,7 @@
 */
 
 import { HTTPError } from "lambert-server/HTTPError";
-import { In } from "typeorm";
+import { In, Raw } from "typeorm";
 // noinspection ES6PreferShortImport -- Causes a circular reference...
 import { fillMessageUrlEmbeds } from "../utility/EmbedHandlers";
 import { getDatabase, Application, Attachment, Channel, CloudAttachment, Guild, Member, Message, ReadState, Role, Session, Sticker, User, Webhook } from "@spacebar/database";
@@ -38,6 +38,7 @@ import {
     makeObjectErrorContent,
     MessageCreateEvent,
     MessageFlags,
+    MessageUpdateEvent,
     Permissions,
     ROLE_MENTION,
     Snowflake,
@@ -148,12 +149,15 @@ async function processMedia(media: UnfurledMediaItem, messageId: string, batchId
         delWhenDone = true;
     }
 
-    const cloneResponse = await fetch(`${Config.get().cdn.endpointPrivate?.replace(/\/+$/, "")}/attachments/${attEnt.uploadFilename}/clone_to_message/${messageId}`, {
-        method: "POST",
-        headers: {
-            signature: Config.get().security.requestSignature || "",
+    const cloneResponse = await fetch(
+        `${Config.get().cdn.endpointPrivate?.replace(/\/+$/, "")}/attachments/${attEnt.uploadFilename}/clone_to_message/${messageId}?channel_id=${channel.id}`,
+        {
+            method: "POST",
+            headers: {
+                signature: Config.get().security.requestSignature || "",
+            },
         },
-    });
+    );
 
     if (!cloneResponse.ok) {
         console.error(`[Message] Failed to clone attachment ${attEnt.userFilename} to message ${messageId}`);
@@ -595,6 +599,28 @@ export async function postHandleMessage(message: Message) {
         await fillMessageUrlEmbeds(message);
 }
 
+export async function syncCrosspostCopies(source: Message, deleted = false) {
+    if (!(source.flags & Number(MessageFlags.FLAGS.CROSSPOSTED))) return;
+    const copies = await Message.find({
+        where: { message_reference: Raw((alias) => `${alias} ->> 'message_id' = :source_id`, { source_id: source.id }) },
+        relations: { channel: true, webhook: true },
+    });
+    for (const copy of copies.filter((c) => c.flags & Number(MessageFlags.FLAGS.IS_CROSSPOST))) {
+        if (deleted) {
+            copy.flags |= Number(MessageFlags.FLAGS.SOURCE_MESSAGE_DELETED);
+            copy.content = "";
+            copy.embeds = [];
+        } else {
+            copy.content = source.content;
+            copy.embeds = (source.embeds ?? []).filter((embed) => embed.type === EmbedType.rich);
+            copy.edited_timestamp = source.edited_timestamp ?? new Date();
+        }
+        await Message.update({ id: copy.id }, { flags: copy.flags, content: copy.content, embeds: copy.embeds, edited_timestamp: copy.edited_timestamp });
+        await emitEvent({ event: "MESSAGE_UPDATE", channel_id: copy.channel_id, data: { ...copy.toJSON(), nonce: undefined } } satisfies MessageUpdateEvent);
+        if (!deleted) postHandleMessage(copy).catch((e) => console.error("[Crosspost] post-message handler failed", e));
+    }
+}
+
 export async function sendMessage(opts: MessageOptions) {
     const message = await handleMessage({ ...opts, timestamp: new Date() });
 
@@ -676,7 +702,7 @@ export async function convertCloudAttachmentToAttachment(cloudAttachmentReferenc
     });
 
     const cloneResponse = await fetch(
-        `${Config.get().cdn.endpointPrivate?.replace(/\/+$/, "")}/attachments/${cloudAttachment.uploadFilename}/clone_to_message/${destinationMessageId}`,
+        `${Config.get().cdn.endpointPrivate?.replace(/\/+$/, "")}/attachments/${cloudAttachment.uploadFilename}/clone_to_message/${destinationMessageId}?channel_id=${destinationChannelId}`,
         {
             method: "POST",
             headers: {
