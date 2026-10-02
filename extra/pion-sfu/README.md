@@ -22,6 +22,10 @@ Without `PION_SFU_BIN` and with `PION_SFU_IPC` set, the server connects to an SF
 
 Changes from upstream: the IPC socket path is a flag (`-ipc`) so several servers can run on one machine, and pion logging defaults to warnings.
 
+## Server mute, deafen and stage suppression
+
+The voice gateway sends a `moderate` message whenever a user's voice state changes, with `blockAudio` (server mute or stage suppression), `blockVideo` (suppressed in a stage) and `deaf` (server deafen). The SFU then drops that publisher's blocked tracks before they reach the packet cache, so neither forwarding nor retransmission can leak them, and stops sending any audio to a deafened subscriber. This holds even when a modified client keeps sending media.
+
 ## Loss recovery and bandwidth
 
 Every published track is forwarded with its original SSRC, so the SFU handles retransmission itself instead of using pion's stock NACK interceptors:

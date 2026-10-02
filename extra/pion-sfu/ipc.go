@@ -35,6 +35,9 @@ type SignalMessage struct {
 	TrackType   string `json:"trackType,omitempty"` // "audio" | "video"
 	PublisherID string `json:"publisherId,omitempty"`
 	SSRC        uint32 `json:"ssrc,omitempty"`
+	BlockAudio  bool   `json:"blockAudio,omitempty"`
+	BlockVideo  bool   `json:"blockVideo,omitempty"`
+	Deaf        bool   `json:"deaf,omitempty"`
 }
 
 func getListener(path string) (net.Listener, error) {
@@ -149,6 +152,8 @@ func (ipcConn *IpcConnection) processMessage(ipcMsg IpcMessage) {
 				handleErr = handleSubscribe(p, msg, requestID)
 			case "unsubscribe":
 				handleErr = handleUnsubscribe(p, msg)
+			case "moderate":
+				p.moderate(msg.BlockAudio, msg.BlockVideo, msg.Deaf)
 			case "keyframe":
 				p.mu.Lock()
 				pt := p.videoPublished

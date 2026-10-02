@@ -39,6 +39,10 @@ type Peer struct {
 	rembAt    time.Time
 	videoLoss map[uint32]lossReport
 
+	blockAudio atomic.Bool
+	blockVideo atomic.Bool
+	deaf       atomic.Bool
+
 	nacksReceived atomic.Uint64
 	retransmitted atomic.Uint64
 	notCached     atomic.Uint64
@@ -104,6 +108,30 @@ type PublishedTrack struct {
 	nacked         atomic.Uint64
 	recovered      atomic.Uint64
 	lost           atomic.Uint64
+}
+
+func (pt *PublishedTrack) blocked() bool {
+	if pt.kind == "audio" {
+		return pt.publisher.blockAudio.Load()
+	}
+	return pt.publisher.blockVideo.Load()
+}
+
+func (pt *PublishedTrack) forwardsTo(sub *Peer) bool {
+	return !pt.blocked() && (pt.kind != "audio" || !sub.deaf.Load())
+}
+
+func (p *Peer) moderate(blockAudio, blockVideo, deaf bool) {
+	p.blockAudio.Store(blockAudio)
+	p.deaf.Store(deaf)
+	if p.blockVideo.Swap(blockVideo) && !blockVideo {
+		p.mu.Lock()
+		pt := p.videoPublished
+		p.mu.Unlock()
+		if pt != nil {
+			pt.requestKeyframe()
+		}
+	}
 }
 
 func (pt *PublishedTrack) close() {

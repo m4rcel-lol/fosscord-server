@@ -20,25 +20,29 @@ import { mediaServer, VoiceOPCodes, VoicePayload, WebRtcWebSocket, Send } from "
 
 // {"speaking":1,"delay":5,"ssrc":2805246727}
 
-export async function onSpeaking(this: WebRtcWebSocket, data: VoicePayload) {
-    if (!this.webRtcClient) return;
-    this.speaking = !!data.d?.speaking;
-    this.lastActivity = Date.now();
-
+export async function relaySpeaking(socket: WebRtcWebSocket, speaking: number) {
+    if (!socket.webRtcClient) return;
     await Promise.all(
-        Array.from(mediaServer.getClientsForRtcServer<WebRtcWebSocket>(this.webRtcClient.voiceRoomId)).map((client) => {
-            if (client.user_id === this.user_id) return Promise.resolve();
+        Array.from(mediaServer.getClientsForRtcServer<WebRtcWebSocket>(socket.webRtcClient.voiceRoomId)).map((client) => {
+            if (client.user_id === socket.user_id) return Promise.resolve();
 
-            const ssrc = client.getOutgoingStreamSSRCsForUser(this.user_id);
+            const ssrc = client.getOutgoingStreamSSRCsForUser(socket.user_id);
 
             return Send(client.websocket, {
                 op: VoiceOPCodes.SPEAKING,
                 d: {
-                    user_id: this.user_id,
-                    speaking: data.d.speaking,
+                    user_id: socket.user_id,
+                    speaking,
                     ssrc: ssrc.audio_ssrc ?? 0,
                 },
             });
         }),
     );
+}
+
+export async function onSpeaking(this: WebRtcWebSocket, data: VoicePayload) {
+    if (!this.webRtcClient) return;
+    this.speaking = !!data.d?.speaking;
+    this.lastActivity = Date.now();
+    await relaySpeaking(this, this.moderation?.mute ? 0 : data.d.speaking);
 }

@@ -16,12 +16,14 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { GoLiveStreams, StreamSession, VoiceState } from "@spacebar/database";
+import { Channel, GoLiveStreams, StreamSession, VoiceState } from "@spacebar/database";
 import { CLOSECODES } from "@spacebar/gateway";
-import { validateSchema, VoiceIdentifySchema } from "@spacebar/schemas";
-import { generateSsrc, mediaServer, Send, VoiceOPCodes, VoicePayload, WebRtcWebSocket } from "@spacebar/webrtc";
+import { ChannelType, validateSchema, VoiceIdentifySchema } from "@spacebar/schemas";
+import { listenEvent } from "@spacebar/util";
+import { generateSsrc, mediaServer, Send, VoiceModeration, VoiceOPCodes, VoicePayload, WebRtcWebSocket } from "@spacebar/webrtc";
 import { SSRCs } from "@spacebarchat/spacebar-webrtc-types";
 import { subscribeToProducers } from "./Video";
+import { relaySpeaking } from "./Speaking";
 import { VoiceSessions } from "../util/VoiceSessions";
 
 export async function onIdentify(this: WebRtcWebSocket, data: VoicePayload) {
@@ -95,6 +97,26 @@ export async function onIdentify(this: WebRtcWebSocket, data: VoicePayload) {
         this.webRtcClient = await mediaServer.join(voiceRoomId, this.user_id, this, type!);
     } catch (e) {
         return this.close(4013);
+    }
+
+    if (type === "guild-voice") {
+        const channel = await Channel.findOne({ where: { id: this.channel_id }, select: { id: true, type: true } });
+        const stage = channel?.type === ChannelType.GUILD_STAGE_VOICE;
+        const moderate = async (state: Pick<VoiceState, "mute" | "deaf" | "suppress">) => {
+            const session = VoiceSessions.find(server_id, session_id) ?? this;
+            const moderation: VoiceModeration = { mute: !!state.mute || !!state.suppress, deaf: !!state.deaf, video: stage && !!state.suppress };
+            const silenced = moderation.mute && !session.moderation?.mute;
+            session.moderation = moderation;
+            (session.webRtcClient as { moderate?: (moderation: VoiceModeration) => void } | undefined)?.moderate?.(moderation);
+            if (silenced && session.speaking) await relaySpeaking(session, 0);
+        };
+        await moderate(voiceState!);
+        const unlisten = await listenEvent(server_id, async (event) => {
+            const update = event.data as VoiceState | undefined;
+            if (event.event !== "VOICE_STATE_UPDATE" || update?.user_id !== user_id || update.session_id !== session_id || update.channel_id !== this.channel_id) return;
+            await moderate(update);
+        });
+        this.sessionCleanups = [...(this.sessionCleanups ?? []), unlisten];
     }
 
     // once connected subscribe to tracks from other users

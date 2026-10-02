@@ -48,6 +48,7 @@ const SESSION_FIELDS = [
     "sessionCleanups",
     "lastActivity",
     "speaking",
+    "moderation",
 ] as const satisfies readonly (keyof WebRtcWebSocket)[];
 
 export const VoiceSessions = {
