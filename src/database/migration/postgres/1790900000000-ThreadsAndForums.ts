@@ -20,9 +20,20 @@ export class ThreadsAndForums1790900000000 implements MigrationInterface {
         await queryRunner.query(
             `ALTER TABLE "messages" ADD CONSTRAINT "FK_message_thread_id" FOREIGN KEY ("thread_id") REFERENCES "channels"("id") ON DELETE SET NULL ON UPDATE NO ACTION`,
         );
+        await queryRunner.query(
+            `CREATE TABLE "stage_instances" ("id" bigint NOT NULL, "guild_id" bigint NOT NULL, "channel_id" bigint NOT NULL, "topic" character varying NOT NULL, "privacy_level" integer NOT NULL DEFAULT 2, "guild_scheduled_event_id" bigint, CONSTRAINT "UQ_stage_instances_channel_id" UNIQUE ("channel_id"), CONSTRAINT "PK_stage_instances_id" PRIMARY KEY ("id"))`,
+        );
+        await queryRunner.query(`CREATE INDEX "IDX_stage_instances_guild_id" ON "stage_instances" ("guild_id")`);
+        await queryRunner.query(
+            `ALTER TABLE "stage_instances" ADD CONSTRAINT "FK_stage_instance_guild_id" FOREIGN KEY ("guild_id") REFERENCES "guilds"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+        );
+        await queryRunner.query(
+            `ALTER TABLE "stage_instances" ADD CONSTRAINT "FK_stage_instance_channel_id" FOREIGN KEY ("channel_id") REFERENCES "channels"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+        );
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`DROP TABLE "stage_instances"`);
         await queryRunner.query(`ALTER TABLE "messages" DROP CONSTRAINT "FK_message_thread_id"`);
         await queryRunner.query(
             `ALTER TABLE "messages" ADD CONSTRAINT "FK_message_thread_id" FOREIGN KEY ("thread_id") REFERENCES "channels"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,

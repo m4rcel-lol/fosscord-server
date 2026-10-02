@@ -35,6 +35,7 @@ import {
     Session,
     Sticker,
     ThreadMember,
+    StageInstance,
     UserSettings,
     UserSettingsProtos,
     VoiceState,
@@ -452,6 +453,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     ]);
 
     const guildIds = memberGuilds.map((g) => g.id);
+    const stageInstancesByGuild = arrayGroupBy(memberGuildIds.length ? await StageInstance.find({ where: { guild_id: In(memberGuildIds) } }) : [], (i) => i.guild_id);
 
     const threadMemberMap = new Map(threadMembers.map((member) => [member.id, member] as const));
     const allThreads = allThreadsRaw.filter(({ id, thread_metadata }) => thread_metadata?.archived === false && threadMemberMap.has(id));
@@ -592,6 +594,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
                 };
             }),
             guild_scheduled_events: [],
+            stage_instances: (stageInstancesByGuild.get(member.guild_id) ?? []).map((i) => i.toJSON()),
             presences: [],
         };
 

@@ -65,3 +65,4 @@ export * from "./ValidRegistrationTokens";
 export * from "./VoiceState";
 export * from "./Webhook";
 export * from "./Tag";
+export * from "./StageInstance";

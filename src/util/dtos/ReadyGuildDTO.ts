@@ -211,7 +211,7 @@ export class ReadyGuildDTO implements IReadyGuildDTO {
             safety_alerts_channel_id: null,
         };
         this.roles = guild.roles.map((x) => x.toJSON());
-        this.stage_instances = [];
+        this.stage_instances = (guild as { stage_instances?: unknown[] }).stage_instances ?? [];
         this.stickers = guild.stickers;
         this.threads = guild.threads;
         this.version = "1"; // ??????
