@@ -36,7 +36,7 @@ import {
     DiscordApiErrors,
     MessageFlags,
 } from "@spacebar/util";
-import { MessageCreateAttachment, MessageCreateCloudAttachment, MessageCreateSchema, MessageEditSchema, ChannelType, EmbedType } from "@spacebar/schemas";
+import { MessageCreateAttachment, MessageCreateCloudAttachment, MessageCreateSchema, MessageEditSchema, ChannelType, EmbedType, MessageType } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
 // TODO: message content/embed string length limit
@@ -303,10 +303,6 @@ router.delete(
         const channel = await Channel.findOneOrFail({
             where: { id: channel_id },
         });
-        if (channel.type === ChannelType.GUILD_PUBLIC_THREAD) {
-            if (channel.message_count !== undefined) channel.message_count--;
-            await channel.save();
-        }
         const message = await Message.findOneOrFail({
             where: { id: message_id, channel_id: channel_id },
         });
@@ -321,6 +317,8 @@ router.delete(
         } else rights.hasThrow("SELF_DELETE_MESSAGES");
 
         await Message.delete({ id: message_id, channel_id: channel_id });
+        if (channel.isThread() && message.id !== channel.id && message.type !== MessageType.THREAD_STARTER_MESSAGE && (channel.message_count ?? 0) > 0)
+            await Channel.getRepository().decrement({ id: channel.id }, "message_count", 1);
 
         await emitEvent({
             event: "MESSAGE_DELETE",

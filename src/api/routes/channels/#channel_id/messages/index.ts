@@ -16,9 +16,9 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { handleMessage, postHandleMessage } from "@spacebar/api/util";
+import { handleMessage, onThreadMessage, postHandleMessage } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
-import { Attachment, Channel, Member, Message, ReadState, Relationship, User, ThreadMember, ThreadMemberFlags } from "@spacebar/database";
+import { Attachment, Channel, Member, Message, ReadState, Relationship, User } from "@spacebar/database";
 import {
     Config,
     DiscordApiErrors,
@@ -33,8 +33,6 @@ import {
     Rights,
     Snowflake,
     uploadFile,
-    ThreadMembersUpdateEvent,
-    ThreadCreateEvent,
     ChannelCreateEvent,
     ChannelUpdateEvent,
 } from "@spacebar/util";
@@ -96,6 +94,7 @@ router.get(
         });
         if (!channel) throw new HTTPError("Channel not found", 404);
 
+        if (channel.threadOnly()) return res.json([]);
         isTextChannel(channel.type);
         const around = req.query.around ? `${req.query.around}` : undefined;
         const before = req.query.before ? `${req.query.before}` : undefined;
@@ -304,46 +303,9 @@ router.post(
             where: { id: channel_id },
             relations: { recipients: { user: true } },
         });
-        if (channel.thread_metadata?.locked) throw DiscordApiErrors.THREAD_IS_LOCKED;
         if (channel.isThread()) {
             req.permission!.hasThrow("SEND_MESSAGES_IN_THREADS");
-            if (channel.recipients && !channel.recipients.find(({ id }) => id === req.user_id)) {
-                const member = await Member.findOneOrFail({ where: { id: req.user_id, guild_id: channel.guild_id! } });
-
-                if (!(await ThreadMember.existsBy({ member_idx: member.index, id: channel_id }))) {
-                    const threadMember = ThreadMember.create({
-                        member_idx: member.index,
-                        id: channel_id,
-                        join_timestamp: new Date(),
-                        muted: false,
-                        flags: ThreadMemberFlags.ALL_MESSAGES,
-                    });
-                    await threadMember.save();
-
-                    // increment member count
-                    if (channel.member_count !== null && channel.member_count !== undefined) {
-                        channel.member_count++;
-                        await channel.save();
-                    }
-
-                    await emitEvent({
-                        event: "THREAD_MEMBERS_UPDATE",
-                        data: {
-                            guild_id: channel.guild_id!,
-                            id: channel.id,
-                            member_count: channel.member_count ?? 0, // TODO: is this the right fix?
-                            added_members: [{ user_id: req.user_id, ...threadMember.toJSON() }],
-                        },
-                        channel_id: channel.id,
-                    } satisfies ThreadMembersUpdateEvent);
-
-                    await emitEvent({
-                        event: "THREAD_CREATE",
-                        data: { ...channel.toJSON(), newly_created: false },
-                        user_id: req.user_id,
-                    } satisfies ThreadCreateEvent);
-                }
-            }
+            if (channel.thread_metadata?.locked && !req.permission!.has("MANAGE_THREADS")) throw DiscordApiErrors.THREAD_IS_LOCKED;
         } else {
             req.permission!.hasThrow("SEND_MESSAGES");
         }
@@ -472,19 +434,7 @@ router.post(
             );
         }
 
-        if (channel.isThread()) {
-            channel.message_count = (channel.message_count || 0) + 1;
-            channel.total_message_sent = (channel.total_message_sent || 0) + 1;
-            channel.last_message_id = message.id;
-            await Promise.all([
-                channel.save(),
-                emitEvent({
-                    event: "CHANNEL_UPDATE",
-                    data: { ...channel.toJSON(), newly_created: false },
-                    guild_id: channel.guild_id,
-                }),
-            ]);
-        }
+        if (channel.isThread()) await onThreadMessage(channel, req.user_id);
 
         if (message.guild_id) {
             // handleMessage will fetch the Member, but only if they are not guild owner.

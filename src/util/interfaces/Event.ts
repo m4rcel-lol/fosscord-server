@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { ConnectedAccount, Invite, Role, Emoji, Channel, User, Sticker, UserSettings, ReadState, ThreadMember } from "@spacebar/database";
+import { ConnectedAccount, Invite, Role, Emoji, Channel, User, Sticker, UserSettings, ReadState, PublicThreadMember } from "@spacebar/database";
 import { Activity, Presence, IReadyGuildDTO, ReadyUserGuildSettingsEntries, ReadyPrivateChannel, GuildOrUnavailable, Snowflake } from "@spacebar/util";
 import { JsonValue } from "@protobuf-ts/runtime";
 import {
@@ -635,7 +635,7 @@ export interface GuildMemberListUpdate extends Event {
 
 export interface ThreadCreateEvent extends Event {
     event: "THREAD_CREATE";
-    data: PublicChannel & { newly_created: boolean };
+    data: PublicChannel & { newly_created: boolean; member?: PublicThreadMember };
 }
 
 export interface ThreadUpdatEvent extends Event {
@@ -653,14 +653,14 @@ export interface ThreadListSyncEvent extends Event {
     data: {
         guild_id: string;
         channel_ids?: string[];
-        threads: Channel[];
-        members: ThreadMember[];
+        threads: PublicChannel[];
+        members: PublicThreadMember[];
     };
 }
 
 export interface ThreadMemberUpdateEvent extends Event {
     event: "THREAD_MEMBER_UPDATE";
-    data: ThreadMember & { guild_id: string };
+    data: PublicThreadMember & { guild_id: string };
 }
 
 export interface ThreadMembersUpdateEvent extends Event {
@@ -669,7 +669,7 @@ export interface ThreadMembersUpdateEvent extends Event {
         id: string;
         guild_id: string;
         member_count: number;
-        added_members?: (ThreadMember & { user_id: string })[];
+        added_members?: PublicThreadMember[];
         removed_member_ids?: string[];
     };
 }
@@ -865,6 +865,9 @@ export type EVENT =
     | "THREAD_LIST_SYNC"
     | "THREAD_MEMBER_UPDATE"
     | "THREAD_MEMBERS_UPDATE"
+    | "STAGE_INSTANCE_CREATE"
+    | "STAGE_INSTANCE_UPDATE"
+    | "STAGE_INSTANCE_DELETE"
     | CUSTOMEVENTS;
 
 export type CUSTOMEVENTS = "INVALIDATED" | "RATELIMIT" | "SB_SESSION_REMOVE" | "SB_SESSION_CLOSE" | "E2EE_DEVICES_UPDATE" | "E2EE_IDENTITY_UPDATE" | "CHANNEL_E2EE_UPDATE";

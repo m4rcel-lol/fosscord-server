@@ -35,6 +35,7 @@ import {
     Session,
     Sticker,
     ThreadMember,
+    StageInstance,
     UserSettings,
     UserSettingsProtos,
     VoiceState,
@@ -437,7 +438,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
         timePromise(() =>
             Channel.find({
                 where: {
-                    type: In([ChannelType.GUILD_NEWS_THREAD, ChannelType.GUILD_PUBLIC_THREAD]),
+                    type: In([ChannelType.GUILD_NEWS_THREAD, ChannelType.GUILD_PUBLIC_THREAD, ChannelType.GUILD_PRIVATE_THREAD]),
                     guild_id: In(memberGuildIds),
                 },
             }),
@@ -456,8 +457,9 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     );
 
     const guildPresenceMembersByGuild = arrayGroupBy(guildPresenceMembers, (m) => m.guild_id);
-    const allThreads = allThreadsRaw.filter(({ thread_metadata }) => thread_metadata?.archived === false);
+    const stageInstancesByGuild = arrayGroupBy(memberGuildIds.length ? await StageInstance.find({ where: { guild_id: In(memberGuildIds) } }) : [], (i) => i.guild_id);
     const threadMemberMap = new Map(threadMembers.map((member) => [member.id, member] as const));
+    const allThreads = allThreadsRaw.filter(({ id, thread_metadata }) => thread_metadata?.archived === false && threadMemberMap.has(id));
 
     const { result: channelsByGuild, elapsed: groupChannelsTime } = timeFunction(() => arrayGroupBy(memberGuildChannels, (c) => c.guild_id!));
     const { result: emojisByGuild, elapsed: groupEmojisTime } = timeFunction(() => arrayGroupBy(memberGuildEmojis, (e) => e.guild_id!));
@@ -595,6 +597,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
                 };
             }),
             guild_scheduled_events: [],
+            stage_instances: (stageInstancesByGuild.get(member.guild_id) ?? []).map((i) => i.toJSON()),
             presences: prioritizedReady
                 ? []
                 : (guildPresenceMembersByGuild.get(member.guild_id) ?? [])

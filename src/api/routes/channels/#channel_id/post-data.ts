@@ -21,7 +21,7 @@ import { messageUpload } from "./messages";
 import { In } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
 import { Channel, Member, Message } from "@spacebar/database";
-import { PostDataSchema, PublicMessage } from "@spacebar/schemas";
+import { PostDataSchema, PublicMember, PublicMessage } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
 
@@ -48,47 +48,31 @@ router.post(
         },
     }),
     async (req: Request, res: Response) => {
-        const body = (req.body as PostDataSchema).thread_ids;
-        const threads = await Channel.find({
-            where: {
-                id: In(body),
-            },
-        });
-        const [messages, members] = await Promise.all([
-            Message.find({
-                where: {
-                    id: In(threads.map(({ id }) => id)),
-                },
-                relations: {
-                    author: true,
-                    webhook: true,
-                    application: true,
-                    mentions: true,
-                    mention_roles: true,
-                    mention_channels: true,
-                    sticker_items: true,
-                    attachments: true,
-                    thread: {
-                        recipients: {
-                            user: true,
-                        },
-                    },
-                },
-            }),
-            Member.find({
-                where: {
-                    id: In(threads.map(({ owner_id }) => owner_id)),
-                },
-            }),
+        const { channel_id } = req.params as Record<string, string>;
+        const ids = [...new Set((req.body as PostDataSchema).thread_ids ?? [])].slice(0, 100);
+        const threads = await Channel.find({ where: { id: In(ids), parent_id: channel_id } });
+        const guild_id = threads[0]?.guild_id;
+        const lastIds = threads.map((t) => t.last_message_id).filter((id): id is string => !!id && !ids.includes(id));
+        const relations = { author: true, attachments: true, sticker_items: true, mentions: true, mention_roles: true, mention_channels: true, webhook: true } as const;
+        const [firstMessages, lastMessages, owners] = await Promise.all([
+            Message.find({ where: { id: In(threads.map((t) => t.id)) }, relations }),
+            lastIds.length ? Message.find({ where: { id: In(lastIds) }, relations }) : Promise.resolve([] as Message[]),
+            guild_id
+                ? Member.find({
+                      where: { guild_id, id: In([...new Set(threads.map((t) => t.owner_id).filter((id): id is string => !!id))]) },
+                      relations: { user: true, roles: true },
+                  })
+                : Promise.resolve([] as Member[]),
         ]);
-        await Message.fillReplies(messages);
-        const objRet: { threads: Record<string, { first_message: null | PublicMessage; owner: null | Member }> } = { threads: {} };
+        const byId = new Map([...firstMessages, ...lastMessages].map((m) => [m.id, m]));
+        const objRet: { threads: Record<string, { first_message: PublicMessage | null; most_recent_message: PublicMessage | null; owner: PublicMember | null }> } = { threads: {} };
         for (const thread of threads) {
-            const owner = members.find(({ id }) => id === thread.owner_id)?.toJSON() || null;
-            const first_message = messages.find(({ channel_id }) => channel_id === thread.id)?.toJSON() || null;
+            const owner = owners.find(({ id }) => id === thread.owner_id);
+            const last = thread.last_message_id ? byId.get(thread.last_message_id) : undefined;
             objRet.threads[thread.id] = {
-                owner,
-                first_message,
+                owner: owner ? { ...owner.toPublicMember(), roles: owner.roles.filter((r) => r.id !== guild_id).map((r) => r.id) } : null,
+                first_message: byId.get(thread.id)?.toJSON() ?? null,
+                most_recent_message: last && last.id !== thread.id ? last.toJSON() : null,
             };
         }
         return res.json(objRet);

@@ -18,6 +18,7 @@
 
 import murmur from "murmurhash-js/murmurhash3_gc";
 import { In } from "typeorm";
+import { sendThreadMemberLists, syncThreadList } from "../util/ThreadSync";
 import { Channel, Guild, Member, Role, User } from "@spacebar/database";
 import { Stopwatch } from "@spacebar/extensions";
 import { WebSocket, Payload, OPCODES, Send, handleOffloadedGatewayRequest, resolveSocket } from "@spacebar/gateway";
@@ -139,7 +140,10 @@ export function scheduleMemberListSync(socket: WebSocket, guild_id: string) {
 export async function onLazyRequest(this: WebSocket, { d }: Payload) {
     const sw = Stopwatch.startNew();
     check.call(this, LazyRequestSchema, d);
-    const { guild_id, channels, members } = d as LazyRequestSchema;
+    const { guild_id, channels, members, threads, thread_member_lists } = d as LazyRequestSchema;
+
+    if (threads) await syncThreadList.call(this, guild_id);
+    if (thread_member_lists?.length) await sendThreadMemberLists.call(this, guild_id, thread_member_lists as string[]);
 
     if (Config.get().offload.gateway.lazyRequestUrl !== null) {
         if (await handleOffloadedGatewayRequest(this, Config.get().offload.gateway.lazyRequestUrl!, d)) return;

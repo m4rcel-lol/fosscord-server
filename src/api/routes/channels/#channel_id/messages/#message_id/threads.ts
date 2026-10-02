@@ -17,17 +17,13 @@
 */
 
 import { Request, Response, Router } from "express";
-import { sendMessage } from "@spacebar/api/util";
+import { createThread, sendMessage } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
-import { Channel, Message, User } from "@spacebar/database";
-import { emitEvent, MessageUpdateEvent } from "@spacebar/util";
+import { Channel, Message } from "@spacebar/database";
+import { DiscordApiErrors, emitEvent, MessageFlags, MessageUpdateEvent } from "@spacebar/util";
 import { MessageThreadCreationSchema, ChannelType, MessageType } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
-
-// TODO: public read receipts & privacy scoping
-// TODO: send read state event to all channel members
-// TODO: advance-only notification cursor
 
 router.post(
     "/",
@@ -35,51 +31,29 @@ router.post(
         requestBody: "MessageThreadCreationSchema",
         permission: "CREATE_PUBLIC_THREADS",
         responses: {
-            200: {},
+            201: {},
             403: {},
         },
     }),
     async (req: Request, res: Response) => {
-        // TODO: check for differences with https://github.com/spacebarchat/server/pull/876/files#diff-95be9c4cdfd8ba6f67361cd40b9abc8226b35d83e2bb44bf5b4682f1d66155e9
         const { message_id, channel_id } = req.params as { [key: string]: string };
         const body = req.body as MessageThreadCreationSchema;
-        const message = await Message.findOneOrFail({
-            where: { id: message_id, channel_id },
-            relations: { guild: true },
-        });
-        const channel = await Channel.findOneOrFail({
-            where: { id: channel_id },
-        });
-        const user = await User.findOneOrFail({ where: { id: req.user_id } });
+        const [message, channel] = await Promise.all([
+            Message.findOneOrFail({ where: { id: message_id, channel_id }, relations: { author: true, attachments: true, thread: true } }),
+            Channel.findOneOrFail({ where: { id: channel_id } }),
+        ]);
+        if (message.thread_id || (await Channel.existsBy({ id: message.id }))) throw DiscordApiErrors.THREAD_ALREADY_CREATED_FOR_THIS_MESSAGE;
 
-        const thread = await Channel.createChannel(
-            {
-                id: message.id,
-                owner: user,
-                parent: channel,
-                guild: channel.guild,
-                member_count: 1,
-                message_count: 0,
-                total_message_sent: 0,
-                name: body.name,
-                guild_id: channel.guild_id,
-                rate_limit_per_user: body.rate_limit_per_user,
-                type: channel.type === ChannelType.GUILD_NEWS ? ChannelType.GUILD_NEWS_THREAD : ChannelType.GUILD_PUBLIC_THREAD,
-                recipients: [],
-                thread_metadata: {
-                    archived: false,
-                    auto_archive_duration: body.auto_archive_duration || channel.default_auto_archive_duration || 4320,
-                    archive_timestamp: new Date().toISOString(),
-                    locked: false,
-                    create_timestamp: new Date().toISOString(),
-                },
-            },
-            void 0,
-            { skipPermissionCheck: true, keepId: true, skipEventEmit: true, skipNameChecks: true },
-        );
+        const { thread, member } = await createThread({
+            id: message.id,
+            parent: channel,
+            user_id: req.user_id,
+            name: body.name,
+            type: channel.type === ChannelType.GUILD_NEWS ? ChannelType.GUILD_NEWS_THREAD : ChannelType.GUILD_PUBLIC_THREAD,
+            auto_archive_duration: body.auto_archive_duration,
+            rate_limit_per_user: body.rate_limit_per_user,
+        });
 
-        message.thread = thread;
-        message.flags ||= 1 << 5;
         await sendMessage({
             channel_id: thread.id,
             type: MessageType.THREAD_STARTER_MESSAGE,
@@ -88,36 +62,20 @@ router.post(
                 channel_id: channel.id,
                 guild_id: channel.guild_id,
             },
-            author_id: user.id,
+            author_id: req.user_id,
         });
-        await sendMessage({
-            channel_id: channel.id,
-            type: MessageType.THREAD_CREATED,
-            content: thread.name,
-            message_reference: {
-                channel_id: thread.id,
-                guild_id: thread.guild_id,
-            },
-            author_id: user.id,
-        });
-        await Promise.all([
-            emitEvent({
-                event: "THREAD_CREATE",
-                channel_id,
-                data: {
-                    ...thread.toJSON(),
-                    newly_created: true,
-                },
-            }),
-            message.save(),
-            emitEvent({
-                event: "MESSAGE_UPDATE",
-                channel_id: message.channel_id,
-                data: message.toJSON(),
-            } satisfies MessageUpdateEvent),
-        ]);
 
-        return res.json(thread.toJSON());
+        await Message.update({ id: message.id }, { thread: { id: thread.id }, flags: message.flags | Number(MessageFlags.FLAGS.HAS_THREAD) });
+        message.thread = thread;
+        message.thread_id = thread.id;
+        message.flags |= Number(MessageFlags.FLAGS.HAS_THREAD);
+        await emitEvent({
+            event: "MESSAGE_UPDATE",
+            channel_id: message.channel_id,
+            data: message.toJSON(),
+        } satisfies MessageUpdateEvent);
+
+        return res.status(201).json({ ...thread.toJSON(), member: member.toJSON() });
     },
 );
 
