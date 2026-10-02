@@ -93,8 +93,9 @@ const seedDefaults = (defaults) => `(() => {
         const seeded = new Set(JSON.parse(localStorage.getItem("FosscordVencordSeeded") || "[]"));
         settings.plugins ??= {};
         for (const [name, value] of Object.entries(defaults.plugins)) {
-            if (seeded.has(name)) continue;
-            seeded.add(name);
+            const key = typeof value === "boolean" ? name : \`\${name}:\${JSON.stringify(value)}\`;
+            if (seeded.has(key)) continue;
+            seeded.add(name).add(key);
             settings.plugins[name] = { ...settings.plugins[name], ...(typeof value === "boolean" ? { enabled: value } : value) };
         }
         for (const [key, value] of Object.entries(defaults.settings)) settings[key] ??= value;

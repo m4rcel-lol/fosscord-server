@@ -21,7 +21,7 @@
         "PictureInPicture": true,
         "ReverseImageSearch": true,
         "ServerInfo": true,
-        "SilentTyping": true,
+        "SilentTyping": { "enabled": true, "isEnabled": false },
         "TypingTweaks": true,
         "Unindent": true,
         "ValidReply": true,
