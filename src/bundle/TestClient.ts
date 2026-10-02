@@ -88,8 +88,34 @@ const serveAsset = async (req: Request, res: Response, next: NextFunction, root:
     await pipeline(fs.createReadStream(source), compressor(encodings[0]), res).catch(() => res.destroy());
 };
 
+const LOGO_PATH =
+    "M3.21 4.84C3.44 3.71 4.58 3.24 5.51 3.78L12 7.59L18.49 3.78C19.42 3.24 20.56 3.71 20.79 4.84L22.8 14.61C23.5 17.82 21.06 20.56 17.78 20.56L6.22 20.56C2.94 20.56 .5 17.82 1.2 14.61ZM7.35 11.06a1.27 1.27 0 0 0-1.27 1.27v2.64a1.27 1.27 0 0 0 1.27 1.27h2.67a1.27 1.27 0 0 0 1.27-1.27v-2.64a1.27 1.27 0 0 0-1.27-1.27ZM13.97 11.06a1.27 1.27 0 0 0-1.27 1.27v2.64a1.27 1.27 0 0 0 1.27 1.27h2.67a1.27 1.27 0 0 0 1.27-1.27v-2.64a1.27 1.27 0 0 0-1.27-1.27Z";
+
+const escapeXml = (text: string) => text.replace(/[<>&"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+const BRANDED_ASSETS: Record<string, () => string> = {
+    "131c318dd45b7aa4.svg": () => {
+        const name = Config.get().client.instanceName || "Fosscord";
+        const width = Math.ceil(34 + [...name].length * 12.5);
+        return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="24" viewBox="0 0 ${width} 24" fill="none"><path fill="#fff" d="${LOGO_PATH}"/><text x="32" y="19.5" fill="#fff" font-family="'gg sans','Noto Sans','Helvetica Neue',Helvetica,Arial,sans-serif" font-size="20" font-weight="800">${escapeXml(name)}</text></svg>`;
+    },
+    "dd05fd1ea37e7747.png": () =>
+        `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="#000"/><path fill="#fff" transform="translate(23 23) scale(2.25)" d="${LOGO_PATH}"/></svg>`,
+};
+
 export function TestClientAssets(app: Application) {
     const noCache = { setHeaders: (res: Response) => res.set("Cache-Control", "no-cache") };
+    app.get("/assets/favicon.ico", (req, res) => {
+        const { image } = Config.get().general;
+        res.set("Cache-Control", "no-cache");
+        if (image && /^https?:\/\//.test(image)) return res.redirect(302, image);
+        return res.type("png").sendFile(path.join(ASSET_FOLDER_PATH, "icon.png"), { cacheControl: false, dotfiles: "allow" });
+    });
+    app.get("/assets/:file", (req, res, next) => {
+        const branded = BRANDED_ASSETS[req.params.file as string];
+        if (!branded) return next();
+        res.set("Cache-Control", "no-cache").type("image/svg+xml").send(branded());
+    });
     app.use("/assets", express.static(path.join(ASSET_FOLDER_PATH, "public")));
     app.get("/assets/vencord/:file", (req, res, next) => void serveAsset(req, res, next, VENCORD_PATH, false).catch(next));
     app.use("/assets/vencord", express.static(VENCORD_PATH, noCache));

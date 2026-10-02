@@ -52,3 +52,7 @@ The output groups problems into our plugins, upstream plugins in our default set
 Google Chrome 154 on macOS quits headless sessions after about 30 seconds. Point `CHROME_PATH` at another Chromium build, for example `CHROME_PATH="/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"`.
 
 On build 626571 (October 2026) with Vencord `7f0c10c`, every upstream patch and every one of ours matches. The one upstream failure was the `SettingsRouter` lookup, which still asked for `USER_SETTINGS_MODAL_KEY`. Discord no longer exports it, which broke `Ctrl+,` in WebKeybinds and the settings links in BetterSessions and Decor, so `client/vencord-patches/settings-router.patch` drops that key.
+
+## Branded images
+
+Some Discord logos are image files, not React components, so the server swaps them. `src/bundle/TestClient.ts` serves `/assets/favicon.ico` from `general.image` or `assets/icon.png`, and `BRANDED_ASSETS` replaces the wordmark on the login, register and invite pages (`131c318dd45b7aa4.svg`) and the logo in the centre of the login QR code (`dd05fd1ea37e7747.png`) with SVGs drawn from the instance logo and `client.instanceName`. The file names change when Discord updates the client, so after `npm run generate:client` open `/login` and check that both images still show the instance logo. The logo in the app itself, on the Home button, the Direct Messages title and the soundboard category, comes from the `FosscordBranding` plugin, which swaps the path of Discord's logo icon.
