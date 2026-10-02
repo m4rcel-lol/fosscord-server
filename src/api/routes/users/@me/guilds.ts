@@ -19,8 +19,8 @@
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
-import { Guild, Member } from "@spacebar/database";
-import { Config, DiscordApiErrors, emitEvent, getPermission, GuildDeleteEvent } from "@spacebar/util";
+import { Guild, Member, User } from "@spacebar/database";
+import { Config, DiscordApiErrors, emitEvent, GuildDeleteEvent, Permissions } from "@spacebar/util";
 
 const router: Router = Router({ mergeParams: true });
 
@@ -35,25 +35,27 @@ router.get(
         },
     }),
     async (req: Request, res: Response) => {
-        const members = await Member.find({
-            relations: { guild: true },
-            where: { id: req.user_id },
-        });
         const withCounts = req.query.with_counts == "true";
+        const [members, user] = await Promise.all([
+            Member.find({ relations: { guild: true, roles: true }, where: { id: req.user_id } }),
+            User.findOneOrFail({ where: { id: req.user_id }, select: { id: true, flags: true } }),
+        ]);
+        const online = withCounts ? await Guild.countOnlineMembersIn(members.map((x) => x.guild_id)) : undefined;
 
         res.json(
-            await Promise.all(
-                members.map(async ({ guild }) => ({
-                    id: guild.id,
-                    name: guild.name,
-                    icon: guild.icon ?? null,
-                    banner: guild.banner ?? null,
-                    owner: guild.owner_id === req.user_id,
-                    permissions: (await getPermission(req.user_id, guild.id)).bitfield.toString(),
-                    features: guild.features,
-                    ...(withCounts && { approximate_member_count: guild.member_count ?? 0, approximate_presence_count: await Guild.countOnlineMembers(guild.id) }),
-                })),
-            ),
+            members.map(({ guild, roles, communication_disabled_until }) => ({
+                id: guild.id,
+                name: guild.name,
+                icon: guild.icon ?? null,
+                banner: guild.banner ?? null,
+                owner: guild.owner_id === req.user_id,
+                permissions: Permissions.finalPermission({
+                    user: { id: req.user_id, roles: roles.map((x) => x.id), communication_disabled_until: communication_disabled_until ?? null, flags: user.flags },
+                    guild: { id: guild.id, owner_id: guild.owner_id!, roles },
+                }).bitfield.toString(),
+                features: guild.features,
+                ...(online && { approximate_member_count: guild.member_count ?? 0, approximate_presence_count: online.get(guild.id) ?? 0 }),
+            })),
         );
     },
 );
