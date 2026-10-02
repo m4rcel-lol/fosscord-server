@@ -6,8 +6,8 @@ const unsequenced = new Set([VoiceOPCodes.HELLO, VoiceOPCodes.HEARTBEAT_ACK, Voi
 const REPLAY_BUFFER_SIZE = 256;
 
 export const write = (socket: WebRtcWebSocket, buffer: Buffer | string) =>
-    new Promise((res, rej) => {
-        if (socket.readyState === 1) socket.send(buffer, (err) => (err ? rej(err) : res(null)));
+    new Promise((res) => {
+        if (socket.readyState === 1) socket.send(buffer, () => res(null));
         else res(null);
     });
 
