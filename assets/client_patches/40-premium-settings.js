@@ -2,8 +2,9 @@
     const rules = [
         [/\((\w+)\.X\.BILLING_SECTION,\{(?!usePredicate)/g, "($1.X.BILLING_SECTION,{usePredicate:()=>!1,"],
         [/\((\w+)\.X\.ACCOUNT_FAMILY_CENTER_CATEGORY,\{(?!usePredicate)/g, "($1.X.ACCOUNT_FAMILY_CENTER_CATEGORY,{usePredicate:()=>!1,"],
+        [/(=function\(\)\{)(let [^;]{0,80}?=\(0,\w+\.\w+\)\(\w+\.\w+\.COLLECTIBLES_PROFILE_SETTINGS_UPSELL\))/g, "$1return null;$2"],
     ];
-    const needles = ["BILLING_SECTION", "ACCOUNT_FAMILY_CENTER_CATEGORY"];
+    const needles = ["BILLING_SECTION", "ACCOUNT_FAMILY_CENTER_CATEGORY", "COLLECTIBLES_PROFILE_SETTINGS_UPSELL"];
 
     const patchModules = (modules) => {
         if (!modules || typeof modules !== "object") return;
