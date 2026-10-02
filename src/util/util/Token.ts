@@ -87,13 +87,14 @@ export const checkToken = (
             }
 
             // eslint-disable-next-line prefer-const
-            let [user, session] = await Promise.all([
+            let [user, session, banned] = await Promise.all([
                 User.findOne({
                     where: { id: decoded.id },
                     select: OrmUtils.keysToObject([...(opts?.select || []), "id", "bot", "disabled", "deleted", "rights", "data"]), // TODO: clean up
                     relations: !opts?.relations ? undefined : OrmUtils.keysToObject(opts.relations), // TODO: clean up
                 }),
                 decoded.did ? Session.findOne({ where: { session_id: decoded.did, user_id: decoded.id } }) : undefined,
+                InstanceBan.hasInstanceBans({ userId: decoded.id, ipAddress: opts?.ipAddress, fingerprint: opts?.fingerprint }),
             ]);
 
             if (!user) {
@@ -117,7 +118,9 @@ export const checkToken = (
                 return rejectAndLog(reject, 401, "User not found");
             }
 
-            const banReasons = await InstanceBan.findInstanceBans({ userId: user.id, ipAddress: opts?.ipAddress, fingerprint: opts?.fingerprint, propagateBan: true });
+            const banReasons = banned
+                ? await InstanceBan.findInstanceBans({ userId: user.id, ipAddress: opts?.ipAddress, fingerprint: opts?.fingerprint, propagateBan: true })
+                : [];
             if (banReasons.length > 0) {
                 logAuth("validateUser rejected: User banned for reasons: " + banReasons.join(", "));
                 return rejectAndLog(reject, 418, "Invalid Token");
