@@ -16,7 +16,19 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { ApiError, DiscordApiErrors, EVENT, FieldErrors, PermissionResolvable, Permissions, RightResolvable, Rights, SpacebarApiErrors, getPermission, getRights } from "@spacebar/util";
+import {
+    ApiError,
+    DiscordApiErrors,
+    EVENT,
+    FieldErrors,
+    PermissionResolvable,
+    Permissions,
+    RightResolvable,
+    Rights,
+    SpacebarApiErrors,
+    getPermission,
+    getRights,
+} from "@spacebar/util";
 import { AnyValidateFunction } from "ajv/dist/core";
 import { NextFunction, Request, Response } from "express";
 import { ajv } from "@spacebar/schemas";
@@ -169,13 +181,15 @@ export function route(opts: RouteOptions) {
             const valid = validate(req.body);
             if (!valid) {
                 const fields: Record<string, { code?: string; message: string }> = {};
-                validate.errors?.forEach(
-                    (x) =>
-                        (fields[x.instancePath.slice(1)] = {
-                            code: x.keyword,
-                            message: x.message || "",
-                        }),
-                );
+                validate.errors?.forEach((x) => {
+                    const limit = (x.params as { limit?: number }).limit;
+                    fields[x.instancePath.slice(1).replaceAll("/", ".")] =
+                        x.keyword === "maxLength" || x.keyword === "maxItems"
+                            ? { code: "BASE_TYPE_MAX_LENGTH", message: `Must be ${limit} or fewer in length.` }
+                            : x.keyword === "minLength" || x.keyword === "minItems"
+                              ? { code: "BASE_TYPE_MIN_LENGTH", message: `Must be ${limit} or more in length.` }
+                              : { code: x.keyword, message: x.message || "" };
+                });
                 if (process.env.LOG_VALIDATION_ERRORS) console.log(`[VALIDATION ERROR] ${req.method} ${req.originalUrl} - SCHEMA='${opts.requestBody}' -`, validate?.errors);
                 throw FieldErrors(fields, validate.errors!);
             }

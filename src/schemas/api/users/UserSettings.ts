@@ -66,6 +66,9 @@ export interface CustomStatus {
     emoji_id?: string;
     emoji_name?: string;
     expires_at?: number;
+    /**
+     * @maxLength 128
+     */
     text?: string;
 }
 

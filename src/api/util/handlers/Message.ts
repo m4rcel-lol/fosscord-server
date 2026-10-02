@@ -290,8 +290,32 @@ export function handleComps(components: BaseMessageComponents[], flags: number) 
         (await Promise.all(medias.map((m, index) => processMedia(m, messageId, batchId, user, channel, index + "")))).forEach((_) => _?.());
     };
 }
+function checkMessageLimits(opts: MessageOptions) {
+    const { maxCharacters, maxEmbeds, maxEmbedCharacters } = Config.get().limits.message;
+    const errors: Record<string, { code: string; message: string }> = {};
+    if (opts.content && opts.content.length > maxCharacters) errors.content = { code: "BASE_TYPE_MAX_LENGTH", message: `Must be ${maxCharacters} or fewer in length.` };
+    const embeds = opts.embeds ?? [];
+    if (embeds.length > maxEmbeds) errors.embeds = { code: "BASE_TYPE_MAX_LENGTH", message: `Must be ${maxEmbeds} or fewer in length.` };
+    else {
+        const length = (value: unknown) => (typeof value === "string" ? value.length : 0);
+        const total = embeds.reduce(
+            (sum, embed) =>
+                sum +
+                length(embed.title) +
+                length(embed.description) +
+                length(embed.footer?.text) +
+                length(embed.author?.name) +
+                (embed.fields ?? []).reduce((fields, field) => fields + length(field.name) + length(field.value), 0),
+            0,
+        );
+        if (total > maxEmbedCharacters) errors.embeds = { code: "MAX_EMBED_SIZE_EXCEEDED", message: `Embed size exceeds maximum size of ${maxEmbedCharacters}` };
+    }
+    if (Object.keys(errors).length) throw FieldErrors(errors);
+}
+
 export async function handleMessage(opts: MessageOptions): Promise<Message> {
     const conf = Config.get();
+    checkMessageLimits(opts);
     const handle = opts.components ? handleComps(opts.components, opts.flags || 0) : undefined;
 
     const channel = await Channel.findOneOrFail({
@@ -359,10 +383,6 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
     }
 
     // TODO: Removed cloud attachment handling being inline - handle components!
-
-    if (message.content && message.content.length > conf.limits.message.maxCharacters) {
-        throw new HTTPError("Content length over max character limit");
-    }
 
     if (opts.application_id) {
         message.application = await Application.findOneOrFail({

@@ -116,6 +116,10 @@ const StaleDefaults: [string, JsonValue, JsonValue][] = [
     ["limits.absoluteRate.register.enabled", true, false],
     ["limits.rate.enabled", false, true],
     ["limits.rate.error", { count: 10, window: 5 }, { count: 10000, window: 600 }],
+    ["limits.message.maxCharacters", 1048576, 4000],
+    ["limits.message.maxBulkDelete", 1000, 100],
+    ["limits.message.maxEmbeds", 20, 10],
+    ["limits.channel.maxName", 32, 100],
 ];
 
 function replaceStaleDefaults(config: ConfigValue) {

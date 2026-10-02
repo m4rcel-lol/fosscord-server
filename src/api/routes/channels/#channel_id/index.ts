@@ -185,7 +185,7 @@ router.patch(
         if (payload.topic && payload.topic.length > (channel.isForum() ? 4096 : channelLimits.maxTopic))
             errors["topic"] = makeObjectErrorContent("BASE_TYPE_BAD_LENGTH", `Must be ${channel.isForum() ? 4096 : channelLimits.maxTopic} or fewer in length.`);
         if (payload.user_limit !== undefined && payload.user_limit < 0) errors["user_limit"] = makeObjectErrorContent("BASE_TYPE_BAD_VALUE", "User limit must be 0 or higher");
-        if (Object.keys(errors).length) throw new FieldError(400, "Invalid form body", errors);
+        if (Object.keys(errors).length) throw new FieldError(50035, "Invalid Form Body", errors);
 
         if (channel.isThread()) {
             const meta = channel.thread_metadata!;

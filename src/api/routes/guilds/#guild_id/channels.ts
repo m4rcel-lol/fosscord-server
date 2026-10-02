@@ -19,7 +19,7 @@
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { Channel, Guild } from "@spacebar/database";
-import { ChannelUpdateEvent, DiscordApiErrors, emitEvent } from "@spacebar/util";
+import { ChannelUpdateEvent, Config, DiscordApiErrors, emitEvent, FieldErrors } from "@spacebar/util";
 import { THREAD_TYPES } from "@spacebar/api/util";
 import { ChannelCreateSchema, ChannelReorderSchema, ChannelType } from "@spacebar/schemas";
 import { In, Not } from "typeorm";
@@ -73,6 +73,9 @@ router.post(
         // creates a new guild channel https://discord.com/developers/docs/resources/guild#create-guild-channel
         const { guild_id } = req.params as { [key: string]: string };
         const body = req.body as ChannelCreateSchema;
+        const { maxName } = Config.get().limits.channel;
+        if (body.name !== undefined && (body.name.length < 1 || body.name.length > maxName))
+            throw FieldErrors({ name: { code: "BASE_TYPE_BAD_LENGTH", message: `Must be between 1 and ${maxName} in length.` } });
 
         const channel = await Channel.createChannel({ ...body, guild_id }, req.user_id);
         channel.position = await Channel.calculatePosition(channel.id, guild_id, channel.guild);
