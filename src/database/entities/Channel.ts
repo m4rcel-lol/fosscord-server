@@ -307,17 +307,15 @@ export class Channel extends BaseClass {
         // TODO: figure out why the generic is required here
         const ret = Channel.create<Channel>(channel);
 
-        await Promise.all([
-            ret.save(),
-            !opts?.skipEventEmit
-                ? emitEvent({
-                      event: "CHANNEL_CREATE",
-                      data: ret.toJSON(),
-                      guild_id: channel.guild_id,
-                  } satisfies ChannelCreateEvent)
-                : Promise.resolve(),
-            Guild.insertChannelInOrder(guild.id, ret.id, position, guild),
-        ]);
+        await Promise.all([ret.save(), Guild.insertChannelInOrder(guild.id, ret.id, position, guild)]);
+        ret.position = Math.max(0, guild.channel_ordering.indexOf(ret.id));
+
+        if (!opts?.skipEventEmit)
+            await emitEvent({
+                event: "CHANNEL_CREATE",
+                data: ret.toJSON(),
+                guild_id: channel.guild_id,
+            } satisfies ChannelCreateEvent);
 
         return ret;
     }
