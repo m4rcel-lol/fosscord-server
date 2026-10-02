@@ -8596,6 +8596,391 @@
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
+    "AdminSettingsUpdateSchema": {
+        "type": "object",
+        "properties": {
+            "general": {
+                "type": "object",
+                "properties": {
+                    "instanceName": {
+                        "type": "string"
+                    },
+                    "instanceDescription": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "image": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "frontPage": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "tosPage": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "correspondenceEmail": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "correspondenceUserID": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    }
+                },
+                "additionalProperties": false
+            },
+            "register": {
+                "type": "object",
+                "properties": {
+                    "disabled": {
+                        "type": "boolean"
+                    },
+                    "allowNewRegistration": {
+                        "type": "boolean"
+                    },
+                    "requireInvite": {
+                        "type": "boolean"
+                    },
+                    "requireCaptcha": {
+                        "type": "boolean"
+                    },
+                    "allowMultipleAccounts": {
+                        "type": "boolean"
+                    }
+                },
+                "additionalProperties": false
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminUserUpdateSchema": {
+        "type": "object",
+        "properties": {
+            "global_name": {
+                "maxLength": 32,
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "bio": {
+                "type": "string"
+            },
+            "disabled": {
+                "type": "boolean"
+            },
+            "verified": {
+                "type": "boolean"
+            },
+            "premium_type": {
+                "minimum": 0,
+                "maximum": 3,
+                "type": "integer"
+            },
+            "hide_premium_badge": {
+                "description": "Leave the premium badge off their profile without touching their premium itself",
+                "type": "boolean"
+            },
+            "rights": {
+                "description": "Bitfield of instance rights, as a decimal string. Requires OPERATOR to change.",
+                "type": "string"
+            },
+            "tag": {
+                "description": "The tag shown next to the user's name. BOT tags only render for bot accounts; AI tags render for anyone.",
+                "enum": [
+                    "ai",
+                    "none",
+                    "verified_ai",
+                    "verified_bot"
+                ],
+                "type": "string"
+            },
+            "badge_ids": {
+                "description": "Instance badges shown on the user's profile, in display order",
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminBadgeCreateSchema": {
+        "type": "object",
+        "properties": {
+            "description": {
+                "description": "Tooltip text shown when hovering the badge",
+                "minLength": 1,
+                "maxLength": 120,
+                "type": "string"
+            },
+            "icon": {
+                "description": "An existing icon hash (served from /badge-icons/<icon>.png; unknown hashes fall back to discord's CDN)",
+                "type": "string"
+            },
+            "icon_data": {
+                "description": "A data: URI image to upload as the icon instead",
+                "type": "string"
+            },
+            "link": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "description"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminBadgeUpdateSchema": {
+        "type": "object",
+        "properties": {
+            "description": {
+                "minLength": 1,
+                "maxLength": 120,
+                "type": "string"
+            },
+            "icon": {
+                "type": "string"
+            },
+            "icon_data": {
+                "type": "string"
+            },
+            "link": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminGuildUpdateSchema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "minLength": 2,
+                "maxLength": 100,
+                "type": "string"
+            },
+            "description": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "features": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "owner_id": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminStatusComponentSchema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "minLength": 1,
+                "maxLength": 100,
+                "type": "string"
+            },
+            "description": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "status": {
+                "enum": [
+                    "degraded_performance",
+                    "major_outage",
+                    "operational",
+                    "partial_outage",
+                    "under_maintenance"
+                ],
+                "type": "string"
+            },
+            "position": {
+                "type": "integer"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "name"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminStatusComponentUpdateSchema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "minLength": 1,
+                "maxLength": 100,
+                "type": "string"
+            },
+            "description": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "status": {
+                "enum": [
+                    "degraded_performance",
+                    "major_outage",
+                    "operational",
+                    "partial_outage",
+                    "under_maintenance"
+                ],
+                "type": "string"
+            },
+            "position": {
+                "type": "integer"
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminStatusIncidentCreateSchema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "minLength": 1,
+                "maxLength": 200,
+                "type": "string"
+            },
+            "impact": {
+                "$ref": "#/definitions/AdminStatusIncidentImpact"
+            },
+            "status": {
+                "$ref": "#/definitions/AdminStatusIncidentState"
+            },
+            "body": {
+                "minLength": 1,
+                "type": "string"
+            },
+            "component_ids": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "component_status": {
+                "description": "Status to set the affected components to while the incident is open",
+                "enum": [
+                    "degraded_performance",
+                    "major_outage",
+                    "operational",
+                    "partial_outage",
+                    "under_maintenance"
+                ],
+                "type": "string"
+            },
+            "scheduled_for": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "scheduled_until": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "body",
+            "impact",
+            "name",
+            "status"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminStatusIncidentUpdateSchema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string"
+            },
+            "impact": {
+                "enum": [
+                    "critical",
+                    "maintenance",
+                    "major",
+                    "minor",
+                    "none"
+                ],
+                "type": "string"
+            },
+            "component_ids": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "scheduled_for": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "scheduled_until": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminStatusIncidentPostUpdateSchema": {
+        "type": "object",
+        "properties": {
+            "status": {
+                "$ref": "#/definitions/AdminStatusIncidentState"
+            },
+            "body": {
+                "minLength": 1,
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "body",
+            "status"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
     "AttachmentListResponse": {
         "type": "object",
         "properties": {
@@ -11478,6 +11863,10 @@
                 "type": "boolean",
                 "default": false
             },
+            "hide_premium_badge": {
+                "type": "boolean",
+                "default": false
+            },
             "email": {
                 "type": "string"
             },
@@ -11620,6 +12009,7 @@
             "discriminator",
             "fingerprints",
             "flags",
+            "hide_premium_badge",
             "id",
             "mfa_enabled",
             "mobile",
@@ -19420,6 +19810,31 @@
             "cancel",
             "next"
         ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminStatusIncidentImpact": {
+        "enum": [
+            "critical",
+            "maintenance",
+            "major",
+            "minor",
+            "none"
+        ],
+        "type": "string",
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminStatusIncidentState": {
+        "enum": [
+            "completed",
+            "identified",
+            "in_progress",
+            "investigating",
+            "monitoring",
+            "resolved",
+            "scheduled",
+            "verifying"
+        ],
+        "type": "string",
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "MessageReferenceIds": {

@@ -90,7 +90,7 @@ router.get("/", route({ responses: { 200: { body: "UserProfileResponse" } } }), 
         : null;
 
     const badges = [];
-    if (user.premium_type > 0 && user.premium_since)
+    if (user.premium_type > 0 && user.premium_since && !user.hide_premium_badge)
         badges.push({
             id: "premium",
             description: `Subscriber since ${new Date(user.premium_since).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`,

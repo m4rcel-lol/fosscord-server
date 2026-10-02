@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="robots" content="noindex" />
+        <title>Admin Dashboard</title>
+        <link rel="icon" href="/static/logo.png" />
+        <link rel="stylesheet" href="/admin/admin.css" />
+    </head>
+    <body>
+        <div id="login" class="login" hidden>
+            <form class="card login-card" id="login-form" autocomplete="on">
+                <h1>Admin sign in</h1>
+                <p class="muted">Sign in with an account that has admin rights on this instance.</p>
+                <label>Email<input name="login" type="email" autocomplete="username" required /></label>
+                <label>Password<input name="password" type="password" autocomplete="current-password" required /></label>
+                <label id="mfa-field" hidden>Two-factor code<input name="code" inputmode="numeric" autocomplete="one-time-code" /></label>
+                <p class="form-error" id="login-error" hidden></p>
+                <button class="btn primary" type="submit">Sign in</button>
+            </form>
+        </div>
+
+        <div id="app" class="app" hidden>
+            <aside class="sidebar">
+                <div class="brand">
+                    <img id="brand-icon" src="/static/logo.png" alt="" />
+                    <div>
+                        <strong id="brand-name">Instance</strong>
+                        <span class="muted">Admin</span>
+                    </div>
+                </div>
+                <nav id="nav">
+                    <a href="#/overview" data-tab="overview">Overview</a>
+                    <a href="#/settings" data-tab="settings" data-access="settings">Site settings</a>
+                    <a href="#/users" data-tab="users" data-access="users">Users</a>
+                    <a href="#/badges" data-tab="badges" data-access="settings">Badges</a>
+                    <a href="#/guilds" data-tab="guilds" data-access="guilds">Servers</a>
+                    <a href="#/status" data-tab="status" data-access="status">Status page</a>
+                </nav>
+                <div class="sidebar-foot">
+                    <div class="me" id="me"></div>
+                    <a class="btn ghost small" href="/status" target="_blank" rel="noopener">View status page ↗</a>
+                    <a class="btn ghost small" href="/app">Back to app</a>
+                    <button class="btn ghost small" id="logout" type="button">Sign out</button>
+                </div>
+            </aside>
+            <main id="view" class="view"></main>
+        </div>
+
+        <div id="drawer" class="drawer" hidden>
+            <div class="drawer-backdrop" data-close></div>
+            <section class="drawer-panel" role="dialog" aria-modal="true">
+                <header class="drawer-head">
+                    <h2 id="drawer-title"></h2>
+                    <button class="btn ghost small" type="button" data-close aria-label="Close">✕</button>
+                </header>
+                <div id="drawer-body" class="drawer-body"></div>
+            </section>
+        </div>
+
+        <div id="toasts" class="toasts" aria-live="polite"></div>
+        <script src="/admin/admin.js"></script>
+    </body>
+</html>
