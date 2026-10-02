@@ -16,36 +16,39 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Config } from "@spacebar/util";
+import { Config, extractVideoFrame, verifyExternalPath } from "@spacebar/util";
 import { Request, Response } from "express";
-import crypto from "node:crypto";
 import { Readable } from "node:stream";
 
 const MAX_SIZE = 50 * 1024 * 1024;
 const PASSTHROUGH_HEADERS = ["content-type", "content-length", "content-range", "accept-ranges", "last-modified", "etag"];
 
-const sign = (path: string) => crypto.createHmac("sha1", Config.get().security.requestSignature).update(path).digest("base64url");
-
-export const externalProxyPath = (url: URL) => {
-    const path = `${url.search ? `${encodeURIComponent(url.search)}/` : ""}${url.protocol.replace(":", "")}/${url.host}${url.pathname}`;
-    return `/external/${sign(path)}/${path}`;
-};
-
-export const externalProxyUrl = (url: URL) => `${(Config.get().cdn.endpointPublic || "").replace(/\/$/, "")}${externalProxyPath(url)}`;
-
 export async function ExternalProxy(req: Request, res: Response) {
     const [, , hash, ...rest] = req.originalUrl.split("?")[0].split("/");
     const path = rest.join("/");
-    const expected = sign(path);
-    if (!hash || hash.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(expected))) return res.status(403).send("Invalid signature");
+    if (!hash || !verifyExternalPath(hash, path)) return res.status(403).send("Invalid signature");
 
     const search = rest[0]?.startsWith("%3F") ? decodeURIComponent(rest.shift()!) : "";
     const [protocol, ...location] = rest;
     if (protocol !== "https" && protocol !== "http") return res.status(400).send("Invalid protocol");
 
+    const target = `${protocol}://${location.join("/")}${search}`;
+    if (req.query.format) {
+        const head = await fetch(target, { method: "HEAD", signal: AbortSignal.timeout(10000) }).catch(() => null);
+        if (head?.headers.get("content-type")?.startsWith("video/")) {
+            const frame = await extractVideoFrame(target);
+            if (!frame) return res.status(415).send("Unable to render a preview frame");
+            res.setHeader("content-type", "image/jpeg");
+            res.setHeader("cache-control", `public, max-age=${Config.get().cdn.proxyCacheHeaderSeconds}`);
+            res.setHeader("access-control-allow-origin", "*");
+            res.setHeader("cross-origin-resource-policy", "cross-origin");
+            return res.send(frame);
+        }
+    }
+
     const abort = new AbortController();
     const timeout = setTimeout(() => abort.abort(), 15000);
-    const upstream = await fetch(`${protocol}://${location.join("/")}${search}`, {
+    const upstream = await fetch(target, {
         headers: {
             "user-agent": Config.get().embeds.defaultUserAgent ?? "Mozilla/5.0 (compatible; Spacebar/1.0; +https://github.com/spacebarchat/server)",
             ...(req.headers.range && { range: req.headers.range }),

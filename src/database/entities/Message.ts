@@ -45,7 +45,7 @@ import {
     PartialUser,
     InteractionType,
 } from "@spacebar/schemas";
-import { MessageFlags } from "@spacebar/util";
+import { MessageFlags, proxyEmbedMedia } from "@spacebar/util";
 import { JsonRemoveEmpty } from "@spacebar/util/util/Decorators";
 
 @Entity({
@@ -389,6 +389,7 @@ export class Message extends BaseClass {
             components: this.components ?? [],
             poll: Message.publicPoll(this.poll),
             content: this.content ?? "",
+            embeds: (this.embeds ?? []).map(proxyEmbedMedia),
             pinned: this.pinned,
             thread: this.thread ? this.thread.toJSON() : this.thread,
             referenced_message: shallow ? undefined : this.referenced_message === null ? null : this.referenced_message?.toJSON(true),

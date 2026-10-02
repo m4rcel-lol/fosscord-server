@@ -22,9 +22,8 @@ import probe from "probe-image-size";
 import { FindOptionsWhere, In } from "typeorm";
 import { EmbedCache, Message } from "@spacebar/database";
 import { sleep, arrayDistinctBy, arrayGroupBy, normalizeUrl } from "@spacebar/extensions";
-import { Config, emitEvent, MessageFlags, MessageUpdateEvent, OrmUtils } from "@spacebar/util";
+import { Config, emitEvent, externalProxyUrl, MessageFlags, MessageUpdateEvent, OrmUtils, readVideoDimensions } from "@spacebar/util";
 import { Embed, EmbedImage, EmbedType } from "@spacebar/schemas";
-import { externalProxyUrl } from "../../middlewares/ExternalProxy";
 
 export function getDefaultFetchOptions(): RequestInit {
     return {
@@ -118,40 +117,6 @@ const doFetch = async (url: URL, opts?: RequestInit) => {
         return res;
     } catch (e) {
         return null;
-    }
-};
-
-const readVideoDimensions = (buf: Buffer): { width: number; height: number } | undefined => {
-    for (let i = buf.indexOf("tkhd"); i !== -1; i = buf.indexOf("tkhd", i + 4)) {
-        const start = i - 4;
-        const size = start >= 0 ? buf.readUInt32BE(start) : 0;
-        if (size < 84 || start + size > buf.length) continue;
-        const width = buf.readUInt32BE(start + size - 8) >>> 16;
-        const height = buf.readUInt32BE(start + size - 4) >>> 16;
-        if (width && height) return { width, height };
-    }
-    const readVint = (at: number) => {
-        const first = buf[at];
-        const length = Math.clz32(first) - 23;
-        if (length < 1 || length > 8) return undefined;
-        let value = first & ((1 << (8 - length)) - 1);
-        for (let j = 1; j < length; j++) value = value * 256 + buf[at + j];
-        return { length, value };
-    };
-    for (let i = buf.indexOf(0xe0); i !== -1; i = buf.indexOf(0xe0, i + 1)) {
-        const size = readVint(i + 1);
-        if (!size || size.value > 256) continue;
-        const end = i + 1 + size.length + size.value;
-        const dims: Record<number, number> = {};
-        for (let at = i + 1 + size.length; at < end && at < buf.length;) {
-            const id = buf[at];
-            const len = readVint(at + 1);
-            if (!len) break;
-            const valueAt = at + 1 + len.length;
-            if ((id === 0xb0 || id === 0xba) && len.value <= 4) dims[id] = buf.readUIntBE(valueAt, len.value);
-            at = valueAt + len.value;
-        }
-        if (dims[0xb0] && dims[0xba]) return { width: dims[0xb0], height: dims[0xba] };
     }
 };
 
