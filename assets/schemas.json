@@ -6470,10 +6470,73 @@
                 "type": "string"
             },
             "avatar": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "channel_id": {
                 "type": "string"
+            },
+            "id": {
+                "type": "string"
+            },
+            "type": {
+                "type": "integer"
+            },
+            "guild_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "application_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "user": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": true
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "token": {
+                "type": "string"
+            },
+            "url": {
+                "type": "string"
+            },
+            "source_guild": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": true
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "source_channel": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": true
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
             }
         },
         "additionalProperties": false,

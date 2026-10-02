@@ -19,8 +19,7 @@
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { Webhook } from "@spacebar/database";
-import { Config } from "@spacebar/util";
-import { WebhookResponse } from "@spacebar/schemas";
+import { webhookToJSON } from "@spacebar/api/util/handlers/Webhook";
 
 const router = Router({ mergeParams: true });
 
@@ -42,18 +41,7 @@ router.get(
             relations: { user: true, channel: true, source_channel: true, guild: true, source_guild: true, application: true },
         });
 
-        return res.json(
-            webhooks.map(
-                (webhook) =>
-                    ({
-                        ...webhook,
-                        user: webhook.user.toPartialUser(),
-                        source_guild: webhook.source_guild?.toIntegrationGuild(),
-                        source_channel: webhook.source_channel?.toWebhookChannel(),
-                        url: Config.get().api.endpointPublic + "/webhooks/" + webhook.id + "/" + webhook.token,
-                    }) satisfies WebhookResponse,
-            ),
-        );
+        return res.json(webhooks.map((webhook) => webhookToJSON(webhook)));
     },
 );
 

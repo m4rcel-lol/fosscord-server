@@ -21,8 +21,9 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
 import { Application, Channel, User, Webhook } from "@spacebar/database";
-import { Config, DiscordApiErrors, handleFile, ValidateName } from "@spacebar/util";
-import { isTextChannel, WebhookCreateSchema, WebhookResponse, WebhookType } from "@spacebar/schemas";
+import { Config, DiscordApiErrors, emitEvent, handleFile, ValidateName, WebhooksUpdateEvent } from "@spacebar/util";
+import { webhookToJSON } from "@spacebar/api/util/handlers/Webhook";
+import { isTextChannel, WebhookCreateSchema, WebhookType } from "@spacebar/schemas";
 import { trimSpecial } from "@spacebar/extensions";
 
 const router: Router = Router({ mergeParams: true });
@@ -45,18 +46,7 @@ router.get(
             relations: { user: true, channel: true, source_channel: true, guild: true, source_guild: true, application: true },
         });
 
-        return res.json(
-            webhooks.map(
-                (webhook) =>
-                    ({
-                        ...webhook,
-                        user: webhook.user.toPartialUser(),
-                        source_guild: webhook.source_guild?.toIntegrationGuild(),
-                        source_channel: webhook.source_channel?.toWebhookChannel(),
-                        url: Config.get().api.endpointPublic + "/webhooks/" + webhook.id + "/" + webhook.token,
-                    }) satisfies WebhookResponse,
-            ),
-        );
+        return res.json(webhooks.map((webhook) => webhookToJSON(webhook)));
     },
 );
 
@@ -110,13 +100,15 @@ router.post(
             token: crypto.randomBytes(24).toString("base64url"),
         }).save();
 
-        const user = await User.getPublicUser(req.user_id);
+        hook.user = await User.findOneOrFail({ where: { id: req.user_id } });
 
-        return res.json({
-            ...hook,
-            user: user,
-            url: Config.get().api.endpointPublic + "/api/webhooks/" + hook.id + "/" + hook.token,
-        });
+        await emitEvent({
+            event: "WEBHOOKS_UPDATE",
+            channel_id: channel.id,
+            data: { channel_id: channel.id, guild_id: channel.guild_id },
+        } satisfies WebhooksUpdateEvent);
+
+        return res.json(webhookToJSON(hook));
     },
 );
 

@@ -21,8 +21,9 @@ import { HTTPError } from "lambert-server/HTTPError";
 import { In } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
 import { Webhook, Channel, Message } from "@spacebar/database";
-import { Config, DiscordApiErrors, getPermission, WebhooksUpdateEvent, emitEvent, handleFile, ValidateName, MessageDeleteBulkEvent } from "@spacebar/util";
-import type { WebhookResponse, WebhookUpdateSchema } from "@spacebar/schemas";
+import { DiscordApiErrors, getPermission, WebhooksUpdateEvent, emitEvent, handleFile, ValidateName, MessageDeleteBulkEvent } from "@spacebar/util";
+import type { WebhookUpdateSchema } from "@spacebar/schemas";
+import { applyWebhookUpdate, webhookToJSON } from "@spacebar/api/util/handlers/Webhook";
 
 const router = Router({ mergeParams: true });
 
@@ -50,13 +51,7 @@ router.get(
             if (!permission.has("MANAGE_WEBHOOKS")) throw DiscordApiErrors.UNKNOWN_WEBHOOK;
         } else if (webhook.user_id != req.user_id) throw DiscordApiErrors.UNKNOWN_WEBHOOK;
 
-        return res.json({
-            ...webhook,
-            user: webhook.user.toPartialUser(),
-            source_guild: webhook.source_guild?.toIntegrationGuild(),
-            source_channel: webhook.source_channel?.toWebhookChannel(),
-            url: Config.get().api.endpointPublic + "/webhooks/" + webhook.id + "/" + webhook.token,
-        } satisfies WebhookResponse);
+        return res.json(webhookToJSON(webhook));
     },
 );
 
@@ -150,25 +145,11 @@ router.patch(
             if (!permission.has("MANAGE_WEBHOOKS")) throw DiscordApiErrors.UNKNOWN_WEBHOOK;
         } else if (webhook.user_id != req.user_id) throw DiscordApiErrors.UNKNOWN_WEBHOOK;
 
-        if (!body.name && !body.avatar && !body.channel_id) {
-            throw new HTTPError("Empty webhook updates are not allowed", 50006);
-        }
-
-        if (body.avatar) body.avatar = await handleFile(`/avatars/${webhook_id}`, body.avatar as string);
-
-        if (body.name) {
-            ValidateName(body.name);
-        }
-
-        const channel_id = body.channel_id || webhook.channel_id;
-        webhook.assign(body);
-
-        if (body.channel_id)
-            webhook.assign({
-                channel: await Channel.findOneOrFail({
-                    where: { id: channel_id },
-                }),
-            });
+        const previousChannelId = webhook.channel_id;
+        await applyWebhookUpdate(webhook, body, true);
+        const channel_id = webhook.channel_id;
+        if (previousChannelId !== channel_id)
+            await emitEvent({ event: "WEBHOOKS_UPDATE", channel_id: previousChannelId, data: { channel_id: previousChannelId, guild_id: webhook.guild_id! } } satisfies WebhooksUpdateEvent);
 
         await Promise.all([
             webhook.save(),
@@ -182,7 +163,7 @@ router.patch(
             } satisfies WebhooksUpdateEvent),
         ]);
 
-        res.json(webhook);
+        res.json(webhookToJSON(webhook));
     },
 );
 
