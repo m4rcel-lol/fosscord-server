@@ -27,6 +27,7 @@ interface GuildPowerupDefinition {
     boost_price: number;
     dependent_sku_id?: string;
     features: string[];
+    image?: string;
     additional_emoji_slots?: number;
     additional_sticker_slots?: number;
     additional_sound_slots?: number;
@@ -79,6 +80,7 @@ const POWERUPS: GuildPowerupDefinition[] = [
         description: "Give your server its own colors that everyone sees while they're in it.",
         boost_price: 3,
         features: ["GUILD_THEME"],
+        image: "theme",
     },
     {
         sku_id: "1351706802684952639",
@@ -88,6 +90,7 @@ const POWERUPS: GuildPowerupDefinition[] = [
         description: "Let members rep your server with a tag and badge next to their name.",
         boost_price: 3,
         features: ["GUILD_TAGS"],
+        image: "tag",
     },
     {
         sku_id: "1395150519886024775",
@@ -97,6 +100,7 @@ const POWERUPS: GuildPowerupDefinition[] = [
         description: "Extra badges for your Server Tag.",
         boost_price: 3,
         features: ["GUILD_TAGS_BADGE_PACK_PETS"],
+        image: "tag",
     },
     {
         sku_id: "1395150923734581339",
@@ -106,6 +110,7 @@ const POWERUPS: GuildPowerupDefinition[] = [
         description: "Extra badges for your Server Tag.",
         boost_price: 5,
         features: ["GUILD_TAGS_BADGE_PACK_FLEX"],
+        image: "tag",
     },
     {
         sku_id: "1466209416922667288",
@@ -115,6 +120,7 @@ const POWERUPS: GuildPowerupDefinition[] = [
         description: "Extra badges for your Server Tag.",
         boost_price: 3,
         features: ["GUILD_TAGS_BADGE_PACK_PLANT"],
+        image: "tag",
     },
     {
         sku_id: "1466209416931055898",
@@ -124,6 +130,7 @@ const POWERUPS: GuildPowerupDefinition[] = [
         description: "Extra badges for your Server Tag.",
         boost_price: 2,
         features: ["GUILD_TAGS_BADGE_PACK_CREEPY_CRAWLIES"],
+        image: "tag",
     },
     {
         sku_id: "1354906318279807056",
@@ -133,6 +140,7 @@ const POWERUPS: GuildPowerupDefinition[] = [
         description: "Gradient and holographic role colors for every role in your server.",
         boost_price: 3,
         features: ["ENHANCED_ROLE_COLORS"],
+        image: "roles",
     },
     {
         sku_id: "1387197800336330924",
@@ -142,6 +150,7 @@ const POWERUPS: GuildPowerupDefinition[] = [
         description: "Pick a memorable invite link for your server.",
         boost_price: 5,
         features: ["VANITY_URL"],
+        image: "invite",
     },
     {
         sku_id: "1479204648718958665",
@@ -151,6 +160,7 @@ const POWERUPS: GuildPowerupDefinition[] = [
         description: "Everyone in your server can upload files up to 250MB.",
         boost_price: 3,
         features: ["MAX_FILE_SIZE_250_MB"],
+        image: "uploads",
     },
 ];
 
@@ -177,8 +187,8 @@ const sku = (powerup: GuildPowerupDefinition) => ({
             additional_sticker_slots: powerup.additional_sticker_slots ?? 0,
             additional_sound_slots: powerup.additional_sound_slots ?? 0,
         },
-        animated_image_url: null,
-        static_image_url: null,
+        animated_image_url: powerup.image ? `/assets/powerups/${powerup.image}.svg` : null,
+        static_image_url: powerup.image ? `/assets/powerups/${powerup.image}.svg` : null,
     },
 });
 
@@ -191,8 +201,8 @@ export function guildPowerupListings() {
         benefits: [],
         powerup_metadata: {
             category_type: powerup.category,
-            animated_image_url: null,
-            static_image_url: null,
+            animated_image_url: powerup.image ? `/assets/powerups/${powerup.image}.svg` : null,
+            static_image_url: powerup.image ? `/assets/powerups/${powerup.image}.svg` : null,
             store_removal_date: null,
             deactivation_cooldown_period_days: 0,
         },
