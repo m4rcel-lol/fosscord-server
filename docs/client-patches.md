@@ -53,6 +53,27 @@ Google Chrome 154 on macOS quits headless sessions after about 30 seconds. Point
 
 On build 626571 (October 2026) with Vencord `7f0c10c`, every upstream patch and every one of ours matches. The one upstream failure was the `SettingsRouter` lookup, which still asked for `USER_SETTINGS_MODAL_KEY`. Discord no longer exports it, which broke `Ctrl+,` in WebKeybinds and the settings links in BetterSessions and Decor, so `client/vencord-patches/settings-router.patch` drops that key.
 
-## Branded images
+## Branding
 
-Some Discord logos are image files, not React components, so the server swaps them. `src/bundle/TestClient.ts` serves `/assets/favicon.ico` from `general.image` or `assets/icon.png`, and `BRANDED_ASSETS` replaces the wordmarks on the login, register and invite pages (`131c318dd45b7aa4.svg`, and `bbbc3d376d38e7bc.svg` in the narrow layout) and the logo in the centre of the login QR code (`dd05fd1ea37e7747.png`) with SVGs drawn from the instance logo and `client.instanceName`. The file names change when Discord updates the client, so after `npm run generate:client` open `/login` and check that both images still show the instance logo. The logo in the app itself, on the Home button, the Direct Messages title and the soundboard category, comes from the `FosscordBranding` plugin, which swaps the path of Discord's logo icon.
+These `client.*` config keys control what the client shows in place of Discord's brand:
+
+| Key            | Default      | Used for                                                                                                                                                                              |
+| -------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `instanceName` | `"Fosscord"` | Every translated string, the page title, the wordmark and the authenticator app issuer.                                                                                               |
+| `icon`         | `null`       | Square icon on the Home button, the loading screen, the wordmark, the login QR code and the favicon. Falls back to `general.image`, then to the built-in vector of `assets/icon.png`. |
+| `logo`         | `null`       | Wordmark on the login, register, OAuth and invite pages. Without it the wordmark is the icon followed by `instanceName`.                                                              |
+| `helpUrl`      | `null`       | Where the `?` button and every Discord help center link go. Without it the button and standalone help links are hidden, and help links inside a sentence render as plain text.        |
+
+`icon` and `logo` take an `http(s)` URL or a file path relative to the repository root, such as `assets/logo.png`. The server serves the icon at `/static/logo.png`, the path the status and admin pages already use, and the wordmark at `/static/wordmark`. It passes their URLs to the client as `GLOBAL_ENV.INSTANCE_ICON` and `INSTANCE_LOGO`, next to `INSTANCE_NAME` and `HELP_URL`. The page is rendered again when any of these change.
+
+### Strings
+
+`FosscordBranding` wraps every translation module in `brandMessages` (`client/plugins/fosscordBranding/messages.ts`), which walks the compiled message tree and rewrites only the text, never argument names, tag names or link targets. It replaces Discord with the instance name, Nitro with Premium, `discord.gg/` with this instance's `/invite/` URL and `discord.com` with its host. It handles the inflected forms the translations use: Finnish and Croatian case endings, Hungarian `Nitró` forms, Czech `Nitra` and `Nitru`, Turkish apostrophe suffixes, the Thai and Japanese transliterations and the uppercase `DISCORD`. It leaves the Crisis Text Line keyword (`Text DISCORD to 741741`) and email addresses such as `privacy@discord.com` alone. A few hardcoded strings outside the translations get their own patches: the document title, the platform name list and the `otpauth://` issuer used for authenticator apps. The OAuth consent page drops the joke scope Discord adds to the list at random, such as "Solve a mystery with Scooby and the gang", so it only lists the scopes the app asked for.
+
+### Images
+
+Some Discord logos are image files, not React components, so the server swaps them. `src/bundle/TestClient.ts` serves `/assets/favicon.ico` from the instance icon, and `BRANDED_ASSETS` replaces the wordmarks on the login, register and invite pages (`131c318dd45b7aa4.svg`, and `bbbc3d376d38e7bc.svg` in the narrow layout) and the logo in the centre of the login QR code (`dd05fd1ea37e7747.png`) with SVGs drawn from the instance icon and `client.instanceName`, or redirects to `client.logo` when it is set. The file names change when Discord updates the client, so after `npm run generate:client` open `/login` and check that both images still show the instance logo. The logo in the app itself, on the Home button, the Direct Messages title and the soundboard category, comes from `FosscordBranding`, which swaps the path of Discord's logo icon. The plugin also replaces the loading screen video with the instance icon.
+
+### Default avatars
+
+The client's `DEFAULT_AVATARS` point at `/embed/avatars/0.png` to `5.png` on this instance's CDN. `npm run build:src` runs `scripts/default-avatars.js`, which uses sharp to cut the instance icon out of six coloured squares and writes them to `dist/default-avatars`. It reads the icon from `DEFAULT_AVATAR_ICON`, then from `client.icon` or `general.image` in the file at `CONFIG_PATH` when that is a local path, then from `assets/icon.png`. Without sharp the CDN draws the same avatars as SVG.
