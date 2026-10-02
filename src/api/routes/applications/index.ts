@@ -18,6 +18,7 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
+import { toOwnedApplication } from "@spacebar/api/util/handlers/Application";
 import { Application } from "@spacebar/database";
 import { Config, createAppBotUser } from "@spacebar/util";
 import { ApplicationCreateSchema } from "@spacebar/schemas";
@@ -39,7 +40,7 @@ router.get(
             where: { owner: { id: req.user_id } },
             relations: { owner: true, bot: true },
         });
-        res.json(results).status(200);
+        res.json(results.map(toOwnedApplication));
     },
 );
 
@@ -70,7 +71,7 @@ router.post(
             await createAppBotUser(app, req);
         } else await app.save();
 
-        res.json(app);
+        res.json(toOwnedApplication(app));
     },
 );
 

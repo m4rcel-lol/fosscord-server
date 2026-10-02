@@ -91,3 +91,21 @@ export async function profileApplication(botId: string) {
         storefront_available: false,
     };
 }
+
+export function toOwnedApplication(app: Application) {
+    return {
+        ...toPublicApplication(app),
+        owner_id: app.owner_id,
+        owner: app.owner?.toPublicUser(),
+        redirect_uris: app.redirect_uris ?? [],
+        interactions_endpoint_url: app.interactions_endpoint_url ?? null,
+        rpc_application_state: app.rpc_application_state,
+        store_application_state: app.store_application_state,
+        verification_state: app.verification_state,
+        integration_public: app.integration_public,
+        integration_require_code_grant: app.integration_require_code_grant,
+        discoverability_state: app.discoverability_state,
+        discovery_eligibility_flags: app.discovery_eligibility_flags,
+        team: app.team ?? null,
+    };
+}

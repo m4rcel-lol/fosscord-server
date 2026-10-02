@@ -19,6 +19,7 @@
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
+import { toOwnedApplication } from "@spacebar/api/util/handlers/Application";
 import { Application, Guild } from "@spacebar/database";
 import { handleFile } from "@spacebar/util";
 import { ApplicationModifySchema } from "@spacebar/schemas";
@@ -44,7 +45,7 @@ router.get(
             relations: { owner: true, bot: true },
         });
 
-        return res.json(app);
+        return res.json(toOwnedApplication(app));
     },
 );
 
@@ -93,7 +94,7 @@ router.patch(
 
         await app.save();
 
-        return res.json(app);
+        return res.json(toOwnedApplication(app));
     },
 );
 

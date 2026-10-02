@@ -20,6 +20,7 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { verifyToken } from "node-2fa";
 import { route } from "@spacebar/api/middlewares";
+import { toOwnedApplication } from "@spacebar/api/util/handlers/Application";
 import { Application, Guild, User } from "@spacebar/database";
 import { DiscordApiErrors, FieldErrors, handleFile } from "@spacebar/util";
 import { ApplicationModifySchema } from "@spacebar/schemas";
@@ -45,7 +46,7 @@ router.get(
         });
         if (app.owner.id != req.user_id) throw DiscordApiErrors.ACTION_NOT_AUTHORIZED_ON_APPLICATION;
 
-        return res.json(app);
+        return res.json(toOwnedApplication(app));
     },
 );
 
@@ -107,7 +108,7 @@ router.patch(
 
         await app.save();
 
-        return res.json(app);
+        return res.json(toOwnedApplication(app));
     },
 );
 
