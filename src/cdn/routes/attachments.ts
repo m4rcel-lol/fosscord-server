@@ -241,8 +241,9 @@ router.post("/:channel_id/:batch_id/:attachment_id/:filename/clone_to_message/:m
     console.log("[Cloud Clone] Cloning attachment to message", req.params);
 
     const { channel_id, batch_id, attachment_id, filename, message_id } = req.params as { [key: string]: string };
+    const target = typeof req.query.channel_id === "string" && /^\d+$/.test(req.query.channel_id) ? req.query.channel_id : channel_id;
     const path = `attachments/${channel_id}/${batch_id}/${attachment_id}/${filename}`;
-    const newPath = `attachments/${channel_id}/${message_id}/${filename}`;
+    const newPath = `attachments/${target}/${message_id}/${filename}`;
 
     const att = await CloudAttachment.findOne({
         where: {

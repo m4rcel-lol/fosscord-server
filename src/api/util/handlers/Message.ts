@@ -148,12 +148,15 @@ async function processMedia(media: UnfurledMediaItem, messageId: string, batchId
         delWhenDone = true;
     }
 
-    const cloneResponse = await fetch(`${Config.get().cdn.endpointPrivate?.replace(/\/+$/, "")}/attachments/${attEnt.uploadFilename}/clone_to_message/${messageId}`, {
-        method: "POST",
-        headers: {
-            signature: Config.get().security.requestSignature || "",
+    const cloneResponse = await fetch(
+        `${Config.get().cdn.endpointPrivate?.replace(/\/+$/, "")}/attachments/${attEnt.uploadFilename}/clone_to_message/${messageId}?channel_id=${channel.id}`,
+        {
+            method: "POST",
+            headers: {
+                signature: Config.get().security.requestSignature || "",
+            },
         },
-    });
+    );
 
     if (!cloneResponse.ok) {
         console.error(`[Message] Failed to clone attachment ${attEnt.userFilename} to message ${messageId}`);
@@ -676,7 +679,7 @@ export async function convertCloudAttachmentToAttachment(cloudAttachmentReferenc
     });
 
     const cloneResponse = await fetch(
-        `${Config.get().cdn.endpointPrivate?.replace(/\/+$/, "")}/attachments/${cloudAttachment.uploadFilename}/clone_to_message/${destinationMessageId}`,
+        `${Config.get().cdn.endpointPrivate?.replace(/\/+$/, "")}/attachments/${cloudAttachment.uploadFilename}/clone_to_message/${destinationMessageId}?channel_id=${destinationChannelId}`,
         {
             method: "POST",
             headers: {
