@@ -97,6 +97,7 @@ const buildHtml = () => {
         RTC_LATENCY_ENDPOINT: \`//\${host}/rtc\`,
         MIGRATION_SOURCE_ORIGIN: location.origin,
         MIGRATION_DESTINATION_ORIGIN: location.origin,
+        INSTANCE_NAME: ${JSON.stringify(client.instanceName).replace(/</g, "\\u003c")},
     });
 })();
 </script>`;

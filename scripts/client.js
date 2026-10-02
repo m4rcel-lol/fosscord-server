@@ -23,7 +23,6 @@ const { existsSync } = require("fs");
 
 const BASE_URL = process.env.CLIENT_BASE_URL || "https://discord.com";
 const CACHE_PATH = path.join(__dirname, "..", "assets", "cache");
-const INSTANCE_NAME = process.env.INSTANCE_NAME || "Fosscord";
 const CONCURRENCY = Number(process.env.CLIENT_CONCURRENCY || 8);
 const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
 
@@ -38,11 +37,7 @@ const patch = (content) =>
         .replaceAll('"https:"+window.GLOBAL_ENV', " location.protocol+window.GLOBAL_ENV")
         .replaceAll("returnlocation.protocol", "return location.protocol")
         .replaceAll("`https:${window.GLOBAL_ENV", "`${location.protocol}${window.GLOBAL_ENV")
-        .replaceAll("`https://${", "`${location.protocol}//${")
-        .replace(/Discord Nitro/g, `${INSTANCE_NAME} Premium`)
-        .replace(/(["> ])Nitro([ ."<,!?])/g, "$1Premium$2")
-        .replace(/(["> ])Discord(['’]s|[ ."<,!?:])/g, `$1${INSTANCE_NAME}$2`)
-        .replace(/(["> ])Discord(?=\\u2019|\\u2014|\\'|-|\))/g, `$1${INSTANCE_NAME}`);
+        .replaceAll("`https://${", "`${location.protocol}//${");
 
 const sliceExpression = (source, start) => {
     const closers = { "(": ")", "[": "]", "{": "}" };
