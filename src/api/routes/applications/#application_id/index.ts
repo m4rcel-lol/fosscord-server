@@ -20,7 +20,7 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { verifyToken } from "node-2fa";
 import { route } from "@spacebar/api/middlewares";
-import { toOwnedApplication } from "@spacebar/api/util/handlers/Application";
+import { ensureInteractionKeys, toOwnedApplication, verifyInteractionsEndpoint } from "@spacebar/api/util/handlers/Application";
 import { Application, Guild, User } from "@spacebar/database";
 import { DiscordApiErrors, FieldErrors, handleFile } from "@spacebar/util";
 import { ApplicationModifySchema } from "@spacebar/schemas";
@@ -45,6 +45,10 @@ router.get(
             relations: { owner: true, bot: true },
         });
         if (app.owner.id != req.user_id) throw DiscordApiErrors.ACTION_NOT_AUTHORIZED_ON_APPLICATION;
+        if (!/^[0-9a-f]{64}$/.test(app.verify_key)) {
+            await ensureInteractionKeys(app.id);
+            app.verify_key = (await Application.findOneOrFail({ where: { id: app.id }, select: { id: true, verify_key: true } })).verify_key;
+        }
 
         return res.json(toOwnedApplication(app));
     },
@@ -102,6 +106,15 @@ router.patch(
         if (app.bot) {
             app.bot.assign({ bio: body.description });
             await app.bot.save();
+        }
+
+        if (body.interactions_endpoint_url !== undefined && body.interactions_endpoint_url !== app.interactions_endpoint_url) {
+            if (body.interactions_endpoint_url && !(await verifyInteractionsEndpoint(app.id, body.interactions_endpoint_url)))
+                throw FieldErrors({
+                    interactions_endpoint_url: { code: "APPLICATION_INTERACTIONS_ENDPOINT_URL_INVALID", message: "The specified interactions endpoint url could not be verified." },
+                });
+            app.verify_key = (await Application.findOneOrFail({ where: { id: app.id }, select: { id: true, verify_key: true } })).verify_key;
+            body.interactions_endpoint_url ||= null;
         }
 
         app.assign(body);

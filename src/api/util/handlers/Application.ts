@@ -16,8 +16,49 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+import { createPrivateKey, generateKeyPairSync, randomBytes, sign } from "node:crypto";
 import { In } from "typeorm";
 import { Application, Member } from "@spacebar/database";
+import { Snowflake } from "@spacebar/util";
+
+export async function ensureInteractionKeys(applicationId: string) {
+    const app = await Application.findOneOrFail({ where: { id: applicationId }, select: { id: true, verify_key: true, interactions_private_key: true } });
+    if (app.interactions_private_key && /^[0-9a-f]{64}$/.test(app.verify_key)) return app.interactions_private_key;
+    const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+    const verifyKey = publicKey.export({ format: "der", type: "spki" }).subarray(-32).toString("hex");
+    const pem = privateKey.export({ format: "pem", type: "pkcs8" }).toString();
+    await Application.update({ id: applicationId }, { verify_key: verifyKey, interactions_private_key: pem });
+    return pem;
+}
+
+export async function postSignedInteraction(url: string, privateKeyPem: string, payload: unknown, signatureOverride?: string) {
+    const body = JSON.stringify(payload);
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const signature = signatureOverride ?? sign(null, Buffer.from(timestamp + body), createPrivateKey(privateKeyPem)).toString("hex");
+    return fetch(url, {
+        method: "POST",
+        headers: {
+            "content-type": "application/json",
+            "user-agent": "Discord-Interactions/1.0 (+https://discord.com)",
+            "x-signature-ed25519": signature,
+            "x-signature-timestamp": timestamp,
+        },
+        body,
+        signal: AbortSignal.timeout(3000),
+    });
+}
+
+export async function verifyInteractionsEndpoint(applicationId: string, url: string) {
+    const key = await ensureInteractionKeys(applicationId);
+    const ping = { id: Snowflake.generate(), application_id: applicationId, type: 1, token: randomBytes(32).toString("base64url"), version: 1 };
+    const ok = await postSignedInteraction(url, key, ping)
+        .then(async (res) => res.ok && ((await res.json()) as { type?: number }).type === 1)
+        .catch(() => false);
+    const rejectsForgery = await postSignedInteraction(url, key, ping, "00".repeat(64))
+        .then((res) => res.status === 401)
+        .catch(() => false);
+    return ok && rejectsForgery;
+}
 
 export function toPublicApplication(app: Application) {
     return {

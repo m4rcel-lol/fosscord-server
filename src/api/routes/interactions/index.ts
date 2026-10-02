@@ -19,15 +19,55 @@
 import { randomBytes } from "node:crypto";
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
-import { InteractionSchema, InteractionType, ApplicationCommandType, ChannelType, MessageCreateCloudAttachment, PublicAttachment } from "@spacebar/schemas";
+import {
+    ajv,
+    InteractionCallbacksSchema,
+    InteractionSchema,
+    InteractionType,
+    ApplicationCommandType,
+    ChannelType,
+    MessageCreateCloudAttachment,
+    PublicAttachment,
+} from "@spacebar/schemas";
 import { route } from "@spacebar/api/middlewares";
 import { Application, ApplicationAuthorization, ApplicationCommand, Channel, Guild, Member, Session } from "@spacebar/database";
-import { Config, DiscordApiErrors, emitEvent, getPermission, InteractionCreateEvent, pendingInteractions, Permissions, Snowflake, storeInteraction } from "@spacebar/util";
-import { buildResolved, emitInteractionFailure, fetchInteractionMessage } from "@spacebar/api/util/handlers/Interaction";
+import {
+    Config,
+    DiscordApiErrors,
+    emitEvent,
+    getPermission,
+    InteractionCreateEvent,
+    PendingInteraction,
+    pendingInteractions,
+    Permissions,
+    Snowflake,
+    storeInteraction,
+} from "@spacebar/util";
+import { buildResolved, emitInteractionFailure, fetchInteractionMessage, processInteractionCallback } from "@spacebar/api/util/handlers/Interaction";
+import { ensureInteractionKeys, postSignedInteraction } from "@spacebar/api/util/handlers/Application";
 import { convertCloudAttachmentToAttachment } from "@spacebar/api/util";
 import { canUseCommand } from "@spacebar/api/util/handlers/ApplicationCommands";
 
 const router = Router({ mergeParams: true });
+
+function deliverOverHttp(applicationId: string, url: string, interaction: PendingInteraction, payload: unknown) {
+    (async () => {
+        const key = await ensureInteractionKeys(applicationId);
+        const res = await postSignedInteraction(url, key, payload);
+        if (!res.ok) throw new Error(`endpoint returned ${res.status}`);
+        const callback = (await res.json()) as InteractionCallbacksSchema;
+        const validate = ajv.getSchema("InteractionCallbacksSchema");
+        if (validate && !validate(callback)) throw new Error("endpoint returned an invalid interaction response");
+        if (interaction.acknowledged) return;
+        await processInteractionCallback(interaction, callback);
+    })().catch((error) => {
+        console.error(`[Interactions] HTTP delivery to ${url} failed:`, error?.message ?? error);
+        if (!interaction.acknowledged) {
+            clearTimeout(interaction.timeout);
+            emitInteractionFailure(interaction);
+        }
+    });
+}
 
 router.post("/", route({}), async (req: Request, res: Response) => {
     const body = req.body as InteractionSchema & { data: Record<string, unknown> };
@@ -229,11 +269,13 @@ router.post("/", route({}), async (req: Request, res: Response) => {
         ...(message && { message: message.toJSON() }),
     };
 
-    await emitEvent({
-        event: "INTERACTION_CREATE",
-        user_id: application.id,
-        data: payload as never,
-    } satisfies InteractionCreateEvent);
+    if (application.interactions_endpoint_url) deliverOverHttp(application.id, application.interactions_endpoint_url, interaction, payload);
+    else
+        await emitEvent({
+            event: "INTERACTION_CREATE",
+            user_id: application.id,
+            data: payload as never,
+        } satisfies InteractionCreateEvent);
 
     interaction.timeout = setTimeout(() => {
         if (interaction.acknowledged) return;

@@ -6612,7 +6612,8 @@
                         "type": "string"
                     },
                     "interactions_endpoint_url": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "max_participants": {
                         "type": "integer",
@@ -11632,6 +11633,9 @@
                         "default": false
                     },
                     "verify_key": {
+                        "type": "string"
+                    },
+                    "interactions_private_key": {
                         "type": "string"
                     },
                     "owner": {

@@ -7089,7 +7089,10 @@
                 "type": "string"
             },
             "interactions_endpoint_url": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "max_participants": {
                 "type": [
@@ -12399,6 +12402,9 @@
                 "default": false
             },
             "verify_key": {
+                "type": "string"
+            },
+            "interactions_private_key": {
                 "type": "string"
             },
             "owner": {
