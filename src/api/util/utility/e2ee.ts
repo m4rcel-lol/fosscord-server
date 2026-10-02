@@ -19,7 +19,7 @@
 import { createHash, createPublicKey, verify } from "node:crypto";
 import { NextFunction, Request, Response } from "express";
 import { In, IsNull, Not } from "typeorm";
-import { Channel, E2eeDevice, E2eeIdentity, E2eeKeyBackup, Message, Recipient, Relationship } from "@spacebar/database";
+import { Channel, E2eeDevice, E2eeIdentity, E2eeKeyBackup, Message, Recipient, Relationship, Session } from "@spacebar/database";
 import { ApiError, Config, emitEvent, MessageFlags } from "@spacebar/util";
 import { ChannelType, E2eeEnvelope, E2eeUserKeysResponse, MessageType } from "@spacebar/schemas";
 import { MessageOptions } from "@spacebar/util/dtos/MessageOptions";
@@ -119,6 +119,18 @@ export async function emitE2eeUserEvent(event: "E2EE_DEVICES_UPDATE" | "E2EE_IDE
     const peers = mine.length ? await Recipient.find({ where: { channel_id: In(mine.map((r) => r.channel_id)) }, select: { user_id: true } }) : [];
     const data = { user_id: userId };
     await Promise.all([...new Set([userId, ...peers.map((r) => r.user_id)])].map((id) => emitEvent({ event, user_id: id, data })));
+}
+
+export async function revokeStaleE2eeDevices(userId: string) {
+    const [sessions, devices] = await Promise.all([
+        Session.find({ where: { user_id: userId }, select: { session_id: true } }),
+        E2eeDevice.find({ where: { user_id: userId, status: Not("revoked") }, select: { id: true, session_id: true } }),
+    ]);
+    const live = new Set(sessions.map((s) => s.session_id));
+    const stale = devices.filter((d) => !d.session_id || !live.has(d.session_id)).map((d) => d.id);
+    if (!stale.length) return;
+    await E2eeDevice.update({ id: In(stale) }, { status: "revoked", revoked_at: new Date() });
+    await emitE2eeUserEvent("E2EE_DEVICES_UPDATE", userId);
 }
 
 export async function sharesE2eeContext(userId: string, others: string[]) {

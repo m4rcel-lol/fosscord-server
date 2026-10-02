@@ -427,11 +427,11 @@ export class Engine {
     private async ensureKeys() {
         const store = this.store!;
         const userId = this.userId;
-        let state = await this.api.request<ServerState>("get", "/users/@me/e2ee");
+        this.device = (await store.get<StoredDevice>("device")) ?? null;
+        let state = await this.api.request<ServerState>("get", `/users/@me/e2ee${this.device ? `?device_id=${encodeURIComponent(this.device.deviceId)}` : ""}`);
         this.encryptedChannels = new Set(state.channels);
         this.identity = (await store.get<StoredIdentity>("identity")) ?? null;
         this.trustedKey = (await store.get<string>("trusted-identity")) ?? null;
-        this.device = (await store.get<StoredDevice>("device")) ?? null;
         this.prekeys = (await store.get<StoredPrekey[]>("prekeys")) ?? [];
         this.secret = (await store.get<Bytes>("backup-secret")) ?? null;
         this.backup = await this.fetchBackup();

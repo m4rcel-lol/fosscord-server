@@ -20,6 +20,7 @@ import { createHash } from "node:crypto";
 import { Request, Response, Router } from "express";
 import { In } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
+import { revokeStaleE2eeDevices } from "@spacebar/api/util";
 import { emitEvent } from "@spacebar/util";
 import { SessionsLogoutSchema } from "@spacebar/schemas";
 import { Session } from "@spacebar/database";
@@ -76,8 +77,9 @@ router.post(
                 event: "SB_SESSION_REMOVE",
                 origin: "Sessions logout",
             });
-            await session.remove();
+            await Session.delete({ session_id: session.session_id });
         }
+        if (sessions.length) await revokeStaleE2eeDevices(req.user_id);
         res.status(204).send();
     },
 );

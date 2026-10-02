@@ -47,6 +47,9 @@ router.get(
         responses: { 200: { body: "E2eeStateResponse" } },
     }),
     async (req: Request, res: Response) => {
+        const { device_id } = req.query as { device_id?: string };
+        if (typeof device_id === "string" && req.session)
+            await E2eeDevice.update({ id: device_id, user_id: req.user_id, status: Not("revoked") }, { session_id: req.session.session_id });
         res.json(await state(req.user_id));
     },
 );

@@ -18,6 +18,7 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
+import { revokeStaleE2eeDevices } from "@spacebar/api/util";
 import { Session } from "@spacebar/database";
 import { emitEvent } from "@spacebar/util";
 
@@ -39,16 +40,18 @@ router.post(
             if (Object.keys(req.body).length != 0) console.log(`[LOGOUT]: Extra fields sent in logout!`, req.body);
         }
 
+        const session_id = req.session?.session_id;
         if (req.session) await Session.remove(req.session);
 
         res.status(204).send();
 
-        if (req.session)
-            await emitEvent({
-                session_id: req.session.session_id,
-                event: "SB_SESSION_REMOVE",
-                origin: "Self logout",
-            });
+        if (!session_id) return;
+        await emitEvent({
+            session_id,
+            event: "SB_SESSION_REMOVE",
+            origin: "Self logout",
+        });
+        await revokeStaleE2eeDevices(req.user_id);
     },
 );
 

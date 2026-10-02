@@ -71,6 +71,7 @@ router.post(
         device.prekey_public = body.prekey.public_key;
         device.prekey_signature = body.prekey.signature;
         device.prekey_updated_at = now;
+        device.session_id = req.session?.session_id ?? null;
         await device.save();
         await emitE2eeUserEvent("E2EE_DEVICES_UPDATE", req.user_id);
         res.json(device.toPublic());

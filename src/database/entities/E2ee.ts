@@ -90,6 +90,9 @@ export class E2eeDevice extends BaseClassWithoutId {
     @Column({ type: "timestamp with time zone", nullable: true })
     revoked_at: Date | null;
 
+    @Column({ type: "varchar", nullable: true, select: false })
+    session_id: string | null;
+
     toPublic(): E2eeDeviceResponse {
         return {
             device_id: this.id,

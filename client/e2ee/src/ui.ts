@@ -554,7 +554,9 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword }
                     const row = document.createElement("div");
                     row.className = "fe2ee-device";
                     const current = device.device_id === engine.device?.deviceId;
-                    row.innerHTML = `<span>${escape(device.name ?? "Unknown browser")}<small>${current ? "This browser" : device.status === "active" ? "Can read encrypted messages" : "Waiting for approval"}</small></span>`;
+                    const added = device.created_at ? `Added ${new Date(device.created_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}` : null;
+                    const state = current ? "This browser" : device.status === "active" ? "Can read encrypted messages" : "Waiting for approval";
+                    row.innerHTML = `<span>${escape(device.name ?? "Unknown browser")}<small>${escape([state, added].filter(Boolean).join(" · "))}</small></span>`;
                     if (!current)
                         row.append(
                             button("Remove", "secondary", async () => {

@@ -25,6 +25,7 @@ import { In } from "typeorm";
 import { BackupCode, SecurityKey, Session, User, generateMfaBackupCodes } from "@spacebar/database";
 import { EVENT, Event, JwtKeypairManager, UserUpdateEvent, emitEvent } from "@spacebar/util";
 import { PrivateUserProjection, UserFlags } from "@spacebar/schemas";
+import { revokeStaleE2eeDevices } from "./e2ee";
 import { PhoneVerification } from "./phoneVerification";
 
 export class ResponseError extends Error {
@@ -370,6 +371,7 @@ export async function revokeSessions(user_id: string, except?: string) {
         await emitEvent({ session_id: session.session_id, event: "SB_SESSION_REMOVE", origin: "Sessions revoked" } as Event);
         await Session.delete({ session_id: session.session_id });
     }
+    await revokeStaleE2eeDevices(user_id);
 }
 
 export const currentToken = (req: Request) => (req.headers.authorization ?? "").replace(/^(Bot|Bearer) /, "");

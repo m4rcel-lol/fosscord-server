@@ -2794,11 +2794,11 @@ ${sig}`;
     async ensureKeys() {
       const store = this.store;
       const userId = this.userId;
-      let state = await this.api.request("get", "/users/@me/e2ee");
+      this.device = await store.get("device") ?? null;
+      let state = await this.api.request("get", `/users/@me/e2ee${this.device ? `?device_id=${encodeURIComponent(this.device.deviceId)}` : ""}`);
       this.encryptedChannels = new Set(state.channels);
       this.identity = await store.get("identity") ?? null;
       this.trustedKey = await store.get("trusted-identity") ?? null;
-      this.device = await store.get("device") ?? null;
       this.prekeys = await store.get("prekeys") ?? [];
       this.secret = await store.get("backup-secret") ?? null;
       this.backup = await this.fetchBackup();
@@ -4101,7 +4101,9 @@ ${approver}`;
           const row = document.createElement("div");
           row.className = "fe2ee-device";
           const current = device.device_id === engine2.device?.deviceId;
-          row.innerHTML = `<span>${escape(device.name ?? "Unknown browser")}<small>${current ? "This browser" : device.status === "active" ? "Can read encrypted messages" : "Waiting for approval"}</small></span>`;
+          const added = device.created_at ? `Added ${new Date(device.created_at).toLocaleString(void 0, { dateStyle: "medium", timeStyle: "short" })}` : null;
+          const state = current ? "This browser" : device.status === "active" ? "Can read encrypted messages" : "Waiting for approval";
+          row.innerHTML = `<span>${escape(device.name ?? "Unknown browser")}<small>${escape([state, added].filter(Boolean).join(" · "))}</small></span>`;
           if (!current)
             row.append(
               button("Remove", "secondary", async () => {
