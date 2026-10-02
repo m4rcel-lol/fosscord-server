@@ -73,6 +73,11 @@ export class VoiceChannels {
         await VoiceChannels.publish(voiceState);
     }
 
+    static async evict(guildId: string, channelId: string) {
+        const voiceStates = await VoiceState.find({ where: { guild_id: guildId, channel_id: channelId }, select: { user_id: true } });
+        for (const { user_id } of voiceStates) await VoiceChannels.move(guildId, user_id, null);
+    }
+
     static async move(guildId: string, userId: string, channelId: string | null) {
         const voiceState = await VoiceState.findOne({ where: { user_id: userId, guild_id: guildId } });
         if (!voiceState?.channel_id || voiceState.channel_id === channelId) return false;
