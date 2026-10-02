@@ -78,7 +78,7 @@ export const GuildPowerupFeatures = [
 
 export const GuildBoostFeatures = ["ANIMATED_BANNER", "ANIMATED_ICON", "BANNER", "INVITE_SPLASH", "ROLE_ICONS", "VANITY_URL", ...GuildPowerupFeatures];
 
-export const GuildBoostCount = 14;
+export const GuildBoostCount = 33;
 
 export const PublicGuildRelations = [
     "channels",
