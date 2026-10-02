@@ -98,6 +98,19 @@ export class UserSettingsProtos extends BaseClassWithoutId {
         }
     }
 
+    private static locks = new Map<string, Promise<unknown>>();
+
+    static async withLock<T>(user_id: string, fn: () => Promise<T>): Promise<T> {
+        const run = (UserSettingsProtos.locks.get(user_id) ?? Promise.resolve()).then(fn, fn);
+        const tail = run.catch(() => undefined);
+        UserSettingsProtos.locks.set(user_id, tail);
+        try {
+            return await run;
+        } finally {
+            if (UserSettingsProtos.locks.get(user_id) === tail) UserSettingsProtos.locks.delete(user_id);
+        }
+    }
+
     static async getOrDefault(user_id: string, save: boolean = false): Promise<UserSettingsProtos> {
         await User.findOneOrFail({
             where: { id: user_id },
@@ -110,9 +123,8 @@ export class UserSettingsProtos extends BaseClassWithoutId {
 
         let modified = false;
         if (!userSettings) {
-            userSettings = UserSettingsProtos.create({
-                user_id,
-            });
+            await UserSettingsProtos.createQueryBuilder().insert().values({ user_id }).orIgnore().execute();
+            userSettings = await UserSettingsProtos.findOneOrFail({ where: { user_id } });
             modified = true;
         }
 
