@@ -10,6 +10,8 @@ import (
 	"os"
 	"runtime"
 	"sync"
+
+	"github.com/pion/rtcp"
 )
 
 type IpcConnection struct {
@@ -147,6 +149,15 @@ func (ipcConn *IpcConnection) processMessage(ipcMsg IpcMessage) {
 				handleErr = handleSubscribe(p, msg, requestID)
 			case "unsubscribe":
 				handleErr = handleUnsubscribe(p, msg)
+			case "keyframe":
+				p.mu.Lock()
+				pt := p.videoPublished
+				p.mu.Unlock()
+				if pt != nil {
+					if err := p.pc.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(pt.ssrc)}}); err != nil {
+						log.Printf("WriteRTCP: %v", err)
+					}
+				}
 			default:
 				handleErr = fmt.Errorf("unknown message type: %s", msg.Type)
 			}

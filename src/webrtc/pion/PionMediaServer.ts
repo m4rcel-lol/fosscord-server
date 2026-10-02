@@ -16,7 +16,6 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-
 import { ChildProcess, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import EventEmitter from "node:events";
@@ -85,6 +84,10 @@ class PionClient implements WebRtcClient<unknown> {
         this.server.ipc.send({ type: "stop-publish", clientId: this.uniqueId, trackType: type });
     }
 
+    requestKeyframe() {
+        if (this.published.video) this.server.ipc.send({ type: "keyframe", clientId: this.uniqueId });
+    }
+
     async subscribeToTrack(userId: string, type: "audio" | "video") {
         const publisher = this.server.findClient(this.voiceRoomId, userId);
         if (!publisher) return;
@@ -101,6 +104,7 @@ class PionClient implements WebRtcClient<unknown> {
         else {
             ssrcs.video_ssrc = ssrc;
             ssrcs.rtx_ssrc = declared.rtx_ssrc;
+            for (const delay of [250, 1000]) setTimeout(() => publisher.requestKeyframe(), delay);
         }
         this.outgoing.set(userId, ssrcs);
     }
@@ -148,7 +152,9 @@ export class PionMediaServer implements SignalingDelegate {
     }
 
     private spawn(socketPath: string) {
-        const child = spawn(process.env.PION_SFU_BIN!, ["-port", String(this._port), "-ip", this._ip, "-ipc", socketPath, ...(process.env.PION_SFU_VERBOSE ? ["-verbose"] : [])], { stdio: ["ignore", "pipe", "pipe"] });
+        const child = spawn(process.env.PION_SFU_BIN!, ["-port", String(this._port), "-ip", this._ip, "-ipc", socketPath, ...(process.env.PION_SFU_VERBOSE ? ["-verbose"] : [])], {
+            stdio: ["ignore", "pipe", "pipe"],
+        });
         const log = (data: Buffer) => process.env.PION_SFU_VERBOSE && console.log(`[Pion SFU] ${data.toString().trimEnd()}`);
         child.stdout?.on("data", log);
         child.stderr?.on("data", log);
@@ -214,7 +220,13 @@ export class PionMediaServer implements SignalingDelegate {
         const h264 = codecs.find((codec) => codec.name === "H264");
         const videoPayload = h264?.payload_type ?? 102;
         const rtxPayload = h264?.rtx_payload_type ?? 103;
-        const transport = [`a=ice-ufrag:${attribute("ice-ufrag")}`, `a=ice-pwd:${attribute("ice-pwd")}`, `a=fingerprint:${attribute("fingerprint")}`, "a=setup:active", "a=rtcp-mux"];
+        const transport = [
+            `a=ice-ufrag:${attribute("ice-ufrag")}`,
+            `a=ice-pwd:${attribute("ice-pwd")}`,
+            `a=fingerprint:${attribute("fingerprint")}`,
+            "a=setup:active",
+            "a=rtcp-mux",
+        ];
 
         const offer = [
             "v=0",

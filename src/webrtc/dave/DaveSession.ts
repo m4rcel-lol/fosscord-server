@@ -16,7 +16,6 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-
 import { Send, SendBinary } from "../util/Send";
 import { VoiceOPCodes } from "../util/Constants";
 import { WebRtcWebSocket } from "../util/WebRtcWebSocket";
@@ -41,6 +40,7 @@ interface Transition {
 }
 
 const externalSender = new ExternalSender();
+const transitionListeners: ((roomId: string) => void)[] = [];
 const sessions = new Map<string, DaveSession>();
 
 export class DaveSession {
@@ -65,6 +65,10 @@ export class DaveSession {
         let session = sessions.get(roomId);
         if (!session) sessions.set(roomId, (session = new DaveSession(roomId, channelId)));
         return session;
+    }
+
+    static onTransitionExecuted(listener: (roomId: string) => void) {
+        transitionListeners.push(listener);
     }
 
     static find(roomId?: string) {
@@ -144,7 +148,8 @@ export class DaveSession {
     async onKeyPackage(socket: WebRtcWebSocket, data: Buffer) {
         const keyPackage = parseKeyPackageMessage(data);
         if (keyPackage.cipherSuite !== CIPHERSUITE_P256_AES128GCM_SHA256_P256) throw new Error(`Unexpected ciphersuite ${keyPackage.cipherSuite}`);
-        if (keyPackage.identity.length !== 8 || keyPackage.identity.readBigUInt64BE(0).toString() !== socket.user_id) throw new Error("Key package identity does not match the authenticated user");
+        if (keyPackage.identity.length !== 8 || keyPackage.identity.readBigUInt64BE(0).toString() !== socket.user_id)
+            throw new Error("Key package identity does not match the authenticated user");
 
         this.sockets.set(socket.user_id, socket);
         this.keyPackages.set(socket.user_id, keyPackage.raw);
@@ -273,6 +278,7 @@ export class DaveSession {
         clearTimeout(transition.timer);
         this.transitions.delete(transitionId);
         for (const userId of this.members()) this.sendJson(userId, VoiceOPCodes.DAVE_PROTOCOL_EXECUTE_TRANSITION, { transition_id: transitionId });
+        for (const listener of transitionListeners) listener(this.roomId);
     }
 
     private encodeAppend(proposals: PendingProposal[]) {
