@@ -33,6 +33,13 @@ import { ChannelType, MessageCallState, MessageType, PublicUserProjection } from
 
 const RING_TIMEOUT = 60_000;
 
+let queue: Promise<unknown> = Promise.resolve();
+const serial = <T>(fn: () => Promise<T>): Promise<T> => {
+    const run = queue.then(fn, fn);
+    queue = run.catch(() => undefined);
+    return run;
+};
+
 const isPrivate = (channel: Channel | null): channel is Channel => channel?.type === ChannelType.DM || channel?.type === ChannelType.GROUP_DM;
 
 async function activeCall(channel_id: string) {
@@ -73,23 +80,27 @@ async function saveCall(message: Message, call: MessageCallState, notifyMessage:
 
 function scheduleRingTimeout(channel_id: string, user_ids: string[]) {
     if (!user_ids.length) return;
-    setTimeout(async () => {
-        try {
-            const message = await activeCall(channel_id);
-            if (!message?.call?.ringing) return;
-            const now = Date.now();
-            const expired = user_ids.filter((id) => message.call!.ringing![id] && now - (message.call!.ring_started?.[id] ?? 0) >= RING_TIMEOUT);
-            if (!expired.length) return;
-            const call = { ...message.call, ringing: { ...message.call.ringing }, ring_started: { ...message.call.ring_started } };
-            for (const id of expired) {
-                delete call.ringing[id];
-                delete call.ring_started[id];
-            }
-            await saveCall(message, call, false);
-        } catch (e) {
-            console.error("[Calls] ring timeout failed", e);
-        }
-    }, RING_TIMEOUT + 500).unref?.();
+    setTimeout(
+        () =>
+            serial(async () => {
+                try {
+                    const message = await activeCall(channel_id);
+                    if (!message?.call?.ringing) return;
+                    const now = Date.now();
+                    const expired = user_ids.filter((id) => message.call!.ringing![id] && now - (message.call!.ring_started?.[id] ?? 0) >= RING_TIMEOUT);
+                    if (!expired.length) return;
+                    const call = { ...message.call, ringing: { ...message.call.ringing }, ring_started: { ...message.call.ring_started } };
+                    for (const id of expired) {
+                        delete call.ringing[id];
+                        delete call.ring_started[id];
+                    }
+                    await saveCall(message, call, false);
+                } catch (e) {
+                    console.error("[Calls] ring timeout failed", e);
+                }
+            }),
+        RING_TIMEOUT + 500,
+    ).unref?.();
 }
 
 async function reopenForRecipients(channel: Channel) {
@@ -158,58 +169,64 @@ async function endCall(message: Message) {
 }
 
 export async function onPrivateVoiceStateChange(user_id: string, previous_channel_id: string | null | undefined, channel_id: string | null | undefined) {
-    try {
-        if (previous_channel_id && previous_channel_id !== channel_id) {
-            const message = await activeCall(previous_channel_id);
-            if (message && !(await VoiceState.exists({ where: { channel_id: previous_channel_id } }))) await endCall(message);
+    return serial(async () => {
+        try {
+            if (previous_channel_id && previous_channel_id !== channel_id) {
+                const message = await activeCall(previous_channel_id);
+                if (message && !(await VoiceState.exists({ where: { channel_id: previous_channel_id } }))) await endCall(message);
+            }
+            if (!channel_id || previous_channel_id === channel_id) return;
+            const channel = await Channel.findOne({ where: { id: channel_id } });
+            if (!isPrivate(channel)) return;
+
+            const message = await activeCall(channel_id);
+            if (!message) return await startCall(channel, user_id);
+
+            const call = { ...(message.call as MessageCallState), ringing: { ...message.call!.ringing }, ring_started: { ...message.call!.ring_started } };
+            const joined = !call.participants.includes(user_id);
+            if (joined) call.participants = [...call.participants, user_id];
+            delete call.ringing[user_id];
+            delete call.ring_started[user_id];
+            await saveCall(message, call, joined);
+        } catch (e) {
+            console.error("[Calls] voice state handling failed", e);
         }
-        if (!channel_id || previous_channel_id === channel_id) return;
-        const channel = await Channel.findOne({ where: { id: channel_id } });
-        if (!isPrivate(channel)) return;
-
-        const message = await activeCall(channel_id);
-        if (!message) return await startCall(channel, user_id);
-
-        const call = { ...(message.call as MessageCallState), ringing: { ...message.call!.ringing }, ring_started: { ...message.call!.ring_started } };
-        const joined = !call.participants.includes(user_id);
-        if (joined) call.participants = [...call.participants, user_id];
-        delete call.ringing[user_id];
-        delete call.ring_started[user_id];
-        await saveCall(message, call, joined);
-    } catch (e) {
-        console.error("[Calls] voice state handling failed", e);
-    }
+    });
 }
 
 export async function ringCall(channel_id: string, user_id: string, recipients?: string[] | null) {
-    const message = await activeCall(channel_id);
-    if (!message) return false;
-    const inVoice = new Set((await VoiceState.find({ where: { channel_id }, select: { user_id: true } })).map((x) => x.user_id));
-    const targets = (recipients?.length ? recipients : await recipientIds(channel_id)).filter((id) => id !== user_id && !inVoice.has(id));
-    const all = new Set(await recipientIds(channel_id));
-    const call = { ...(message.call as MessageCallState), ringing: { ...message.call!.ringing }, ring_started: { ...message.call!.ring_started } };
-    const now = Date.now();
-    const rung = targets.filter((id) => all.has(id));
-    for (const id of rung) {
-        call.ringing[id] = user_id;
-        call.ring_started[id] = now;
-    }
-    await saveCall(message, call, false);
-    scheduleRingTimeout(channel_id, rung);
-    return true;
+    return serial(async () => {
+        const message = await activeCall(channel_id);
+        if (!message) return false;
+        const inVoice = new Set((await VoiceState.find({ where: { channel_id }, select: { user_id: true } })).map((x) => x.user_id));
+        const targets = (recipients?.length ? recipients : await recipientIds(channel_id)).filter((id) => id !== user_id && !inVoice.has(id));
+        const all = new Set(await recipientIds(channel_id));
+        const call = { ...(message.call as MessageCallState), ringing: { ...message.call!.ringing }, ring_started: { ...message.call!.ring_started } };
+        const now = Date.now();
+        const rung = targets.filter((id) => all.has(id));
+        for (const id of rung) {
+            call.ringing[id] = user_id;
+            call.ring_started[id] = now;
+        }
+        await saveCall(message, call, false);
+        scheduleRingTimeout(channel_id, rung);
+        return true;
+    });
 }
 
 export async function stopRingingCall(channel_id: string, user_id: string, recipients?: string[] | null) {
-    const message = await activeCall(channel_id);
-    if (!message) return false;
-    const targets = recipients?.length ? recipients : [user_id];
-    const call = { ...(message.call as MessageCallState), ringing: { ...message.call!.ringing }, ring_started: { ...message.call!.ring_started } };
-    for (const id of targets) {
-        delete call.ringing[id];
-        delete call.ring_started[id];
-    }
-    await saveCall(message, call, false);
-    return true;
+    return serial(async () => {
+        const message = await activeCall(channel_id);
+        if (!message) return false;
+        const targets = recipients?.length ? recipients : [user_id];
+        const call = { ...(message.call as MessageCallState), ringing: { ...message.call!.ringing }, ring_started: { ...message.call!.ring_started } };
+        for (const id of targets) {
+            delete call.ringing[id];
+            delete call.ring_started[id];
+        }
+        await saveCall(message, call, false);
+        return true;
+    });
 }
 
 export async function getActiveCallsFor(user_id: string) {
