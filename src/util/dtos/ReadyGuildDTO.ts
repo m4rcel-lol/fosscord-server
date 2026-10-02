@@ -17,6 +17,7 @@
 */
 
 import { Channel, Emoji, Guild, Role, Sticker } from "../../database/entities";
+import { StageInstances } from "../../database/voice/StageInstances";
 import { ChannelOverride, ChannelType, PublicMember, PublicUser, UserGuildSettings } from "@spacebar/schemas";
 
 // TODO: this is not the best place for this type
@@ -211,7 +212,7 @@ export class ReadyGuildDTO implements IReadyGuildDTO {
             safety_alerts_channel_id: null,
         };
         this.roles = guild.roles.map((x) => x.toJSON());
-        this.stage_instances = [];
+        this.stage_instances = StageInstances.forGuild(guild.id);
         this.stickers = guild.stickers;
         this.threads = guild.threads;
         this.version = "1"; // ??????

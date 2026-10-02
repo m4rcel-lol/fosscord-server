@@ -6294,6 +6294,25 @@
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
+    "VoiceStateModifySchema": {
+        "type": "object",
+        "properties": {
+            "channel_id": {
+                "type": "string"
+            },
+            "suppress": {
+                "type": "boolean"
+            },
+            "request_to_speak_timestamp": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
     "GenerateWebAuthnCredentialsSchema": {
         "type": "object",
         "properties": {

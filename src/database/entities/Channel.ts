@@ -250,6 +250,11 @@ export class Channel extends BaseClass {
             case ChannelType.GUILD_MEDIA:
             case ChannelType.GUILD_NEWS:
             case ChannelType.GUILD_VOICE:
+            case ChannelType.GUILD_STAGE_VOICE:
+                if (channel.type === ChannelType.GUILD_VOICE || channel.type === ChannelType.GUILD_STAGE_VOICE) {
+                    channel.bitrate ??= 64000;
+                    channel.user_limit ??= 0;
+                }
                 if (channel.parent_id && !opts?.skipExistsCheck) {
                     const exists = await Channel.findOneOrFail({
                         where: { id: channel.parent_id },
@@ -714,7 +719,7 @@ export class Channel extends BaseClass {
 
             // these fields are not returned depending on the type of channel
             bitrate: this.bitrate || undefined,
-            user_limit: this.user_limit || undefined,
+            user_limit: this.user_limit ?? undefined,
             rate_limit_per_user: this.rate_limit_per_user || undefined,
             owner_id: this.owner_id || undefined,
             ...(this.isThread() && this.thread_members ? { member_ids_preview: this.thread_members.map((_) => _.member.id) } : {}),

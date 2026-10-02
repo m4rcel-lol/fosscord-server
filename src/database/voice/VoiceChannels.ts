@@ -24,6 +24,7 @@ import { Member } from "../entities/Member";
 import { VoiceState } from "../entities/VoiceState";
 import { PrivateCalls } from "./PrivateCalls";
 import { GoLiveStreams } from "./StreamPreviews";
+import { StageInstances } from "./StageInstances";
 
 export class VoiceChannels {
     static async startTime(channelId: string) {
@@ -44,6 +45,7 @@ export class VoiceChannels {
         const voiceStartTime = await VoiceChannels.startTime(channelId);
         await emitEvent({ event: "VOICE_CHANNEL_START_TIME_UPDATE", guild_id: guildId, data: { id: channelId, guild_id: guildId, voice_start_time: voiceStartTime } });
         if (voiceStartTime !== null) return;
+        await StageInstances.delete(channelId);
 
         const channel = await Channel.findOne({ where: { id: channelId }, select: { id: true, status: true } });
         if (!channel?.status) return;

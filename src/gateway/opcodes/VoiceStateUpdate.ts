@@ -86,7 +86,7 @@ export async function onVoiceStateUpdate(this: WebSocket, data: Payload) {
         voiceState.mute = member?.mute ?? false;
         voiceState.deaf = member?.deaf ?? false;
         voiceState.suppress = channel?.type === ChannelType.GUILD_STAGE_VOICE;
-        voiceState.request_to_speak_timestamp = undefined;
+        voiceState.request_to_speak_timestamp = null as unknown as undefined;
         voiceState.self_stream = false;
     }
     await voiceState.save();
@@ -126,5 +126,7 @@ export async function onVoiceStateUpdate(this: WebSocket, data: Payload) {
         } satisfies VoiceServerUpdateEvent);
     }
 
-    console.log(`[Gateway/${this.user_id}] VOICE_STATE_UPDATE for user ${this.user_id} in channel ${voiceState.channel_id} in guild ${voiceState.guild_id} in ${Date.now() - startTime}ms`);
+    console.log(
+        `[Gateway/${this.user_id}] VOICE_STATE_UPDATE for user ${this.user_id} in channel ${voiceState.channel_id} in guild ${voiceState.guild_id} in ${Date.now() - startTime}ms`,
+    );
 }

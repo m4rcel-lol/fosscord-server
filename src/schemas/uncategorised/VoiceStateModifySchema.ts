@@ -16,14 +16,8 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Request, Response, Router } from "express";
-import { route } from "@spacebar/api/middlewares";
-
-const router: Router = Router({ mergeParams: true });
-
-router.get("/", route({}), (req: Request, res: Response) => {
-    //TODO
-    res.json([]).status(200);
-});
-
-export default router;
+export interface VoiceStateModifySchema {
+    channel_id?: string;
+    suppress?: boolean;
+    request_to_speak_timestamp?: string | null;
+}
