@@ -20,7 +20,7 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
 import { Guild, Member } from "@spacebar/database";
-import { Config } from "@spacebar/util";
+import { Config, getPermission } from "@spacebar/util";
 
 const router: Router = Router({ mergeParams: true });
 
@@ -38,14 +38,22 @@ router.get(
             relations: { guild: true },
             where: { id: req.user_id },
         });
+        const withCounts = req.query.with_counts == "true";
 
-        let guild = members.map((x) => x.guild);
-
-        if ("with_counts" in req.query && req.query.with_counts == "true") {
-            guild = []; // TODO: Load guilds with user role permissions number
-        }
-
-        res.json(guild);
+        res.json(
+            await Promise.all(
+                members.map(async ({ guild }) => ({
+                    id: guild.id,
+                    name: guild.name,
+                    icon: guild.icon ?? null,
+                    banner: guild.banner ?? null,
+                    owner: guild.owner_id === req.user_id,
+                    permissions: (await getPermission(req.user_id, guild.id)).bitfield.toString(),
+                    features: guild.features,
+                    ...(withCounts && { approximate_member_count: guild.member_count ?? 0, approximate_presence_count: guild.presence_count ?? 0 }),
+                })),
+            ),
+        );
     },
 );
 
