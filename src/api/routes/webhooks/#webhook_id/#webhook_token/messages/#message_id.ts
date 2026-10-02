@@ -32,7 +32,7 @@ async function interactionMessage(req: Request) {
     const { webhook_id, webhook_token, message_id } = req.params as { [key: string]: string };
     const interaction = getInteractionByToken(webhook_id, webhook_token);
     if (!interaction) return undefined;
-    const id = message_id === "@original" ? interaction.responseMessageId : message_id;
+    const id = message_id === "@original" ? interaction.responseMessageId : /^\d+$/.test(message_id) ? message_id : undefined;
     const message = id ? await fetchInteractionMessage(id) : null;
     if (!message) throw DiscordApiErrors.UNKNOWN_MESSAGE;
     const isSource = message.id === interaction.messageId && message.application_id === interaction.applicationId;
@@ -47,6 +47,7 @@ async function assertValidWebhookAuth(webhookId: string, webhookToken: string, m
     if (webhook.token != webhookToken) throw DiscordApiErrors.INVALID_WEBHOOK_TOKEN_PROVIDED;
 
     // TODO: fix error responses
+    if (!/^\d+$/.test(messageId)) throw DiscordApiErrors.UNKNOWN_MESSAGE;
     const message = await Message.findOne({ where: { id: messageId } });
     if (!message) throw new HTTPError(`No message found with ID ${messageId}`, 404);
     if (webhook.id != message?.webhook_id) throw new HTTPError(`Message does not belong to webhook ${message.webhook_id}`, 401);
