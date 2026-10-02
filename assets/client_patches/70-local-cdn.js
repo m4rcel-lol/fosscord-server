@@ -2,7 +2,7 @@
     const cdn = () => `${location.protocol}//${window.GLOBAL_ENV?.CDN_HOST || location.host}`;
     const rules = [
         [/^https:\/\/cdn\.discordapp\.com\/assets\/content\//, () => `${cdn()}/content-assets/`],
-        [/^https:\/\/cdn\.discordapp\.com\/(media\/v1\/collectibles-shop|badge-icons|avatar-decoration-presets|app-icons)\//, (match, prefix) => `${cdn()}/${prefix}/`],
+        [/^https:\/\/cdn\.discordapp\.com\/(media\/v1\/collectibles-shop|badge-icons|avatar-decoration-presets|app-icons|bad-domains)\//, (match, prefix) => `${cdn()}/${prefix}/`],
     ];
     const rewrite = (value) => {
         if (typeof value !== "string" || !value.includes("cdn.discordapp.com")) return value;
