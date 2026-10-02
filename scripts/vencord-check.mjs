@@ -121,7 +121,8 @@ const findOwner = (find) => [...ours].find((name) => find.includes(name));
 writeFileSync(reportPath, JSON.stringify({ outcome, origin, seconds: Math.round((Date.now() - started) / 1000), ...report }, null, 4));
 
 const groups = { fosscord: [], enabled: [], upstream: [] };
-for (const patch of report.badPatches) groups[owner(patch.plugin)].push(`${patch.plugin}: patch ${patch.type}\n      ${patch.match.slice(0, 220)}${patch.error ? `\n      ${patch.error.slice(0, 220)}` : ""}`);
+for (const patch of report.badPatches)
+    groups[owner(patch.plugin)].push(`${patch.plugin}: patch ${patch.type}\n      ${patch.match.slice(0, 220)}${patch.error ? `\n      ${patch.error.slice(0, 220)}` : ""}`);
 for (const start of report.badStarts) groups[owner(start.plugin)].push(`${start.plugin}: failed to start\n      ${start.error.slice(0, 220)}`);
 for (const patch of report.unmatchedAllPatches) groups.fosscord.push(`${patch.plugin}: patch found no module\n      ${patch.find.slice(0, 220)}`);
 for (const find of report.badFinds) groups[findOwner(find) ? "fosscord" : "upstream"].push(`webpack find failed\n      ${find.slice(0, 220)}`);
