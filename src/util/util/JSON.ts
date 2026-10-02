@@ -36,3 +36,17 @@ export function JSONReplacer(this: { [key: string]: unknown }, key: string, valu
 
     return value;
 }
+
+function discordDate(this: Date) {
+    return Number.isNaN(this.getTime()) ? null : this.toISOString().replace("Z", "+00:00");
+}
+
+export function JSONStringify(value: unknown) {
+    const toJSON = Date.prototype.toJSON;
+    Date.prototype.toJSON = discordDate as typeof toJSON;
+    try {
+        return JSON.stringify(value);
+    } finally {
+        Date.prototype.toJSON = toJSON;
+    }
+}

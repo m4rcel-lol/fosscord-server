@@ -19,7 +19,7 @@
 import { In, Not } from "typeorm";
 import { arrayGroupBy } from "@spacebar/extensions";
 import { Channel, Emoji, getDatabase, Role, Sticker } from "@spacebar/database";
-import { GuildCacheEventId, JSONReplacer, listenEvent } from "@spacebar/util";
+import { GuildCacheEventId, JSONStringify, listenEvent } from "@spacebar/util";
 import { ChannelType, PublicChannel } from "@spacebar/schemas";
 
 export type CachedChannel = PublicChannel & { id: string; last_message_id?: string | null; last_pin_timestamp?: string; e2ee_enabled_at?: string | null };
@@ -57,7 +57,7 @@ const subscribe = () =>
             return false;
         }));
 
-const plain = <T>(value: unknown) => JSON.parse(JSON.stringify(value, JSONReplacer)) as T;
+const plain = <T>(value: unknown) => JSON.parse(JSONStringify(value)) as T;
 
 const dateString = (value: Date | string | null | undefined) => (value ? new Date(value).toISOString() : undefined);
 

@@ -20,7 +20,7 @@ import { Payload, WebSocket } from "@spacebar/gateway";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { JSONReplacer } from "@spacebar/util";
+import { JSONReplacer, JSONStringify } from "@spacebar/util";
 import { bufferForResume, rememberDispatch, resolveSocket } from "./SessionResume";
 import * as erlpack from "harmony-erlpack";
 
@@ -64,7 +64,7 @@ export async function Send(target: WebSocket, data: Payload) {
         buffer = Buffer.from(erlpack.pack(data));
     }
     // TODO: encode circular object
-    else if (socket.encoding === "json") buffer = JSON.stringify(data, JSONReplacer);
+    else if (socket.encoding === "json") buffer = JSONStringify(data);
     else return;
 
     // TODO: compression
