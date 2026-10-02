@@ -23,7 +23,6 @@ import { HTTPError } from "lambert-server/HTTPError";
 import { Config } from "@spacebar/util";
 import { storage, multer, setCacheControl, setCacheControlNotFound, validateServerAuth, fetchUpstreamAsset } from "../util";
 
-const ALLOWED_MIME_TYPES = ["audio/mpeg", "audio/ogg", "audio/opus", "audio/wav", "audio/x-wav", "audio/vnd.wave", "audio/webm", "audio/mp4", "audio/aac", "audio/x-m4a"];
 const DEFAULT_SOUND_IDS = ["1", "2", "3", "4", "5", "6", "7"];
 
 const router = Router({ mergeParams: true });
@@ -36,7 +35,7 @@ router.post("/:sound_id", validateServerAuth, multer.single("file"), async (req:
     const { sound_id } = req.params as { [key: string]: string };
 
     const type = await fileTypeFromBuffer(buffer);
-    if (!type || !ALLOWED_MIME_TYPES.includes(type.mime)) throw new HTTPError("Invalid file type");
+    if (!type?.mime.startsWith("audio/") && type?.mime !== "video/ogg" && type?.mime !== "video/webm") throw new HTTPError("Invalid file type");
 
     await storage.set(`${pathPrefix}/${sound_id}`, buffer);
 
