@@ -63,6 +63,18 @@ export function requestOrigin(req: Request) {
 
 const rpIdFor = (origin: string) => new URL(origin).hostname;
 
+const failedAttempts = new Map<string, { count: number; expires: number }>();
+
+export async function guardedMfaAttempt(ticket: string, verify: () => Promise<boolean>) {
+    const now = Date.now();
+    for (const [key, entry] of failedAttempts) if (entry.expires < now) failedAttempts.delete(key);
+    const entry = failedAttempts.get(ticket);
+    if (entry && entry.count >= 5) throw MfaInvalidTicket();
+    if (await verify()) return true;
+    failedAttempts.set(ticket, { count: (entry?.count ?? 0) + 1, expires: now + 600000 });
+    return false;
+}
+
 export function verifyTotp(secret: string | undefined, code: unknown) {
     if (!secret || typeof code !== "string") return false;
     const result = verifyToken(secret, code.replace(/\s/g, ""), 1);

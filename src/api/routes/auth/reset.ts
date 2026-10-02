@@ -20,7 +20,7 @@ import crypto from "node:crypto";
 import bcrypt from "bcrypt";
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { MfaInvalidCode, MfaInvalidTicket, loginMfaResponse, readTicket, revokeSessions, verifyMfaMethod } from "@spacebar/api/util";
+import { MfaInvalidCode, MfaInvalidTicket, guardedMfaAttempt, loginMfaResponse, readTicket, revokeSessions, verifyMfaMethod } from "@spacebar/api/util";
 import { User } from "@spacebar/database";
 import { Config, Email, FieldErrors, generateToken } from "@spacebar/util";
 
@@ -79,7 +79,7 @@ router.post(
         } else {
             const mfaTicket = readTicket<{ typ: string; uid?: string; reset?: string }>(ticket, "login");
             if (!mfaTicket?.uid || mfaTicket.reset !== user.id) throw MfaInvalidTicket();
-            if (!(await verifyMfaMethod(user.id, method ?? "totp", code, mfaTicket))) throw MfaInvalidCode();
+            if (!(await guardedMfaAttempt(ticket, () => verifyMfaMethod(user.id, method ?? "totp", code, mfaTicket)))) throw MfaInvalidCode();
         }
 
         await User.update(
