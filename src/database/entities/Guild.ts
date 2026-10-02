@@ -20,6 +20,7 @@ import { Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId } from "ty
 import { arrayRemove } from "@spacebar/extensions";
 import { Config, handleFile, Snowflake } from "@spacebar/util";
 import {
+    ChannelType,
     DiscoverableGuild,
     GuildNsfwLevel,
     GuildPremiumTier,
@@ -382,6 +383,7 @@ export class Guild extends BaseClass {
         owner_id?: string;
         roles?: Partial<Role>[];
         channels?: Partial<Channel>[];
+        system_channel_id?: string | null;
         source_guild_id: string | null;
     }) {
         const guild_id = Snowflake.generate();
@@ -459,6 +461,7 @@ export class Guild extends BaseClass {
         }
 
         const ids = new Map();
+        let systemChannelId: string | undefined;
 
         body.channels.forEach((x) => {
             if (x.id) {
@@ -479,6 +482,12 @@ export class Guild extends BaseClass {
             });
 
             await Guild.insertChannelInOrder(guild.id, saved.id, parent_id ?? channel.position ?? 0, guild);
+            if (!systemChannelId && saved.type === ChannelType.GUILD_TEXT && (!body.system_channel_id || channel.id === body.system_channel_id)) systemChannelId = saved.id;
+        }
+
+        if (systemChannelId) {
+            guild.system_channel_id = systemChannelId;
+            await Guild.update({ id: guild.id }, { system_channel_id: systemChannelId });
         }
 
         return guild;
