@@ -128,6 +128,11 @@ export default function TestClient(app: Application) {
     let html = buildHtml();
     const missLog = path.join(ASSET_FOLDER_PATH, "cacheMisses");
 
+    app.get("/assets/version.:channel.json", (req, res) => {
+        const hash = fs.readFileSync(path.join(CACHE_PATH, "index.html"), "utf8").match(/"VERSION_HASH":"(\w+)"/)?.[1];
+        res.set("Cache-Control", "no-cache").json({ hash, required: false });
+    });
+
     app.get("/assets/:file", async (req, res) => {
         const file = req.params.file;
         if (!/^[\w.-]+$/.test(file) || file.endsWith(".map")) return res.sendStatus(404);
