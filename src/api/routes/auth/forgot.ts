@@ -40,6 +40,8 @@ router.post(
     async (req: Request, res: Response) => {
         const { login, captcha_key } = req.body as ForgotPasswordSchema;
 
+        if (!login?.trim()) throw FieldErrors({ login: { code: "BASE_TYPE_REQUIRED", message: req.t("common:field.BASE_TYPE_REQUIRED") } });
+
         const config = Config.get();
 
         if (config.passwordReset.requireCaptcha && config.security.captcha.enabled) {
