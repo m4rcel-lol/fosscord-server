@@ -18,12 +18,23 @@
 
 import { In } from "typeorm";
 import { Channel, Member, Message, ThreadMember, ThreadMemberFlags } from "@spacebar/database";
-import { ChannelFlags, DiscordApiErrors, emitEvent, InvisibleCharacters, Snowflake, ThreadCreateEvent, ThreadMembersUpdateEvent, ThreadUpdatEvent } from "@spacebar/util";
+import {
+    ChannelFlags,
+    DiscordApiErrors,
+    emitEvent,
+    FieldErrors,
+    InvisibleCharacters,
+    Snowflake,
+    ThreadCreateEvent,
+    ThreadMembersUpdateEvent,
+    ThreadUpdatEvent,
+} from "@spacebar/util";
 import { ChannelType } from "@spacebar/schemas";
 import { HTTPError } from "lambert-server/HTTPError";
 
 export const THREAD_TYPES = [ChannelType.GUILD_NEWS_THREAD, ChannelType.GUILD_PUBLIC_THREAD, ChannelType.GUILD_PRIVATE_THREAD];
-const AUTO_ARCHIVE_DURATIONS = [60, 1440, 4320, 10080];
+export const AUTO_ARCHIVE_DURATIONS = [60, 1440, 4320, 10080];
+export const AUTO_ARCHIVE_DURATION_ERROR = { code: "BASE_TYPE_CHOICES", message: "Value must be one of {60, 1440, 4320, 10080}." };
 
 export interface CreateThreadOptions {
     parent: Channel;
@@ -41,12 +52,15 @@ export async function createThread(opts: CreateThreadOptions) {
     const { parent, user_id, type } = opts;
     const name = opts.name?.trim();
     if (!name) throw new HTTPError("Thread name cannot be empty.", 400);
+    if (opts.name.length > 100) throw FieldErrors({ name: { code: "BASE_TYPE_BAD_LENGTH", message: "Must be between 1 and 100 in length." } });
+    if (opts.auto_archive_duration != null && !AUTO_ARCHIVE_DURATIONS.includes(Number(opts.auto_archive_duration)))
+        throw FieldErrors({ auto_archive_duration: AUTO_ARCHIVE_DURATION_ERROR });
     for (const character of InvisibleCharacters) if (name === character) throw new HTTPError("Thread name cannot include invalid characters", 400);
 
     if (parent.threadOnly()) {
         if (type !== ChannelType.GUILD_PUBLIC_THREAD) throw DiscordApiErrors.CANNOT_EXECUTE_ON_THIS_CHANNEL_TYPE;
     } else if (parent.type === ChannelType.GUILD_NEWS) {
-        if (type !== ChannelType.GUILD_NEWS_THREAD && type !== ChannelType.GUILD_PRIVATE_THREAD) throw DiscordApiErrors.CANNOT_EXECUTE_ON_THIS_CHANNEL_TYPE;
+        if (type !== ChannelType.GUILD_NEWS_THREAD) throw DiscordApiErrors.CANNOT_EXECUTE_ON_THIS_CHANNEL_TYPE;
     } else if (parent.type === ChannelType.GUILD_TEXT) {
         if (type !== ChannelType.GUILD_PUBLIC_THREAD && type !== ChannelType.GUILD_PRIVATE_THREAD) throw DiscordApiErrors.CANNOT_EXECUTE_ON_THIS_CHANNEL_TYPE;
     } else throw DiscordApiErrors.CANNOT_EXECUTE_ON_THIS_CHANNEL_TYPE;
@@ -60,7 +74,7 @@ export async function createThread(opts: CreateThreadOptions) {
         id: opts.id ?? Snowflake.generate(),
         created_at: new Date(),
         type,
-        name: name.slice(0, 100),
+        name,
         guild_id: parent.guild_id,
         parent_id: parent.id,
         owner_id: user_id,

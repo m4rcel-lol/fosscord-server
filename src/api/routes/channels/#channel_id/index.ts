@@ -19,7 +19,7 @@
 import { Request, Response, Router } from "express";
 import { Not } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
-import { emitThreadUpdate, sendMessage, setThreadArchived } from "@spacebar/api/util";
+import { AUTO_ARCHIVE_DURATION_ERROR, AUTO_ARCHIVE_DURATIONS, emitThreadUpdate, sendMessage, setThreadArchived } from "@spacebar/api/util";
 import { Channel, Recipient, Tag, ThreadMember } from "@spacebar/database";
 import {
     ChannelDeleteEvent,
@@ -182,12 +182,15 @@ router.patch(
 
         const channelLimits = Config.get().limits.channel;
         const errors: ErrorList = {};
-        if (payload.name !== undefined && (payload.name.length < 1 || payload.name.length > channelLimits.maxName))
-            errors["name"] = makeObjectErrorContent("BASE_TYPE_BAD_LENGTH", `Must be between 1 and ${channelLimits.maxName} in length.`);
+        const maxName = channel.isThread() ? 100 : channelLimits.maxName;
+        if (payload.name !== undefined && (payload.name.length < 1 || payload.name.length > maxName))
+            errors["name"] = makeObjectErrorContent("BASE_TYPE_BAD_LENGTH", `Must be between 1 and ${maxName} in length.`);
+        if (channel.isThread() && payload.auto_archive_duration != null && !AUTO_ARCHIVE_DURATIONS.includes(Number(payload.auto_archive_duration)))
+            errors["auto_archive_duration"] = makeObjectErrorContent(AUTO_ARCHIVE_DURATION_ERROR.code, AUTO_ARCHIVE_DURATION_ERROR.message);
         if (payload.topic && payload.topic.length > (channel.isForum() ? 4096 : channelLimits.maxTopic))
             errors["topic"] = makeObjectErrorContent("BASE_TYPE_BAD_LENGTH", `Must be ${channel.isForum() ? 4096 : channelLimits.maxTopic} or fewer in length.`);
         if (payload.user_limit !== undefined && payload.user_limit < 0) errors["user_limit"] = makeObjectErrorContent("BASE_TYPE_BAD_VALUE", "User limit must be 0 or higher");
-        if (Object.keys(errors).length) throw new FieldError(400, "Invalid form body", errors);
+        if (Object.keys(errors).length) throw new FieldError(50035, "Invalid Form Body", errors);
 
         if (channel.isThread()) {
             const meta = channel.thread_metadata!;
@@ -212,9 +215,9 @@ router.patch(
                 const realTags = new Map((parent.available_tags ?? []).map((tag) => [tag.id, tag]));
                 const applied = [...new Set(payload.applied_tags)];
                 if (applied.length > 5)
-                    throw new FieldError(400, "Invalid form body", { applied_tags: makeObjectErrorContent("BASE_TYPE_MAX_LENGTH", "Must be 5 or fewer in length.") });
+                    throw new FieldError(50035, "Invalid Form Body", { applied_tags: makeObjectErrorContent("BASE_TYPE_MAX_LENGTH", "Must be 5 or fewer in length.") });
                 if (applied.find((tag) => !realTags.has(tag)))
-                    throw new FieldError(400, "Invalid form body", { applied_tags: makeObjectErrorContent("INVALID_TAG", "Invalid tag") });
+                    throw new FieldError(50035, "Invalid Form Body", { applied_tags: makeObjectErrorContent("INVALID_TAG", "Invalid tag") });
                 const changed = new Set(channel.applied_tags || []).symmetricDifference(new Set(applied));
                 if ([...changed].some((tag) => realTags.get(tag)?.moderated)) perms.hasThrow("MANAGE_THREADS");
                 changes.applied_tags = applied;
@@ -266,7 +269,7 @@ router.patch(
         if (payload.available_tags) {
             if (!channel.isForum()) throw DiscordApiErrors.CANNOT_EXECUTE_ON_THIS_CHANNEL_TYPE;
             if (payload.available_tags.length > 20)
-                throw new FieldError(400, "Invalid form body", { available_tags: makeObjectErrorContent("BASE_TYPE_MAX_LENGTH", "Must be 20 or fewer in length.") });
+                throw new FieldError(50035, "Invalid Form Body", { available_tags: makeObjectErrorContent("BASE_TYPE_MAX_LENGTH", "Must be 20 or fewer in length.") });
             const existing = new Map((channel.available_tags ?? []).map((tag) => [tag.id, tag]));
             const keep = new Set<string>();
             const tags: Tag[] = [];
