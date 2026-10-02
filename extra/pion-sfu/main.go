@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"runtime"
 	"syscall"
+	"time"
 
 	"github.com/pion/ice/v4"
 	"github.com/pion/interceptor"
@@ -89,9 +90,11 @@ func handleJoin(clientID string) error {
 	if _, err := pc.AddTrack(masterAudio); err != nil {
 		return fmt.Errorf("AddTrack audio: %w", err)
 	}
-	if _, err := pc.AddTrack(masterVideo); err != nil {
+	videoSender, err := pc.AddTrack(masterVideo)
+	if err != nil {
 		return fmt.Errorf("AddTrack video: %w", err)
 	}
+	go forwardKeyframeRequests(videoSender)
 
 	p := &Peer{
 		id:            clientID,
@@ -124,6 +127,49 @@ func handleJoin(clientID string) error {
 
 	log.Printf("Client %s joined", clientID)
 	return nil
+}
+
+// forward picture loss and full intra requests from a subscriber to the
+// peer publishing the requested SSRC, so late joiners get a keyframe
+func forwardKeyframeRequests(sender *webrtc.RTPSender) {
+	for {
+		packets, _, err := sender.ReadRTCP()
+		if err != nil {
+			return
+		}
+		for _, packet := range packets {
+			var mediaSSRC uint32
+			switch pkt := packet.(type) {
+			case *rtcp.PictureLossIndication:
+				mediaSSRC = pkt.MediaSSRC
+			case *rtcp.FullIntraRequest:
+				mediaSSRC = pkt.MediaSSRC
+			default:
+				continue
+			}
+			requestKeyframe(webrtc.SSRC(mediaSSRC))
+		}
+	}
+}
+
+func requestKeyframe(ssrc webrtc.SSRC) {
+	sfu.mu.RLock()
+	defer sfu.mu.RUnlock()
+	for _, publisher := range sfu.peers {
+		publisher.mu.Lock()
+		pt := publisher.videoPublished
+		due := pt != nil && pt.ssrc == ssrc && time.Since(publisher.lastKeyframeRequest) > 500*time.Millisecond
+		if due {
+			publisher.lastKeyframeRequest = time.Now()
+		}
+		publisher.mu.Unlock()
+		if due {
+			if err := publisher.pc.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(ssrc)}}); err != nil {
+				log.Printf("WriteRTCP: %v", err)
+			}
+			return
+		}
+	}
 }
 
 // handle "leave": intermediary signals a client has disconnected

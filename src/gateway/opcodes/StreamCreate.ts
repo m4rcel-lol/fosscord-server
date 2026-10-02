@@ -18,7 +18,7 @@
 
 import { Channel, Member, Stream, StreamSession, VoiceState } from "@spacebar/database";
 import { genVoiceToken, Payload, WebSocket, generateStreamKey } from "@spacebar/gateway";
-import { Config, emitEvent, Snowflake, StreamCreateEvent, StreamServerUpdateEvent, VoiceStateUpdateEvent } from "@spacebar/util";
+import { Config, emitEvent, getPermission, Snowflake, StreamCreateEvent, StreamServerUpdateEvent, VoiceStateUpdateEvent } from "@spacebar/util";
 import { check } from "./instanceOf";
 import { StreamCreateSchema } from "@spacebar/schemas";
 
@@ -43,7 +43,7 @@ export async function onStreamCreate(this: WebSocket, data: Payload) {
         });
     }
 
-    // TODO: permissions check - if it's a guild, check if user is allowed to create stream in this guild
+    if (voiceState.guild_id && !(await getPermission(this.user_id, voiceState.guild_id, voiceState.channel_id)).has("STREAM")) return;
 
     const channel = await Channel.findOne({
         where: { id: body.channel_id },
@@ -118,7 +118,7 @@ export async function onStreamCreate(this: WebSocket, data: Payload) {
         event: "VOICE_STATE_UPDATE",
         data: {
             ...voiceState.toPublicVoiceState(),
-            member: voiceState.member.toPublicMember(),
+            member: voiceState.member?.toPublicMember(),
         },
         guild_id: voiceState.guild_id,
         channel_id: voiceState.channel_id,

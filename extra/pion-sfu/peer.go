@@ -2,6 +2,7 @@ package main
 
 import (
 	"sync"
+	"time"
 
 	"github.com/pion/webrtc/v4"
 )
@@ -17,6 +18,8 @@ type Peer struct {
 
 	isAudioPublished bool
 	isVideoPublished bool
+
+	lastKeyframeRequest time.Time
 
 	// single downstream track that all subscribed audio/video is multiplexed onto
 	masterAudio *MultiplexTrack
