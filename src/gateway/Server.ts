@@ -27,11 +27,13 @@ import { Config, initEvent, JSONReplacer, JwtKeypairManager, registerRoutes } fr
 import { ProcessLifecycle, SystemdLifecycle } from "../util/util/ProcessLifecycle";
 import { Monitoring } from "../util/monitoring/Monitoring";
 import { Connection } from "./events/Connection";
+import { RemoteAuthConnection } from "./events/RemoteAuth";
 import { cleanupOnStartup } from "./util";
 import { Authentication, BodyParser, CORS, ErrorHandler } from "@spacebar/api";
 
 export class GatewayServer extends Server {
     public ws: ws.Server;
+    public remoteAuth: ws.Server;
 
     constructor(options?: Partial<ServerOptions>) {
         super(options);
@@ -39,10 +41,16 @@ export class GatewayServer extends Server {
         this.http ??= http.createServer(this.app);
 
         this.http.on("upgrade", (request, socket, head) => {
+            if (request.url?.startsWith("/remote-auth"))
+                return this.remoteAuth.handleUpgrade(request, socket, head, (socket) => {
+                    RemoteAuthConnection(socket);
+                });
             this.ws.handleUpgrade(request, socket, head, (socket) => {
                 this.ws.emit("connection", socket, request);
             });
         });
+
+        this.remoteAuth = new ws.Server({ maxPayload: 4096, noServer: true });
 
         this.ws = new ws.Server({
             maxPayload: 4096,

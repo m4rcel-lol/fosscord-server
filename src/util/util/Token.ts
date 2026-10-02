@@ -153,13 +153,38 @@ export const checkToken = (
         if (!dec) return void rejectAndLog(reject, 500, "Failed to decode token");
         logAuth("Decoded token: " + JSON.stringify(dec));
 
-        if (dec.header.alg == "HS256" && Config.get().security.jwtSecret !== null) {
+        if (dec.header.alg == "HS256" && dec.header.kid === "c") {
+            jwt.verify(token, compactTokenSecret(), { algorithms: ["HS256"] }, validateUser);
+        } else if (dec.header.alg == "HS256" && Config.get().security.jwtSecret !== null) {
             legacyVersion = 1;
             jwt.verify(token, Config.get().security.jwtSecret!, { algorithms: ["HS256"] }, validateUser);
         } else if (dec.header.alg == "ES512") {
             jwt.verify(token, JwtKeypairManager.keypair.publicKey, { algorithms: ["ES512"] }, validateUser);
         } else return void rejectAndLog(reject, 400, "Unsupported token algorithm: " + dec.header.alg);
     });
+
+const compactTokenSecret = () =>
+    crypto
+        .createHash("sha256")
+        .update("compact-token")
+        .update(JwtKeypairManager.keypair.privateKey.export({ format: "pem", type: "sec1" }))
+        .digest();
+
+export async function generateCompactToken(id: string): Promise<string> {
+    const session = Session.create({
+        session_id: Random.getString("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 10),
+        user_id: id,
+        is_admin_session: false,
+        client_status: {},
+        status: "offline",
+        client_info: {},
+    });
+    await session.save();
+    return jwt.sign({ id, iat: Math.floor(Date.now() / 1000), ver: CurrentTokenFormatVersion, did: session.session_id }, compactTokenSecret(), {
+        algorithm: "HS256",
+        header: { alg: "HS256", kid: "c", typ: undefined },
+    });
+}
 
 export async function generateToken(id: string, isAdminSession: boolean = false, scopes: string[] | undefined = undefined): Promise<string | undefined> {
     const iat = Math.floor(Date.now() / 1000);
