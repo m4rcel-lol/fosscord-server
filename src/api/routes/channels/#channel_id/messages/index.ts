@@ -92,6 +92,7 @@ router.get(
         });
         if (!channel) throw new HTTPError("Channel not found", 404);
 
+        if (channel.threadOnly()) return res.json([]);
         isTextChannel(channel.type);
         const around = req.query.around ? `${req.query.around}` : undefined;
         const before = req.query.before ? `${req.query.before}` : undefined;

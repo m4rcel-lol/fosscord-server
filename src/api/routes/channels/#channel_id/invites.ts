@@ -20,8 +20,8 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
 import { Channel, Guild, Invite, PublicInviteRelation, User } from "@spacebar/database";
-import { InviteCreateEvent, emitEvent } from "@spacebar/util";
-import { InviteCreateSchema, isTextChannel } from "@spacebar/schemas";
+import { DiscordApiErrors, InviteCreateEvent, emitEvent } from "@spacebar/util";
+import { ChannelType, InviteCreateSchema } from "@spacebar/schemas";
 import { Random } from "@spacebar/extensions";
 import { InviteListResponse } from "@spacebar/schemas/api/guilds/Invite";
 
@@ -51,7 +51,7 @@ router.post(
             where: { id: channel_id },
             select: { id: true, name: true, type: true, guild_id: true },
         });
-        isTextChannel(channel.type);
+        if (channel.type === ChannelType.GUILD_CATEGORY || channel.isThread()) throw DiscordApiErrors.CANNOT_EXECUTE_ON_THIS_CHANNEL_TYPE;
 
         if (!channel.guild_id) {
             throw new HTTPError("This channel doesn't exist", 404);
