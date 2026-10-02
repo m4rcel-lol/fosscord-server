@@ -378,10 +378,12 @@ router.post(
                     nonce: body.nonce,
                     channel_id: channel.id,
                     author_id: req.user_id,
+                    timestamp: MoreThan(new Date(Date.now() - 5 * 60 * 1000)),
                 },
+                relations: { author: true, attachments: true, mentions: true, mention_roles: true, sticker_items: true },
             });
             if (existing) {
-                return res.json(existing);
+                return res.json(existing.toPublicJSON(req.user_id));
             }
         }
 

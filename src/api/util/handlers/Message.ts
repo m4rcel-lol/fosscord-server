@@ -819,7 +819,7 @@ async function handleMessageMentionsAsync(message: Message, allowed?: AllowedMen
         },
     });
     message.mentions = [...message.mentions, ...mentionedUsers];
-    message.mention_everyone = mention_everyone;
+    message.mention_everyone = mention_everyone || mention_here;
     trace.calls.push("fillMessageMentionProperties", { micros: sw.getElapsedAndReset().totalMicroseconds });
 
     const fillInMissingIDs = async (ids: string[], trace?: TraceSubTree) => {
