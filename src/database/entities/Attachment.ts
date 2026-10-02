@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { BeforeRemove, Column, Entity, JoinColumn, ManyToOne, RelationId } from "typeorm";
+import { BeforeRemove, Column, Entity, JoinColumn, ManyToOne, RelationId, Index } from "typeorm";
 import { Config, deleteFile } from "@spacebar/util/util";
 import { getUrlSignature, NewUrlUserSignatureData, NewUrlSignatureData } from "@spacebar/util/Signing";
 import { AttachmentFlags, PublicAttachment } from "@spacebar/schemas/api/messages/Attachments";
@@ -43,6 +43,7 @@ export class Attachment extends BaseClass {
 
     @Column({ nullable: true, foreignKeyConstraintName: "FK_attachment_message_id" })
     @RelationId((attachment: Attachment) => attachment.message)
+    @Index("IDX_attachments_message_id")
     message_id: string;
 
     @Column({ nullable: true, foreignKeyConstraintName: "FK_attachment_channel_id" })

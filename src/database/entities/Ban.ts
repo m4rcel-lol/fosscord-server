@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, JoinColumn, ManyToOne, RelationId } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, RelationId, Index } from "typeorm";
 import { BaseClass } from "./BaseClass";
 import { Guild } from "./Guild";
 import { User } from "./User";
@@ -37,6 +37,7 @@ export class Ban extends BaseClass {
 
     @Column({ nullable: true })
     @RelationId((ban: Ban) => ban.guild)
+    @Index("IDX_bans_guild_id")
     guild_id: string;
 
     @JoinColumn({ name: "guild_id", foreignKeyConstraintName: "FK_ban_guild_id" })

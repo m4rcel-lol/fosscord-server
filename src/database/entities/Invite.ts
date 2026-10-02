@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, JoinColumn, ManyToOne, PrimaryColumn, RelationId } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, PrimaryColumn, RelationId, Index } from "typeorm";
 import { BaseClassWithoutId } from "./BaseClass";
 import { Channel } from "./Channel";
 import { Guild } from "./Guild";
@@ -53,6 +53,7 @@ export class Invite extends BaseClassWithoutId {
 
     @Column({ nullable: true })
     @RelationId((invite: Invite) => invite.guild)
+    @Index("IDX_invites_guild_id")
     guild_id: string;
 
     @JoinColumn({ name: "guild_id", foreignKeyConstraintName: "FK_invite_guild_id" })
@@ -63,6 +64,7 @@ export class Invite extends BaseClassWithoutId {
 
     @Column({ nullable: true })
     @RelationId((invite: Invite) => invite.channel)
+    @Index("IDX_invites_channel_id")
     channel_id: string;
 
     @JoinColumn({ name: "channel_id", foreignKeyConstraintName: "FK_invite_channel_id" })

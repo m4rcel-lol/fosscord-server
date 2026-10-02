@@ -38,6 +38,7 @@ export class Relationship extends BaseClass {
 
     @Column({})
     @RelationId((relationship: Relationship) => relationship.to)
+    @Index("IDX_relationships_to_id")
     to_id: string;
 
     @JoinColumn({ name: "to_id", foreignKeyConstraintName: "FK_relationship_to_id" })

@@ -74,6 +74,7 @@ export class Member extends BaseClassWithoutId {
 
     @Column()
     @RelationId((member: Member) => member.guild)
+    @Index("IDX_members_guild_id")
     guild_id: string;
 
     @JoinColumn({ name: "guild_id", foreignKeyConstraintName: "FK_member_guild_id" })

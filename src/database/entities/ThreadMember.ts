@@ -57,6 +57,7 @@ export class ThreadMember extends BaseClassWithoutId {
 
     @Column()
     @RelationId((member: ThreadMember) => member.member)
+    @Index("IDX_thread_members_member_idx")
     member_idx: string;
 
     @JoinColumn({ name: "member_idx", foreignKeyConstraintName: "FK_thread_member_member_id" })

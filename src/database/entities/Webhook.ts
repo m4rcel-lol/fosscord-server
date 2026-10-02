@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, JoinColumn, ManyToOne, RelationId } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, RelationId, Index } from "typeorm";
 import { Application } from "./Application";
 import { BaseClass } from "./BaseClass";
 import { Channel } from "./Channel";
@@ -42,6 +42,7 @@ export class Webhook extends BaseClass {
 
     @Column({ nullable: true })
     @RelationId((webhook: Webhook) => webhook.guild)
+    @Index("IDX_webhooks_guild_id")
     guild_id?: string;
 
     @JoinColumn({ name: "guild_id", foreignKeyConstraintName: "FK_webhook_guild_id" })
@@ -52,6 +53,7 @@ export class Webhook extends BaseClass {
 
     @Column({ nullable: true })
     @RelationId((webhook: Webhook) => webhook.channel)
+    @Index("IDX_webhooks_channel_id")
     channel_id: string;
 
     @JoinColumn({ name: "channel_id", foreignKeyConstraintName: "FK_webhook_channel_id" })
