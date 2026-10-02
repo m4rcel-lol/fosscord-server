@@ -190,7 +190,6 @@ router.put(
         });
 
         const alreadyMember = await Member.existsBy({ id: member_id, guild_id });
-
         if (!alreadyMember && !guild.features.includes("DISCOVERABLE")) {
             throw DiscordApiErrors.UNKNOWN_GUILD;
         }

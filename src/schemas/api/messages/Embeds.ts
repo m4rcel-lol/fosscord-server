@@ -63,4 +63,5 @@ export interface EmbedImage {
     proxy_url?: string;
     height?: number;
     width?: number;
+    content_type?: string;
 }

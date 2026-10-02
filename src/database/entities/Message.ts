@@ -38,13 +38,15 @@ import {
     MessageType,
     PartialMessage,
     Poll,
+    PollAnswerCount,
     PublicMessage,
+    PublicReaction,
     Reaction,
     UnfurledMediaItem,
     PartialUser,
     InteractionType,
 } from "@spacebar/schemas";
-import { MessageFlags } from "@spacebar/util";
+import { MessageFlags, proxyEmbedMedia } from "@spacebar/util";
 import { JsonRemoveEmpty } from "@spacebar/util/util/Decorators";
 
 @Entity({
@@ -319,6 +321,34 @@ export class Message extends BaseClass {
         }
     }
 
+    static publicReactions(reactions: Reaction[] | undefined, userId?: string): PublicReaction[] {
+        return (reactions ?? []).map(({ emoji, user_ids, burst_user_ids, burst_colors }) => ({
+            emoji,
+            count: user_ids.length + (burst_user_ids?.length ?? 0),
+            count_details: { burst: burst_user_ids?.length ?? 0, normal: user_ids.length },
+            burst_colors: burst_colors ?? [],
+            me: !!userId && user_ids.includes(userId),
+            me_burst: !!userId && !!burst_user_ids?.includes(userId),
+        }));
+    }
+
+    static publicPoll(poll: Poll | undefined, userId?: string): Poll | undefined {
+        if (!poll) return undefined;
+        const counts = (poll.results?.answer_counts ?? []) as (PollAnswerCount & { voters?: string[] })[];
+        return {
+            ...poll,
+            layout_type: poll.layout_type ?? 1,
+            results: {
+                is_finalized: poll.results?.is_finalized ?? false,
+                answer_counts: counts.map(({ id, count, voters }) => ({ id: Number(id) as unknown as string, count, me_voted: !!userId && !!voters?.includes(userId) })),
+            },
+        };
+    }
+
+    toPublicJSON(userId: string): PublicMessage {
+        return { ...this.toJSON(), reactions: Message.publicReactions(this.reactions, userId), poll: Message.publicPoll(this.poll, userId) };
+    }
+
     toJSON(shallow = false): PublicMessage {
         // this.clean_data();
         return {
@@ -344,11 +374,11 @@ export class Message extends BaseClass {
 
             nonce: this.nonce ?? undefined,
             tts: this.tts ?? false,
-            guild: this.guild ?? undefined,
+            guild: undefined,
             webhook: this.webhook?.toMessageWebhook() ?? undefined,
             interaction: this.interaction ?? undefined,
             interaction_metadata: this.interaction_metadata ?? undefined,
-            reactions: this.reactions ?? undefined,
+            reactions: undefined,
             sticker_items: this.sticker_items ?? undefined,
             message_reference: this.message_reference ?? undefined,
             mention_everyone: this.mention_everyone ?? false,
@@ -361,11 +391,12 @@ export class Message extends BaseClass {
             activity: this.activity ?? undefined,
             application: this.application ?? undefined,
             components: this.components ?? [],
-            poll: this.poll ?? undefined,
+            poll: Message.publicPoll(this.poll),
             content: this.content ?? "",
+            embeds: (this.embeds ?? []).map(proxyEmbedMedia),
             pinned: this.pinned,
             thread: this.thread ? this.thread.toJSON() : this.thread,
-            referenced_message: this.referenced_message && !shallow ? this.referenced_message.toJSON(true) : undefined,
+            referenced_message: shallow ? undefined : this.referenced_message === null ? null : this.referenced_message?.toJSON(true),
             encrypted: this.encrypted ?? undefined,
         } satisfies PublicMessage;
     }
@@ -406,11 +437,13 @@ export class Message extends BaseClass {
         function signMedia(media: UnfurledMediaItem) {
             Object.assign(media, Attachment.prototype.signUrls.call(media, data));
         }
+        const json = this instanceof Message ? this.toJSON() : (this as unknown as PublicMessage);
+        const components = this.components as BaseMessageComponents[] | undefined;
         return {
-            ...this,
-            attachments: this.attachments?.map((attachment: Attachment) => Attachment.prototype.signUrls.call(attachment, data)),
-            components: this.components
-                ? this.components.map((comp) => {
+            ...json,
+            attachments: (this.attachments ?? json.attachments)?.map((attachment) => Attachment.prototype.signUrls.call(attachment, data)),
+            components: components
+                ? components.map((comp) => {
                       comp = structuredClone(comp);
                       if (comp.type === MessageComponentType.Section) {
                           const accessory = comp.accessory;
@@ -450,7 +483,7 @@ export class Message extends BaseClass {
                       }
                       return comp;
                   })
-                : this.components,
+                : json.components,
         };
     }
 

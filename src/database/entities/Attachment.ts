@@ -96,10 +96,11 @@ export class Attachment extends BaseClass {
     toJSON(): PublicAttachment {
         const channelId = this.channel_id ?? this.channel?.id ?? this.message?.channel_id;
         const messageId = this.message_id ?? this.message?.id;
+        const cdn = Config.get().cdn.endpointPublic?.replace(/\/+$/, "");
         return {
             ...this,
-            url: `${Config.get().cdn.endpointPublic}/attachments/${channelId}/${this.id}/${this.filename}`,
-            proxy_url: `${Config.get().cdn.endpointPublic}/attachments/${channelId}/${this.id}/${this.filename}`,
+            url: `${cdn}/attachments/${channelId}/${this.id}/${this.filename}`,
+            proxy_url: `${cdn}/attachments/${channelId}/${this.id}/${this.filename}`,
         } satisfies PublicAttachment;
     }
     signUrls(data: NewUrlUserSignatureData): PublicAttachment {

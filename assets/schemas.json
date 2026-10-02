@@ -10729,6 +10729,17 @@
             "closed": {
                 "type": "boolean"
             },
+            "message_request_timestamp": {
+                "anyOf": [
+                    {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
             "id": {
                 "type": "string"
             }
@@ -13545,6 +13556,9 @@
             },
             "width": {
                 "type": "integer"
+            },
+            "content_type": {
+                "type": "string"
             }
         },
         "additionalProperties": false,
@@ -13560,6 +13574,18 @@
                 "$ref": "#/definitions/PartialEmoji"
             },
             "user_ids": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "burst_user_ids": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "burst_colors": {
                 "type": "array",
                 "items": {
                     "type": "string"
@@ -14424,6 +14450,9 @@
             },
             "allow_multiselect": {
                 "type": "boolean"
+            },
+            "layout_type": {
+                "type": "integer"
             },
             "results": {
                 "$ref": "#/definitions/PollResult"
@@ -16902,7 +16931,7 @@
             "reactions": {
                 "type": "array",
                 "items": {
-                    "$ref": "#/definitions/Reaction"
+                    "$ref": "#/definitions/PublicReaction"
                 }
             },
             "nonce": {
@@ -17007,6 +17036,55 @@
             "tts",
             "type",
             "webhook"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "PublicReaction": {
+        "type": "object",
+        "properties": {
+            "count": {
+                "type": "integer"
+            },
+            "count_details": {
+                "type": "object",
+                "properties": {
+                    "burst": {
+                        "type": "integer"
+                    },
+                    "normal": {
+                        "type": "integer"
+                    }
+                },
+                "additionalProperties": false,
+                "required": [
+                    "burst",
+                    "normal"
+                ]
+            },
+            "emoji": {
+                "$ref": "#/definitions/PartialEmoji"
+            },
+            "me": {
+                "type": "boolean"
+            },
+            "me_burst": {
+                "type": "boolean"
+            },
+            "burst_colors": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "burst_colors",
+            "count",
+            "count_details",
+            "emoji",
+            "me",
+            "me_burst"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },

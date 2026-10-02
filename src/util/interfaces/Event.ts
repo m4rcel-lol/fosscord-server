@@ -399,6 +399,9 @@ export interface MessageReactionAddEvent extends Event {
         member?: PublicMember;
         emoji: PartialEmoji;
         type: ReactionType;
+        burst?: boolean;
+        burst_colors?: string[];
+        message_author_id?: string;
     };
 }
 
@@ -411,6 +414,7 @@ export interface MessageReactionRemoveEvent extends Event {
         guild_id?: string;
         emoji: PartialEmoji;
         type: ReactionType;
+        burst?: boolean;
     };
 }
 

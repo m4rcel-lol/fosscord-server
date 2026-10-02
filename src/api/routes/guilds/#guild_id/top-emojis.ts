@@ -18,24 +18,24 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { Message } from "@spacebar/database";
-import { DiscordApiErrors } from "@spacebar/util";
-import { finalizePoll } from "@spacebar/api/util";
+import { Emoji, Message } from "@spacebar/database";
 
 const router: Router = Router({ mergeParams: true });
 
-router.post("/", route({ permission: "VIEW_CHANNEL" }), async (req: Request, res: Response) => {
-    const { poll_id, channel_id } = req.params as { [key: string]: string };
+router.get("/", route({ permission: "VIEW_CHANNEL", responses: { 200: {} } }), async (req: Request, res: Response) => {
+    const { guild_id } = req.params as { [key: string]: string };
+    const emojis = await Emoji.find({ where: { guild_id }, select: { id: true } });
+    if (!emojis.length) return res.json({ items: [] });
 
-    const message = await Message.findOne({ where: { id: poll_id, channel_id } });
+    const usage: { id: string }[] = await Message.query(
+        `SELECT r->'emoji'->>'id' AS id, SUM((r->>'count')::int) AS uses
+         FROM (SELECT reactions FROM messages WHERE guild_id = $1 ORDER BY id DESC LIMIT 5000) recent, jsonb_array_elements(recent.reactions) r
+         WHERE r->'emoji'->>'id' = ANY($2)
+         GROUP BY 1 ORDER BY 2 DESC LIMIT 20`,
+        [guild_id, emojis.map((emoji) => emoji.id)],
+    ).catch(() => []);
 
-    if (!message) throw DiscordApiErrors.UNKNOWN_MESSAGE;
-    if (!message.poll) throw DiscordApiErrors.NON_POLL_MESSAGE_CANNOT_EXPIRE;
-    if (message.poll.results?.is_finalized || new Date() > new Date(message.poll.expiry)) throw DiscordApiErrors.POLL_EXPIRED;
-    if (message.author_id !== req.user_id) req.permission?.hasThrow("MANAGE_MESSAGES");
-
-    const finalized = await finalizePoll(message.id);
-    res.json(finalized?.toPublicJSON(req.user_id));
+    res.json({ items: usage.map(({ id }, i) => ({ emoji_id: id, emoji_rank: i + 1 })) });
 });
 
 export default router;

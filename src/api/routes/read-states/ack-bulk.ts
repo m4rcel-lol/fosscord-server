@@ -20,6 +20,7 @@ import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { ReadState } from "@spacebar/database";
 import { AckBulkSchema } from "@spacebar/schemas";
+import { emitEvent, MessageAckEvent } from "@spacebar/util";
 
 const router = Router({ mergeParams: true });
 
@@ -60,7 +61,12 @@ router.post(
                 //It's a little more complicated than this but this'll do
                 ret.mention_count = 0;
 
-                return ret.save();
+                await ret.save();
+                await emitEvent({
+                    event: "MESSAGE_ACK",
+                    user_id: req.user_id,
+                    data: { channel_id: x.channel_id, message_id: x.message_id, version: Date.now() },
+                } satisfies MessageAckEvent);
             }),
         ]);
 

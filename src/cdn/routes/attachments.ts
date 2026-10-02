@@ -21,7 +21,7 @@ import { fileTypeFromBuffer } from "file-type";
 import imageSize from "image-size";
 import { HTTPError } from "lambert-server/HTTPError";
 import { Attachment, CloudAttachment } from "@spacebar/database";
-import { Config, hasValidSignature, NewUrlUserSignatureData, Snowflake, UrlSignResult } from "@spacebar/util";
+import { Config, extractVideoFrame, hasValidSignature, readVideoDimensions, NewUrlUserSignatureData, Snowflake, UrlSignResult } from "@spacebar/util";
 import { storage, multer, setCacheControl } from "../util";
 import { InternalCdnAttachment } from "@spacebar/util/dtos/MessageOptions";
 
@@ -36,11 +36,11 @@ router.post("/:channel_id/:message_id", multer.single("file"), async (req: Reque
 
     const { buffer, mimetype, size, originalname } = req.file;
     const { channel_id, message_id } = req.params as { [key: string]: string };
-    const filename = originalname.replaceAll(" ", "_").replace(/[^a-zA-Z0-9._]+/g, "");
+    const filename = originalname.replaceAll(" ", "_").replace(/[^a-zA-Z0-9._-]+/g, "");
     const attachment_id = Snowflake.generate();
     const path = `attachments/${channel_id}/${attachment_id}/${filename}`;
 
-    const endpoint = Config.get()?.cdn.endpointPublic;
+    const endpoint = Config.get()?.cdn.endpointPublic?.replace(/\/+$/, "");
 
     await storage.set(path, buffer);
     let width;
@@ -126,6 +126,13 @@ router.get("/:channel_id/:attachment_id/:filename", setCacheControl, async (req:
         content_type = "application/octet-stream";
     }
 
+    if (req.query.format && content_type.startsWith("video/")) {
+        const frame = await extractVideoFrame(file);
+        if (!frame) return res.status(415).send("Unable to render a preview frame");
+        res.set("Content-Type", "image/jpeg");
+        return res.send(frame);
+    }
+
     res.set("Content-Type", content_type);
 
     return res.send(file);
@@ -185,6 +192,12 @@ router.put("/:channel_id/:batch_id/:attachment_id/:filename", multer.single("fil
 
         if (mimeType?.includes("image")) {
             const dimensions = imageSize(buffer);
+            if (dimensions) {
+                att.width = dimensions.width;
+                att.height = dimensions.height;
+            }
+        } else if (mimeType?.startsWith("video/")) {
+            const dimensions = readVideoDimensions(buffer);
             if (dimensions) {
                 att.width = dimensions.width;
                 att.height = dimensions.height;

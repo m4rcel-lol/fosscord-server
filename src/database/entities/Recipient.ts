@@ -46,5 +46,8 @@ export class Recipient extends BaseClass {
     @Column({ default: false })
     closed: boolean;
 
+    @Column({ nullable: true, type: Date })
+    message_request_timestamp?: Date | null;
+
     // TODO: settings/mute/nick/added at/encryption keys/read_state
 }

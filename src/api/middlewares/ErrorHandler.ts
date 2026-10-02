@@ -75,6 +75,12 @@ export function ErrorHandler(error: Error & { type?: string }, req: Request, res
 
         if (httpcode > 511) httpcode = 400;
 
+        const retry_after = (error as Error & { retry_after?: number }).retry_after;
+        if (retry_after !== undefined) {
+            res.setHeader("Retry-After", Math.ceil(retry_after));
+            return res.status(httpcode).json({ code, message, retry_after, global: false });
+        }
+
         res.status(httpcode).json({ code, message, errors, _ajvErrors, request: `${req.method} ${req.url}` });
     } catch (error) {
         console.error(`[Internal Server Error] 500`, error);

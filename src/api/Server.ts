@@ -40,7 +40,7 @@ import {
 import { ProcessLifecycle, SystemdLifecycle } from "../util/util/ProcessLifecycle";
 import { Monitoring } from "../util/monitoring/Monitoring";
 import { BcryptWorkerPool } from "../util/util/workers/bcrypt/BcryptWorkerPool";
-import { Authentication, CORS, ImageProxy, BodyParser, ErrorHandler, initRateLimits, initTranslation } from "./middlewares";
+import { Authentication, CORS, ExternalProxy, ImageProxy, BodyParser, ErrorHandler, initRateLimits, initTranslation } from "./middlewares";
 import { initInstance } from "./util/handlers/Instance";
 import { addPendingPoll } from "./util";
 import { route } from "@spacebar/api/middlewares";
@@ -137,9 +137,13 @@ export class SpacebarServer extends Server {
         app.use("/api", api); // allow unversioned requests
 
         app.use("/imageproxy/:hash/:size/:url", ImageProxy);
+        app.get("/external/:hash/{*path}", ExternalProxy);
 
         // Pickup non-expired polls
-        const nonExpiredPolls = await Message.createQueryBuilder("message").where("message.poll->>'expiry' > :now", { now: new Date().toISOString() }).getMany();
+        const nonExpiredPolls = await Message.createQueryBuilder("message")
+            .where("message.poll IS NOT NULL")
+            .andWhere("COALESCE(message.poll->'results'->>'is_finalized', 'false') <> 'true'")
+            .getMany();
 
         for (const message of nonExpiredPolls) {
             if (!message.poll) {

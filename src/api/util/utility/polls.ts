@@ -1,6 +1,6 @@
 /*
 	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
-	Copyright (C) 2026 Spacebar and Spacebar Contributors
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
 	
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU Affero General Public License as published
@@ -18,37 +18,39 @@
 
 import { sendMessage } from "@spacebar/api";
 import { EmbedType, MessageReferenceType, MessageType, PollAnswerCount } from "@spacebar/schemas";
-import { pendingPolls } from "@spacebar/util";
+import { emitEvent, MessageUpdateEvent, pendingPolls } from "@spacebar/util";
 import { Message } from "@spacebar/database";
 import { MessageOptions } from "@spacebar/util/dtos/MessageOptions";
 
-export async function generatePollResultsMessage(options: MessageOptions): Promise<MessageOptions> {
-    // TODO: shouldnt this get saved?
-    const message = Message.create({
-        ...options,
-        message_reference: options.message_reference ?? undefined,
-        poll: options.poll,
-        // sticker_items: stickers,
-        // guild_id: options.guild_id,
-        channel_id: options.channel_id,
-        attachments: [],
-        embeds: options.embeds || [],
-        reactions: [],
-        type: MessageType.POLL_RESULT,
-        mentions: [],
-        components: [],
-    });
+type StoredAnswerCount = Omit<PollAnswerCount, "me_voted" | "id"> & { id: number | string; voters: string[] };
 
-    if (!message.poll?.results) {
-        return {};
+export function generatePollResultsMessage(message: Message): MessageOptions {
+    if (!message.poll) return {};
+
+    const counts = (message.poll.results?.answer_counts ?? []) as unknown as StoredAnswerCount[];
+    const totalVotes = counts.reduce((sum, answer) => sum + answer.count, 0);
+    const best = Math.max(0, ...counts.map((answer) => answer.count));
+    const winners = best > 0 ? counts.filter((answer) => answer.count === best) : [];
+
+    const fields = [
+        { name: "poll_question_text", value: message.poll.question.text ?? "" },
+        { name: "victor_answer_votes", value: `${best}` },
+        { name: "total_votes", value: `${totalVotes}` },
+    ];
+
+    if (winners.length === 1) {
+        const winner = message.poll.answers.find((answer) => Number(answer.answer_id) === Number(winners[0].id));
+        fields.push({ name: "victor_answer_id", value: `${winners[0].id}` });
+        if (winner?.poll_media.text) fields.push({ name: "victor_answer_text", value: winner.poll_media.text });
+        const emoji = winner?.poll_media.emoji;
+        if (emoji) {
+            if (emoji.id) fields.push({ name: "victor_answer_emoji_id", value: `${emoji.id}` });
+            if (emoji.name) fields.push({ name: "victor_answer_emoji_name", value: emoji.name });
+            fields.push({ name: "victor_answer_emoji_animated", value: `${!!emoji.animated}` });
+        }
     }
 
-    const allAnswerCounts = message.poll.results.answer_counts as unknown as (Omit<PollAnswerCount, "me_voted"> & { voters: string[] })[];
-
-    const totalVotes = allAnswerCounts.map((a) => a.voters).length;
-    const winningAnswerCounts = allAnswerCounts.filter((a) => (a.count * totalVotes) / 100);
-
-    const pollResultsMessage = {
+    return {
         type: MessageType.POLL_RESULT,
         channel_id: message.channel_id,
         author_id: message.author_id,
@@ -56,83 +58,33 @@ export async function generatePollResultsMessage(options: MessageOptions): Promi
             type: MessageReferenceType.DEFAULT,
             message_id: message.id,
             channel_id: message.channel_id,
+            guild_id: message.guild_id,
         },
-        embeds: [
-            {
-                type: EmbedType.poll_result,
-                id: message.id,
-                fields: [
-                    {
-                        name: "poll_question_text",
-                        value: message.poll.question.text!,
-                    },
-                    {
-                        name: "total_votes",
-                        value: totalVotes.toString(),
-                    },
-                ],
-            },
-        ],
+        embeds: [{ type: EmbedType.poll_result, fields }],
     };
+}
 
-    if (winningAnswerCounts) {
-        const winningAnswer = message.poll.answers.find((a) => a.answer_id === Number(winningAnswerCounts[0]?.id))!;
+export async function finalizePoll(messageId: string) {
+    pendingPolls.delete(messageId);
+    const message = await Message.findOne({ where: { id: messageId }, relations: { author: true } });
+    if (!message?.poll || message.poll.results?.is_finalized) return message;
 
-        if (winningAnswerCounts.length === 0) {
-            pollResultsMessage.embeds[0].fields.push({
-                name: "victor_answer_votes",
-                value: "0",
-            });
-        } else if (winningAnswerCounts.length === 1) {
-            pollResultsMessage.embeds[0].fields.push(
-                {
-                    name: "victor_answer_votes",
-                    value: winningAnswerCounts[0].count.toString(),
-                },
-                {
-                    name: "victor_answer_id",
-                    value: winningAnswerCounts[0].id,
-                },
-                {
-                    name: "victor_answer_text",
-                    value: winningAnswer.poll_media.text!,
-                },
-            );
-        } else if (winningAnswerCounts.length > 1) {
-            pollResultsMessage.embeds[0].fields.push({
-                name: "victor_answer_votes",
-                value: winningAnswerCounts[0].count.toString(),
-            });
-        }
+    message.poll.results = { answer_counts: [], ...message.poll.results, is_finalized: true };
+    if (new Date(message.poll.expiry) > new Date()) message.poll.expiry = new Date();
+    await Message.update({ id: message.id, channel_id: message.channel_id }, { poll: message.poll });
 
-        if (winningAnswer?.poll_media.emoji) {
-            pollResultsMessage.embeds[0].fields.push(
-                {
-                    name: "victor_answer_emoji_id",
-                    value: winningAnswer.poll_media.emoji.id!.toString()!,
-                },
-                {
-                    name: "victor_answer_emoji_name",
-                    value: winningAnswer.poll_media.emoji.name!,
-                },
-                {
-                    name: "victor_answer_emoji_animated",
-                    value: `${winningAnswer.poll_media.emoji.animated}`,
-                },
-            );
-        }
-    }
+    await emitEvent({
+        event: "MESSAGE_UPDATE",
+        channel_id: message.channel_id,
+        data: message.toJSON(),
+    } satisfies MessageUpdateEvent);
 
-    return pollResultsMessage;
+    await sendMessage(generatePollResultsMessage(message));
+    return message;
 }
 
 export async function addPendingPoll(message: Message, timeoutTime: number) {
     pendingPolls.set(message.id, {
-        timeout: setTimeout(async () => {
-            const pollResultsMessage = await generatePollResultsMessage(message);
-
-            await sendMessage(pollResultsMessage);
-            pendingPolls.delete(message.id);
-        }, timeoutTime),
+        timeout: setTimeout(() => finalizePoll(message.id).catch((e) => console.error("[Polls] failed to finalize poll", e)), Math.min(Math.max(timeoutTime, 0), 2 ** 31 - 1)),
     });
 }

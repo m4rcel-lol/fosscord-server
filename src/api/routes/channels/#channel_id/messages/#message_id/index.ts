@@ -34,8 +34,9 @@ import {
     uploadFile,
     NewUrlUserSignatureData,
     DiscordApiErrors,
+    MessageFlags,
 } from "@spacebar/util";
-import { MessageCreateAttachment, MessageCreateCloudAttachment, MessageCreateSchema, MessageEditSchema, ChannelType } from "@spacebar/schemas";
+import { MessageCreateAttachment, MessageCreateCloudAttachment, MessageCreateSchema, MessageEditSchema, ChannelType, EmbedType } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
 // TODO: message content/embed string length limit
@@ -72,7 +73,7 @@ router.patch(
 
         const message = await Message.findOneOrFail({
             where: { id: message_id, channel_id },
-            relations: { attachments: true },
+            relations: { attachments: true, author: true, mentions: true, mention_roles: true, sticker_items: true },
         });
 
         const permissions = await getPermission(req.user_id, undefined, channel_id);
@@ -87,22 +88,45 @@ router.patch(
             }
         } else rights.hasThrow("SELF_EDIT_MESSAGES");
 
+        const suppress = Number(MessageFlags.FLAGS.SUPPRESS_EMBEDS);
+        const flags = body.flags === undefined || body.flags === null ? message.flags : (message.flags & ~suppress) | (body.flags & suppress);
+
+        if (Object.keys(body).every((key) => key === "flags")) {
+            const unsuppressed = (message.flags & suppress) !== 0 && (flags & suppress) === 0;
+            message.flags = flags;
+            if (flags & suppress) message.embeds = message.embeds.filter((embed) => embed.type === EmbedType.rich);
+            await Message.update({ id: message.id, channel_id }, { flags: message.flags, embeds: message.embeds });
+            await emitEvent({
+                event: "MESSAGE_UPDATE",
+                channel_id,
+                data: { ...message.toJSON(), nonce: undefined },
+            } satisfies MessageUpdateEvent);
+            if (unsuppressed) postHandleMessage(message).catch((e) => console.error("[Message] post-message handler failed", e));
+            return res.json(message.toPublicJSON(req.user_id));
+        }
+
         if (message.poll) {
             throw DiscordApiErrors.POLL_CANNOT_EDIT_MESSAGE;
         }
 
-        // no longer necessary, somehow resolved by updating the type of `attachments`...?
-        // //@ts-expect-error Something is wrong with message_reference here, TS complains since "channel_id" is optional in MessageCreateSchema
+        const attachments = body.attachments?.map((attachment) =>
+            "uploaded_filename" in attachment ? attachment : (message.attachments?.find((existing) => existing.id === attachment.id) ?? attachment),
+        );
+
         const new_message = await handleMessage({
             ...message,
             // TODO: should message_reference be overridable?
             message_reference: message.message_reference,
             ...body,
+            flags,
+            attachments: attachments ?? message.attachments,
+            sticker_ids: message.sticker_items?.map((sticker) => sticker.id),
             author_id: message.author_id,
             channel_id,
             id: message_id,
-            edited_timestamp: new Date(),
+            edited_timestamp: body.content !== undefined && body.content !== message.content ? new Date() : (message.edited_timestamp ?? new Date()),
         });
+        if (new_message.flags & suppress) new_message.embeds = new_message.embeds.filter((embed) => embed.type === EmbedType.rich);
 
         await new_message.save();
         await emitEvent({
@@ -116,7 +140,7 @@ router.patch(
 
         postHandleMessage(new_message).catch((e) => console.error("[Message] post-message handler failed", e));
 
-        return res.json(new_message.toJSON());
+        return res.json(new_message.toPublicJSON(req.user_id));
     },
 );
 
@@ -258,7 +282,7 @@ router.get(
 
         if (message.author_id !== req.user_id) permissions.hasThrow("READ_MESSAGE_HISTORY");
 
-        return res.json(message.toJSON());
+        return res.json(message.toPublicJSON(req.user_id));
     },
 );
 
