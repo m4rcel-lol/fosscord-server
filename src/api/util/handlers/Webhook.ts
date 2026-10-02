@@ -45,7 +45,8 @@ export async function applyWebhookUpdate(webhook: Webhook, body: WebhookUpdateSc
         ValidateName(body.name);
         webhook.name = body.name;
     }
-    if (body.avatar !== undefined && body.avatar !== webhook.avatar) webhook.avatar = body.avatar ? ((await handleFile(`/avatars/${webhook.id}`, body.avatar)) ?? webhook.avatar) : (null as never);
+    if (body.avatar !== undefined && body.avatar !== webhook.avatar)
+        webhook.avatar = body.avatar ? ((await handleFile(`/avatars/${webhook.id}`, body.avatar)) ?? webhook.avatar) : (null as never);
     if (allowChannel && body.channel_id && body.channel_id !== webhook.channel_id) {
         const channel = await Channel.findOneOrFail({ where: { id: body.channel_id, guild_id: webhook.guild_id } });
         webhook.channel_id = channel.id;
@@ -182,15 +183,12 @@ export const executeWebhook = async (req: Request, res: Response) => {
 
     sendChannel.last_message_id = message.id;
 
-    await Promise.all([
-        message.save(),
-        sendChannel.save(),
-        emitEvent({
-            event: "MESSAGE_CREATE",
-            channel_id: sendChannel.id,
-            data: message.toJSON(),
-        } satisfies MessageCreateEvent),
-    ]);
+    await Promise.all([message.save(), sendChannel.save()]);
+    await emitEvent({
+        event: "MESSAGE_CREATE",
+        channel_id: sendChannel.id,
+        data: message.toJSON(),
+    } satisfies MessageCreateEvent);
 
     // no await as it shouldnt block the message send function and silently catch error
     postHandleMessage(message).catch((e) => console.error("[Message] post-message handler failed", e));
