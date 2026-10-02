@@ -44,5 +44,42 @@ export class RouteRateLimit {
         count: 5,
         window: 10,
     };
+    application: RateLimitOptions = {
+        count: 10,
+        bot: 50,
+        window: 10,
+    };
+    expression: RateLimitOptions = {
+        count: 20,
+        window: 60,
+    };
+    interaction: RateLimitOptions = {
+        count: 10,
+        window: 5,
+    };
+    oauth2: RateLimitOptions = {
+        count: 5,
+        window: 10,
+    };
+    report: RateLimitOptions = {
+        count: 5,
+        window: 60,
+    };
+    readState: RateLimitOptions = {
+        count: 10,
+        window: 10,
+    };
+    stream: RateLimitOptions = {
+        count: 10,
+        window: 60,
+    };
+    connection: RateLimitOptions = {
+        count: 5,
+        window: 60,
+    };
+    attachment: RateLimitOptions = {
+        count: 20,
+        window: 10,
+    };
     auth: AuthRateLimit = new AuthRateLimit();
 }

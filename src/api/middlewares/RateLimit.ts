@@ -164,6 +164,21 @@ export async function initRateLimits(app: Router) {
     app.patch("/users/@me", rateLimit(routes.userProfile));
     app.use("/users/@me", rateLimit({ onlyWrites: true, ...routes.user }));
     app.use("/invites/:code", rateLimit({ onlyWrites: true, ...routes.invite }));
+    app.use(
+        ["/guilds/:guild_id/emojis", "/guilds/:guild_id/stickers", "/guilds/:guild_id/soundboard-sounds", "/applications/:application_id/emojis"],
+        rateLimit({ onlyWrites: true, ...routes.expression }),
+    );
+    app.use(["/applications", "/teams", "/oauth2/applications"], rateLimit({ onlyWrites: true, ...routes.application }));
+    app.use("/interactions", rateLimit({ onlyWrites: true, ...routes.interaction }));
+    app.use(["/oauth2/authorize", "/oauth2/tokens"], rateLimit({ onlyWrites: true, ...routes.oauth2 }));
+    app.use(["/reporting", "/safety-hub", "/attachments/report-false-positive", "/attachments/sender-report-false-positive"], rateLimit({ onlyWrites: true, ...routes.report }));
+    app.use("/read-states", rateLimit({ onlyWrites: true, ...routes.readState }));
+    app.use("/stage-instances", rateLimit({ onlyWrites: true, ...routes.channel }));
+    app.use("/streams", rateLimit({ onlyWrites: true, ...routes.stream }));
+    app.use("/connections", rateLimit({ onlyWrites: true, ...routes.connection }));
+    app.use("/attachments", rateLimit({ onlyWrites: true, ...routes.attachment }));
+    app.use(["/auth/logout", "/auth/sessions", "/messages"], rateLimit({ onlyWrites: true, ...routes.user }));
+    app.use("/phone-verifications", rateLimit({ onlyWrites: true, ...routes.auth.phone }));
     app.use("/auth/login", rateLimit(routes.auth.login));
     app.use(["/auth/mfa", "/mfa/finish", "/auth/conditional", "/auth/passwordless", "/auth/forgot", "/auth/reset", "/auth/verify"], rateLimit(routes.auth.login));
     app.use("/auth/register", rateLimit({ onlyIp: true, success: true, ...routes.auth.register }));

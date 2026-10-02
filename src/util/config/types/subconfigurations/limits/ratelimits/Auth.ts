@@ -27,4 +27,8 @@ export class AuthRateLimit {
         count: 2,
         window: 60 * 60 * 12,
     };
+    phone: RateLimitOptions = {
+        count: 5,
+        window: 60 * 10,
+    };
 }
