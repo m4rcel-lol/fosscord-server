@@ -16,12 +16,11 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { FindManyOptions, ILike, In, MoreThan } from "typeorm";
-import { getDatabase, Member, Session } from "@spacebar/database";
-import { DateBuilder } from "@spacebar/extensions";
+import { FindManyOptions, ILike, In } from "typeorm";
+import { getDatabase, Member } from "@spacebar/database";
 import { WebSocket, Payload, OPCODES, Send, handleOffloadedGatewayRequest } from "@spacebar/gateway";
-import { RequestGuildMembersSchema } from "@spacebar/schemas";
-import { Config, getPermission, GuildMembersChunkEvent, Presence } from "@spacebar/util";
+import { PublicUser, RequestGuildMembersSchema } from "@spacebar/schemas";
+import { Config, getPermission, getUserPresences, GuildMembersChunkEvent, Presence } from "@spacebar/util";
 import { check } from "./instanceOf";
 
 export async function onRequestGuildMembers(this: WebSocket, { d }: Payload) {
@@ -117,10 +116,11 @@ export async function onRequestGuildMembers(this: WebSocket, { d }: Payload) {
         members = await q.getMany();
     } else {
         if (query) {
-            // @ts-expect-error memberFind.where is very much defined
-            memberFind.where.user = {
-                username: ILike(query + "%"),
-            };
+            memberFind.where = [
+                { guild_id, user: { username: ILike(`${query}%`) } },
+                { guild_id, user: { global_name: ILike(`${query}%`) } },
+                { guild_id, nick: ILike(`${query}%`) },
+            ];
         } else if (user_ids && user_ids.length > 0) {
             // @ts-expect-error memberFind.where is still very much defined
             memberFind.where.id = In(user_ids);
@@ -142,37 +142,13 @@ export async function onRequestGuildMembers(this: WebSocket, { d }: Payload) {
     let notFound: string[] = [];
     if (user_ids && user_ids.length > 0) notFound = user_ids.filter((id) => !members.some((member) => member.id == id));
 
-    const recentlyActiveSince = new DateBuilder().addMinutes(-15).build();
-
     while (members.length > 0) {
         const chunk: Member[] = members.splice(0, chunkSize);
 
         let presenceList: Presence[] = [];
         if (presences) {
-            const sessions = await Session.find({
-                where: { user_id: In(chunk.map((m) => m.id)), is_admin_session: false, last_seen: MoreThan(recentlyActiveSince) },
-                select: {
-                    user: true,
-                    status: true,
-                    activities: true,
-                    client_status: true,
-                },
-                relations: { user: true },
-            });
-
-            const foundUids = new Set<string>();
-            presenceList = sessions
-                .filter((s) => {
-                    if (foundUids.has(s.user.id)) return false;
-                    foundUids.add(s.user.id);
-                    return true;
-                })
-                .map((session) => ({
-                    user: session.user.toPublicUser(),
-                    status: session.getPublicStatus(),
-                    activities: session.activities,
-                    client_status: session.client_status,
-                }));
+            const presenceMap = await getUserPresences(chunk.map((m) => m.id));
+            presenceList = chunk.filter((m) => presenceMap.has(m.id)).map((m) => ({ user: { id: m.id } as PublicUser, ...presenceMap.get(m.id)! }));
         }
 
         await Send(this, {
@@ -181,7 +157,7 @@ export async function onRequestGuildMembers(this: WebSocket, { d }: Payload) {
             t: "GUILD_MEMBERS_CHUNK",
             d: {
                 ...baseData,
-                members: chunk.map((member) => member.toPublicMember()),
+                members: chunk.map((member) => ({ ...member.toPublicMember(), roles: member.roles.filter((r) => r.id !== guild_id).map((r) => r.id) })),
                 presences: presences ? presenceList : undefined,
                 chunk_index: sentChunkCount,
                 chunk_count: chunkCount,
