@@ -163,8 +163,8 @@ export async function onLazyRequest(this: WebSocket, { d }: Payload) {
     const channel_id = Object.keys(channels || {})[0];
     if (!channel_id) return;
 
-    const permissions = await getPermission(this.user_id, guild_id, channel_id);
-    permissions.hasThrow("VIEW_CHANNEL");
+    const permissions = await getPermission(this.user_id, guild_id, channel_id).catch(() => undefined);
+    if (!permissions?.has("VIEW_CHANNEL")) return;
 
     const ranges = channels![channel_id];
     if (!Array.isArray(ranges)) throw new Error("Not a valid Array");
@@ -177,7 +177,7 @@ export async function onLazyRequest(this: WebSocket, { d }: Payload) {
         ranges: ranges.filter((x) => Array.isArray(x) && x.length === 2).map(([a, b]) => [Number(a) || 0, Number(b) || 0] as [number, number]),
     };
 
-    await sendMemberListSync.call(this, guild_id);
+    await sendMemberListSync.call(this, guild_id).catch((e) => console.error(`[Gateway/${this.user_id}] member list sync failed`, e));
 
     console.log(`[Gateway/${this.user_id}] LAZY_REQUEST ${guild_id} ${channel_id} took ${sw.elapsed().toString()}`);
 }
