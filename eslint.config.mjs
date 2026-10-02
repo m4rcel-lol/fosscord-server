@@ -85,6 +85,17 @@ export default defineConfig([
         },
     },
     {
+        files: ["client/**/*.ts"],
+        languageOptions: {
+            globals: {
+                ...globals.browser,
+            },
+            parserOptions: {
+                project: "./client/e2ee/tsconfig.json",
+            },
+        },
+    },
+    {
         files: ["**/*.js", "**/*.cjs", "**/*.mjs"],
         extends: typescriptEslint.configs?.disableTypeChecked ? [typescriptEslint.configs.disableTypeChecked] : [],
     },
