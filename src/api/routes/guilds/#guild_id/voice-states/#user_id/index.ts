@@ -21,6 +21,7 @@ import { route } from "@spacebar/api/middlewares";
 import { Channel, VoiceChannels, VoiceState } from "@spacebar/database";
 import { DiscordApiErrors, getPermission } from "@spacebar/util";
 import { ChannelType, VoiceStateModifySchema } from "@spacebar/schemas";
+import { sleep } from "@spacebar/extensions";
 
 const router = Router({ mergeParams: true });
 //TODO need more testing when community guild and voice stage channel are working
@@ -48,7 +49,13 @@ router.patch(
         const self = req.params.user_id === "@me" || req.params.user_id === req.user_id;
         const user_id = self ? req.user_id : (req.params.user_id as string);
 
-        const voiceState = await VoiceState.findOne({ where: { guild_id, user_id } });
+        const matches = (state: VoiceState | null) => !!state?.channel_id && (!body.channel_id || body.channel_id === state.channel_id);
+        let voiceState = await VoiceState.findOne({ where: { guild_id, user_id } });
+        if (self)
+            for (let attempt = 0; !matches(voiceState) && attempt < 30; attempt++) {
+                await sleep(100);
+                voiceState = await VoiceState.findOne({ where: { guild_id, user_id } });
+            }
         if (!voiceState?.channel_id || (body.channel_id && body.channel_id !== voiceState.channel_id)) throw DiscordApiErrors.UNKNOWN_VOICE_STATE;
         const channel = await Channel.findOneOrFail({ where: { guild_id, id: voiceState.channel_id } });
         if (channel.type !== ChannelType.GUILD_STAGE_VOICE) throw DiscordApiErrors.CANNOT_EXECUTE_ON_THIS_CHANNEL_TYPE;
