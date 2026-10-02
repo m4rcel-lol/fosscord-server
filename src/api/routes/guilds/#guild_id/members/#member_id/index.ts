@@ -185,11 +185,14 @@ router.put(
             throw DiscordApiErrors.MISSING_REQUIRED_OAUTH2_SCOPE;
         }
 
-        const guild = await Guild.findOneOrFail({
+        const guild = await Guild.findOne({
             where: { id: guild_id },
         });
+        if (!guild) throw DiscordApiErrors.UNKNOWN_GUILD;
 
-        if (!guild.features.includes("DISCOVERABLE")) {
+        const isMember = await Member.exists({ where: { id: member_id, guild_id } });
+
+        if (!isMember && !guild.features.includes("DISCOVERABLE")) {
             throw DiscordApiErrors.UNKNOWN_GUILD;
         }
 
@@ -205,7 +208,7 @@ router.put(
             where: { guild_id: guild_id },
         });
 
-        await Member.addToGuild(member_id, guild_id);
+        if (!isMember) await Member.addToGuild(member_id, guild_id);
         res.send({ ...guild, emojis: emoji, roles: roles, stickers: stickers });
     },
 );
