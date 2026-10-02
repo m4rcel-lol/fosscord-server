@@ -35,7 +35,8 @@ schemas_final/
 
 temp/
 !/extra/admin-api/Utilities/Spacebar.AdminApi.TestClient/wwwroot/lib/bootstrap/dist/
-*.qcow2assets/cacheFailures
+*.qcow2
+assets/cacheFailures
 scripts/dev/.test-account
 assets/client_patches/0*-dev*.js
 assets/client_patches/00-debug.js
