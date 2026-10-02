@@ -139,7 +139,21 @@ export default function TestClient(app: Application) {
         res.send(Buffer.from(await upstream.arrayBuffer()));
     });
 
-    if (process.env.NODE_ENV === "development") app.use((req, res, next) => ((html = buildHtml()), next()));
+    if (process.env.NODE_ENV === "development") {
+        const sourceStamp = () =>
+            [path.join(CACHE_PATH, "index.html"), PATCH_PATH, ...(fs.existsSync(PATCH_PATH) ? fs.readdirSync(PATCH_PATH).map((x) => path.join(PATCH_PATH, x)) : [])]
+                .map((x) => fs.statSync(x, { throwIfNoEntry: false })?.mtimeMs ?? 0)
+                .join();
+        let stamp = sourceStamp();
+        app.use((req, res, next) => {
+            const current = sourceStamp();
+            if (current !== stamp) {
+                stamp = current;
+                html = buildHtml();
+            }
+            next();
+        });
+    }
 
     app.get("/{*splat}", (req, res, next) => {
         if (/^\/(api|cdn|attachments|avatars|icons|banners|emojis|stickers|imageproxy)\b/.test(req.path)) return next();
