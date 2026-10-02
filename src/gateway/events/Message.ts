@@ -93,6 +93,7 @@ export async function Message(this: WebSocket, buffer: WS.Data) {
         console.error(`[Gateway/${this.user_id ?? this.ipAddress}] Error: Op ${data.op}`, error);
         let message: string | undefined = undefined;
         if (error instanceof HTTPError) message = error.message;
+        if (data.op === 2 && error instanceof HTTPError && error.code >= 400 && error.code < 500) return this.close(CLOSECODES.Authentication_failed, message);
         // if (!this.CLOSED && this.CLOSING)
         return this.close(CLOSECODES.Unknown_error, message ?? `Unknown opcode error while handling opcode ${data.op}`);
     }
