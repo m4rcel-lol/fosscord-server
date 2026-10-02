@@ -24,6 +24,10 @@ export interface UserModifySchema {
      * @minLength 2
      */
     username?: string;
+    /**
+     * @maxLength 32
+     */
+    global_name?: string | null;
     avatar?: string | null;
     avatar_description?: string | null;
     bio?: string;
@@ -54,10 +58,6 @@ export interface UserModifySchema {
      */
     discriminator?: string;
 
-    /**
-     * @maxLength 32
-     */
-    global_name?: string | null;
     avatar_id?: string | null;
     email_token?: string;
     legacy_username?: string | null;

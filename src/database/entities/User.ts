@@ -55,7 +55,7 @@ export class User extends BaseClass {
     @Column()
     discriminator: string; // opaque string: 4 digits on discord.com
 
-    @Column({ type: "varchar", nullable: true })
+    @Column({ type: String, nullable: true })
     global_name?: string | null;
 
     @Column({ nullable: true })
@@ -364,12 +364,7 @@ export class User extends BaseClass {
         // trim special utf8 control characters -> Backspace, Newline, ...
         username = trimSpecial(username);
 
-        const pomelo =
-            Config.get().register.uniqueUsernames &&
-            /^[a-z0-9_.]{2,32}$/.test(username) &&
-            !username.includes("..") &&
-            !(await User.findOne({ where: { username, discriminator: "0" }, select: { id: true } }));
-        const discriminator = pomelo ? "0" : await User.generateDiscriminator(username);
+        const discriminator = await User.generateDiscriminator(username);
         if (!discriminator) {
             // We've failed to generate a valid and unused discriminator
             throw FieldErrors({
