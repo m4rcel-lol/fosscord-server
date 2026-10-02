@@ -9,7 +9,6 @@ import (
 	"os/signal"
 	"runtime"
 	"syscall"
-	"time"
 
 	"github.com/pion/ice/v4"
 	"github.com/pion/interceptor"
@@ -264,21 +263,9 @@ func handleSubscribe(p *Peer, msg SignalMessage, requestID string) error {
 		return fmt.Errorf("publisher %s not found", publisherID)
 	}
 
-	// wait up to 5 seconds for the publisher's track to appear
-	var pt *PublishedTrack
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		publisher.mu.Lock()
-		pt = publisher.getPublishedTrack(trackType)
-		publisher.mu.Unlock()
-		if pt != nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf("publisher %s is not publishing %s (timed out waiting)", publisherID, trackType)
-		}
-		time.Sleep(200 * time.Millisecond)
-	}
+	publisher.mu.Lock()
+	pt := publisher.getPublishedTrack(trackType)
+	publisher.mu.Unlock()
 
 	subKey := publisherID + "_" + trackType
 	p.mu.Lock()
@@ -289,16 +276,20 @@ func handleSubscribe(p *Peer, msg SignalMessage, requestID string) error {
 	p.subscriptions[subKey] = true
 	p.mu.Unlock()
 
-	log.Printf("%s Subscribed to track ssrc %d", p.id, pt.ssrc)
-
-	// force a keyframe
-	if err := publisher.pc.WriteRTCP([]rtcp.Packet{
-		&rtcp.PictureLossIndication{
-			SenderSSRC: uint32(pt.ssrc),
-			MediaSSRC:  uint32(pt.ssrc),
-		},
-	}); err != nil {
-		log.Printf("WriteRTCP: %v", err)
+	var ssrc uint32
+	if pt != nil {
+		ssrc = uint32(pt.ssrc)
+		log.Printf("%s Subscribed to track ssrc %d", p.id, pt.ssrc)
+		if err := publisher.pc.WriteRTCP([]rtcp.Packet{
+			&rtcp.PictureLossIndication{
+				SenderSSRC: uint32(pt.ssrc),
+				MediaSSRC:  uint32(pt.ssrc),
+			},
+		}); err != nil {
+			log.Printf("WriteRTCP: %v", err)
+		}
+	} else {
+		log.Printf("%s Subscribed to %s of %s before its first packet", p.id, trackType, publisherID)
 	}
 
 	return ipcConn.sendReply(requestID, SignalMessage{
@@ -306,7 +297,7 @@ func handleSubscribe(p *Peer, msg SignalMessage, requestID string) error {
 		ClientID:    p.id,
 		PublisherID: publisherID,
 		TrackType:   trackType,
-		SSRC:        uint32(pt.ssrc),
+		SSRC:        ssrc,
 	}, "")
 }
 
@@ -373,6 +364,12 @@ func setupOnTrack(p *Peer) {
 		p.mu.Unlock()
 
 		log.Printf("Client %s started publishing %s (SSRC: %d)", p.id, trackType, ssrc)
+
+		if trackType == "video" {
+			if err := p.pc.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(ssrc)}}); err != nil {
+				log.Printf("WriteRTCP: %v", err)
+			}
+		}
 
 		// Forward RTP packets to all subscribed peers
 		go func() {

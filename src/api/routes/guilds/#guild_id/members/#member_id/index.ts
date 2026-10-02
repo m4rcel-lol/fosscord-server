@@ -18,7 +18,7 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { Emoji, Guild, Member, Role, Sticker } from "@spacebar/database";
+import { Emoji, Guild, Member, Role, Sticker, VoiceChannels } from "@spacebar/database";
 import { Config, DiscordApiErrors, emitEvent, getPermission, getRights, GuildMemberUpdateEvent, handleFile } from "@spacebar/util";
 import { MemberChangeSchema, PublicMemberProjection, PublicUserProjection } from "@spacebar/schemas";
 
@@ -117,8 +117,15 @@ router.patch(
         }
 
         if (body.avatar) body.avatar = await handleFile(`/guilds/${guild_id}/users/${member_id}/avatars`, body.avatar as string);
+        if ("mute" in body) permission.hasThrow("MUTE_MEMBERS");
+        if ("deaf" in body) permission.hasThrow("DEAFEN_MEMBERS");
+        const { channel_id: voiceChannelId, ...changes } = body;
+        if ("channel_id" in body) {
+            permission.hasThrow("MOVE_MEMBERS");
+            if (voiceChannelId && !(await getPermission(member_id, guild_id, voiceChannelId)).has("CONNECT")) throw DiscordApiErrors.MISSING_PERMISSIONS.withParams("CONNECT");
+        }
 
-        member.assign(body);
+        member.assign(changes);
 
         // must do this after the assign because the body roles array
         // is string[] not Role[]
@@ -139,6 +146,8 @@ router.patch(
         }
 
         await member.save();
+        if ("mute" in body || "deaf" in body) await VoiceChannels.setServerMute(guild_id, member_id, { mute: body.mute, deaf: body.deaf });
+        if ("channel_id" in body) await VoiceChannels.move(guild_id, member_id, voiceChannelId ?? null);
 
         member.roles = member.roles.filter((x) => x.id !== guild_id);
 

@@ -41,6 +41,7 @@ class PionClient implements WebRtcClient<unknown> {
     videoStream?: VideoStream;
     stopped = false;
     private incoming: SSRCs = {};
+    private published = { audio: false, video: false };
     readonly outgoing = new Map<string, SSRCs>();
 
     constructor(
@@ -63,22 +64,24 @@ class PionClient implements WebRtcClient<unknown> {
     }
 
     isProducingAudio() {
-        return !!this.incoming.audio_ssrc;
+        return this.published.audio;
     }
 
     isProducingVideo() {
-        return !!this.incoming.video_ssrc;
+        return this.published.video;
     }
 
     async publishTrack(type: "audio" | "video", ssrcs: SSRCs) {
         if (type === "audio") this.incoming.audio_ssrc = ssrcs.audio_ssrc;
         else this.incoming = { ...ssrcs, audio_ssrc: this.incoming.audio_ssrc };
+        this.published[type] = true;
         this.server.ipc.send({ type: "publish", clientId: this.uniqueId, trackType: type });
     }
 
     stopPublishingTrack(type: "audio" | "video") {
         if (type === "audio") this.incoming.audio_ssrc = undefined;
         else this.incoming = { audio_ssrc: this.incoming.audio_ssrc };
+        this.published[type] = false;
         this.server.ipc.send({ type: "stop-publish", clientId: this.uniqueId, trackType: type });
     }
 
@@ -89,12 +92,15 @@ class PionClient implements WebRtcClient<unknown> {
             console.log(`[WebRTC] ${this.user_id} could not subscribe to ${type} of ${userId}: ${error.message}`);
             return undefined;
         });
-        if (!result?.ssrc) return;
+        if (!result) return;
+        const declared = publisher.getIncomingStreamSSRCs();
+        const ssrc = result.ssrc || (type === "audio" ? declared.audio_ssrc : declared.video_ssrc);
+        if (!ssrc) return;
         const ssrcs = this.outgoing.get(userId) ?? {};
-        if (type === "audio") ssrcs.audio_ssrc = result.ssrc;
+        if (type === "audio") ssrcs.audio_ssrc = ssrc;
         else {
-            ssrcs.video_ssrc = result.ssrc;
-            ssrcs.rtx_ssrc = publisher.getIncomingStreamSSRCs().rtx_ssrc;
+            ssrcs.video_ssrc = ssrc;
+            ssrcs.rtx_ssrc = declared.rtx_ssrc;
         }
         this.outgoing.set(userId, ssrcs);
     }

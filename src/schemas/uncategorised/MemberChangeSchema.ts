@@ -23,4 +23,6 @@ export interface MemberChangeSchema {
     bio?: string;
     communication_disabled_until?: string | null;
     channel_id?: string | null;
+    mute?: boolean;
+    deaf?: boolean;
 }
