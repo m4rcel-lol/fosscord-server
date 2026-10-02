@@ -20,6 +20,7 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { In, MoreThan } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
+import { getBurstColors } from "@spacebar/api/util";
 import { Channel, Emoji, Member, Message, User } from "@spacebar/database";
 import {
     emitEvent,
@@ -262,6 +263,7 @@ router.put(
         if (users.includes(req.user_id)) return res.sendStatus(204);
         users.push(req.user_id);
         recount(reaction);
+        if (type === ReactionType.burst && !reaction.burst_colors?.length) reaction.burst_colors = await getBurstColors(reaction.emoji);
 
         await Message.update({ id: message.id, channel_id }, { reactions: message.reactions });
 

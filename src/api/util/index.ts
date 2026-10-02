@@ -24,3 +24,4 @@ export * from "./utility/captcha";
 export * from "./utility/EmbedHandlers";
 export * from "./utility/polls";
 export * from "./utility/MessageSearch";
+export * from "./utility/BurstColors";
