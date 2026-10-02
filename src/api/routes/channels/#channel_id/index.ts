@@ -32,6 +32,7 @@ import {
     FieldError,
     handleFile,
     makeObjectErrorContent,
+    Snowflake,
     ThreadDeleteEvent,
 } from "@spacebar/util";
 import { ChannelModifySchema, ChannelType, MessageType } from "@spacebar/schemas";
@@ -104,8 +105,9 @@ router.delete(
         } else if (channel.isThread()) {
             req.permission!.hasThrow("MANAGE_THREADS");
             const data = { id: channel_id, guild_id: channel.guild_id, parent_id: channel.parent_id, type: channel.type };
-            await emitEvent({ event: "THREAD_DELETE", data, channel_id } satisfies ThreadDeleteEvent);
-            if (!channel.isPrivateThread()) await emitEvent({ event: "THREAD_DELETE", data, channel_id: channel.parent_id! } satisfies ThreadDeleteEvent);
+            const transaction_id = Snowflake.generate();
+            await emitEvent({ event: "THREAD_DELETE", data, channel_id, transaction_id } satisfies ThreadDeleteEvent);
+            if (!channel.isPrivateThread()) await emitEvent({ event: "THREAD_DELETE", data, channel_id: channel.parent_id!, transaction_id } satisfies ThreadDeleteEvent);
             await Channel.delete({ id: channel_id });
         } else {
             req.permission!.hasThrow("MANAGE_CHANNELS");
