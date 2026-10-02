@@ -23,6 +23,7 @@ import { EVENTEnum, EventOpts, getPermission, listenEvent, ListenEventOpts, NewU
 import { WebSocket } from "@spacebar/gateway";
 import { PublicMember, RelationshipType } from "@spacebar/schemas";
 import { CLOSECODES, OPCODES, Send } from "../util";
+import { scheduleMemberListSync } from "../opcodes/LazyRequest";
 
 // TODO: close connection on Invalidated Token
 // TODO: check intent
@@ -386,4 +387,18 @@ async function consume(this: WebSocket, opts: EventOpts) {
         d: data,
         s: this.sequence++,
     });
+
+    const listGuildId = opts.guild_id ?? data?.guild_id;
+    if (listGuildId && this.member_lists?.[listGuildId] && MemberListEvents.has(event)) scheduleMemberListSync(this, listGuildId);
 }
+
+const MemberListEvents = new Set([
+    "PRESENCE_UPDATE",
+    "GUILD_MEMBER_ADD",
+    "GUILD_MEMBER_UPDATE",
+    "GUILD_MEMBER_REMOVE",
+    "GUILD_ROLE_CREATE",
+    "GUILD_ROLE_UPDATE",
+    "GUILD_ROLE_DELETE",
+    "CHANNEL_UPDATE",
+]);

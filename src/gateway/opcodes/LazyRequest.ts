@@ -17,188 +17,147 @@
 */
 
 import murmur from "murmurhash-js/murmurhash3_gc";
-import { getDatabase, Member, Role, Session, User, Channel } from "@spacebar/database";
-import { arrayPartition, Stopwatch } from "@spacebar/extensions";
-import { WebSocket, Payload, handlePresenceUpdate, OPCODES, Send, handleOffloadedGatewayRequest } from "@spacebar/gateway";
+import { In } from "typeorm";
+import { Channel, Guild, Member, Role, User } from "@spacebar/database";
+import { Stopwatch } from "@spacebar/extensions";
+import { WebSocket, Payload, OPCODES, Send, handleOffloadedGatewayRequest } from "@spacebar/gateway";
 import { LazyRequestSchema } from "@spacebar/schemas";
-import { getPermission, listenEvent, Presence, Permissions, getMostRelevantSession, Config } from "@spacebar/util";
+import { getPermission, Permissions, Config, getUserPresences, AggregatedPresence } from "@spacebar/util";
 import { check } from "./instanceOf";
-import { start } from "node:repl";
 
-// TODO: only show roles/members that have access to this channel
-// TODO: config: to list all members (even those who are offline) sorted by role, or just those who are online
-// TODO: rewrite typeorm
+const MAX_LIST_MEMBERS = 5000;
+const OFFLINE_GROUP_LIMIT = 1000;
 
-async function getMembers(guild_id: string, range: [number, number]) {
-    if (!Array.isArray(range) || range.length !== 2) {
-        throw new Error("range is not a valid array");
+type MemberListItem = { group: { id: string; count: number } } | { member: Record<string, unknown> };
+
+function getListId(channel: Channel) {
+    const perms: string[] = [];
+    for (const { id, allow, deny } of channel.permission_overwrites ?? []) {
+        if (BigInt(allow) & Permissions.FLAGS.VIEW_CHANNEL) perms.push(`allow:${id}`);
+        else if (BigInt(deny) & Permissions.FLAGS.VIEW_CHANNEL) perms.push(`deny:${id}`);
     }
+    return perms.length ? murmur(perms.sort().join(",")).toString() : "everyone";
+}
 
-    let members: Member[] = [];
-    try {
-        members =
-            (await getDatabase()
-                ?.getRepository(Member)
-                .createQueryBuilder("member")
-                .where("member.guild_id = :guild_id", { guild_id })
-                .leftJoinAndSelect("member.roles", "role")
-                .leftJoinAndSelect("member.user", "user")
-                .leftJoinAndSelect("user.sessions", "session")
-                .addSelect("user.settings")
-                .addSelect("CASE WHEN session.status IS NULL OR session.status = 'offline' OR session.status = 'invisible' THEN 0 ELSE 1 END", "_status")
-                .orderBy("_status", "DESC")
-                .addOrderBy("role.position", "DESC")
-                .addOrderBy("user.username", "ASC")
-                .offset(Number(range[0]) || 0)
-                .limit(Number(range[1]) || 100)
-                .getMany()) ?? [];
-    } catch (e) {
-        console.error(`LazyRequest`, e);
-    }
+export async function buildMemberList(guild_id: string, channel_id: string) {
+    const [guild, roles, channel, members] = await Promise.all([
+        Guild.findOneOrFail({ where: { id: guild_id }, select: { id: true, owner_id: true } }),
+        Role.find({ where: { guild_id } }),
+        Channel.findOneOrFail({ where: { id: channel_id, guild_id } }),
+        Member.find({ where: { guild_id }, relations: { user: true, roles: true }, take: MAX_LIST_MEMBERS }),
+    ]);
 
-    if (!members || !members.length) {
-        return {
-            items: [],
-            groups: [],
-            range: [],
-            members: [],
-        };
-    }
-
-    const groups = [];
-    const items = [];
-    const member_roles = [
-        ...new Map(
-            members
-                .map((m) => m.roles)
-                .flat()
-                .map((role) => [role.id, role] as [string, Role]),
-        ).values(),
-    ];
-    member_roles.push(
-        member_roles.splice(
-            member_roles.findIndex((x) => x.id === x.guild_id),
-            1,
-        )[0],
+    const visible = members.filter((member) =>
+        Permissions.finalPermission({
+            user: { id: member.id, roles: [guild_id, ...member.roles.map((r) => r.id)], communication_disabled_until: null, flags: 0 },
+            guild: { id: guild.id, owner_id: guild.owner_id!, roles },
+            channel: { overwrites: channel.permission_overwrites },
+        }).has("VIEW_CHANNEL"),
     );
 
-    const offlineItems = [];
+    const presences = await getUserPresences(visible.map((x) => x.id));
+    const hoisted = roles.filter((r) => r.hoist && r.id !== guild_id).sort((a, b) => b.position - a.position);
+    const displayName = (m: Member) => (m.nick || m.user.global_name || m.user.username || "").toLowerCase();
+    const byName = (a: Member, b: Member) => displayName(a).localeCompare(displayName(b)) || a.id.localeCompare(b.id);
 
-    for (const role of member_roles) {
-        const [role_members, other_members] = arrayPartition(members, (m: Member) => !!m.roles.find((r) => r.id === role.id));
-        const group = {
-            count: role_members.length,
-            id: role.id === guild_id ? "online" : role.id,
-        };
-
-        items.push({ group });
-        groups.push(group);
-
-        for (const member of role_members) {
-            const roles = member.roles.filter((x: Role) => x.id !== guild_id).map((x: Role) => x.id);
-
-            const session: Session | undefined = getMostRelevantSession(member.user.sessions);
-
-            const item = {
-                member: {
-                    ...member,
-                    roles,
-                    user: member.user.toPublicUser(),
-                    presence: {
-                        activities: session?.activities || [],
-                        user: { id: member.user.id },
-                        client_status: session?.client_status,
-                        status: session?.getPublicStatus() || "offline",
-                    },
-                },
-            };
-
-            if (!session || session.status == "invisible" || session.status == "offline") {
-                item.member.presence.status = "offline";
-                offlineItems.push(item);
-                group.count--;
-                continue;
-            }
-
-            items.push(item);
+    const groups = new Map<string, Member[]>([...hoisted.map((r) => [r.id, [] as Member[]] as const), ["online", []], ["offline", []]]);
+    for (const member of visible) {
+        if (!presences.has(member.id)) {
+            groups.get("offline")!.push(member);
+            continue;
         }
-        members = other_members;
+        const role = hoisted.find((r) => member.roles.some((x) => x.id === r.id));
+        groups.get(role?.id ?? "online")!.push(member);
     }
+    if (visible.length > OFFLINE_GROUP_LIMIT) groups.set("offline", []);
 
-    if (offlineItems.length) {
-        const group = {
-            count: offlineItems.length,
-            id: "offline",
-        };
+    const toItem = (member: Member, presence?: AggregatedPresence) => ({
+        member: {
+            ...member.toPublicMember(),
+            roles: member.roles.filter((r) => r.id !== guild_id).map((r) => r.id),
+            user: member.user.toPublicUser(),
+            presence: {
+                user: { id: member.id },
+                status: presence?.status ?? "offline",
+                client_status: presence?.client_status ?? {},
+                activities: presence?.activities ?? [],
+                processed_at_timestamp: presence?.processed_at_timestamp ?? Date.now(),
+            },
+        },
+    });
+
+    const items: MemberListItem[] = [];
+    const groupList: { id: string; count: number }[] = [];
+    for (const [id, groupMembers] of groups) {
+        if (!groupMembers.length) continue;
+        const group = { id, count: groupMembers.length };
+        groupList.push(group);
         items.push({ group });
-        groups.push(group);
-
-        items.push(...offlineItems);
+        for (const member of groupMembers.sort(byName)) items.push(toItem(member, presences.get(member.id)));
     }
 
     return {
+        id: getListId(channel),
+        guild_id,
+        member_count: members.length,
+        online_count: visible.filter((x) => presences.has(x.id)).length,
+        groups: groupList,
         items,
-        groups,
-        range,
-        members: items.map((x) => ("member" in x ? { ...x.member, settings: undefined } : undefined)).filter((x) => !!x),
     };
 }
 
-async function subscribeToMemberEvents(this: WebSocket, user_id: string) {
-    if (this.events[user_id]) return false; // already subscribed as friend
-    if (this.member_events[user_id]) return false; // already subscribed in member list
-    this.member_events[user_id] = await listenEvent(user_id, handlePresenceUpdate.bind(this), this.listen_options);
-    return true;
+export async function sendMemberListSync(this: WebSocket, guild_id: string) {
+    const subscription = this.member_lists?.[guild_id];
+    if (!subscription) return;
+    const list = await buildMemberList(guild_id, subscription.channel_id);
+    await Send(this, {
+        op: OPCODES.Dispatch,
+        s: this.sequence++,
+        t: "GUILD_MEMBER_LIST_UPDATE",
+        d: {
+            ops: subscription.ranges.map((range) => ({ op: "SYNC", range, items: list.items.slice(range[0], range[1] + 1) })),
+            online_count: list.online_count,
+            member_count: list.member_count,
+            id: list.id,
+            guild_id,
+            groups: list.groups,
+        },
+    });
+}
+
+export function scheduleMemberListSync(socket: WebSocket, guild_id: string) {
+    const subscription = socket.member_lists?.[guild_id];
+    if (!subscription || subscription.timer) return;
+    subscription.timer = setTimeout(() => {
+        subscription.timer = undefined;
+        if (socket.readyState !== 1) return;
+        sendMemberListSync.call(socket, guild_id).catch((e) => console.error(`[Gateway/${socket.user_id}] member list sync failed`, e));
+    }, 750);
 }
 
 export async function onLazyRequest(this: WebSocket, { d }: Payload) {
     const sw = Stopwatch.startNew();
-    // TODO: check data
     check.call(this, LazyRequestSchema, d);
-    // noinspection JSUnusedLocalSymbols - TODO: implement typing/activities subscriptions
-    const { guild_id, typing, channels, activities, members } = d as LazyRequestSchema;
+    const { guild_id, channels, members } = d as LazyRequestSchema;
 
     if (Config.get().offload.gateway.lazyRequestUrl !== null) {
         if (await handleOffloadedGatewayRequest(this, Config.get().offload.gateway.lazyRequestUrl!, d)) return;
     }
 
-    if (members) {
-        // Client has requested a PRESENCE_UPDATE for specific member
-
-        await Promise.all([
-            members.map(async (x) => {
-                if (!x) return;
-                const didSubscribe = await subscribeToMemberEvents.call(this, x);
-                if (!didSubscribe) return;
-
-                // if we didn't subscribe just now, this is a new subscription
-                // and we should send a PRESENCE_UPDATE immediately
-
-                const sessions = await Session.find({ where: { user_id: x } });
-                const session = getMostRelevantSession(sessions);
-                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-                // @ts-ignore
-                if (session?.status == "unknown") session.status = "online";
-                const user = await User.getPublicUser(x);
-
-                return Send(this, {
-                    op: OPCODES.Dispatch,
-                    s: this.sequence++,
-                    t: "PRESENCE_UPDATE",
-                    d: {
-                        user: user,
-                        activities: session?.activities || [],
-                        client_status: session?.client_status,
-                        status: session?.getPublicStatus() || "offline",
-                    } as Presence,
-                });
-            }),
-        ]);
-
-        if (!channels) return;
+    if (members?.length) {
+        const ids = members.filter((x) => typeof x === "string");
+        const [presences, users] = await Promise.all([getUserPresences(ids), User.find({ where: { id: In(ids) } })]);
+        for (const user of users) {
+            const presence = presences.get(user.id);
+            if (!presence) continue;
+            await Send(this, {
+                op: OPCODES.Dispatch,
+                s: this.sequence++,
+                t: "PRESENCE_UPDATE",
+                d: { user: user.toPublicUser(), guild_id, ...presence },
+            });
+        }
     }
-
-    if (!channels) return;
 
     const channel_id = Object.keys(channels || {})[0];
     if (!channel_id) return;
@@ -206,60 +165,18 @@ export async function onLazyRequest(this: WebSocket, { d }: Payload) {
     const permissions = await getPermission(this.user_id, guild_id, channel_id);
     permissions.hasThrow("VIEW_CHANNEL");
 
-    const ranges = channels[channel_id];
+    const ranges = channels![channel_id];
     if (!Array.isArray(ranges)) throw new Error("Not a valid Array");
 
-    const member_count = await Member.count({ where: { guild_id } });
-    const ops = await Promise.all(ranges.map((x) => getMembers(guild_id, x as [number, number])));
+    this.member_lists ??= {};
+    const previous = this.member_lists[guild_id];
+    if (previous?.timer) clearTimeout(previous.timer);
+    this.member_lists[guild_id] = {
+        channel_id,
+        ranges: ranges.filter((x) => Array.isArray(x) && x.length === 2).map(([a, b]) => [Number(a) || 0, Number(b) || 0] as [number, number]),
+    };
 
-    let list_id = "everyone";
-
-    const channel = await Channel.findOneOrFail({
-        where: { id: channel_id },
-    });
-    if (channel.permission_overwrites) {
-        const perms: string[] = [];
-
-        channel.permission_overwrites.forEach((overwrite) => {
-            const { id, allow, deny } = overwrite;
-
-            if (BigInt(allow) & Permissions.FLAGS.VIEW_CHANNEL) perms.push(`allow:${id}`);
-            else if (BigInt(deny) & Permissions.FLAGS.VIEW_CHANNEL) perms.push(`deny:${id}`);
-        });
-
-        if (perms.length > 0) {
-            list_id = murmur(perms.sort().join(",")).toString();
-        }
-    }
-
-    // TODO: unsubscribe member_events that are not in op.members
-
-    ops.forEach((op) => {
-        op.members.forEach(async (member) => {
-            if (!member?.user.id) return;
-            return subscribeToMemberEvents.call(this, member.user.id);
-        });
-    });
-
-    const groups = [...new Set(ops.map((x) => x.groups).flat())];
-
-    await Send(this, {
-        op: OPCODES.Dispatch,
-        s: this.sequence++,
-        t: "GUILD_MEMBER_LIST_UPDATE",
-        d: {
-            ops: ops.map((x) => ({
-                items: x.items,
-                op: "SYNC",
-                range: x.range,
-            })),
-            online_count: member_count - (groups.find((x) => x.id == "offline")?.count ?? 0),
-            member_count,
-            id: list_id,
-            guild_id,
-            groups,
-        },
-    });
+    await sendMemberListSync.call(this, guild_id);
 
     console.log(`[Gateway/${this.user_id}] LAZY_REQUEST ${guild_id} ${channel_id} took ${sw.elapsed().toString()}`);
 }

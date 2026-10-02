@@ -53,4 +53,5 @@ export interface WebSocket extends WS {
     large_threshold: number;
     qos?: QoSPayload;
     session?: Session;
+    member_lists?: Record<string, { channel_id: string; ranges: [number, number][]; timer?: NodeJS.Timeout }>;
 }
