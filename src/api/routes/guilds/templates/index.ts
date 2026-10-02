@@ -69,8 +69,9 @@ router.post("/:template_code", route({ requestBody: "GuildTemplateCreateSchema" 
     });
 
     await Member.addToGuild(req.user_id, guild.id);
+    if (template instanceof Template) await Template.update({ code: template.code }, { usage_count: (template.usage_count ?? 0) + 1 });
 
-    res.status(201).json({ id: guild.id });
+    res.status(201).json(await Guild.findOneOrFail({ where: { id: guild.id }, relations: { roles: true, channels: true } }));
 });
 
 async function getTemplate(code: string) {
@@ -118,9 +119,12 @@ async function getTemplate(code: string) {
         return code.split("external:", 2)[1];
     }
 
-    return await Template.findOneOrFail({
+    const template = await Template.findOne({
         where: { code: code },
+        relations: { creator: true },
     });
+    if (!template) throw DiscordApiErrors.UNKNOWN_GUILD_TEMPLATE;
+    return template;
 }
 
 export default router;

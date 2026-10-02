@@ -1,50 +1,66 @@
 /*
 	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
 	Copyright (C) 2023 Spacebar and Spacebar Contributors
-	
+
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU Affero General Public License as published
 	by the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
-	
+
 	This program is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU Affero General Public License for more details.
-	
+
 	You should have received a copy of the GNU Affero General Public License
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { Request, Response, Router } from "express";
-import { HTTPError } from "lambert-server/HTTPError";
+import { DiscordApiErrors } from "@spacebar/util";
 import { route } from "@spacebar/api/middlewares";
 import { Guild, Template } from "@spacebar/database";
-import { generateCode } from "@spacebar/extensions";
+import { TemplateCreateSchema, TemplateModifySchema } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
 
-const TemplateGuildProjection: (keyof Guild)[] = [
-    "id",
-    "name",
-    "description",
-    "region",
-    "verification_level",
-    "default_message_notifications",
-    "explicit_content_filter",
-    "preferred_locale",
-    "afk_timeout",
-    // "roles",
-    // "channels",
-    "afk_channel_id",
-    "system_channel_id",
-    "system_channel_flags",
-    "icon",
-];
+const loadGuild = (guild_id: string) =>
+    Guild.findOneOrFail({
+        where: { id: guild_id },
+        select: {
+            id: true,
+            name: true,
+            description: true,
+            region: true,
+            verification_level: true,
+            default_message_notifications: true,
+            explicit_content_filter: true,
+            preferred_locale: true,
+            afk_timeout: true,
+            afk_channel_id: true,
+            system_channel_id: true,
+            system_channel_flags: true,
+            channel_ordering: true,
+        },
+        relations: { roles: true, channels: { available_tags: true } },
+    });
+
+const withDirty = async (template: Template) => {
+    const serialized = Template.serializeGuild(await loadGuild(template.source_guild_id));
+    const canonical = (value: unknown) => JSON.stringify(value, (_, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort()) : x));
+    return { ...template.toJSON(), is_dirty: canonical(serialized) !== canonical(template.serialized_source_guild) };
+};
+
+const findTemplate = (code: string, guild_id: string) =>
+    Template.findOneOrFail({
+        where: { code, source_guild_id: guild_id },
+        relations: { creator: true },
+    });
 
 router.get(
     "/",
     route({
+        permission: "MANAGE_GUILD",
         responses: {
             200: {
                 body: "APITemplateArray",
@@ -56,9 +72,10 @@ router.get(
 
         const templates = await Template.find({
             where: { source_guild_id: guild_id },
+            relations: { creator: true },
         });
 
-        return res.json(templates);
+        return res.json(await Promise.all(templates.map(withDirty)));
     },
 );
 
@@ -84,27 +101,23 @@ router.post(
     }),
     async (req: Request, res: Response) => {
         const { guild_id } = req.params as { [key: string]: string };
-        const guild = await Guild.findOneOrFail({
-            where: { id: guild_id },
-            select: Object.fromEntries(TemplateGuildProjection.map((i) => [i, true])), //TODO: cleanup
-            relations: { roles: true, channels: true },
-        });
-        const exists = await Template.findOne({
-            where: { id: guild_id },
-        });
-        if (exists) throw new HTTPError("Template already exists", 400);
+        const { name, description } = req.body as TemplateCreateSchema;
+
+        if (await Template.exists({ where: { source_guild_id: guild_id } })) throw DiscordApiErrors.GUILD_ALREADY_HAS_TEMPLATE;
 
         const template = await Template.create({
-            ...req.body,
-            code: generateCode(),
+            name,
+            description,
+            code: Template.generateCode(),
+            usage_count: 0,
             creator_id: req.user_id,
             created_at: new Date(),
             updated_at: new Date(),
             source_guild_id: guild_id,
-            serialized_source_guild: guild,
+            serialized_source_guild: Template.serializeGuild(await loadGuild(guild_id)),
         }).save();
 
-        res.json(template);
+        res.json({ ...(await findTemplate(template.code, guild_id)).toJSON(), is_dirty: false });
     },
 );
 
@@ -119,13 +132,10 @@ router.delete(
     }),
     async (req: Request, res: Response) => {
         const { code, guild_id } = req.params as { [key: string]: string };
+        const template = await findTemplate(code, guild_id);
+        await Template.delete({ code, source_guild_id: guild_id });
 
-        const template = await Template.delete({
-            code,
-            source_guild_id: guild_id,
-        });
-
-        res.json(template);
+        res.json(template.toJSON());
     },
 );
 
@@ -140,17 +150,13 @@ router.put(
     }),
     async (req: Request, res: Response) => {
         const { code, guild_id } = req.params as { [key: string]: string };
-        const guild = await Guild.findOneOrFail({
-            where: { id: guild_id },
-            select: Object.fromEntries(TemplateGuildProjection.map((i) => [i, true])), //TODO: cleanup
-        });
+        const template = await findTemplate(code, guild_id);
 
-        const template = await Template.create({
-            code,
-            serialized_source_guild: guild,
-        }).save();
+        template.serialized_source_guild = Template.serializeGuild(await loadGuild(guild_id));
+        template.updated_at = new Date();
+        await template.save();
 
-        res.json(template);
+        res.json({ ...template.toJSON(), is_dirty: false });
     },
 );
 
@@ -166,18 +172,15 @@ router.patch(
     }),
     async (req: Request, res: Response) => {
         const { code, guild_id } = req.params as { [key: string]: string };
-        const { name, description } = req.body;
+        const { name, description } = req.body as TemplateModifySchema;
+        const template = await findTemplate(code, guild_id);
 
-        const template = await Template.findOneOrFail({
-            where: { code, source_guild_id: guild_id },
-        });
-
-        template.name = name;
-        template.description = description;
-
+        if (name !== undefined) template.name = name;
+        if (description !== undefined) template.description = description;
+        template.updated_at = new Date();
         await template.save();
 
-        res.json(template);
+        res.json(await withDirty(template));
     },
 );
 

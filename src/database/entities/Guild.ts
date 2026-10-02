@@ -464,24 +464,23 @@ export class Guild extends BaseClass {
             flags: 0, // TODO?
         }).save();
 
-        // create custom roles if provided
-        if (body.roles && body.roles.length) {
-            await Promise.all(
-                body.roles?.map(
-                    (role) =>
-                        new Promise((resolve) => {
-                            Role.create({
-                                ...role,
-                                guild_id,
-                                id:
-                                    // role.id === body.template_guild_id indicates that this is the @everyone role
-                                    role.id === body.source_guild_id || role.id == "0" ? guild_id : Snowflake.generate(),
-                            })
-                                .save()
-                                .then(resolve);
-                        }),
-                ),
-            );
+        const roleIds = new Map<string, string>([["0", guild_id]]);
+        for (const [index, role] of (body.roles ?? []).entries()) {
+            const id = role.id === body.source_guild_id || `${role.id}` === "0" ? guild_id : Snowflake.generate();
+            roleIds.set(`${role.id}`, id);
+            await Role.create({
+                color: 0,
+                hoist: false,
+                managed: false,
+                mentionable: false,
+                permissions: "0",
+                flags: 0,
+                position: index,
+                ...role,
+                colors: role.colors ?? { primary_color: role.color ?? 0 },
+                guild_id,
+                id,
+            }).save();
         }
 
         if (!body.channels || !body.channels.length) {
@@ -496,25 +495,32 @@ export class Guild extends BaseClass {
         const ids = new Map();
 
         body.channels.forEach((x) => {
-            if (x.id) {
+            if (x.id != null) {
                 ids.set(x.id, Snowflake.generate());
             }
         });
 
-        for (const channel of body.channels.sort((a) => (a.parent_id ? 1 : -1))) {
-            const id = ids.get(channel.id) || Snowflake.generate();
-
-            const parent_id = ids.get(channel.parent_id);
-
-            const saved = await Channel.createChannel({ ...channel, guild_id, id, parent_id }, body.owner_id, {
-                keepId: true,
-                skipExistsCheck: true,
-                skipPermissionCheck: true,
-                skipEventEmit: true,
-            });
-
-            await Guild.insertChannelInOrder(guild.id, saved.id, parent_id ?? channel.position ?? 0, guild);
+        const ordered = body.channels.map((channel) => ({ ...channel, id: ids.get(channel.id) || Snowflake.generate(), parent_id: ids.get(channel.parent_id) }));
+        for (const channel of [...ordered.filter((c) => !c.parent_id), ...ordered.filter((c) => c.parent_id)]) {
+            await Channel.createChannel(
+                {
+                    ...channel,
+                    guild_id,
+                    permission_overwrites: (channel.permission_overwrites ?? [])
+                        .filter((o) => o.type !== 0 || roleIds.has(`${o.id}`))
+                        .map((o) => ({ ...o, id: o.type === 0 ? roleIds.get(`${o.id}`)! : o.id })),
+                },
+                body.owner_id,
+                {
+                    keepId: true,
+                    skipExistsCheck: true,
+                    skipPermissionCheck: true,
+                    skipEventEmit: true,
+                },
+            );
         }
+        guild.channel_ordering = ordered.map((c) => c.id);
+        await Guild.update({ id: guild_id }, { channel_ordering: guild.channel_ordering });
 
         const systemChannelId = (body.system_channel_id && ids.get(body.system_channel_id)) ?? ids.get(body.channels.find((c) => c.type === 0)?.id);
         if (systemChannelId) {
