@@ -93,12 +93,16 @@ const LOGO_PATH =
 
 const escapeXml = (text: string) => text.replace(/[<>&"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
+const wordmark = (box?: [number, number]) => {
+    const name = Config.get().client.instanceName || "Fosscord";
+    const width = Math.ceil(34 + [...name].length * 12.5);
+    const [boxWidth, boxHeight] = box ?? [width, 24];
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${boxWidth}" height="${boxHeight}" viewBox="0 0 ${width} 24" fill="none"><path fill="#fff" d="${LOGO_PATH}"/><text x="32" y="19.5" fill="#fff" font-family="'gg sans','Noto Sans','Helvetica Neue',Helvetica,Arial,sans-serif" font-size="20" font-weight="800">${escapeXml(name)}</text></svg>`;
+};
+
 const BRANDED_ASSETS: Record<string, () => string> = {
-    "131c318dd45b7aa4.svg": () => {
-        const name = Config.get().client.instanceName || "Fosscord";
-        const width = Math.ceil(34 + [...name].length * 12.5);
-        return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="24" viewBox="0 0 ${width} 24" fill="none"><path fill="#fff" d="${LOGO_PATH}"/><text x="32" y="19.5" fill="#fff" font-family="'gg sans','Noto Sans','Helvetica Neue',Helvetica,Arial,sans-serif" font-size="20" font-weight="800">${escapeXml(name)}</text></svg>`;
-    },
+    "131c318dd45b7aa4.svg": () => wordmark(),
+    "bbbc3d376d38e7bc.svg": () => wordmark([112, 36]),
     "dd05fd1ea37e7747.png": () =>
         `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="#000"/><path fill="#fff" transform="translate(23 23) scale(2.25)" d="${LOGO_PATH}"/></svg>`,
 };
