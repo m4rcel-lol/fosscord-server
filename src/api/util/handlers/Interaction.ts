@@ -18,27 +18,35 @@
 
 import { HTTPError } from "lambert-server/HTTPError";
 import { In } from "typeorm";
-import { Attachment, Channel, Member, Message, Role, User } from "@spacebar/database";
+import { Application, Attachment, Channel, Member, Message, Role, User } from "@spacebar/database";
 import {
     ApplicationCommandOptionType,
     ApplicationCommandType,
     BaseMessageComponents,
+    InteractionCallbacksSchema,
+    InteractionCallbackType,
     InteractionFailureReason,
     InteractionMessage,
     InteractionType,
     MessageType,
 } from "@spacebar/schemas";
 import {
+    ApiError,
+    ApplicationCommandAutocompleteResponseEvent,
     Config,
+    DiscordApiErrors,
     emitEvent,
     getPermission,
     InteractionFailureEvent,
+    InteractionModalCreateEvent,
     InteractionSuccessEvent,
     MessageCreateEvent,
     MessageDeleteEvent,
     MessageFlags,
     MessageUpdateEvent,
     PendingInteraction,
+    Snowflake,
+    uploadFile,
 } from "@spacebar/util";
 import { handleComps, handleMessage, postHandleMessage } from "./Message";
 
@@ -321,4 +329,107 @@ export function messageBelongsToInteraction(interaction: PendingInteraction, mes
     if (!message) return false;
     const metadata = message.interaction_metadata as { id?: string } | undefined;
     return message.channel_id === interaction.channelId && message.application_id === interaction.applicationId && metadata?.id === interaction.id;
+}
+
+export async function processInteractionCallback(interaction: PendingInteraction, body: InteractionCallbacksSchema, files: Express.Multer.File[] = []) {
+    const allowed: Record<number, InteractionType[]> = {
+        [InteractionCallbackType.CHANNEL_MESSAGE_WITH_SOURCE]: [InteractionType.ApplicationCommand, InteractionType.MessageComponent, InteractionType.ModalSubmit],
+        [InteractionCallbackType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE]: [InteractionType.ApplicationCommand, InteractionType.MessageComponent, InteractionType.ModalSubmit],
+        [InteractionCallbackType.DEFERRED_UPDATE_MESSAGE]: [InteractionType.MessageComponent, InteractionType.ModalSubmit],
+        [InteractionCallbackType.UPDATE_MESSAGE]: [InteractionType.MessageComponent, InteractionType.ModalSubmit],
+        [InteractionCallbackType.APPLICATION_COMMAND_AUTOCOMPLETE_RESULT]: [InteractionType.ApplicationCommandAutocomplete],
+        [InteractionCallbackType.MODAL]: [InteractionType.ApplicationCommand, InteractionType.MessageComponent],
+    };
+    if (!allowed[body.type]?.includes(interaction.type)) throw new ApiError("Interaction callback type is not valid for this interaction", 50035, 400);
+    if ((body.type === InteractionCallbackType.UPDATE_MESSAGE || body.type === InteractionCallbackType.DEFERRED_UPDATE_MESSAGE) && !interaction.messageId)
+        throw new ApiError("This interaction is not attached to a message", 50035, 400);
+
+    clearTimeout(interaction.timeout);
+    interaction.acknowledged = true;
+
+    if (files.length && "data" in body && body.data && typeof body.data === "object") {
+        const folder = Snowflake.generate();
+        const uploaded = await Promise.all(files.map((file) => uploadFile(`/attachments/${interaction.channelId}/${folder}`, file).then((f) => Attachment.create(f))));
+        (body.data as { attachments?: unknown[] }).attachments = uploaded;
+    }
+
+    let message: Message | null = null;
+    try {
+        switch (body.type) {
+            case InteractionCallbackType.CHANNEL_MESSAGE_WITH_SOURCE:
+                message = await createInteractionMessage(interaction, body.data);
+                interaction.responseMessageId = message.id;
+                interaction.responseEphemeral = (message.flags & Number(MessageFlags.FLAGS.EPHEMERAL)) !== 0;
+                break;
+            case InteractionCallbackType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE:
+                message = await createInteractionMessage(interaction, { flags: body.data?.flags }, { loading: true });
+                interaction.responseMessageId = message.id;
+                interaction.responseEphemeral = (message.flags & Number(MessageFlags.FLAGS.EPHEMERAL)) !== 0;
+                interaction.responseLoading = true;
+                break;
+            case InteractionCallbackType.DEFERRED_UPDATE_MESSAGE:
+                interaction.responseMessageId = interaction.messageId;
+                break;
+            case InteractionCallbackType.UPDATE_MESSAGE: {
+                const target = await fetchInteractionMessage(interaction.messageId!);
+                if (!target) throw DiscordApiErrors.UNKNOWN_MESSAGE;
+                message = await editInteractionMessage(interaction, target, body.data);
+                interaction.responseMessageId = message.id;
+                break;
+            }
+            case InteractionCallbackType.APPLICATION_COMMAND_AUTOCOMPLETE_RESULT:
+                await emitEvent({
+                    event: "APPLICATION_COMMAND_AUTOCOMPLETE_RESPONSE",
+                    ...interactionTarget(interaction),
+                    data: { nonce: interaction.nonce, choices: body.data.choices.slice(0, 25) },
+                } satisfies ApplicationCommandAutocompleteResponseEvent);
+                break;
+            case InteractionCallbackType.MODAL: {
+                const application = await Application.findOneOrFail({ where: { id: interaction.applicationId }, relations: { bot: true } });
+                await emitEvent({
+                    event: "INTERACTION_MODAL_CREATE",
+                    ...interactionTarget(interaction),
+                    data: {
+                        id: interaction.id,
+                        nonce: interaction.nonce,
+                        channel_id: interaction.channelId,
+                        custom_id: body.data.custom_id,
+                        title: body.data.title,
+                        components: body.data.components,
+                        application: {
+                            id: application.id,
+                            name: application.name,
+                            icon: application.icon ?? null,
+                            description: application.description ?? "",
+                            flags: application.flags,
+                            bot: application.bot?.toPublicUser(),
+                        },
+                    },
+                } satisfies InteractionModalCreateEvent);
+                break;
+            }
+            default:
+                break;
+        }
+    } catch (error) {
+        interaction.acknowledged = false;
+        await emitInteractionFailure(interaction, InteractionFailureReason.UNKNOWN);
+        throw error;
+    }
+
+    if (body.type !== InteractionCallbackType.APPLICATION_COMMAND_AUTOCOMPLETE_RESULT) await emitInteractionSuccess(interaction);
+
+    return {
+        interaction: {
+            id: interaction.id,
+            type: interaction.type,
+            response_message_id: interaction.responseMessageId,
+            response_message_loading: interaction.responseLoading ?? false,
+            response_message_ephemeral: interaction.responseEphemeral ?? false,
+        },
+        resource: {
+            type: body.type,
+            message: message?.toJSON(),
+        },
+    };
 }
