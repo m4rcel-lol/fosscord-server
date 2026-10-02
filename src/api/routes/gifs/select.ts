@@ -16,15 +16,13 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { GifsResponse, GifTrendingCategory } from "@spacebar/schemas";
+import { Request, Response, Router } from "express";
+import { route } from "@spacebar/api/middlewares";
 
-export interface IGifProvider {
-    id: string;
-    available: boolean;
+const router = Router({ mergeParams: true });
 
-    init(): Promise<void>;
-    search(query: { q: string; limit?: number; media_format: string; locale: string }): Promise<GifsResponse>;
-    getTrendingCategories(query: { media_format: string; locale: string }): Promise<GifTrendingCategory[]>;
-    getTrendingGifs(query: { q: string; limit?: number; media_format: string; locale: string }): Promise<GifsResponse>;
-    suggest?(query: { q: string; limit: number; locale: string }): Promise<string[]>;
-}
+router.post("/", route({ responses: { 204: {} } }), (req: Request, res: Response) => {
+    res.sendStatus(204);
+});
+
+export default router;
