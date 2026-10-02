@@ -151,14 +151,7 @@ router.patch(
                 });
             }
 
-            if (
-                user.discriminator === "0" &&
-                (await User.createQueryBuilder("u")
-                    .where("LOWER(u.username) = LOWER(:username)", { username: body.username })
-                    .andWhere("u.id != :id", { id: user.id })
-                    .andWhere("u.bot = false")
-                    .getCount()) > 0
-            )
+            if (user.discriminator === "0" && (await User.isUsernameTaken(body.username, user.id)))
                 throw FieldErrors({
                     username: {
                         code: "USERNAME_ALREADY_TAKEN",

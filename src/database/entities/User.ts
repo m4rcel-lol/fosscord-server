@@ -314,6 +314,33 @@ export class User extends BaseClass {
         }
     }
 
+    static isValidPomeloUsername(username: string) {
+        return /^[a-z0-9_.]{2,32}$/i.test(username) && !username.includes("..");
+    }
+
+    static async isUsernameTaken(username: string, exceptUserId?: string) {
+        const query = User.createQueryBuilder("u").where("LOWER(u.username) = LOWER(:username)", { username }).andWhere("u.bot = false");
+        if (exceptUserId) query.andWhere("u.id != :id", { id: exceptUserId });
+        return (await query.getCount()) > 0;
+    }
+
+    static async suggestUsername(source: string, exceptUserId?: string) {
+        const base =
+            source
+                .toLowerCase()
+                .normalize("NFKD")
+                .replace(/[^a-z0-9_.]/g, "")
+                .replace(/\.{2,}/g, ".")
+                .slice(0, 26) || "user";
+        const padded = base.length < 2 ? `${base}_` : base;
+        if (!(await User.isUsernameTaken(padded, exceptUserId))) return padded;
+        for (let tries = 0; tries < 20; tries++) {
+            const candidate = `${padded}${Random.nextInt(0, 9999).toString().padStart(4, "0")}`;
+            if (!(await User.isUsernameTaken(candidate, exceptUserId))) return candidate;
+        }
+        return `${padded}${Date.now().toString(36)}`;
+    }
+
     public get tag(): string {
         return this.discriminator === "0" ? this.username : `${this.username}#${this.discriminator}`;
     }
@@ -346,8 +373,7 @@ export class User extends BaseClass {
         // trim special utf8 control characters -> Backspace, Newline, ...
         username = trimSpecial(username);
 
-        const usernameTaken = !bot && (await User.createQueryBuilder("u").where("LOWER(u.username) = LOWER(:username)", { username }).andWhere("u.bot = false").getCount()) > 0;
-        if (usernameTaken)
+        if (!bot && (await User.isUsernameTaken(username)))
             throw FieldErrors({
                 username: {
                     code: "USERNAME_ALREADY_TAKEN",
