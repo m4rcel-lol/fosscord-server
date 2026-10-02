@@ -17,7 +17,7 @@
 */
 
 export class PasswordConfiguration {
-    required: boolean = false;
+    required: boolean = true;
     minLength: number = 8;
     minNumbers: number = 2;
     minUpperCase: number = 2;
