@@ -173,7 +173,7 @@ export class ReadyGuildDTO implements IReadyGuildDTO {
         this.channels = guild.channels;
         this.data_mode = "full";
         this.emojis = guild.emojis;
-        this.guild_scheduled_events = [];
+        this.guild_scheduled_events = (guild as { guild_scheduled_events?: unknown[] }).guild_scheduled_events ?? [];
         this.id = guild.id;
         this.large = guild.large;
         this.lazy = true; // ??????????

@@ -6996,6 +6996,9 @@
                     "null",
                     "string"
                 ]
+            },
+            "silent": {
+                "type": "boolean"
             }
         },
         "additionalProperties": false,

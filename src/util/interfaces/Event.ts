@@ -190,7 +190,7 @@ export interface GuildCreateEvent extends Event {
     data: IReadyGuildDTO & {
         joined_at: Date | null;
         // TODO: add them to guild
-        guild_scheduled_events: never[];
+        guild_scheduled_events: unknown[];
         guild_hashes: unknown;
         presences: never[];
         stage_instances: never[];
@@ -929,6 +929,14 @@ export type EVENT =
     | "STAGE_INSTANCE_CREATE"
     | "STAGE_INSTANCE_UPDATE"
     | "STAGE_INSTANCE_DELETE"
+    | "GUILD_SCHEDULED_EVENT_CREATE"
+    | "GUILD_SCHEDULED_EVENT_UPDATE"
+    | "GUILD_SCHEDULED_EVENT_DELETE"
+    | "GUILD_SCHEDULED_EVENT_USER_ADD"
+    | "GUILD_SCHEDULED_EVENT_USER_REMOVE"
+    | "GUILD_SCHEDULED_EVENT_EXCEPTION_CREATE"
+    | "GUILD_SCHEDULED_EVENT_EXCEPTION_UPDATE"
+    | "GUILD_SCHEDULED_EVENT_EXCEPTION_DELETE"
     | "APPLICATION_COMMAND_CREATE"
     | "APPLICATION_COMMAND_UPDATE"
     | "APPLICATION_COMMAND_DELETE"

@@ -17,7 +17,7 @@
 */
 
 import { route } from "@spacebar/api/middlewares";
-import { AuditLog, Ban, Channel, Guild, Invite, Member, PublicInviteRelation, Recipient, User } from "@spacebar/database";
+import { AuditLog, Ban, Channel, Guild, GuildScheduledEvent, Invite, Member, PublicInviteRelation, Recipient, ScheduledEvents, User } from "@spacebar/database";
 import { ChannelRecipientAddEvent, Config, DiscordApiErrors, DmChannelDTO, emitEvent, getPermission, InviteDeleteEvent } from "@spacebar/util";
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
@@ -97,7 +97,12 @@ router.get(
         await invite.loadGroupRecipients();
 
         await invite.guild?.withPresenceCount();
-        res.status(200).send(invite.toPublicJSON());
+        const eventId = req.query.guild_scheduled_event_id ?? req.query.event;
+        const event =
+            invite.guild && typeof eventId === "string" && /^\d+$/.test(eventId)
+                ? await GuildScheduledEvent.findOne({ where: { id: eventId, guild_id: invite.guild.id }, relations: { creator: true } })
+                : null;
+        res.status(200).send({ ...invite.toPublicJSON(), ...(event ? { guild_scheduled_event: await ScheduledEvents.serialize(event) } : {}) });
     },
 );
 

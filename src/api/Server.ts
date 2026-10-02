@@ -21,7 +21,7 @@ import { Request, Response, Router } from "express";
 import morgan from "morgan";
 import { Server, ServerOptions } from "lambert-server/Server";
 import { red } from "picocolors";
-import { getDatabase, initDatabase, Message } from "@spacebar/database";
+import { getDatabase, initDatabase, Message, ScheduledEvents } from "@spacebar/database";
 import {
     Config,
     ConnectionConfig,
@@ -79,6 +79,7 @@ export class SpacebarServer extends Server {
         WebAuthn.init();
         // await BcryptWorkerPool.Init(8); // TODO: make configurable
         await GifProviderManager.init();
+        ScheduledEvents.startSweeper();
 
         const logRequests = process.env["LOG_REQUESTS"] != undefined;
         if (logRequests) {
