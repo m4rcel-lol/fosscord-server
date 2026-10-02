@@ -97,6 +97,10 @@ const avatar = (u, cls = "") =>
         ? html`<img class="avatar ${cls}" src="/avatars/${u.id}/${u.avatar}.${u.avatar.startsWith("a_") ? "gif" : "png"}?size=128" alt="" loading="lazy" />`
         : html`<span class="avatar ${cls}">${initials(userName(u))}</span>`;
 
+// a server tag the way it looks next to a name: badge icon + tag text
+const tagChip = (guildId, tag, badgeHash) =>
+    html`<span class="tag-chip small">${badgeHash ? html`<img src="/clan-badges/${guildId}/${badgeHash}.png?size=32" alt="" />` : ""}${tag}</span>`;
+
 const guildIcon = (g, cls = "") =>
     g?.icon
         ? html`<img class="avatar square ${cls}" src="/icons/${g.id}/${g.icon}.${g.icon.startsWith("a_") ? "gif" : "png"}?size=128" alt="" loading="lazy" />`
@@ -267,6 +271,65 @@ const CHECK_ICON = '<svg aria-hidden="true" width="12" height="12" viewBox="0 0 
 
 const badgeIcon = (b) => html`<img class="badge-icon" src="/badge-icons/${b.icon}.png" alt="" loading="lazy" />`;
 
+const STANDINGS = [
+    [100, "All good", "ok"],
+    [200, "Limited", "warn"],
+    [300, "Very limited", "warn"],
+    [400, "At risk", "danger"],
+    [500, "Suspended", "danger"],
+];
+const standingOf = (state) => STANDINGS.find(([v]) => v === state) ?? STANDINGS[0];
+
+const VIOLATION_TYPES = [
+    [3030, "Spam"],
+    [290, "Harassment and bullying"],
+    [320, "Hateful conduct"],
+    [220, "Hate speech"],
+    [210, "Glorifying violence"],
+    [3010, "Malicious conduct"],
+    [711, "Impersonation"],
+    [720, "Ban evasion"],
+    [4010, "Fraud"],
+    [250, "Social engineering"],
+    [240, "Illicit goods"],
+    [230, "Cracked accounts"],
+    [100, "Unsolicited adult content"],
+    [4000, "Non-consensual adult content"],
+    [5305, "Doxxing"],
+    [5440, "Copyright infringement"],
+    [280, "Child safety"],
+    [5090, "Self-harm"],
+    [5411, "Underage user"],
+    [1, "Other"],
+];
+const violationType = (id) => VIOLATION_TYPES.find(([v]) => v === id)?.[1] ?? `Type ${id}`;
+
+const VIOLATION_ACTIONS = [
+    [4, "Warning"],
+    [9, "Limited access"],
+    [1, "Temporary ban"],
+    [0, "Ban"],
+    [2, "Quarantine"],
+    [3, "Verification required"],
+    [13, "Content removed"],
+    [16, "Messages removed"],
+    [14, "Username reset"],
+    [22, "Profile reset"],
+    [5, "Marked as spammer"],
+];
+const APPEAL_REASONS = ["They didn't break the rules", "The decision was too strict or unfair", "They disagree with the penalty", "Something else"];
+
+const violationAction = (id) => VIOLATION_ACTIONS.find(([v]) => v === id)?.[1] ?? `Action ${id}`;
+
+const VIOLATION_DURATIONS = [
+    [7, "7 days"],
+    [30, "30 days"],
+    [90, "90 days"],
+    [180, "180 days"],
+    [365, "1 year"],
+    ["", "Permanent"],
+];
+
 const COMPONENT_STATUSES = [
     ["operational", "Operational", "ok"],
     ["degraded_performance", "Degraded performance", "warn"],
@@ -383,7 +446,15 @@ $("#logout").addEventListener("click", () => {
 
 /* ---------- router ---------- */
 
-const TABS = { overview: renderOverview, settings: renderSettings, users: renderUsers, badges: renderBadges, guilds: renderGuilds, status: renderStatus };
+const TABS = {
+    overview: renderOverview,
+    settings: renderSettings,
+    users: renderUsers,
+    badges: renderBadges,
+    announcements: renderAnnouncements,
+    guilds: renderGuilds,
+    status: renderStatus,
+};
 
 function route() {
     if (!state.overview) return;
@@ -670,9 +741,9 @@ function bindPager(root, total, st, load) {
 
 async function openUser(id, reload) {
     const body = openDrawer("User", html`<div class="spinner">Loading…</div>`);
-    let u, badges;
+    let u, badges, standing;
     try {
-        [u, badges] = await Promise.all([api(`/admin/users/${id}`), api("/admin/badges")]);
+        [u, badges, standing] = await Promise.all([api(`/admin/users/${id}`), api("/admin/badges"), api(`/admin/users/${id}/violations`)]);
     } catch (e) {
         return mount(body, html`<p class="form-error">${e.message}</p>`);
     }
@@ -752,6 +823,8 @@ async function openUser(id, reload) {
                 <div class="form-actions"><button class="btn primary" type="submit">Save user</button></div>
             </form>
 
+            <div class="card stack" id="standing-card"></div>
+
             ${u.guilds.length
                 ? html`<div class="card">
                       <h3>Servers (${u.guilds.length})</h3>
@@ -824,7 +897,138 @@ async function openUser(id, reload) {
     $("#user-form").tag.addEventListener("change", syncTag);
     syncTag();
 
-    for (const btn of $("[data-guild]", body)) btn.addEventListener("click", () => openGuild(btn.dataset.guild));
+    for (const btn of $$("[data-guild]", body)) btn.addEventListener("click", () => openGuild(btn.dataset.guild));
+
+    const renderStanding = () => {
+        const [, label, tone] = standingOf(standing.standing.state);
+        const card = $("#standing-card");
+        mount(
+            card,
+            html`
+                <div class="row" style="justify-content:space-between">
+                    <h3>Account standing</h3>
+                    <span class="badge ${tone}" style="font-size:12px;padding:3px 10px"><span class="dot"></span>${label}</span>
+                </div>
+                <label
+                    >Standing<span class="hint"
+                        >What the user sees on their Account Standing page. Automatic goes down one step per active violation (suspended for disabled
+                        accounts).</span
+                    ><select name="standing">
+                        <option value="">Automatic (${standingOf(standing.standing.automatic)[1].toLowerCase()})</option>
+                        ${options(STANDINGS, standing.standing.override ?? "")}
+                    </select></label
+                >
+                <div class="stack">
+                    <h3>Violations (${standing.violations.length})</h3>
+                    ${standing.violations.length
+                        ? standing.violations.map(
+                              (v) => html`<div class="violation ${v.active ? "" : "inactive"}" data-violation="${v.id}">
+                                  <div class="row">
+                                      <strong class="grow">${violationType(v.classification_type)}</strong>
+                                      ${v.appeal_status === 1 ? html`<span class="badge warn">Appeal pending</span>` : ""}
+                                      ${v.appeal_status === 2 ? html`<span class="badge">Appeal denied</span>` : ""}
+                                      ${v.appeal_status === 3 ? html`<span class="badge ok">Overturned</span>` : ""}
+                                      ${v.active ? html`<span class="badge danger">Active</span>` : v.appeal_status !== 3 ? html`<span class="badge">Expired</span>` : ""}
+                                  </div>
+                                  <p>${v.description}</p>
+                                  ${v.appeal_status
+                                      ? html`<div class="appeal-note">
+                                            <strong>Appeal</strong> · ${APPEAL_REASONS[v.appeal_signal ?? 3]}${v.appealed_at ? html` · ${fmtDate(v.appealed_at)}` : ""}
+                                            ${v.appeal_user_input ? html`<p>${v.appeal_user_input}</p>` : ""}
+                                        </div>`
+                                      : ""}
+                                  ${v.actions.length ? html`<div class="badges">${v.actions.map((a) => html`<span class="badge">${violationAction(a.action_type)}</span>`)}</div>` : ""}
+                                  <div class="muted">
+                                      Issued ${fmtDate(v.created_at)}${v.issued_by ? html` by ${userName(v.issued_by)}` : ""} ·
+                                      ${v.permanent ? "Permanent" : html`${v.active || new Date(v.expires_at) > new Date() ? "Expires" : "Expired"} ${fmtDate(v.expires_at)}`}
+                                  </div>
+                                  <div class="row" style="justify-content:flex-end">
+                                      ${v.appeal_status === 1
+                                          ? html`<button class="btn small" type="button" data-appeal="2">Deny appeal</button
+                                                ><button class="btn small primary" type="button" data-appeal="3">Overturn</button>`
+                                          : ""}
+                                      <button class="btn small ghost" type="button" data-remove-violation>Remove</button>
+                                  </div>
+                              </div>`,
+                          )
+                        : html`<p class="muted" style="margin:0">No violations.</p>`}
+                </div>
+                <details class="stack">
+                    <summary class="btn small" style="width:max-content">Add violation</summary>
+                    <form id="violation-form" class="stack" style="margin-top:12px">
+                        <label>Type<select name="classification_type">${options(VIOLATION_TYPES, 3030)}</select></label>
+                        <label
+                            >Message to the user<span class="hint">Shown on their Account Standing page.</span
+                            ><textarea name="description" required maxlength="2000" placeholder="You sent unsolicited advertisements to other members."></textarea
+                        ></label>
+                        <div class="stack">
+                            <span class="muted">Actions taken</span>
+                            <div class="checks">
+                                ${VIOLATION_ACTIONS.map(
+                                    ([id, label]) => html`<label class="toggle"><input type="checkbox" name="action" value="${id}" ${id === 4 ? raw("checked") : ""} /><span>${label}</span></label>`,
+                                )}
+                            </div>
+                        </div>
+                        <label>Counts against them for<select name="duration">${options(VIOLATION_DURATIONS, 90)}</select></label>
+                        <p class="muted" style="margin:0">
+                            This records the violation and its effect on their standing. To actually restrict the account, disable it above.
+                        </p>
+                        <div class="form-actions"><button class="btn danger" type="submit">Add violation</button></div>
+                    </form>
+                </details>
+            `,
+        );
+
+        card.querySelector("[name=standing]").addEventListener("change", async (e) => {
+            const value = e.target.value === "" ? null : Number(e.target.value);
+            const saved = await act(e.target, () => api(`/admin/users/${u.id}`, { method: "PATCH", body: { account_standing: value } }), "Standing updated");
+            if (saved) {
+                standing = await api(`/admin/users/${u.id}/violations`);
+                renderStanding();
+            }
+        });
+
+        for (const row of $$("[data-violation]", card)) {
+            const vid = row.dataset.violation;
+            for (const btn of $$("[data-appeal]", row))
+                btn.addEventListener("click", async () => {
+                    const next = await act(
+                        btn,
+                        () => api(`/admin/users/${u.id}/violations/${vid}`, { method: "PATCH", body: { appeal_status: Number(btn.dataset.appeal) } }),
+                        btn.dataset.appeal === "3" ? "Violation overturned" : "Appeal denied",
+                    );
+                    if (next) {
+                        standing = next;
+                        renderStanding();
+                    }
+                });
+            $("[data-remove-violation]", row).addEventListener("click", async (e) => {
+                if (!confirm("Remove this violation completely? Use Overturn instead to keep a record of it.")) return;
+                const next = await act(e.currentTarget, () => api(`/admin/users/${u.id}/violations/${vid}`, { method: "DELETE" }), "Violation removed");
+                if (next) {
+                    standing = next;
+                    renderStanding();
+                }
+            });
+        }
+
+        $("#violation-form", card).addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const form = e.currentTarget;
+            const payload = {
+                classification_type: Number(form.classification_type.value),
+                description: form.description.value,
+                actions: $$("input[name=action]:checked", form).map((x) => ({ action_type: Number(x.value) })),
+                expires_in_days: form.duration.value ? Number(form.duration.value) : null,
+            };
+            const next = await act($("button[type=submit]", form), () => api(`/admin/users/${u.id}/violations`, { method: "POST", body: payload }), "Violation added");
+            if (next) {
+                standing = next;
+                renderStanding();
+            }
+        });
+    };
+    renderStanding();
 
     $("#ban-user")?.addEventListener("click", async (e) => {
         if (!confirm(`Permanently delete and ban ${userName(u)}? This can't be undone.`)) return;
@@ -833,6 +1037,78 @@ async function openUser(id, reload) {
         if (done !== undefined) {
             closeDrawer();
             reload?.();
+        }
+    });
+}
+
+/* ---------- announcements ---------- */
+
+async function renderAnnouncements(view) {
+    const { official, announcements } = await api("/admin/announcements");
+    mount(
+        view,
+        html`
+            <div class="page-head">
+                <div>
+                    <h1>Announcements</h1>
+                    <p class="muted">
+                        Sent as a direct message from <strong>${official.global_name || official.username}</strong>, the instance's official system account.
+                        Users can't reply to it.
+                    </p>
+                </div>
+            </div>
+            <div class="stack">
+                <form id="announce-form" class="card stack">
+                    <h2>New announcement</h2>
+                    <label>Title<input name="title" required maxlength="256" placeholder="Scheduled maintenance tonight" /></label>
+                    <label
+                        >Message<span class="hint">Markdown works: **bold**, *italics*, links, lists.</span
+                        ><textarea name="body" required maxlength="4000" rows="6" placeholder="We'll be upgrading the database at 23:00 UTC…"></textarea
+                    ></label>
+                    <label
+                        >Send to<select name="audience" style="max-width:320px">
+                            ${options(
+                                [
+                                    ["everyone", "Everyone on the instance"],
+                                    ["staff", "Staff only (admin panel access)"],
+                                ],
+                                "everyone",
+                            )}
+                        </select></label
+                    >
+                    <div class="form-actions"><button class="btn primary" type="submit">Send announcement</button></div>
+                </form>
+                <div class="stack">
+                    <h2>Sent</h2>
+                    ${announcements.length
+                        ? announcements.map(
+                              (a) => html`<div class="card stack" style="gap:6px">
+                                  <div class="row">
+                                      <strong class="grow">${a.title}</strong>
+                                      <span class="badge">${a.audience === "staff" ? "Staff" : "Everyone"} · ${fmtNumber(a.recipient_count)}</span>
+                                  </div>
+                                  <p style="margin:0;white-space:pre-wrap">${a.body}</p>
+                                  <span class="muted">${fmtDate(a.created_at)}</span>
+                              </div>`,
+                          )
+                        : html`<div class="card empty">Nothing sent yet.</div>`}
+                </div>
+            </div>
+        `,
+    );
+
+    $("#announce-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const form = e.currentTarget;
+        const audience = form.audience.value;
+        if (audience === "everyone" && !confirm("Send this announcement to every user on the instance?")) return;
+        const sent = await act(
+            $("button[type=submit]", form),
+            () => api("/admin/announcements", { method: "POST", body: { title: form.title.value, body: form.body.value, audience } }),
+        );
+        if (sent) {
+            toast(`Sending to ${fmtNumber(sent.recipient_count)} ${sent.recipient_count === 1 ? "user" : "users"}`);
+            renderAnnouncements(view);
         }
     });
 }
@@ -1046,7 +1322,7 @@ async function renderGuilds(view) {
                                                   <div class="ident">
                                                       ${guildIcon(g)}
                                                       <div>
-                                                          <strong>${g.name}</strong>
+                                                          <strong class="row" style="gap:6px">${g.name}${g.tag ? tagChip(g.id, g.tag.tag, g.tag.badge_hash) : ""}</strong>
                                                           ${g.features.length ? html`<span class="muted">${g.features.slice(0, 3).join(", ")}${g.features.length > 3 ? "…" : ""}</span>` : ""}
                                                       </div>
                                                   </div>
@@ -1125,6 +1401,28 @@ async function openGuild(id, reload) {
                 <label>Name<input name="name" value="${g.name}" minlength="2" maxlength="100" required /></label>
                 <label>Description<textarea name="description" maxlength="300">${g.description ?? ""}</textarea></label>
                 <div class="stack">
+                    <div class="row" style="justify-content:space-between"><h3>Server tag</h3><span id="tag-preview"></span></div>
+                    <label
+                        >Tag<span class="hint"
+                            >Shown next to members' names. Staff can use any text of any length here (server owners are limited to 2–4 letters or numbers).
+                            Leave empty to remove the tag.</span
+                        ><input name="tag" autocomplete="off" value="${g.tag?.tag ?? ""}" placeholder="LARP"
+                    /></label>
+                    <div class="stack" id="tag-badge-fields">
+                        <span class="muted">Badge</span>
+                        <div id="badge-picker" class="badge-picker"><span class="muted">Loading badges…</span></div>
+                        <label class="toggle"
+                            ><input type="checkbox" name="badge_default_colors" ${g.tag?.badge_color_primary ? "" : raw("checked")} /><span
+                                >Use the badge's own colours</span
+                            ></label
+                        >
+                        <div class="row" id="badge-colors">
+                            <label class="row" style="gap:8px">Main<input type="color" name="badge_color_primary" value="${g.tag?.badge_color_primary ?? "#5865f2"}" /></label>
+                            <label class="row" style="gap:8px">Accent<input type="color" name="badge_color_secondary" value="${g.tag?.badge_color_secondary ?? "#ffffff"}" /></label>
+                        </div>
+                    </div>
+                </div>
+                <div class="stack">
                     <h3>Feature flags</h3>
                     <div id="feature-chips" class="chips"></div>
                     <div class="row">
@@ -1169,12 +1467,61 @@ async function openGuild(id, reload) {
     });
     $("#open-owner")?.addEventListener("click", () => openUser(g.owner.id));
 
+    const tagForm = $("#guild-form");
+    let badge = g.tag?.badge ?? 0;
+    const badgeColours = () =>
+        tagForm.badge_default_colors.checked ? {} : { primary: tagForm.badge_color_primary.value, secondary: tagForm.badge_color_secondary.value };
+    const previewUrl = (id, size) => `/clan-badges/preview/${id}?${new URLSearchParams({ size, ...badgeColours() })}`;
+    const renderTagPreview = () => {
+        const tag = tagForm.tag.value.trim();
+        $("#tag-badge-fields").hidden = !tag;
+        $("#badge-colors").hidden = tagForm.badge_default_colors.checked;
+        mount($("#tag-preview"), tag ? html`<span class="tag-chip"><img src="${previewUrl(badge, 32)}" alt="" />${tag}</span>` : html`<span class="muted">No tag</span>`);
+        for (const img of $$("[data-badge] img", tagForm)) img.src = previewUrl(img.closest("[data-badge]").dataset.badge, 48);
+        for (const btn of $$("[data-badge]", tagForm)) btn.classList.toggle("active", Number(btn.dataset.badge) === badge);
+    };
+    fetch("/clan-badges/preview")
+        .then((r) => r.json())
+        .then((list) => {
+            mount(
+                $("#badge-picker"),
+                list.length
+                    ? list.map(
+                          (b) =>
+                              html`<button type="button" class="badge-option" data-badge="${b.id}" title="${b.name.toLowerCase().replace(/_/g, " ")}"
+                                  ><img src="${previewUrl(b.id, 48)}" alt="${b.name}"
+                              /></button>`,
+                      )
+                    : html`<span class="muted">Badge artwork isn't available. Run <code>npm run generate:client</code> on the server.</span>`,
+            );
+            renderTagPreview();
+        })
+        .catch(() => mount($("#badge-picker"), html`<span class="muted">Couldn't load badges.</span>`));
+    $("#badge-picker").addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-badge]");
+        if (!btn) return;
+        badge = Number(btn.dataset.badge);
+        renderTagPreview();
+    });
+    tagForm.tag.addEventListener("input", renderTagPreview);
+    tagForm.badge_default_colors.addEventListener("change", renderTagPreview);
+    for (const input of [tagForm.badge_color_primary, tagForm.badge_color_secondary]) input.addEventListener("input", debounce(renderTagPreview, 150));
+    renderTagPreview();
+
     $("#guild-form").addEventListener("submit", async (e) => {
         e.preventDefault();
         const form = e.currentTarget;
         const patch = { name: form.name.value, description: form.description.value, features: [...features] };
         const owner = form.owner_id.value.trim();
         if (owner && owner !== g.owner?.id) patch.owner_id = owner;
+
+        const tag = form.tag.value.trim();
+        const colours = badgeColours();
+        const next = { tag: tag || null, badge, badge_color_primary: colours.primary ?? null, badge_color_secondary: colours.secondary ?? null };
+        const prev = g.tag ? { tag: g.tag.tag, badge: g.tag.badge, badge_color_primary: g.tag.badge_color_primary, badge_color_secondary: g.tag.badge_color_secondary } : { tag: null };
+        if (!next.tag) {
+            if (prev.tag) patch.tag = null;
+        } else if (JSON.stringify(next) !== JSON.stringify(prev)) Object.assign(patch, next);
         const saved = await act($("button[type=submit]", form), () => api(`/admin/guilds/${g.id}`, { method: "PATCH", body: patch }), "Server updated");
         if (saved) {
             reload?.();

@@ -73,4 +73,6 @@ export * from "./Tag";
 export * from "./StageInstance";
 export * from "./StatusComponent";
 export * from "./StatusIncident";
+export * from "./UserViolation";
+export * from "./Announcement";
 export * from "./GuildScheduledEvent";

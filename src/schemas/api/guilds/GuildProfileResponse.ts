@@ -31,8 +31,9 @@ export interface GuildProfileResponse {
     game_activity: { [id: string]: GameActivity };
     tag: string | null;
     badge: GuildBadgeType | null;
-    badge_color_primary: string;
-    badge_color_secondary: string;
+    // null means the badge's own colours; clients treat any other non-colour (like "") as invalid and draw it black
+    badge_color_primary: string | null;
+    badge_color_secondary: string | null;
     badge_hash: string;
     traits: GuildTrait[];
     features: string[];

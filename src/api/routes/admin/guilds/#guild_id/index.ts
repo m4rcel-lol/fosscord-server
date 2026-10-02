@@ -22,6 +22,7 @@ import { route } from "@spacebar/api/middlewares";
 import { Channel, Guild, Member, User } from "@spacebar/database";
 import { Config, emitEvent, GuildDeleteEvent } from "@spacebar/util";
 import { AdminGuildUpdateSchema } from "@spacebar/schemas";
+import { applyGuildTag, syncTagAdopters } from "@spacebar/api/util";
 import { pickOwner } from "../index";
 
 const router = Router({ mergeParams: true });
@@ -29,7 +30,19 @@ const router = Router({ mergeParams: true });
 const describeGuild = async (guild_id: string) => {
     const guild = await Guild.findOneOrFail({
         where: { id: guild_id },
-        select: { id: true, name: true, icon: true, banner: true, description: true, owner_id: true, features: true, verification_level: true, nsfw: true, premium_tier: true },
+        select: {
+            id: true,
+            name: true,
+            icon: true,
+            banner: true,
+            description: true,
+            owner_id: true,
+            features: true,
+            verification_level: true,
+            nsfw: true,
+            premium_tier: true,
+            profile: true,
+        },
     });
     const [memberCount, channelCount, owner] = await Promise.all([
         Member.count({ where: { guild_id } }),
@@ -48,6 +61,15 @@ const describeGuild = async (guild_id: string) => {
         premium_tier: guild.premium_tier ?? 0,
         member_count: memberCount,
         channel_count: channelCount,
+        tag: guild.profile?.tag
+            ? {
+                  tag: guild.profile.tag,
+                  badge: guild.profile.badge ?? 0,
+                  badge_color_primary: guild.profile.badge_color_primary || null,
+                  badge_color_secondary: guild.profile.badge_color_secondary || null,
+                  badge_hash: guild.profile.badge_hash ?? null,
+              }
+            : null,
         owner: guild.owner_id ? pickOwner(owner, guild.owner_id) : null,
     };
 };
@@ -84,8 +106,21 @@ router.patch(
         if (body.name !== undefined) guild.name = body.name.trim();
         if (body.description !== undefined) guild.description = body.description?.trim() || undefined;
         if (body.features !== undefined) guild.features = [...new Set(body.features.map((f) => f.trim().toUpperCase()).filter(Boolean))];
+        // setting a tag without picking a badge yet gives it the first badge, like the client does
+        const addingTag = body.tag && !guild.profile?.tag && body.badge === undefined && guild.profile?.badge == null;
+        const tagChanged = applyGuildTag(
+            guild,
+            {
+                tag: body.tag === undefined ? undefined : body.tag?.trim() || null,
+                badge: addingTag ? 0 : body.badge,
+                badge_color_primary: body.badge_color_primary,
+                badge_color_secondary: body.badge_color_secondary,
+            },
+            { unrestricted: true },
+        );
 
         await guild.save();
+        if (tagChanged) await syncTagAdopters(guild);
         await Guild.emitUpdate(guild_id);
 
         res.json(await describeGuild(guild_id));

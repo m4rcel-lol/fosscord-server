@@ -159,6 +159,10 @@ export class User extends BaseClass {
     @Column({ default: false })
     hide_premium_badge: boolean = false; // admin-controlled: keeps premium, just leaves the badge off their profile
 
+    // staff override for the account standing page (AccountStandingState); null works it out from violations
+    @Column({ type: "int", nullable: true })
+    account_standing?: number | null;
+
     @Column({ nullable: true, select: false })
     email?: string; // email of the user
 

@@ -60,10 +60,16 @@ const checkout = () => {
 };
 
 const pnpm = () => {
-    for (const candidate of [["pnpm"], ["corepack", "pnpm"], ["npx", "-y", "pnpm@11"]]) {
-        if (succeeds(candidate[0], [...candidate.slice(1), "--version"])) return candidate;
+    // a lockfile from another pnpm major fails --frozen-lockfile, so only take a pnpm matching vencord's pinned major
+    const pinned = JSON.parse(fs.readFileSync(path.join(SOURCE, "package.json"), "utf8")).packageManager?.match(/^pnpm@(\d+)/)?.[1] ?? "11";
+    const major = (candidate) =>
+        spawnSync(candidate[0], [...candidate.slice(1), "--version"], { cwd: SOURCE, encoding: "utf8" })
+            .stdout?.trim()
+            .split(".")[0];
+    for (const candidate of [["pnpm"], ["corepack", "pnpm"], ["npx", "-y", `pnpm@${pinned}`]]) {
+        if (major(candidate) === pinned) return candidate;
     }
-    throw new Error("could not find pnpm, corepack or npx");
+    throw new Error(`could not find pnpm ${pinned} (tried pnpm, corepack and npx)`);
 };
 
 const install = (pm) => {

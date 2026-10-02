@@ -17,6 +17,7 @@
 */
 
 import http from "node:http";
+import type { Duplex } from "node:stream";
 import path from "node:path";
 import morgan from "morgan";
 import { red } from "picocolors";
@@ -34,6 +35,8 @@ import { Authentication, BodyParser, CORS, ErrorHandler } from "@spacebar/api";
 export class GatewayServer extends Server {
     public ws: ws.Server;
     public remoteAuth: ws.Server;
+    // websocket paths served by something else sharing this http server (e.g. the voice gateway in the bundle)
+    public upgradeRoutes = new Map<string, (request: http.IncomingMessage, socket: Duplex, head: Buffer) => void>();
 
     constructor(options?: Partial<ServerOptions>) {
         super(options);
@@ -41,6 +44,8 @@ export class GatewayServer extends Server {
         this.http ??= http.createServer(this.app);
 
         this.http.on("upgrade", (request, socket, head) => {
+            for (const [prefix, handle] of this.upgradeRoutes)
+                if (request.url === prefix || request.url?.startsWith(`${prefix}/`) || request.url?.startsWith(`${prefix}?`)) return handle(request, socket, head);
             if (request.url?.startsWith("/remote-auth"))
                 return this.remoteAuth.handleUpgrade(request, socket, head, (socket) => {
                     RemoteAuthConnection(socket, request);

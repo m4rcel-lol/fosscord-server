@@ -37,7 +37,8 @@ import TestClient, { TestClientAssets } from "./TestClient";
 const app = express();
 const server = http.createServer();
 const port = Number(process.env.PORT) || 3001;
-const wrtcWsPort = Number(process.env.WRTC_WS_PORT) || 3004;
+// without WRTC_WS_PORT the voice gateway shares PORT under /voice, so the whole instance is one port
+const wrtcWsPort = Number(process.env.WRTC_WS_PORT) || undefined;
 const production = process.env.NODE_ENV == "development" ? false : true;
 server.on("request", app);
 
@@ -46,9 +47,11 @@ const cdn = new CDNServer({ server, port, production, app });
 const gateway = new GatewayServer({ server, port, production, app });
 const webrtc = new WebrtcServer({
     server: undefined,
-    port: wrtcWsPort,
+    port: wrtcWsPort ?? port,
     production,
+    noServer: !wrtcWsPort,
 });
+if (!wrtcWsPort) gateway.upgradeRoutes.set("/voice", (request, socket, head) => webrtc.handleUpgrade(request, socket, head));
 
 ProcessLifecycle.eventEmitter.on("stopping", async () => {
     await gateway.stop();

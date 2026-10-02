@@ -20,7 +20,7 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { In, MoreThan } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
-import { getBurstColors } from "@spacebar/api/util";
+import { getBurstColors, handleAppealVote } from "@spacebar/api/util";
 import { Channel, Emoji, Member, Message, User } from "@spacebar/database";
 import {
     emitEvent,
@@ -300,6 +300,9 @@ router.put(
                 type,
             },
         } satisfies MessageReactionAddEvent);
+
+        // staff voting on an appeal review the appeals account sent them
+        handleAppealVote(message.id, req.user_id, reaction.emoji.name ?? "").catch((e) => console.error("[Safety] appeal vote failed", e));
 
         res.sendStatus(204);
     },

@@ -19,12 +19,16 @@
 import { In } from "typeorm";
 import { Channel, Member, Message, Relationship, User, UserSettingsProtos } from "@spacebar/database";
 import { ChannelCreateEvent, ChannelUpdateEvent, DiscordApiErrors, DmChannelDTO, emitEvent } from "@spacebar/util";
-import { ChannelType, RelationshipType } from "@spacebar/schemas";
+import { ChannelType, RelationshipType, UserFlags } from "@spacebar/schemas";
 
 export async function assertCanSendDirectMessage(channel: Channel, senderId: string) {
     if (channel.type !== ChannelType.DM) return;
     const recipientId = channel.recipients?.find((r) => r.user_id !== senderId)?.user_id;
     if (!recipientId) return;
+
+    // the official and appeals accounts only send; nothing reads what's sent to them
+    const target = await User.findOne({ where: { id: recipientId }, select: { id: true, system: true, flags: true } });
+    if (target?.system || (Number(target?.flags ?? 0) & Number(UserFlags.FLAGS.SYSTEM)) !== 0) throw DiscordApiErrors.CANNOT_MESSAGE_USER;
 
     const relationships = await Relationship.find({
         where: [
@@ -53,7 +57,8 @@ async function isMessageRequest(channelId: string, recipientId: string, senderId
     return !(await Message.exists({ where: { channel_id: channelId, author_id: recipientId } }));
 }
 
-export async function reopenDirectMessage(channel: Channel, senderId: string) {
+// neverMessageRequest: for messages the server itself sends (official notices), which must not land in message requests
+export async function reopenDirectMessage(channel: Channel, senderId: string, { neverMessageRequest = false }: { neverMessageRequest?: boolean } = {}) {
     if (!channel.isDm()) return;
     const channelDto = await DmChannelDTO.from(channel);
     const sender = channel.recipients?.find((recipient) => recipient.user_id === senderId);
@@ -74,7 +79,7 @@ export async function reopenDirectMessage(channel: Channel, senderId: string) {
             ?.filter((recipient) => recipient.closed)
             .map(async (recipient) => {
                 recipient.closed = false;
-                if (channel.type === ChannelType.DM && recipient.user_id !== senderId && (await isMessageRequest(channel.id, recipient.user_id, senderId)))
+                if (!neverMessageRequest && channel.type === ChannelType.DM && recipient.user_id !== senderId && (await isMessageRequest(channel.id, recipient.user_id, senderId)))
                     recipient.message_request_timestamp = new Date();
                 await recipient.save();
                 await emitEvent({
