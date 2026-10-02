@@ -37,3 +37,4 @@ export * from "./utility/mfa";
 export * from "./utility/statusPage";
 export * from "./utility/phoneVerification";
 export * from "./utility/harvest";
+export * from "./utility/games";

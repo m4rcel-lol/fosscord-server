@@ -18,14 +18,9 @@
 
 import { route } from "@spacebar/api/middlewares";
 import { Request, Response, Router } from "express";
-import { ApplicationDetectableResponse } from "@spacebar/schemas";
+import { DetectableGames } from "@spacebar/api/util";
 
 const router: Router = Router({ mergeParams: true });
-const cache = {
-    data: {},
-    expires: 0,
-};
-
 // modern dclients call this, is /applications/detectable deprecated?
 router.get(
     "/",
@@ -37,17 +32,11 @@ router.get(
         },
     }),
     async (req: Request, res: Response) => {
-        // cache for 6 hours
-        if (Date.now() > cache.expires) {
-            const response = await fetch("https://discord.com/api/v10/games/detectable"); // because, well, it's unauthenticated anyways
-            const data = await response.json();
-            cache.data = data as ApplicationDetectableResponse;
-            cache.expires = Date.now() + 6 * 60 * 60 * 1000;
-        }
+        const cache = await DetectableGames.load();
 
         res.set("Cache-Control", `public, max-age=${Math.floor((cache.expires - Date.now()) / 1000)}, s-maxage=${Math.floor((cache.expires - Date.now()) / 1000)}, immutable`)
             .status(200)
-            .json(cache.data);
+            .json(cache.games);
     },
 );
 
