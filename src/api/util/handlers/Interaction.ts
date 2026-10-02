@@ -223,6 +223,7 @@ export async function createInteractionMessage(interaction: PendingInteraction, 
         )) as never,
     });
     message.type = type;
+    if (referenced?.author_id && !message.content?.match(new RegExp(`<@!?${referenced.author_id}>`))) message.mentions = message.mentions.filter((u) => u.id !== referenced.author_id);
     if (!referenced) {
         message.message_reference = undefined;
         message.referenced_message = undefined;

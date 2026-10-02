@@ -577,6 +577,15 @@ export interface InteractionModalCreateEvent extends Event {
     };
 }
 
+export interface GuildApplicationCommandIndexUpdateEvent extends Event {
+    event: "GUILD_APPLICATION_COMMAND_INDEX_UPDATE";
+    data: {
+        guild_id: Snowflake;
+        application_command_counts: Record<number, number>;
+        version: Snowflake;
+    };
+}
+
 export interface ApplicationCommandAutocompleteResponseEvent extends Event {
     event: "APPLICATION_COMMAND_AUTOCOMPLETE_RESPONSE";
     data: {
@@ -864,6 +873,7 @@ export type EVENT =
     | "INTERACTION_FAILURE"
     | "INTERACTION_MODAL_CREATE"
     | "APPLICATION_COMMAND_AUTOCOMPLETE_RESPONSE"
+    | "GUILD_APPLICATION_COMMAND_INDEX_UPDATE"
     | "VOICE_STATE_UPDATE"
     | "VOICE_SERVER_UPDATE"
     | "STREAM_CREATE"

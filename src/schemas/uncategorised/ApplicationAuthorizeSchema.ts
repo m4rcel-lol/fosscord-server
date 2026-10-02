@@ -18,8 +18,13 @@
 
 export interface ApplicationAuthorizeSchema {
     authorize: boolean;
-    guild_id: string;
-    permissions: string;
+    guild_id?: string;
+    channel_id?: string;
+    webhook_channel_id?: string;
+    permissions?: string;
+    integration_type?: number;
+    location_context?: object;
+    dm_settings?: object;
     captcha_key?: string;
     /**
      * @minLength 6

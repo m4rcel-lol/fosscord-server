@@ -136,6 +136,7 @@ const handlers = {
         await call("POST", `/webhooks/${state.application_id}/${i.token}`, null, { content: "and this is a followup" });
     },
     v2: (i) => respond(i, { type: 4, data: v2Message }),
+    fruit: (i) => respond(i, { type: 4, data: { content: `you picked ${i.data.options[0].value}` } }),
     guildonly: (i) => respond(i, { type: 4, data: { content: "guild command works" } }),
     Wave: (i) => respond(i, { type: 4, data: { content: `${who(i).username} waves at <@${i.data.target_id}>` } }),
     Quote: (i) => respond(i, { type: 4, data: { content: `> ${i.data.resolved?.messages?.[i.data.target_id]?.content ?? "(missing message)"}` } }),

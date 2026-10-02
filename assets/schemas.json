@@ -1171,8 +1171,27 @@
             "guild_id": {
                 "type": "string"
             },
+            "channel_id": {
+                "type": "string"
+            },
+            "webhook_channel_id": {
+                "type": "string"
+            },
             "permissions": {
                 "type": "string"
+            },
+            "integration_type": {
+                "type": "integer"
+            },
+            "location_context": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": true
+            },
+            "dm_settings": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": true
             },
             "captcha_key": {
                 "type": "string"
@@ -1185,9 +1204,7 @@
         },
         "additionalProperties": false,
         "required": [
-            "authorize",
-            "guild_id",
-            "permissions"
+            "authorize"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -8696,6 +8713,69 @@
         "items": {
             "$ref": "#/definitions/ApplicationCommandCreateSchema"
         },
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "ApplicationCommandModifySchema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string"
+            },
+            "name_localizations": {
+                "type": "object",
+                "additionalProperties": {
+                    "type": "string"
+                }
+            },
+            "description": {
+                "type": "string"
+            },
+            "description_localizations": {
+                "type": "object",
+                "additionalProperties": {
+                    "type": "string"
+                }
+            },
+            "options": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/ApplicationCommandOption"
+                }
+            },
+            "default_member_permissions": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "dm_permission": {
+                "type": "boolean"
+            },
+            "nsfw": {
+                "type": "boolean"
+            },
+            "integration_types": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/ApplicationIntegrationType"
+                }
+            },
+            "contexts": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/InteractionContextType"
+                }
+            },
+            "handler": {
+                "enum": [
+                    1,
+                    2,
+                    3
+                ],
+                "type": "number"
+            }
+        },
+        "additionalProperties": false,
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "OAuth2UserInfoResponse": {
