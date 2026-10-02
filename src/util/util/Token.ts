@@ -61,6 +61,9 @@ function rejectAndLog(rejectFunction: (reason?: unknown) => void, httpCode: numb
     rejectFunction(new HTTPError(reason, httpCode ?? 400));
 }
 
+const VERIFIED_TOKEN_CACHE_SIZE = 10000;
+const verifiedTokens = new Map<string, { key: string | KeyObject; decoded: UserTokenData["decoded"] }>();
+
 export const checkToken = (
     token: string,
     opts?: {
@@ -148,12 +151,22 @@ export const checkToken = (
         if (!dec) return void rejectAndLog(reject, 500, "Failed to decode token");
         logAuth("Decoded token: " + JSON.stringify(dec));
 
+        let key: string | KeyObject;
         if (dec.header.alg == "HS256" && Config.get().security.jwtSecret !== null) {
             legacyVersion = 1;
-            jwt.verify(token, Config.get().security.jwtSecret!, { algorithms: ["HS256"] }, validateUser);
-        } else if (dec.header.alg == "ES512") {
-            jwt.verify(token, JwtKeypairManager.keypair.publicKey, { algorithms: ["ES512"] }, validateUser);
-        } else return void rejectAndLog(reject, 400, "Unsupported token algorithm: " + dec.header.alg);
+            key = Config.get().security.jwtSecret!;
+        } else if (dec.header.alg == "ES512") key = JwtKeypairManager.keypair.publicKey;
+        else return void rejectAndLog(reject, 400, "Unsupported token algorithm: " + dec.header.alg);
+
+        const verified = verifiedTokens.get(token);
+        if (verified?.key === key) return void validateUser(null, verified.decoded);
+        jwt.verify(token, key, { algorithms: [dec.header.alg] }, (err, out) => {
+            if (!err && out && typeof out === "object") {
+                if (verifiedTokens.size >= VERIFIED_TOKEN_CACHE_SIZE) verifiedTokens.delete(verifiedTokens.keys().next().value!);
+                verifiedTokens.set(token, { key, decoded: out as UserTokenData["decoded"] });
+            }
+            return validateUser(err, out);
+        });
     });
 
 export async function generateToken(id: string, isAdminSession: boolean = false, scopes: string[] | undefined = undefined): Promise<string | undefined> {
