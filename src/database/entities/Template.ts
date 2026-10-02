@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, JoinColumn, ManyToOne, RelationId } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne } from "typeorm";
 import { BaseClass } from "./BaseClass";
 import { Guild } from "./Guild";
 import { User } from "./User";
@@ -39,7 +39,6 @@ export class Template extends BaseClass {
     usage_count?: number;
 
     @Column({ nullable: true })
-    @RelationId((template: Template) => template.creator)
     creator_id: string;
 
     @JoinColumn({ name: "creator_id", foreignKeyConstraintName: "FK_template_creator_id" })
@@ -53,7 +52,6 @@ export class Template extends BaseClass {
     updated_at: Date;
 
     @Column({ nullable: true })
-    @RelationId((template: Template) => template.source_guild)
     source_guild_id: string;
 
     @JoinColumn({ name: "source_guild_id", foreignKeyConstraintName: "FK_template_source_guild_id" })

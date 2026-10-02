@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, Index, JoinColumn, ManyToOne, RelationId } from "typeorm";
+import { Column, Entity, Index, JoinColumn, ManyToOne } from "typeorm";
 import { BaseClass } from "./BaseClass";
 import { User } from "./User";
 import { PartialRelationshipSchema, RelationshipSchema, RelationshipType } from "@spacebar/schemas";
@@ -27,7 +27,6 @@ import { PartialRelationshipSchema, RelationshipSchema, RelationshipType } from 
 @Index(["from_id", "to_id"], { unique: true })
 export class Relationship extends BaseClass {
     @Column({})
-    @RelationId((relationship: Relationship) => relationship.from)
     from_id: string;
 
     @JoinColumn({ name: "from_id", foreignKeyConstraintName: "FK_relationship_from_id" })
@@ -37,7 +36,6 @@ export class Relationship extends BaseClass {
     from: User;
 
     @Column({})
-    @RelationId((relationship: Relationship) => relationship.to)
     @Index("IDX_relationships_to_id")
     to_id: string;
 

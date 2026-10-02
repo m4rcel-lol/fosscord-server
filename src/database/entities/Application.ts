@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany, OneToOne, RelationId } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany, OneToOne } from "typeorm";
 import { BaseClass } from "./BaseClass";
 import { Team } from "./Team";
 import { User } from "./User";
@@ -62,7 +62,6 @@ export class Application extends BaseClass {
     owner: User;
 
     @Column({ type: "int8" })
-    @RelationId((application: Application) => application.owner)
     owner_id: string;
 
     // TODO: enum this? https://discord.com/developers/docs/resources/application#application-object-application-flags
@@ -116,7 +115,6 @@ export class Application extends BaseClass {
     privacy_policy_url?: string;
 
     @Column({ nullable: true })
-    @RelationId((application: Application) => application.guild)
     guild_id?: string;
 
     @JoinColumn({ name: "guild_id", foreignKeyConstraintName: "FK_application_guild_id" })

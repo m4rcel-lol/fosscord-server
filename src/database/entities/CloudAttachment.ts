@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, JoinColumn, ManyToOne, RelationId } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne } from "typeorm";
 import { BaseClass } from "./BaseClass";
 import { User } from "./User";
 import { Channel } from "./Channel";
@@ -27,7 +27,6 @@ import { Channel } from "./Channel";
 export class CloudAttachment extends BaseClass {
     // Internal tracking metadata
     @Column({ name: "user_id", nullable: true })
-    @RelationId((att: CloudAttachment) => att.user)
     userId: string;
 
     @JoinColumn({ name: "user_id", foreignKeyConstraintName: "FK_cloud_attachment_user_id" })
@@ -35,7 +34,6 @@ export class CloudAttachment extends BaseClass {
     user?: User;
 
     @Column({ name: "channel_id", nullable: true })
-    @RelationId((att: CloudAttachment) => att.channel)
     channelId?: string; // channel the file is uploaded to
 
     @JoinColumn({ name: "channel_id", foreignKeyConstraintName: "FK_cloud_attachment_channel_id" })

@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, JoinColumn, ManyToOne, RelationId } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne } from "typeorm";
 import { BaseClass } from "./BaseClass";
 import { User } from "./User";
 
@@ -25,7 +25,6 @@ import { User } from "./User";
 })
 export class SecurityKey extends BaseClass {
     @Column({ nullable: true })
-    @RelationId((key: SecurityKey) => key.user)
     user_id: string;
 
     @JoinColumn({ name: "user_id", foreignKeyConstraintName: "FK_security_key_user_id" })

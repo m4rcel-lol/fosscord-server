@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, JoinColumn, ManyToOne, RelationId, Index } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, Index } from "typeorm";
 import { BaseClass } from "./BaseClass";
 
 @Entity({
@@ -24,7 +24,6 @@ import { BaseClass } from "./BaseClass";
 })
 export class Recipient extends BaseClass {
     @Column()
-    @RelationId((recipient: Recipient) => recipient.channel)
     @Index("IDX_recipients_channel_id")
     channel_id: string;
 
@@ -35,7 +34,6 @@ export class Recipient extends BaseClass {
     channel: import("./Channel").Channel;
 
     @Column()
-    @RelationId((recipient: Recipient) => recipient.user)
     @Index("IDX_recipients_user_id")
     user_id: string;
 

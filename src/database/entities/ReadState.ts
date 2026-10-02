@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, Index, JoinColumn, ManyToOne, RelationId } from "typeorm";
+import { Column, Entity, Index, JoinColumn, ManyToOne } from "typeorm";
 import { BaseClass } from "./BaseClass";
 import { Channel } from "./Channel";
 import { User } from "./User";
@@ -32,7 +32,6 @@ import { ReadStateFlags, ReadStateType } from "@spacebar/schemas";
 @Index(["channel_id", "user_id"], { unique: true })
 export class ReadState extends BaseClass {
     @Column({ type: "int8" })
-    @RelationId((read_state: ReadState) => read_state.channel)
     channel_id: string;
 
     @JoinColumn({ name: "channel_id", foreignKeyConstraintName: "FK_read_state_channel_id" })
@@ -42,7 +41,6 @@ export class ReadState extends BaseClass {
     channel: Channel;
 
     @Column({ type: "int8" })
-    @RelationId((read_state: ReadState) => read_state.user)
     @Index("IDX_read_states_user_id")
     user_id: string;
 

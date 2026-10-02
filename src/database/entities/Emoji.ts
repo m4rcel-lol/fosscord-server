@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, JoinColumn, ManyToOne, RelationId, Index } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, Index } from "typeorm";
 import { BaseClass } from "./BaseClass";
 import { Application } from "./Application";
 import { Guild } from "./Guild";
@@ -54,7 +54,6 @@ export class Emoji extends BaseClass {
     application: Application | null;
 
     @Column({ nullable: true })
-    @RelationId((emoji: Emoji) => emoji.user)
     user_id: string;
 
     @JoinColumn({ name: "user_id", foreignKeyConstraintName: "FK_emoji_user_id" })

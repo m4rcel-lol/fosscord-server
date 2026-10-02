@@ -17,7 +17,7 @@
 */
 
 import { HTTPError } from "lambert-server/HTTPError";
-import { BeforeInsert, BeforeUpdate, Column, Entity, Index, JoinColumn, JoinTable, ManyToMany, ManyToOne, Not, PrimaryGeneratedColumn, RelationId } from "typeorm";
+import { BeforeInsert, BeforeUpdate, Column, Entity, Index, JoinColumn, JoinTable, ManyToMany, ManyToOne, Not, PrimaryGeneratedColumn } from "typeorm";
 import { Stopwatch } from "@spacebar/extensions";
 import { Config, emitEvent, DiscordApiErrors } from "@spacebar/util/util";
 import {
@@ -74,7 +74,6 @@ export class Member extends BaseClassWithoutId {
     index: string;
 
     @Column()
-    @RelationId((member: Member) => member.user)
     id: string;
 
     @JoinColumn({ name: "id", foreignKeyConstraintName: "FK_member_user_id" })
@@ -84,7 +83,6 @@ export class Member extends BaseClassWithoutId {
     user: User;
 
     @Column()
-    @RelationId((member: Member) => member.guild)
     @Index("IDX_members_guild_id")
     guild_id: string;
 

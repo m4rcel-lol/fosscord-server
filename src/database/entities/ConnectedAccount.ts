@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, JoinColumn, ManyToOne, RelationId, Index } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, Index } from "typeorm";
 import { BaseClass } from "./BaseClass";
 import { User } from "./User";
 import { ConnectedAccountTokenData } from "@spacebar/schemas";
@@ -29,7 +29,6 @@ export class ConnectedAccount extends BaseClass {
     external_id: string;
 
     @Column({ nullable: true })
-    @RelationId((account: ConnectedAccount) => account.user)
     @Index("IDX_connected_accounts_user_id")
     user_id: string;
 

@@ -17,7 +17,7 @@
 */
 
 import { HTTPError } from "lambert-server/HTTPError";
-import { Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, RelationId } from "typeorm";
+import { Column, Entity, Index, JoinColumn, ManyToOne, OneToMany } from "typeorm";
 import { DmChannelDTO } from "../../util/dtos";
 import { ChannelCreateEvent, ChannelRecipientRemoveEvent, ThreadCreateEvent, ThreadMembersUpdateEvent } from "../../util/interfaces";
 import { InvisibleCharacters, Snowflake, emitEvent, getPermission, Permissions, Config, DiscordApiErrors } from "@spacebar/util/util";
@@ -69,7 +69,6 @@ export class Channel extends BaseClass {
     last_message_id?: string;
 
     @Column({ nullable: true })
-    @RelationId((channel: Channel) => channel.guild)
     @Index("IDX_channels_guild_id")
     guild_id?: string;
 
@@ -82,7 +81,6 @@ export class Channel extends BaseClass {
 
     @Column({ nullable: true })
     @Index("IDX_channels_parent_id")
-    @RelationId((channel: Channel) => channel.parent)
     parent_id: string | null;
 
     @JoinColumn({ name: "parent_id", foreignKeyConstraintName: "FK_channel_parent_id" })
@@ -91,7 +89,6 @@ export class Channel extends BaseClass {
 
     // for group DMs and owned custom channel types
     @Column({ nullable: true })
-    @RelationId((channel: Channel) => channel.owner)
     owner_id?: string;
 
     @JoinColumn({ name: "owner_id", foreignKeyConstraintName: "FK_channel_owner_id" })

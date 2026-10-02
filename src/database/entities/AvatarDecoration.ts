@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, Index, JoinColumn, ManyToOne, RelationId } from "typeorm";
+import { Column, Entity, Index, JoinColumn, ManyToOne } from "typeorm";
 import { AvatarDecorationData, PublicAvatarDecorationResponse } from "@spacebar/schemas";
 import { BaseClass } from "./BaseClass";
 import { User } from "./User";
@@ -33,7 +33,6 @@ export class AvatarDecoration extends BaseClass {
     approved: boolean;
 
     @Column({ nullable: true })
-    @RelationId((deco: AvatarDecoration) => deco.uploader)
     @Index("IDX_avatar_decoration_uploader_id")
     uploader_id: string;
 

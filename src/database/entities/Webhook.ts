@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, JoinColumn, ManyToOne, RelationId, Index } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, Index } from "typeorm";
 import { Application } from "./Application";
 import { BaseClass } from "./BaseClass";
 import { Channel } from "./Channel";
@@ -41,7 +41,6 @@ export class Webhook extends BaseClass {
     token?: string;
 
     @Column({ nullable: true })
-    @RelationId((webhook: Webhook) => webhook.guild)
     @Index("IDX_webhooks_guild_id")
     guild_id?: string;
 
@@ -52,7 +51,6 @@ export class Webhook extends BaseClass {
     guild?: Guild;
 
     @Column({ nullable: true })
-    @RelationId((webhook: Webhook) => webhook.channel)
     @Index("IDX_webhooks_channel_id")
     channel_id: string;
 
@@ -63,7 +61,6 @@ export class Webhook extends BaseClass {
     channel: Channel;
 
     @Column({ nullable: true })
-    @RelationId((webhook: Webhook) => webhook.application)
     application_id: string;
 
     @JoinColumn({ name: "application_id", foreignKeyConstraintName: "FK_webhook_application_id" })
@@ -73,7 +70,6 @@ export class Webhook extends BaseClass {
     application: Application;
 
     @Column({ nullable: true })
-    @RelationId((webhook: Webhook) => webhook.user)
     user_id: string;
 
     @JoinColumn({ name: "user_id", foreignKeyConstraintName: "FK_webhook_user_id" })
@@ -83,7 +79,6 @@ export class Webhook extends BaseClass {
     user: User;
 
     @Column({ nullable: true })
-    @RelationId((webhook: Webhook) => webhook.source_guild)
     source_guild_id?: string;
 
     @JoinColumn({ name: "source_guild_id", foreignKeyConstraintName: "FK_webhook_source_guild_id" })
@@ -93,7 +88,6 @@ export class Webhook extends BaseClass {
     source_guild?: Guild;
 
     @Column({ nullable: true })
-    @RelationId((webhook: Webhook) => webhook.source_channel)
     source_channel_id: string;
 
     @JoinColumn({ name: "source_channel_id", foreignKeyConstraintName: "FK_webhook_source_channel_id" })

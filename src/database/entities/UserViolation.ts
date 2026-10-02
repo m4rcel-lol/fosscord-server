@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, Index, JoinColumn, ManyToOne, RelationId } from "typeorm";
+import { Column, Entity, Index, JoinColumn, ManyToOne } from "typeorm";
 import { BaseClass } from "./BaseClass";
 import { User } from "./User";
 
@@ -32,7 +32,6 @@ export interface UserViolationAction {
 export class UserViolation extends BaseClass {
     @Index("IDX_user_violation_user_id")
     @Column()
-    @RelationId((violation: UserViolation) => violation.user)
     user_id: string;
 
     @JoinColumn({ name: "user_id" })

@@ -21,7 +21,7 @@ import { Member } from "./Member";
 import { Role } from "./Role";
 import { Channel } from "./Channel";
 import { Application } from "./Application";
-import { Column, CreateDateColumn, Entity, Index, JoinColumn, JoinTable, ManyToMany, ManyToOne, OneToMany, RelationId, FindOneOptions, Raw, Not, BaseEntity, In } from "typeorm";
+import { Column, CreateDateColumn, Entity, Index, JoinColumn, JoinTable, ManyToMany, ManyToOne, OneToMany, FindOneOptions, Raw, Not, BaseEntity, In } from "typeorm";
 import { BaseClass } from "./BaseClass";
 import { Guild } from "./Guild";
 import { Webhook } from "./Webhook";
@@ -58,7 +58,6 @@ import { JsonRemoveEmpty } from "@spacebar/util/util/Decorators";
 @Index(["channel_id", "id"], { unique: true })
 export class Message extends BaseClass {
     @Column({ nullable: true })
-    @RelationId((message: Message) => message.channel)
     @Index()
     channel_id?: string;
 
@@ -69,7 +68,6 @@ export class Message extends BaseClass {
     channel: Channel;
 
     @Column({ nullable: true })
-    @RelationId((message: Message) => message.thread)
     @JsonRemoveEmpty
     thread_id?: string;
 
@@ -81,7 +79,6 @@ export class Message extends BaseClass {
     thread?: Channel;
 
     @Column({ nullable: true })
-    @RelationId((message: Message) => message.guild)
     @JsonRemoveEmpty
     guild_id?: string;
 
@@ -92,7 +89,6 @@ export class Message extends BaseClass {
     guild?: Guild;
 
     @Column({ nullable: true })
-    @RelationId((message: Message) => message.author)
     @Index()
     author_id?: string;
 
@@ -103,7 +99,6 @@ export class Message extends BaseClass {
     author?: User;
 
     @Column({ nullable: true })
-    @RelationId((message: Message) => message.member)
     member_id?: string;
 
     @JoinColumn({ name: "member_id", referencedColumnName: "id", foreignKeyConstraintName: "FK_message_member_id" })
@@ -113,7 +108,6 @@ export class Message extends BaseClass {
     member?: Member;
 
     @Column({ nullable: true })
-    @RelationId((message: Message) => message.webhook)
     @JsonRemoveEmpty
     webhook_id?: string;
 
@@ -122,7 +116,6 @@ export class Message extends BaseClass {
     webhook?: Webhook;
 
     @Column({ nullable: true })
-    @RelationId((message: Message) => message.application)
     application_id?: string;
 
     @JoinColumn({ name: "application_id", foreignKeyConstraintName: "FK_message_application_id" })

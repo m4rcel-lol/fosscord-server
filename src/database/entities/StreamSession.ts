@@ -1,4 +1,4 @@
-import { Column, Entity, JoinColumn, ManyToOne, RelationId } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne } from "typeorm";
 import { BaseClass } from "./BaseClass";
 import { User } from "./User";
 import { Stream } from "./Stream";
@@ -8,7 +8,6 @@ import { Stream } from "./Stream";
 })
 export class StreamSession extends BaseClass {
     @Column()
-    @RelationId((session: StreamSession) => session.stream)
     stream_id: string;
 
     @JoinColumn({ name: "stream_id", foreignKeyConstraintName: "FK_stream_session_stream_id" })
@@ -18,7 +17,6 @@ export class StreamSession extends BaseClass {
     stream: Stream;
 
     @Column()
-    @RelationId((session: StreamSession) => session.user)
     user_id: string;
 
     @JoinColumn({ name: "user_id", foreignKeyConstraintName: "FK_stream_session_user_id" })

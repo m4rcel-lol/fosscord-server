@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, Index, JoinColumn, ManyToOne, RelationId } from "typeorm";
+import { Column, Entity, Index, JoinColumn, ManyToOne } from "typeorm";
 import { BaseClass } from "./BaseClass";
 import { User } from "./User";
 import { AuditLogChange, AuditLogEntry, AuditLogEvents } from "@spacebar/schemas";
@@ -33,7 +33,6 @@ export class AuditLog extends BaseClass {
     target_id: string;
 
     @Column({ nullable: true })
-    @RelationId((auditlog: AuditLog) => auditlog.user)
     user_id: string;
 
     @JoinColumn({ name: "user_id", foreignKeyConstraintName: "FK_audit_log_source_user_id" })

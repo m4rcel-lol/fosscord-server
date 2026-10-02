@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId } from "typeorm";
+import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
 import { ThreadCreateEvent, ThreadDeleteEvent, ThreadMembersUpdateEvent } from "../../util/interfaces";
 import { emitEvent, Snowflake } from "@spacebar/util/util";
 import { BaseClassWithoutId } from "./BaseClass";
@@ -46,7 +46,6 @@ export class ThreadMember extends BaseClassWithoutId {
     index: string;
 
     @Column()
-    @RelationId((member: ThreadMember) => member.channel)
     id: string;
 
     @JoinColumn({ name: "id", foreignKeyConstraintName: "FK_thread_member_channel_id" })
@@ -56,7 +55,6 @@ export class ThreadMember extends BaseClassWithoutId {
     channel: Channel;
 
     @Column()
-    @RelationId((member: ThreadMember) => member.member)
     @Index("IDX_thread_members_member_idx")
     member_idx: string;
 

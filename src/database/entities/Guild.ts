@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { AfterLoad, Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId } from "typeorm";
+import { AfterLoad, Column, Entity, JoinColumn, ManyToOne, OneToMany } from "typeorm";
 import { arrayRemove } from "@spacebar/extensions";
 import { Config, emitEvent, handleFile, Snowflake } from "@spacebar/util";
 import { GuildUpdateEvent } from "../../util/interfaces/Event";
@@ -105,7 +105,6 @@ export const PublicGuildRelations = [
 })
 export class Guild extends BaseClass {
     @Column({ type: String, nullable: true })
-    @RelationId((guild: Guild) => guild.afk_channel)
     afk_channel_id?: string | null;
 
     @JoinColumn({ name: "afk_channel_id", foreignKeyConstraintName: "FK_guild_afk_channel_id" })
@@ -193,7 +192,6 @@ export class Guild extends BaseClass {
     channels: Channel[];
 
     @Column({ nullable: true })
-    @RelationId((guild: Guild) => guild.template)
     template_id?: string;
 
     @JoinColumn({ name: "template_id", referencedColumnName: "id", foreignKeyConstraintName: "FK_guild_template_id" })
@@ -247,7 +245,6 @@ export class Guild extends BaseClass {
     name: string;
 
     @Column({ nullable: true })
-    @RelationId((guild: Guild) => guild.owner)
     owner_id?: string; // optional to allow for ownerless guilds
 
     @JoinColumn({ name: "owner_id", referencedColumnName: "id", foreignKeyConstraintName: "FK_guild_owner_id" })
@@ -264,7 +261,6 @@ export class Guild extends BaseClass {
     premium_tier?: number; // crowd premium level
 
     @Column({ type: String, nullable: true })
-    @RelationId((guild: Guild) => guild.public_updates_channel)
     public_updates_channel_id: string | null;
 
     @JoinColumn({ name: "public_updates_channel_id", foreignKeyConstraintName: "FK_guild_public_updates_channel_id" })
@@ -272,7 +268,6 @@ export class Guild extends BaseClass {
     public_updates_channel?: Channel;
 
     @Column({ type: String, nullable: true })
-    @RelationId((guild: Guild) => guild.rules_channel)
     rules_channel_id?: string | null;
 
     @JoinColumn({ name: "rules_channel_id", foreignKeyConstraintName: "FK_guild_rules_channel_id" })
@@ -286,7 +281,6 @@ export class Guild extends BaseClass {
     splash?: string;
 
     @Column({ type: String, nullable: true })
-    @RelationId((guild: Guild) => guild.system_channel)
     system_channel_id?: string | null;
 
     @JoinColumn({ name: "system_channel_id", foreignKeyConstraintName: "FK_guild_system_channel_id" })
@@ -309,7 +303,6 @@ export class Guild extends BaseClass {
     welcome_screen: GuildWelcomeScreen;
 
     @Column({ nullable: true, type: "int8" })
-    @RelationId((guild: Guild) => guild.widget_channel)
     widget_channel_id?: string;
 
     @JoinColumn({ name: "widget_channel_id", foreignKeyConstraintName: "FK_guild_widget_channel_id" })

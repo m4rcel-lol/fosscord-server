@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany } from "typeorm";
 import { BaseClass } from "./BaseClass";
 import { Sticker } from "./Sticker";
 
@@ -43,7 +43,6 @@ export class StickerPack extends BaseClass {
     sku_id?: string;
 
     @Column({ nullable: true })
-    @RelationId((pack: StickerPack) => pack.cover_sticker)
     cover_sticker_id?: string;
 
     @ManyToOne(() => Sticker, { nullable: true })

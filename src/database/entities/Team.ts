@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany } from "typeorm";
 import { BaseClass } from "./BaseClass";
 import { TeamMember } from "./TeamMember";
 import { User } from "./User";
@@ -38,7 +38,6 @@ export class Team extends BaseClass {
     name: string;
 
     @Column({ nullable: true })
-    @RelationId((team: Team) => team.owner_user)
     owner_user_id: string;
 
     @JoinColumn({ name: "owner_user_id", foreignKeyConstraintName: "FK_team_owner_user_id" })

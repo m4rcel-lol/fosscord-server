@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, JoinColumn, ManyToOne, RelationId, Unique } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, Unique } from "typeorm";
 import { BaseClass } from "./BaseClass";
 import { User } from "./User";
 import { Application } from "./Application";
@@ -27,7 +27,6 @@ import { Application } from "./Application";
 @Unique("UQ_application_authorization_user_application", ["user", "application"])
 export class ApplicationAuthorization extends BaseClass {
     @Column()
-    @RelationId((authorization: ApplicationAuthorization) => authorization.user)
     user_id: string;
 
     @JoinColumn({ name: "user_id", foreignKeyConstraintName: "FK_application_authorization_user_id" })
@@ -35,7 +34,6 @@ export class ApplicationAuthorization extends BaseClass {
     user: User;
 
     @Column()
-    @RelationId((authorization: ApplicationAuthorization) => authorization.application)
     application_id: string;
 
     @JoinColumn({ name: "application_id", foreignKeyConstraintName: "FK_application_authorization_application_id" })

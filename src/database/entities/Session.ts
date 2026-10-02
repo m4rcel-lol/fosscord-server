@@ -17,7 +17,7 @@
 */
 
 import crypto from "node:crypto";
-import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn, RelationId } from "typeorm";
+import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from "typeorm";
 import { DateBuilder, TimeSpan, Random } from "@spacebar/extensions";
 import { ClientStatus, PrivateStatus } from "@spacebar/schemas";
 import { IpDataClient } from "@spacebar/util/util/networking";
@@ -33,7 +33,6 @@ export class Session extends BaseClassWithoutId {
     session_id: string = Random.getString("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 10);
 
     @Column()
-    @RelationId((session: Session) => session.user)
     @Index({})
     user_id: string;
 

@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, CreateDateColumn, Entity, FindOptionsWhere, Index, JoinColumn, OneToOne, RelationId } from "typeorm";
+import { Column, CreateDateColumn, Entity, FindOptionsWhere, Index, JoinColumn, OneToOne } from "typeorm";
 import { BaseClass } from "./BaseClass";
 
 @Entity({
@@ -51,7 +51,6 @@ export class InstanceBan extends BaseClass {
     is_from_other_instance_ban: boolean = false;
 
     @Column({ nullable: true })
-    @RelationId((instance_ban: InstanceBan) => instance_ban.origin_instance_ban)
     origin_instance_ban_id?: string;
 
     @JoinColumn({ name: "origin_instance_ban_id", foreignKeyConstraintName: "FK_origin_instance_ban_id" })

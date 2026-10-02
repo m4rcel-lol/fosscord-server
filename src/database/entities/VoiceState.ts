@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, JoinColumn, ManyToOne, RelationId, Index } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, Index } from "typeorm";
 import { BaseClass } from "./BaseClass";
 import { Channel } from "./Channel";
 import { Guild } from "./Guild";
@@ -30,7 +30,6 @@ import { PublicVoiceState, PublicVoiceStateProjection } from "@spacebar/schemas"
 })
 export class VoiceState extends BaseClass {
     @Column({ nullable: true })
-    @RelationId((voice_state: VoiceState) => voice_state.guild)
     @Index("IDX_voice_states_guild_id")
     guild_id: string;
 
@@ -41,7 +40,6 @@ export class VoiceState extends BaseClass {
     guild?: Guild;
 
     @Column({ nullable: true })
-    @RelationId((voice_state: VoiceState) => voice_state.channel)
     @Index("IDX_voice_states_channel_id")
     channel_id: string;
 
@@ -52,7 +50,6 @@ export class VoiceState extends BaseClass {
     channel: Channel;
 
     @Column({ nullable: true })
-    @RelationId((voice_state: VoiceState) => voice_state.user)
     @Index("IDX_voice_states_user_id")
     user_id: string;
 

@@ -17,7 +17,7 @@
 */
 
 import { Request } from "express";
-import { AfterLoad, Column, Entity, FindOptionsWhere, ILike, Index, JoinColumn, ManyToOne, OneToMany, OneToOne, RelationId } from "typeorm";
+import { AfterLoad, Column, Entity, FindOptionsWhere, ILike, Index, JoinColumn, ManyToOne, OneToMany, OneToOne } from "typeorm";
 import { Config, Email, FieldErrors, Snowflake } from "@spacebar/util";
 import { Stopwatch, trimSpecial, Random } from "@spacebar/extensions";
 import { BaseClass } from "./BaseClass";
@@ -254,7 +254,6 @@ export class User extends BaseClass {
     avatar_decoration?: AvatarDecoration;
 
     @Column({ type: "int8", nullable: true })
-    @RelationId((user: User) => user.avatar_decoration)
     avatar_decoration_id?: string;
 
     @AfterLoad()
