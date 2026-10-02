@@ -38,6 +38,7 @@ temp/
 *.qcow2
 assets/cacheFailures
 scripts/dev/.test-account
+scripts/dev/.e2ee-test-accounts
 assets/client_patches/0*-dev*.js
 assets/client_patches/00-debug.js
 server.log
