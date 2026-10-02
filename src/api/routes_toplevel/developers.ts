@@ -28,6 +28,15 @@ const PAGE_FOLDER = path.join(PUBLIC_ASSETS_FOLDER, "developers");
 router.use(express.static(PAGE_FOLDER, { index: false, redirect: false, setHeaders: (res) => res.set("Cache-Control", "no-cache") }));
 
 router.get(
+    "/docs{/*splat}",
+    route({
+        spacebarOnly: true,
+        authentication: "never",
+    }),
+    (req: Request, res: Response) => res.redirect(302, "https://docs.discord.food/"),
+);
+
+router.get(
     "/{*splat}",
     route({
         spacebarOnly: true,
