@@ -18,10 +18,10 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { Application, ApplicationAuthorization, Member, Role, User } from "@spacebar/database";
-import { DiscordApiErrors, FieldErrors, Permissions, Snowflake, emitEvent, getPermission, GuildRoleCreateEvent } from "@spacebar/util";
+import { Application, ApplicationAuthorization, AuditLog, Member, Role, User } from "@spacebar/database";
+import { DiscordApiErrors, FieldErrors, Permissions, Snowflake, emitEvent, getPermission, GuildIntegrationUpdateEvent, GuildRoleCreateEvent } from "@spacebar/util";
 import { emitCommandIndexUpdate } from "@spacebar/api/util/handlers/ApplicationCommands";
-import { ApplicationAuthorizeSchema } from "@spacebar/schemas";
+import { ApplicationAuthorizeSchema, AuditLogEvents } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
 
@@ -230,7 +230,15 @@ router.post(
         if (await Member.exists({ where: { id: app.bot.id, guild_id: body.guild_id } })) return res.json({ location: "/oauth2/authorized" });
 
         await Member.addToGuild(app.bot.id, body.guild_id);
-        const permissions = new Permissions(body.permissions ?? "0").bitfield & perms.bitfield;
+        await AuditLog.log({ guild_id: body.guild_id, user_id: req.user_id, action_type: AuditLogEvents.BOT_ADD, target_id: app.bot.id });
+        await AuditLog.log({
+            guild_id: body.guild_id,
+            user_id: req.user_id,
+            action_type: AuditLogEvents.INTEGRATION_CREATE,
+            target_id: app.id,
+            changes: AuditLog.diff({}, { type: "discord", name: app.name }, ["type", "name"]),
+        });
+        const permissions = (/^\d+$/.test(body.permissions ?? "") ? BigInt(body.permissions!) : 0n) & perms.bitfield;
         if (permissions) {
             const role = Role.create({
                 managed: true,
@@ -248,6 +256,7 @@ router.post(
             await emitEvent({ event: "GUILD_ROLE_CREATE", guild_id: body.guild_id, data: { guild_id: body.guild_id, role } } satisfies GuildRoleCreateEvent);
             await Member.addRole(app.bot.id, body.guild_id, role.id);
         }
+        await emitEvent({ event: "GUILD_INTEGRATIONS_UPDATE", guild_id: body.guild_id, data: { guild_id: body.guild_id } } satisfies GuildIntegrationUpdateEvent);
         await emitCommandIndexUpdate(app.id, body.guild_id);
 
         return res.json({
