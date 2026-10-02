@@ -21,6 +21,11 @@ import { arrayRemove } from "@spacebar/extensions";
 import { Config, handleFile, Snowflake } from "@spacebar/util";
 import {
     DiscoverableGuild,
+    GuildDiscoveryMetadata,
+    GuildHomeSettings,
+    GuildMemberVerification,
+    GuildOnboarding,
+    GuildProfileSettings,
     GuildNsfwLevel,
     GuildPremiumTier,
     GuildProfileResponse,
@@ -330,6 +335,24 @@ export class Guild extends BaseClass {
     @Column({ default: false })
     discovery_excluded: boolean = false;
 
+    @Column({ type: String, nullable: true })
+    vanity_url_code?: string | null;
+
+    @Column({ type: "jsonb", nullable: true })
+    profile?: GuildProfileSettings | null;
+
+    @Column({ type: "jsonb", nullable: true })
+    home_settings?: GuildHomeSettings | null;
+
+    @Column({ type: "jsonb", nullable: true })
+    onboarding?: GuildOnboarding | null;
+
+    @Column({ type: "jsonb", nullable: true })
+    member_verification?: GuildMemberVerification | null;
+
+    @Column({ type: "jsonb", nullable: true })
+    discovery_metadata?: GuildDiscoveryMetadata | null;
+
     premium_features?: {
         features: string[];
         additional_emoji_slots: number;
@@ -359,7 +382,7 @@ export class Guild extends BaseClass {
             splash: this.splash ?? null,
             discovery_splash: this.discovery_splash ?? null,
             features: this.features,
-            vanity_url_code: null,
+            vanity_url_code: this.vanity_url_code ?? null,
             preferred_locale: this.preferred_locale || "en",
             premium_subscription_count: this.premium_subscription_count ?? 0,
             approximate_member_count: this.member_count ?? 1,
@@ -562,6 +585,12 @@ export class Guild extends BaseClass {
             channel_ordering: undefined,
             discovery_weight: undefined,
             discovery_excluded: undefined,
+            vanity_url_code: this.vanity_url_code ?? null,
+            profile: this.profile?.tag ? ({ tag: this.profile.tag, badge: this.profile.badge_hash ?? null } as GuildProfileSettings) : null,
+            home_settings: undefined,
+            onboarding: undefined,
+            member_verification: undefined,
+            discovery_metadata: undefined,
             parent: undefined,
             primary_category_id: undefined,
             nsfw: undefined,
@@ -580,7 +609,7 @@ export class Guild extends BaseClass {
             splash: this.splash ?? null,
             verification_level: this.verification_level ?? GuildVerificationLevel.NONE,
             features: this.features,
-            vanity_url_code: null, //this.vanity_url_code, // TODO: store this in db?
+            vanity_url_code: this.vanity_url_code ?? null,
             premium_subscription_count: this.premium_subscription_count,
             premium_tier: this.premium_tier ?? GuildPremiumTier.NONE,
             nsfw: this.nsfw,
@@ -589,6 +618,7 @@ export class Guild extends BaseClass {
     }
 
     toGuildProfile(): GuildProfileResponse {
+        const profile = this.profile ?? {};
         return {
             id: this.id,
             name: this.name,
@@ -596,21 +626,26 @@ export class Guild extends BaseClass {
             member_count: this.member_count ?? 0,
             online_count: this.presence_count ?? 0,
             description: this.description ?? "",
-            brand_color_primary: undefined, // TODO
-            game_application_ids: [], // TODO
-            game_activity: {}, // TODO
-            tag: null, // TODO
-            badge: null, // TODO
-            badge_color_primary: "", // TODO
-            badge_color_secondary: "", // TODO
-            badge_hash: "", // TODO
-            traits: [], // TODO
-            features: this.features, // TODO: should we filter this?
-            visibility: GuildVisibilityLevel.PUBLIC, // TODO
-            custom_banner_hash: this.discovery_splash ?? null,
+            brand_color_primary: profile.brand_color_primary ?? undefined,
+            game_application_ids: profile.game_application_ids ?? [],
+            game_activity: {},
+            tag: profile.tag ?? null,
+            badge: profile.badge ?? null,
+            badge_color_primary: profile.badge_color_primary ?? "",
+            badge_color_secondary: profile.badge_color_secondary ?? "",
+            badge_hash: profile.badge_hash ?? "",
+            traits: (profile.traits ?? []).map((trait) => ({
+                ...trait,
+                emoji_id: trait.emoji_id ?? null,
+                emoji_name: trait.emoji_name ?? null,
+                emoji_animated: trait.emoji_animated ?? false,
+            })),
+            features: this.features,
+            visibility: profile.visibility ?? GuildVisibilityLevel.PUBLIC,
+            custom_banner_hash: profile.custom_banner_hash ?? null,
             premium_subscription_count: this.premium_subscription_count ?? 0,
             premium_tier: this.premium_tier ?? GuildPremiumTier.NONE,
-            banner_hash: null, // Deprecated, TODO: clan banner hash
+            banner_hash: null,
         } satisfies GuildProfileResponse;
     }
 }

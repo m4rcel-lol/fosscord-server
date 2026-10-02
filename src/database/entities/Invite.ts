@@ -114,7 +114,7 @@ export class Invite extends BaseClassWithoutId {
             guild_id: this.guild_id,
             guild: this.guild.toInviteGuild(),
             profile: this.guild.toGuildProfile(),
-            inviter: this.inviter.toPartialUser(),
+            inviter: this.inviter?.toPartialUser(),
             flags: this.flags,
             expires_at: this.expires_at ? new Date(this.expires_at).toISOString() : null,
             approximate_member_count: this.guild.member_count,
@@ -148,7 +148,11 @@ export class Invite extends BaseClassWithoutId {
         }
         if (await Member.exists({ where: { id: user_id, guild_id: invite.guild_id } })) return { invite, new_member: false };
 
-        await Member.addToGuild(user_id, invite.guild_id);
+        await Member.addToGuild(user_id, invite.guild_id, false, {
+            source_invite_code: invite.code,
+            join_source_type: invite.vanity_url ? 6 : 5,
+            inviter_id: invite.inviter_id ?? null,
+        });
         if (invite.uses++ >= invite.max_uses && invite.max_uses !== 0) await Invite.delete({ code });
         else await invite.save();
 

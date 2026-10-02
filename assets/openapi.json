@@ -3711,6 +3711,60 @@
                     "discovery_excluded": {
                         "type": "boolean"
                     },
+                    "vanity_url_code": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "profile": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/GuildProfileSettings"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "home_settings": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/GuildHomeSettings"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "onboarding": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/GuildOnboarding"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "member_verification": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/GuildMemberVerification"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "discovery_metadata": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/GuildDiscoveryMetadata"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
                     "premium_features": {
                         "type": "object",
                         "properties": {
@@ -6866,6 +6920,86 @@
                     "users",
                     "webhooks"
                 ]
+            },
+            "GuildProfileModifySchema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "icon": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "custom_banner": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "visibility": {
+                        "type": "integer"
+                    },
+                    "brand_color_primary": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "traits": {
+                        "type": "array",
+                        "items": {
+                            "anyOf": [
+                                {
+                                    "$ref": "#/components/schemas/GuildProfileTrait"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ]
+                        }
+                    },
+                    "game_application_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "tag": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "badge": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "badge_color_primary": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "badge_color_secondary": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                }
+            },
+            "GuildMemberVerificationModifySchema": {
+                "type": "object",
+                "properties": {
+                    "enabled": {
+                        "type": "boolean"
+                    },
+                    "form_fields": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/GuildMemberVerificationFormField"
+                        }
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                }
             },
             "GuildProfileResponse": {
                 "type": "object",
@@ -10852,6 +10986,60 @@
                         "type": "boolean",
                         "default": false
                     },
+                    "vanity_url_code": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "profile": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/GuildProfileSettings"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "home_settings": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/GuildHomeSettings"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "onboarding": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/GuildOnboarding"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "member_verification": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/GuildMemberVerification"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "discovery_metadata": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/GuildDiscoveryMetadata"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
                     "premium_features": {
                         "type": "object",
                         "properties": {
@@ -10991,6 +11179,48 @@
                     },
                     "pending": {
                         "type": "boolean"
+                    },
+                    "source_invite_code": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "join_source_type": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "inviter_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "onboarding_responses": {
+                        "anyOf": [
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "onboarding_responses": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "onboarding_prompts_seen": {
+                                        "$ref": "#/components/schemas/Record%3Cstring%2Cnumber%3E"
+                                    },
+                                    "onboarding_responses_seen": {
+                                        "$ref": "#/components/schemas/Record%3Cstring%2Cnumber%3E"
+                                    }
+                                },
+                                "additionalProperties": false,
+                                "required": [
+                                    "onboarding_prompts_seen",
+                                    "onboarding_responses",
+                                    "onboarding_responses_seen"
+                                ]
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
                     },
                     "settings": {
                         "$ref": "#/components/schemas/UserGuildSettings"
@@ -12009,6 +12239,523 @@
                     "description",
                     "enabled",
                     "welcome_channels"
+                ]
+            },
+            "GuildProfileSettings": {
+                "type": "object",
+                "properties": {
+                    "tag": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "badge": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "badge_color_primary": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "badge_color_secondary": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "badge_hash": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "traits": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/GuildProfileTrait"
+                        }
+                    },
+                    "brand_color_primary": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "visibility": {
+                        "type": "integer"
+                    },
+                    "custom_banner_hash": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "game_application_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "GuildProfileTrait": {
+                "type": "object",
+                "properties": {
+                    "label": {
+                        "type": "string"
+                    },
+                    "position": {
+                        "type": "integer"
+                    },
+                    "emoji_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "emoji_name": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "emoji_animated": {
+                        "type": "boolean",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "label",
+                    "position"
+                ]
+            },
+            "GuildHomeSettings": {
+                "type": "object",
+                "properties": {
+                    "guild_id": {
+                        "type": "string"
+                    },
+                    "enabled": {
+                        "type": "boolean"
+                    },
+                    "welcome_message": {
+                        "type": "object",
+                        "properties": {
+                            "author_ids": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "message": {
+                                "type": "string"
+                            }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                            "author_ids",
+                            "message"
+                        ]
+                    },
+                    "new_member_actions": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "channel_id": {
+                                    "type": "string"
+                                },
+                                "action_type": {
+                                    "type": "integer"
+                                },
+                                "title": {
+                                    "type": "string"
+                                },
+                                "description": {
+                                    "type": "string"
+                                },
+                                "emoji": {
+                                    "anyOf": [
+                                        {
+                                            "$ref": "#/components/schemas/GuildEmojiReference"
+                                        },
+                                        {
+                                            "type": "null"
+                                        }
+                                    ]
+                                },
+                                "icon": {
+                                    "type": [
+                                        "null",
+                                        "string"
+                                    ]
+                                }
+                            },
+                            "additionalProperties": false,
+                            "required": [
+                                "action_type",
+                                "channel_id",
+                                "description",
+                                "title"
+                            ]
+                        }
+                    },
+                    "resource_channels": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "channel_id": {
+                                    "type": "string"
+                                },
+                                "title": {
+                                    "type": "string"
+                                },
+                                "description": {
+                                    "type": "string"
+                                },
+                                "emoji": {
+                                    "anyOf": [
+                                        {
+                                            "$ref": "#/components/schemas/GuildEmojiReference"
+                                        },
+                                        {
+                                            "type": "null"
+                                        }
+                                    ]
+                                },
+                                "icon": {
+                                    "type": [
+                                        "null",
+                                        "string"
+                                    ]
+                                }
+                            },
+                            "additionalProperties": false,
+                            "required": [
+                                "channel_id",
+                                "title"
+                            ]
+                        }
+                    }
+                },
+                "required": [
+                    "enabled",
+                    "new_member_actions",
+                    "resource_channels",
+                    "welcome_message"
+                ]
+            },
+            "GuildEmojiReference": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "animated": {
+                        "type": "boolean",
+                        "nullable": true
+                    }
+                }
+            },
+            "GuildOnboarding": {
+                "type": "object",
+                "properties": {
+                    "guild_id": {
+                        "type": "string"
+                    },
+                    "prompts": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/GuildOnboardingPrompt"
+                        }
+                    },
+                    "default_channel_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "enabled": {
+                        "type": "boolean"
+                    },
+                    "mode": {
+                        "type": "integer"
+                    },
+                    "below_requirements": {
+                        "type": "boolean"
+                    },
+                    "responses": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "onboarding_prompts_seen": {
+                        "$ref": "#/components/schemas/Record%3Cstring%2Cnumber%3E"
+                    },
+                    "onboarding_responses_seen": {
+                        "$ref": "#/components/schemas/Record%3Cstring%2Cnumber%3E"
+                    }
+                },
+                "required": [
+                    "default_channel_ids",
+                    "enabled",
+                    "mode",
+                    "prompts"
+                ]
+            },
+            "GuildOnboardingPrompt": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "type": "integer"
+                    },
+                    "options": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/GuildOnboardingPromptOption"
+                        }
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "single_select": {
+                        "type": "boolean"
+                    },
+                    "required": {
+                        "type": "boolean"
+                    },
+                    "in_onboarding": {
+                        "type": "boolean"
+                    },
+                    "disabled": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "id",
+                    "in_onboarding",
+                    "options",
+                    "required",
+                    "single_select",
+                    "title",
+                    "type"
+                ]
+            },
+            "GuildOnboardingPromptOption": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "channel_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "role_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "emoji": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/GuildEmojiReference"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "emoji_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "emoji_name": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "emoji_animated": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "channel_ids",
+                    "id",
+                    "role_ids",
+                    "title"
+                ]
+            },
+            "GuildMemberVerification": {
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "string"
+                    },
+                    "form_fields": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/GuildMemberVerificationFormField"
+                        }
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "description",
+                    "form_fields",
+                    "version"
+                ]
+            },
+            "GuildMemberVerificationFormField": {
+                "type": "object",
+                "properties": {
+                    "field_type": {
+                        "type": "string"
+                    },
+                    "label": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "automations": {
+                        "anyOf": [
+                            {
+                                "type": "array",
+                                "items": {}
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "required": {
+                        "type": "boolean"
+                    },
+                    "values": {
+                        "anyOf": [
+                            {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "response": {},
+                    "placeholder": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "field_type",
+                    "label",
+                    "required"
+                ]
+            },
+            "GuildDiscoveryMetadata": {
+                "type": "object",
+                "properties": {
+                    "primary_category_id": {
+                        "type": "integer"
+                    },
+                    "keywords": {
+                        "anyOf": [
+                            {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "emoji_discoverability_enabled": {
+                        "type": "boolean"
+                    },
+                    "partner_actioned_timestamp": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "partner_application_timestamp": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "is_published": {
+                        "type": "boolean"
+                    },
+                    "reasons_to_join": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "reason": {
+                                    "type": "string"
+                                },
+                                "emoji_id": {
+                                    "type": [
+                                        "null",
+                                        "string"
+                                    ]
+                                },
+                                "emoji_name": {
+                                    "type": [
+                                        "null",
+                                        "string"
+                                    ]
+                                }
+                            },
+                            "additionalProperties": false,
+                            "required": [
+                                "reason"
+                            ]
+                        }
+                    },
+                    "social_links": {
+                        "anyOf": [
+                            {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "about": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "about",
+                    "emoji_discoverability_enabled",
+                    "is_published",
+                    "keywords",
+                    "partner_actioned_timestamp",
+                    "partner_application_timestamp",
+                    "primary_category_id",
+                    "reasons_to_join",
+                    "social_links"
                 ]
             },
             "Message": {

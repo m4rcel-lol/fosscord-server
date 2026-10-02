@@ -116,6 +116,22 @@ export class Member extends BaseClassWithoutId {
     @Column()
     pending: boolean;
 
+    @Column({ type: String, nullable: true })
+    source_invite_code?: string | null;
+
+    @Column({ type: Number, nullable: true })
+    join_source_type?: number | null;
+
+    @Column({ type: "bigint", nullable: true })
+    inviter_id?: string | null;
+
+    @Column({ type: "jsonb", nullable: true, select: false })
+    onboarding_responses?: {
+        onboarding_responses: string[];
+        onboarding_prompts_seen: Record<string, number>;
+        onboarding_responses_seen: Record<string, number>;
+    } | null;
+
     @Column({ type: "jsonb", select: false })
     settings: UserGuildSettings;
 
@@ -311,7 +327,12 @@ export class Member extends BaseClassWithoutId {
         ]);
     }
 
-    static async addToGuild(user_id: string, guild_id: string, isRegistration: boolean = false) {
+    static async addToGuild(
+        user_id: string,
+        guild_id: string,
+        isRegistration: boolean = false,
+        source?: { source_invite_code?: string | null; join_source_type?: number; inviter_id?: string | null },
+    ) {
         const totalSw = Stopwatch.startNew();
         const incSw = Stopwatch.startNew();
         const logTrace = (...data: unknown[]) => {
@@ -359,6 +380,9 @@ export class Member extends BaseClassWithoutId {
             mute: false,
             pending: false,
             bio: "",
+            source_invite_code: source?.source_invite_code ?? null,
+            join_source_type: source?.join_source_type ?? null,
+            inviter_id: source?.inviter_id ?? null,
             roles: [Role.create({ id: guild_id })], // @everyone role
             // read_state: {},
             settings: {
@@ -496,9 +520,9 @@ export class Member extends BaseClassWithoutId {
     toSupplementalMember() {
         return {
             member: { ...this.toPublicMember(), roles: (this.roles ?? []).map((r) => r.id).filter((id) => id !== this.guild_id) },
-            source_invite_code: null,
-            join_source_type: 0,
-            inviter_id: null,
+            source_invite_code: this.source_invite_code ?? null,
+            join_source_type: this.join_source_type ?? 0,
+            inviter_id: this.inviter_id ?? null,
             integration_type: null,
         };
     }

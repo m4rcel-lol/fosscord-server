@@ -1,26 +1,28 @@
 /*
 	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
-	Copyright (C) 2025 Spacebar and Spacebar Contributors
-	
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU Affero General Public License as published
 	by the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
-	
+
 	This program is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU Affero General Public License for more details.
-	
+
 	You should have received a copy of the GNU Affero General Public License
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-export * from "./AuditLog";
-export * from "./Automod";
-export * from "./Emoji";
-export * from "./GuildManagement";
-export * from "./GuildProfileResponse";
-export * from "./GuildSchema";
-export * from "./Role";
-export * from "./Sticker";
-export * from "./VoiceState";
+
+import { Request, Response, Router } from "express";
+import { route } from "@spacebar/api/middlewares";
+
+const router = Router({ mergeParams: true });
+
+router.get("/", route({}), async (req: Request, res: Response) => {
+    res.json({ guild_verification_role_enabled: false, application_identity_linked_roles_enabled: false });
+});
+
+export default router;

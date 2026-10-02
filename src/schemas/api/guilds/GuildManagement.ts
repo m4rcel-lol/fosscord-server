@@ -1,0 +1,150 @@
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2023 Spacebar and Spacebar Contributors
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+export interface GuildProfileTrait {
+    label: string;
+    position: number;
+    emoji_id?: string | null;
+    emoji_name?: string | null;
+    emoji_animated?: boolean | null;
+}
+
+export interface GuildProfileSettings {
+    tag?: string | null;
+    badge?: number | null;
+    badge_color_primary?: string | null;
+    badge_color_secondary?: string | null;
+    badge_hash?: string | null;
+    traits?: GuildProfileTrait[];
+    brand_color_primary?: string | null;
+    visibility?: number;
+    custom_banner_hash?: string | null;
+    game_application_ids?: string[];
+}
+
+export interface GuildProfileModifySchema {
+    name?: string;
+    description?: string | null;
+    icon?: string | null;
+    custom_banner?: string | null;
+    visibility?: number;
+    brand_color_primary?: string | null;
+    traits?: (GuildProfileTrait | null)[];
+    game_application_ids?: string[];
+    tag?: string | null;
+    badge?: number | null;
+    badge_color_primary?: string | null;
+    badge_color_secondary?: string | null;
+}
+
+export interface GuildEmojiReference {
+    id?: string | null;
+    name?: string | null;
+    animated?: boolean | null;
+}
+
+export interface GuildHomeSettings {
+    guild_id?: string;
+    enabled: boolean;
+    welcome_message: { author_ids: string[]; message: string };
+    new_member_actions: {
+        channel_id: string;
+        action_type: number;
+        title: string;
+        description: string;
+        emoji?: GuildEmojiReference | null;
+        icon?: string | null;
+    }[];
+    resource_channels: {
+        channel_id: string;
+        title: string;
+        description?: string;
+        emoji?: GuildEmojiReference | null;
+        icon?: string | null;
+    }[];
+}
+
+export interface GuildOnboardingPromptOption {
+    id: string;
+    channel_ids: string[];
+    role_ids: string[];
+    emoji?: GuildEmojiReference | null;
+    emoji_id?: string | null;
+    emoji_name?: string | null;
+    emoji_animated?: boolean | null;
+    title: string;
+    description?: string | null;
+}
+
+export interface GuildOnboardingPrompt {
+    id: string;
+    type: number;
+    options: GuildOnboardingPromptOption[];
+    title: string;
+    single_select: boolean;
+    required: boolean;
+    in_onboarding: boolean;
+    disabled?: boolean;
+}
+
+export interface GuildOnboarding {
+    guild_id?: string;
+    prompts: GuildOnboardingPrompt[];
+    default_channel_ids: string[];
+    enabled: boolean;
+    mode: number;
+    below_requirements?: boolean;
+    responses?: string[];
+    onboarding_prompts_seen?: Record<string, number>;
+    onboarding_responses_seen?: Record<string, number>;
+}
+
+export interface GuildMemberVerificationFormField {
+    field_type: string;
+    label: string;
+    description?: string | null;
+    automations?: unknown[] | null;
+    required: boolean;
+    values?: string[] | null;
+    response?: unknown;
+    placeholder?: string | null;
+}
+
+export interface GuildMemberVerification {
+    version: string;
+    form_fields: GuildMemberVerificationFormField[];
+    description: string | null;
+}
+
+export interface GuildMemberVerificationModifySchema {
+    enabled?: boolean;
+    form_fields?: GuildMemberVerificationFormField[];
+    description?: string | null;
+}
+
+export interface GuildDiscoveryMetadata {
+    primary_category_id: number;
+    keywords: string[] | null;
+    emoji_discoverability_enabled: boolean;
+    partner_actioned_timestamp: string | null;
+    partner_application_timestamp: string | null;
+    is_published: boolean;
+    reasons_to_join: { reason: string; emoji_id?: string | null; emoji_name?: string | null }[];
+    social_links: string[] | null;
+    about: string | null;
+}
