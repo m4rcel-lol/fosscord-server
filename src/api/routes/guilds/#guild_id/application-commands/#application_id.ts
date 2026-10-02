@@ -18,7 +18,7 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { Member } from "@spacebar/database";
+import { ApplicationCommandPermission, Member } from "@spacebar/database";
 import { DiscordApiErrors } from "@spacebar/util";
 import { buildCommandIndex } from "@spacebar/api/util/handlers/ApplicationCommands";
 
@@ -29,7 +29,8 @@ router.get("/", route({ permission: "MANAGE_GUILD" }), async (req: Request, res:
     const applicationId = req.params.application_id as string;
     if (!(await Member.exists({ where: { guild_id: guildId, id: applicationId } }))) throw DiscordApiErrors.UNKNOWN_APPLICATION;
     const index = await buildCommandIndex([applicationId], { guildId });
-    res.json({ application_commands: index.application_commands, permissions: [] });
+    const permissions = await ApplicationCommandPermission.find({ where: { guild_id: guildId, application_id: applicationId } });
+    res.json({ application_commands: index.application_commands, permissions: permissions.map((p) => p.toJSON()) });
 });
 
 export default router;

@@ -31,7 +31,7 @@ router.get("/", route({}), async (req: Request, res: Response) => {
     res.json(
         await buildCommandIndex(
             bots.map((m) => m.id),
-            { guildId, context: 0, integrationType: 0 },
+            { guildId, context: 0, integrationType: 0, userId: req.user_id },
         ),
     );
 });

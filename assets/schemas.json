@@ -8841,6 +8841,44 @@
         "additionalProperties": false,
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
+    "ApplicationCommandPermissionsUpdateSchema": {
+        "type": "object",
+        "properties": {
+            "permissions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string"
+                        },
+                        "type": {
+                            "enum": [
+                                1,
+                                2,
+                                3
+                            ],
+                            "type": "number"
+                        },
+                        "permission": {
+                            "type": "boolean"
+                        }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                        "id",
+                        "permission",
+                        "type"
+                    ]
+                }
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "permissions"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
     "OAuth2UserInfoResponse": {
         "type": "object",
         "properties": {
@@ -13163,6 +13201,16 @@
                     },
                     "name": {
                         "type": "string"
+                    },
+                    "user": {
+                        "$ref": "#/definitions/PublicUser"
+                    },
+                    "command_id": {
+                        "type": "string"
+                    },
+                    "options": {
+                        "type": "array",
+                        "items": {}
                     }
                 },
                 "additionalProperties": false,

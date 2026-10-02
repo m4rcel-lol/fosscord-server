@@ -19,6 +19,7 @@
 export * from "./Application";
 export * from "./ApplicationCommand";
 export * from "./ApplicationAuthorization";
+export * from "./ApplicationCommandPermission";
 export * from "./Attachment";
 export * from "./AuditLog";
 export * from "./AutomodRule";

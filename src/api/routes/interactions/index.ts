@@ -25,6 +25,7 @@ import { Application, ApplicationAuthorization, ApplicationCommand, Channel, Gui
 import { Config, DiscordApiErrors, emitEvent, getPermission, InteractionCreateEvent, pendingInteractions, Permissions, Snowflake, storeInteraction } from "@spacebar/util";
 import { buildResolved, emitInteractionFailure, fetchInteractionMessage } from "@spacebar/api/util/handlers/Interaction";
 import { convertCloudAttachmentToAttachment } from "@spacebar/api/util";
+import { canUseCommand } from "@spacebar/api/util/handlers/ApplicationCommands";
 
 const router = Router({ mergeParams: true });
 
@@ -76,7 +77,12 @@ router.post("/", route({}), async (req: Request, res: Response) => {
             const contexts = command.contexts?.length ? command.contexts : command.dm_permission === false ? [0] : [0, 1, 2];
             const usable = contexts.includes(context) && ((integrationTypes.includes(0) && (guildInstalled || botDm)) || (integrationTypes.includes(1) && userInstalled));
             if (!usable) throw DiscordApiErrors.UNKNOWN_APPLICATION_COMMAND;
-            if (guildId && guildInstalled && command.default_member_permissions != null && !permission.has("ADMINISTRATOR")) {
+            const access =
+                guildId && guildInstalled && !permission.has("ADMINISTRATOR")
+                    ? await canUseCommand(command, guildId, req.user_id, permission.cache.roles?.map((r) => r.id) ?? [], channel.id)
+                    : undefined;
+            if (access && !access.allowed) throw DiscordApiErrors.MISSING_PERMISSIONS.withParams("application command permissions");
+            if (guildId && guildInstalled && !access?.explicit && command.default_member_permissions != null && !permission.has("ADMINISTRATOR")) {
                 const required = BigInt(command.default_member_permissions);
                 if (required === 0n || (permission.bitfield & required) !== required) throw DiscordApiErrors.MISSING_PERMISSIONS.withParams("default_member_permissions");
             }

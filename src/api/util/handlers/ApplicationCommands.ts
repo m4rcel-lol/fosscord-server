@@ -19,9 +19,9 @@
 import { Request, Response, Router } from "express";
 import { In, IsNull } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
-import { Application, ApplicationCommand, Member } from "@spacebar/database";
+import { Application, ApplicationCommand, ApplicationCommandPermission, ApplicationCommandPermissionOverwrite, Member } from "@spacebar/database";
 import { ApplicationCommandCreateSchema, ApplicationCommandType } from "@spacebar/schemas";
-import { DiscordApiErrors, emitEvent, FieldErrors, Snowflake } from "@spacebar/util";
+import { ApiError, DiscordApiErrors, emitEvent, FieldErrors, getPermission, Snowflake } from "@spacebar/util";
 
 const NAME_PATTERN = /^[-_'\p{L}\p{N}\p{sc=Deva}\p{sc=Thai}]{1,32}$/u;
 
@@ -133,7 +133,19 @@ export async function emitCommandIndexUpdate(applicationId: string, guildId?: st
     );
 }
 
-export async function buildCommandIndex(applicationIds: string[], scope: { guildId?: string; context?: number; integrationType?: number }) {
+function indexPermissions(overwrites: ApplicationCommandPermissionOverwrite[] | undefined, userId?: string) {
+    if (!overwrites?.length) return undefined;
+    const user = overwrites.find((o) => o.type === 2 && o.id === userId)?.permission;
+    const roles = Object.fromEntries(overwrites.filter((o) => o.type === 1).map((o) => [o.id, o.permission]));
+    const channels = Object.fromEntries(overwrites.filter((o) => o.type === 3).map((o) => [o.id, o.permission]));
+    return {
+        ...(user !== undefined && { user }),
+        ...(Object.keys(roles).length && { roles }),
+        ...(Object.keys(channels).length && { channels }),
+    };
+}
+
+export async function buildCommandIndex(applicationIds: string[], scope: { guildId?: string; context?: number; integrationType?: number; userId?: string }) {
     if (!applicationIds.length) return { applications: [], application_commands: [], version: "0" };
     const applications = await Application.find({ where: { id: In(applicationIds) }, relations: { bot: true } });
     const commands = applications.length
@@ -148,9 +160,15 @@ export async function buildCommandIndex(applicationIds: string[], scope: { guild
         if (c.contexts?.length) return c.contexts.includes(scope.context);
         return scope.context !== 1 || c.dm_permission !== false;
     });
+    const overwrites =
+        scope.guildId && applications.length
+            ? await ApplicationCommandPermission.find({ where: { guild_id: scope.guildId, application_id: In(applications.map((a) => a.id)) } })
+            : [];
+    const overwritesFor = (id: string) => indexPermissions(overwrites.find((o) => o.id === id)?.permissions, scope.userId);
     return {
         applications: applications.map((a) => ({
             id: a.id,
+            permissions: overwritesFor(a.id),
             name: a.name,
             description: a.description ?? "",
             icon: a.icon ?? null,
@@ -158,9 +176,89 @@ export async function buildCommandIndex(applicationIds: string[], scope: { guild
             bot_id: a.bot?.id,
             bot: a.bot?.toPublicUser(),
         })),
-        application_commands: visible.map((c) => ({ ...serializeCommand(c), guild_id: c.guild_id ?? undefined })),
+        application_commands: visible.map((c) => ({ ...serializeCommand(c), guild_id: c.guild_id ?? undefined, permissions: overwritesFor(c.id) })),
         version: visible.reduce((v, c) => (BigInt(c.version) > BigInt(v) ? String(c.version) : v), "0"),
     };
+}
+
+export async function canUseCommand(command: ApplicationCommand, guildId: string, userId: string, roleIds: string[], channelId: string) {
+    const rows = await ApplicationCommandPermission.find({ where: { guild_id: guildId, id: In([command.id, command.application_id]) } });
+    const merged = new Map<string, ApplicationCommandPermissionOverwrite>();
+    for (const o of rows.find((r) => r.id === command.application_id)?.permissions ?? []) merged.set(`${o.type}:${o.id}`, o);
+    for (const o of rows.find((r) => r.id === command.id)?.permissions ?? []) merged.set(`${o.type}:${o.id}`, o);
+    const overwrites = [...merged.values()];
+    const allChannels = (BigInt(guildId) - 1n).toString();
+    const channel = overwrites.find((o) => o.type === 3 && o.id === channelId) ?? overwrites.find((o) => o.type === 3 && o.id === allChannels);
+    const user = overwrites.find((o) => o.type === 2 && o.id === userId);
+    const roles = overwrites.filter((o) => o.type === 1 && o.id !== guildId && roleIds.includes(o.id));
+    const everyone = overwrites.find((o) => o.type === 1 && o.id === guildId);
+    const explicit = user ? user.permission : roles.length ? roles.some((r) => r.permission) : undefined;
+    const member = explicit ?? everyone?.permission ?? true;
+    return { allowed: (channel?.permission ?? true) && member, explicit: explicit === true };
+}
+
+async function assertCanReadPermissions(req: Request) {
+    const applicationId = req.params.application_id as string;
+    const guildId = req.params.guild_id as string;
+    if (!(await Member.exists({ where: { guild_id: guildId, id: applicationId } }))) throw DiscordApiErrors.UNKNOWN_APPLICATION;
+    if (req.user_id === applicationId) return;
+    const permission = await getPermission(req.user_id, guildId);
+    permission.hasThrow("MANAGE_GUILD");
+}
+
+export function commandPermissionsListRouter() {
+    const router = Router({ mergeParams: true });
+    router.get("/", route({}), async (req: Request, res: Response) => {
+        await assertCanReadPermissions(req);
+        const rows = await ApplicationCommandPermission.find({ where: { guild_id: req.params.guild_id as string, application_id: req.params.application_id as string } });
+        res.json(rows.map((r) => r.toJSON()));
+    });
+    return router;
+}
+
+export function commandPermissionsRouter() {
+    const router = Router({ mergeParams: true });
+    const target = async (req: Request) => {
+        const applicationId = req.params.application_id as string;
+        const guildId = req.params.guild_id as string;
+        const commandId = req.params.command_id as string;
+        if (!/^\d+$/.test(commandId)) throw DiscordApiErrors.UNKNOWN_APPLICATION_COMMAND;
+        if (commandId !== applicationId) {
+            const exists = await ApplicationCommand.exists({
+                where: [
+                    { id: commandId, application_id: applicationId, guild_id: IsNull() },
+                    { id: commandId, application_id: applicationId, guild_id: guildId },
+                ],
+            });
+            if (!exists) throw DiscordApiErrors.UNKNOWN_APPLICATION_COMMAND;
+        }
+        return { applicationId, guildId, commandId };
+    };
+
+    router.get("/", route({}), async (req: Request, res: Response) => {
+        await assertCanReadPermissions(req);
+        const { guildId, commandId } = await target(req);
+        const row = await ApplicationCommandPermission.findOne({ where: { id: commandId, guild_id: guildId } });
+        if (!row) throw new ApiError("Unknown application command permissions", 10066, 404);
+        res.json(row.toJSON());
+    });
+
+    router.put("/", route({ requestBody: "ApplicationCommandPermissionsUpdateSchema" }), async (req: Request, res: Response) => {
+        const { applicationId, guildId, commandId } = await target(req);
+        if (!(await Member.exists({ where: { guild_id: guildId, id: applicationId } }))) throw DiscordApiErrors.UNKNOWN_APPLICATION;
+        const permission = await getPermission(req.user_id, guildId);
+        permission.hasThrow("MANAGE_GUILD");
+        permission.hasThrow("MANAGE_ROLES");
+        const body = req.body as { permissions: ApplicationCommandPermissionOverwrite[] };
+        if (body.permissions.length > 100) throw FieldErrors({ permissions: { code: "BASE_TYPE_MAX_LENGTH", message: "Must be 100 or fewer in length." } });
+        const row = ApplicationCommandPermission.create({ id: commandId, guild_id: guildId, application_id: applicationId, permissions: body.permissions });
+        if (body.permissions.length) await row.save();
+        else await ApplicationCommandPermission.delete({ id: commandId, guild_id: guildId });
+        await emitEvent({ event: "APPLICATION_COMMAND_PERMISSIONS_UPDATE", guild_id: guildId, data: row.toJSON() });
+        res.json(row.toJSON());
+    });
+
+    return router;
 }
 
 export function commandListRouter() {

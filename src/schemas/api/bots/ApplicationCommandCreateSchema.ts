@@ -58,3 +58,11 @@ export interface ApplicationCommandModifySchema {
     contexts?: InteractionContextType[];
     handler?: ApplicationCommandHandlerType;
 }
+
+export interface ApplicationCommandPermissionsUpdateSchema {
+    permissions: {
+        id: string;
+        type: 1 | 2 | 3;
+        permission: boolean;
+    }[];
+}
