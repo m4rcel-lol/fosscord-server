@@ -53,33 +53,41 @@ export interface CollectibleProduct {
 export interface CollectibleCategory {
     sku_id: string;
     name: string;
+    summary?: string;
+    store_listing_id?: string;
+    hero_ranking?: string[];
     products: CollectibleProduct[];
     [key: string]: unknown;
 }
 
+interface CollectiblePrices {
+    [group: string]: { country_prices: { country_code: string; prices: { amount: number; currency: string; exponent: number }[] } };
+}
+
+type Catalog = { categories: CollectibleCategory[]; products: Map<string, CollectibleProduct>; items: Map<string, CollectibleItem> };
+
 const CATALOG_URL = process.env.COLLECTIBLES_CATALOG_URL || "https://raw.githubusercontent.com/aamiaa/discord-api-diff/main/collectibles.json";
 const CACHE_FILE = path.join(ASSETS_FOLDER, "collectibles.json");
+const REFRESH_MS = Number(process.env.COLLECTIBLES_REFRESH_HOURS || 12) * 3_600_000;
 
-let catalog: Promise<{ categories: CollectibleCategory[]; products: Map<string, CollectibleProduct>; items: Map<string, CollectibleItem> }> | undefined;
+let catalog: Promise<Catalog> | undefined;
+let refreshTimer: NodeJS.Timeout | undefined;
 
-const load = async () => {
-    let raw = await fs.readFile(CACHE_FILE, "utf8").catch(() => undefined);
-    if (!raw) {
-        const res = await fetch(CATALOG_URL).catch(() => undefined);
-        if (!res?.ok) {
-            console.error(`[Collectibles] could not fetch catalog from ${CATALOG_URL}: ${res?.status ?? "network error"}`);
-            catalog = undefined;
-            return { categories: [], products: new Map<string, CollectibleProduct>(), items: new Map<string, CollectibleItem>() };
-        }
-        raw = await res.text();
-        await fs.writeFile(CACHE_FILE, raw).catch((e) => console.error("[Collectibles] could not cache catalog", e));
-    }
-
-    const categories = JSON.parse(raw) as CollectibleCategory[];
+const parse = (raw: string): Catalog => {
+    const categories = (JSON.parse(raw) as CollectibleCategory[]).sort((a, b) => (BigInt(b.sku_id) > BigInt(a.sku_id) ? 1 : -1));
     const products = new Map<string, CollectibleProduct>();
     const items = new Map<string, CollectibleItem>();
 
     const index = (product: CollectibleProduct) => {
+        product.prices = Object.fromEntries(
+            Object.entries((product.prices ?? {}) as CollectiblePrices).map(([group, { country_prices }]) => [
+                group,
+                { country_prices: { ...country_prices, prices: country_prices.prices.map((price) => ({ ...price, amount: 0 })) } },
+            ]),
+        );
+        product.unpublished_at = null;
+        product.premium_type = 2;
+        product.hide_badge = true;
         if (!products.has(product.sku_id) || product.items?.some((x) => x.asset || x.effects)) products.set(product.sku_id, product);
         for (const item of product.items ?? []) {
             const known = items.get(item.sku_id);
@@ -88,13 +96,57 @@ const load = async () => {
         product.bundled_products?.forEach(index);
         product.variants?.forEach(index);
     };
-    for (const category of categories) category.products.forEach(index);
+    for (const category of categories) {
+        category.unpublished_at = null;
+        category.products.forEach(index);
+    }
 
     return { categories, products, items };
 };
 
+const download = async () => {
+    const res = await fetch(CATALOG_URL).catch(() => undefined);
+    if (!res?.ok) {
+        console.error(`[Collectibles] could not fetch catalog from ${CATALOG_URL}: ${res?.status ?? "network error"}`);
+        return undefined;
+    }
+    const raw = await res.text();
+    try {
+        parse(raw);
+    } catch (e) {
+        console.error(`[Collectibles] catalog from ${CATALOG_URL} is invalid`, e);
+        return undefined;
+    }
+    await fs.writeFile(CACHE_FILE, raw).catch((e) => console.error("[Collectibles] could not cache catalog", e));
+    return raw;
+};
+
+const refresh = async () => {
+    const raw = await download();
+    if (!raw) return;
+    const next = parse(raw);
+    catalog = Promise.resolve(next);
+    console.log(`[Collectibles] refreshed catalog: ${next.categories.length} categories, ${next.products.size} products`);
+};
+
+const load = async (): Promise<Catalog> => {
+    refreshTimer ??= setInterval(() => void refresh(), REFRESH_MS).unref();
+    const stat = await fs.stat(CACHE_FILE).catch(() => undefined);
+    const raw = stat ? await fs.readFile(CACHE_FILE, "utf8") : await download();
+    if (!raw) {
+        catalog = undefined;
+        return { categories: [], products: new Map(), items: new Map() };
+    }
+    if (stat && Date.now() - stat.mtimeMs > REFRESH_MS) void refresh();
+    return parse(raw);
+};
+
+const listedSkus = (category: CollectibleCategory) => category.products.map((x) => x.sku_id);
+
 export const Collectibles = {
     get: () => (catalog ??= load()),
+
+    refresh,
 
     async categories() {
         return (await Collectibles.get()).categories;
@@ -110,8 +162,61 @@ export const Collectibles = {
         return item?.type === type ? item : undefined;
     },
 
-    async owned() {
-        const { products } = await Collectibles.get();
-        return [...products.values()].filter((x) => x.type !== CollectibleItemType.BUNDLE && x.type !== CollectibleItemType.VARIANTS_GROUP);
+    async grantable(sku_id: string) {
+        const product = await Collectibles.product(sku_id);
+        if (!product) return [];
+        if (product.type === CollectibleItemType.BUNDLE) return [product.sku_id, ...(product.bundled_products ?? []).map((x) => x.sku_id)];
+        if (product.type === CollectibleItemType.VARIANTS_GROUP) return (product.variants ?? []).map((x) => x.sku_id);
+        return [product.sku_id];
+    },
+
+    async shop() {
+        const listed = (await Collectibles.categories()).filter((x) => x.products.length);
+        const [hero, ...rest] = listed;
+        const ranked = listed.flatMap(listedSkus);
+        return {
+            shop_blocks: [
+                ...(hero
+                    ? [
+                          {
+                              type: 0,
+                              category_sku_id: hero.sku_id,
+                              category_store_listing_id: hero.store_listing_id ?? hero.sku_id,
+                              name: hero.name,
+                              title: hero.hero_block_title ?? hero.name,
+                              summary: hero.summary ?? "",
+                              ranked_sku_ids: hero.hero_ranking ?? listedSkus(hero),
+                              unpublished_at: null,
+                              banner_text_color: hero.banner_text_color ?? null,
+                              hero_banner_url: hero.hero_banner_url ?? hero.catalog_banner_url ?? null,
+                              hero_banner_animated_url: hero.hero_banner_animated_url ?? null,
+                              hero_logo_url: hero.hero_logo_url ?? hero.logo_url ?? null,
+                              mobile_hero_url: hero.mobile_hero_url ?? null,
+                              banner_display_config: hero.hero_banner_display_config ?? null,
+                              logo_display_config: hero.hero_logo_display_config ?? null,
+                          },
+                      ]
+                    : []),
+                {
+                    type: 1,
+                    subblocks: rest
+                        .filter((x) => x.featured_block_url)
+                        .slice(0, 3)
+                        .map((category) => ({
+                            type: 0,
+                            category_store_listing_id: category.store_listing_id ?? category.sku_id,
+                            category_sku_id: category.sku_id,
+                            name: category.name,
+                            unpublished_at: null,
+                            body_text: category.summary?.trim() || null,
+                            banner_text_color: null,
+                            banner_url: category.featured_block_url,
+                            asset_url: category.logo_url ?? null,
+                        })),
+                },
+                { type: 2, ranked_sku_ids: ranked, sorted_sku_ids: { recommended: null, popular: ranked } },
+            ],
+            categories: listed,
+        };
     },
 };
