@@ -790,7 +790,7 @@ export const DiscordApiErrors = {
         return new ApiError("Cannot send an empty message", 50006);
     },
     get CANNOT_MESSAGE_USER() {
-        return new ApiError("Cannot send messages to this user", 50007);
+        return new ApiError("Cannot send messages to this user", 50007, 403);
     },
     get CANNOT_SEND_MESSAGES_IN_VOICE_CHANNEL() {
         return new ApiError("Cannot send messages in a voice channel", 50008);
