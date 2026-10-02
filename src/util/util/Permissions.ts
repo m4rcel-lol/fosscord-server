@@ -2,7 +2,7 @@
 // Apache License Version 2.0 Copyright 2015 - 2021 Amish Shah
 // @fc-license-skip
 
-import { Channel, Guild, Member, Role, User } from "../../database/entities";
+import { Channel, Guild, Member, Role, ThreadMember, User } from "../../database/entities";
 import { BitField, BitFieldResolvable, BitFlag } from "./BitField";
 import { HTTPError } from "lambert-server/HTTPError";
 import { DiscordApiErrors } from "./Constants";
@@ -276,7 +276,8 @@ export async function getPermission(
     while (channel?.isThread() && channel.parent_id) {
         const parent = await Channel.findOneOrFail({ where: { id: channel.parent_id }, ...query });
         if (channel.type === ChannelType.GUILD_PRIVATE_THREAD) {
-            if (!channel.thread_members?.find((m) => (m.user_id ?? m.member?.id) === user_id)) {
+            channel.thread_members ??= await ThreadMember.find({ where: { id: channel.id }, relations: { member: true } });
+            if (!channel.thread_members.find((m) => (m.user_id ?? m.member?.id) === user_id)) {
                 const perms: Permissions = await getPermission(user_id, guild_id, parent, opts);
                 if (!perms.has("MANAGE_THREADS")) {
                     return new Permissions(0);
