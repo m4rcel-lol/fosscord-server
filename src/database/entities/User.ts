@@ -52,6 +52,11 @@ export interface AccountPreferences {
     harvest?: HarvestRecord;
 }
 
+export interface ProfileWidget {
+    id: string;
+    data: { type: string; [key: string]: string | number | boolean | null | object };
+}
+
 export interface HarvestRecord {
     harvest_id: string;
     user_id: string;
@@ -236,6 +241,9 @@ export class User extends BaseClass {
 
     @Column({ type: "jsonb", nullable: true, select: false })
     account_preferences?: AccountPreferences | null;
+
+    @Column({ type: "jsonb", nullable: true })
+    profile_widgets?: ProfileWidget[] | null;
 
     @JoinColumn({ name: "avatar_decoration_id", foreignKeyConstraintName: "FK_user_avatar_decoration_id" })
     @OneToOne(() => AvatarDecoration, { onDelete: "SET NULL", nullable: true })
