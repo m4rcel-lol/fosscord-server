@@ -51,7 +51,7 @@ router.get(
             throw DiscordApiErrors.UNKNOWN_INVITE;
         }
 
-        res.status(200).send(invite.toPublicJSON());
+        res.status(200).send({ ...invite.toPublicJSON(), approximate_presence_count: await Guild.countOnlineMembers(invite.guild_id) });
     },
 );
 
@@ -121,7 +121,7 @@ router.post(
         }).catch(() => null);
         if (!invite) return res.json({ code: invite_code, guild_id, new_member });
 
-        res.json({ ...invite.toPublicJSON(), new_member });
+        res.json({ ...invite.toPublicJSON(), approximate_presence_count: await Guild.countOnlineMembers(invite.guild_id), new_member });
     },
 );
 
