@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { handleMessage, onThreadMessage, postHandleMessage } from "@spacebar/api/util";
+import { checkAutomod, handleMessage, onThreadMessage, postHandleMessage } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
 import { Attachment, Channel, Member, Message, ReadState, Relationship, User } from "@spacebar/database";
 import {
@@ -368,6 +368,8 @@ router.post(
                     });
             }
         }
+
+        if (channel.guild_id) await checkAutomod({ guild_id: channel.guild_id, channel, user_id: req.user_id, content: body.content, permission: req.permission });
 
         const files = (req.files as Express.Multer.File[]) ?? [];
         for (const currFile of files) {

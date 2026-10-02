@@ -63,6 +63,8 @@ router.post(
     }),
     async (req: Request, res: Response) => {
         const { guild_id } = req.params as { [key: string]: string };
+        req.body.creator_id ??= req.user_id;
+        req.body.guild_id ??= guild_id;
         if (req.user_id !== req.body.creator_id) throw new HTTPError("You can't create a rule for someone else", 403);
 
         if (guild_id !== req.body.guild_id) throw new HTTPError("You can't create a rule for another guild", 403);
@@ -72,6 +74,7 @@ router.post(
         }
 
         const data = req.body as AutomodRuleSchema;
+        data.position ??= await AutomodRule.count({ where: { guild_id } });
 
         const created = AutomodRule.create({
             creator: await User.findOneOrFail({

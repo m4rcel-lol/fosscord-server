@@ -19,7 +19,7 @@
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import multer from "multer";
-import { handleMessage, postHandleMessage } from "@spacebar/api/util";
+import { checkAutomod, handleMessage, postHandleMessage } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
 import { Attachment, Channel, Message } from "@spacebar/database";
 import {
@@ -107,6 +107,11 @@ router.patch(
 
         if (message.poll) {
             throw DiscordApiErrors.POLL_CANNOT_EDIT_MESSAGE;
+        }
+
+        if (message.guild_id && body.content !== undefined && body.content !== message.content) {
+            const channel = await Channel.findOneOrFail({ where: { id: channel_id } });
+            await checkAutomod({ guild_id: message.guild_id, channel, user_id: req.user_id, content: body.content, permission: permissions });
         }
 
         const attachments = body.attachments?.map((attachment) =>
