@@ -1173,6 +1173,10 @@
                     "captcha_key": {
                         "type": "string"
                     },
+                    "connected_account_provider": {
+                        "type": "string",
+                        "nullable": true
+                    },
                     "code": {
                         "minLength": 6,
                         "maxLength": 6,
@@ -2156,7 +2160,16 @@
                         "nullable": true
                     },
                     "description": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "system_channel_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "rules_channel_id": {
+                        "type": "string",
+                        "nullable": true
                     },
                     "features": {
                         "type": "array",
@@ -2177,13 +2190,15 @@
                         "type": "integer"
                     },
                     "public_updates_channel_id": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "afk_timeout": {
                         "type": "integer"
                     },
                     "afk_channel_id": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "preferred_locale": {
                         "type": "string"
@@ -2208,12 +2223,6 @@
                     "icon": {
                         "type": "string",
                         "nullable": true
-                    },
-                    "system_channel_id": {
-                        "type": "string"
-                    },
-                    "rules_channel_id": {
-                        "type": "string"
                     },
                     "guild_template_code": {
                         "type": "string"
@@ -2934,15 +2943,17 @@
                         "type": "string",
                         "nullable": true
                     },
-                    "icon": {
+                    "system_channel_id": {
                         "type": "string",
                         "nullable": true
                     },
-                    "system_channel_id": {
-                        "type": "string"
-                    },
                     "rules_channel_id": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "icon": {
+                        "type": "string",
+                        "nullable": true
                     },
                     "guild_template_code": {
                         "type": "string"
@@ -2955,7 +2966,8 @@
                         "nullable": true
                     },
                     "description": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "features": {
                         "type": "array",
@@ -2976,13 +2988,15 @@
                         "type": "integer"
                     },
                     "public_updates_channel_id": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "afk_timeout": {
                         "type": "integer"
                     },
                     "afk_channel_id": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "preferred_locale": {
                         "type": "string"
@@ -3738,9 +3752,6 @@
                             "$ref": "#/components/schemas/Member"
                         }
                     },
-                    "icon": {
-                        "type": "string"
-                    },
                     "system_channel_id": {
                         "type": "string",
                         "nullable": true
@@ -3748,6 +3759,9 @@
                     "rules_channel_id": {
                         "type": "string",
                         "nullable": true
+                    },
+                    "icon": {
+                        "type": "string"
                     },
                     "splash": {
                         "type": "string"
@@ -4293,15 +4307,17 @@
                         "type": "string",
                         "nullable": true
                     },
-                    "icon": {
+                    "system_channel_id": {
                         "type": "string",
                         "nullable": true
                     },
-                    "system_channel_id": {
-                        "type": "string"
-                    },
                     "rules_channel_id": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "icon": {
+                        "type": "string",
+                        "nullable": true
                     },
                     "guild_template_code": {
                         "type": "string"
@@ -4314,7 +4330,8 @@
                         "nullable": true
                     },
                     "description": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "features": {
                         "type": "array",
@@ -4335,13 +4352,15 @@
                         "type": "integer"
                     },
                     "public_updates_channel_id": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "afk_timeout": {
                         "type": "integer"
                     },
                     "afk_channel_id": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "preferred_locale": {
                         "type": "string"
@@ -7344,6 +7363,13 @@
                     },
                     "guild_id": {
                         "type": "string"
+                    },
+                    "redirect_uris": {
+                        "maxItems": 10,
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
                     }
                 }
             },
@@ -21290,6 +21316,23 @@
                 ]
             }
         },
+        "/api/users/@me/virtual-currency/balance": {
+            "get": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            }
+        },
         "/api/users/@me/virtual-currency/balance/": {
             "get": {
                 "security": [
@@ -22385,6 +22428,60 @@
                                 }
                             }
                         }
+                    },
+                    "400": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            }
+        },
+        "/api/users/@me/mfa/sms/enable/": {
+            "post": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No description available"
+                    },
+                    "400": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            }
+        },
+        "/api/users/@me/mfa/sms/disable/": {
+            "post": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No description available"
                     },
                     "400": {
                         "description": "",
@@ -23578,16 +23675,6 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/E2eeBackupResponse"
-                                }
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/APIErrorResponse"
                                 }
                             }
                         }
@@ -25421,6 +25508,86 @@
                         "description": "No description available"
                     }
                 },
+                "tags": [
+                    "api"
+                ]
+            }
+        },
+        "/api/stage-instances/{channel_id}": {
+            "get": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "channel_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "channel_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ]
+            },
+            "patch": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "channel_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "channel_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ]
+            },
+            "delete": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "channel_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "channel_id"
+                    }
+                ],
                 "tags": [
                     "api"
                 ]
@@ -28055,6 +28222,61 @@
             }
         },
         "/api/guilds/{guild_id}/voice-states/{user_id}/": {
+            "get": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No description available"
+                    },
+                    "403": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "guild_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "guild_id"
+                    },
+                    {
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "user_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ]
+            },
             "patch": {
                 "security": [
                     {
@@ -34766,23 +34988,6 @@
                 ]
             }
         },
-        "/api/collectibles-categories/v2/": {
-            "get": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "responses": {
-                    "default": {
-                        "description": "No description available"
-                    }
-                },
-                "tags": [
-                    "api"
-                ]
-            }
-        },
         "/api/collectibles-categories/": {
             "get": {
                 "security": [
@@ -34800,6 +35005,23 @@
                                 }
                             }
                         }
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            }
+        },
+        "/api/collectibles-categories/v2/": {
+            "get": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": "No description available"
                     }
                 },
                 "tags": [
@@ -38658,6 +38880,105 @@
                 ]
             }
         },
+        "/api/auth/mfa/webauthn/": {
+            "post": {
+                "security": [
+                    {}
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WebAuthnTotpSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            }
+        },
+        "/api/auth/mfa/totp/": {
+            "post": {
+                "security": [
+                    {}
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TotpSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            }
+        },
+        "/api/auth/mfa/sms/send/": {
+            "post": {
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            }
+        },
         "/api/auth/mfa/{authenticator_type}/": {
             "post": {
                 "security": [
@@ -40439,7 +40760,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Application"
+                                    "$ref": "#/components/schemas/PublicUser"
                                 }
                             }
                         }
