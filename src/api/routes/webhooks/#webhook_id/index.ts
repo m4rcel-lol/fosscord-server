@@ -18,9 +18,9 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { Webhook } from "@spacebar/database";
+import { AuditLog, Webhook } from "@spacebar/database";
 import { DiscordApiErrors, getPermission, WebhooksUpdateEvent, emitEvent } from "@spacebar/util";
-import type { WebhookUpdateSchema } from "@spacebar/schemas";
+import { AuditLogEvents, type WebhookUpdateSchema } from "@spacebar/schemas";
 import { applyWebhookUpdate, webhookToJSON } from "@spacebar/api/util/handlers/Webhook";
 
 const router = Router({ mergeParams: true });
@@ -80,6 +80,15 @@ router.delete(
 
         const channel_id = webhook.channel_id;
         await Webhook.delete({ id: webhook_id });
+        if (webhook.guild_id)
+            await AuditLog.log({
+                guild_id: webhook.guild_id,
+                user_id: req.user_id,
+                action_type: AuditLogEvents.WEBHOOK_DELETE,
+                target_id: webhook.id,
+                changes: AuditLog.diff({ type: webhook.type, name: webhook.name, channel_id, avatar_hash: webhook.avatar }, {}, ["type", "name", "channel_id", "avatar_hash"]),
+                reason: req.headers["x-audit-log-reason"],
+            });
 
         await emitEvent({
             event: "WEBHOOKS_UPDATE",
@@ -125,7 +134,18 @@ router.patch(
         } else if (webhook.user_id != req.user_id) throw DiscordApiErrors.UNKNOWN_WEBHOOK;
 
         const previousChannelId = webhook.channel_id;
+        const before = { name: webhook.name, channel_id: webhook.channel_id, avatar_hash: webhook.avatar };
         await applyWebhookUpdate(webhook, body, true);
+        const changes = AuditLog.diff(before, { name: webhook.name, channel_id: webhook.channel_id, avatar_hash: webhook.avatar }, ["name", "channel_id", "avatar_hash"]);
+        if (webhook.guild_id && changes.length)
+            await AuditLog.log({
+                guild_id: webhook.guild_id,
+                user_id: req.user_id,
+                action_type: AuditLogEvents.WEBHOOK_UPDATE,
+                target_id: webhook.id,
+                changes,
+                reason: req.headers["x-audit-log-reason"],
+            });
         const channel_id = webhook.channel_id;
         if (previousChannelId !== channel_id)
             await emitEvent({

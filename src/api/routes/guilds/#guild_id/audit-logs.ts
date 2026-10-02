@@ -19,7 +19,8 @@
 import { Router, Response, Request } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { AuditLogEntry, AuditLogEvents, AuditLogResponse } from "@spacebar/schemas";
-import { AuditLog, User } from "@spacebar/database";
+import { Application, AuditLog, User, Webhook } from "@spacebar/database";
+import { webhookToJSON } from "@spacebar/api/util/handlers/Webhook";
 import { FindManyOptions, FindOptionsWhere, In, LessThan, MoreThan } from "typeorm";
 const router = Router({ mergeParams: true });
 
@@ -89,11 +90,18 @@ router.get(
         if (req.query.action_type) (query.where as FindOptionsWhere<AuditLog>).action_type = Number(req.query.action_type as string) as AuditLogEvents;
 
         const auditLogEntries: AuditLogEntry[] = (await AuditLog.find(query)).map((x) => x.toAuditLogEntry());
+        const targetIds = (types: AuditLogEvents[]) => [...new Set(auditLogEntries.filter((e) => types.includes(e.action_type) && e.target_id).map((e) => e.target_id!))];
+        const integrationIds = targetIds([AuditLogEvents.INTEGRATION_CREATE, AuditLogEvents.INTEGRATION_UPDATE, AuditLogEvents.INTEGRATION_DELETE]);
+        const webhookIds = targetIds([AuditLogEvents.WEBHOOK_CREATE, AuditLogEvents.WEBHOOK_UPDATE, AuditLogEvents.WEBHOOK_DELETE]);
+        const [applications, webhooks] = await Promise.all([
+            integrationIds.length ? Application.find({ where: { id: In(integrationIds) }, select: { id: true, name: true } }) : [],
+            webhookIds.length ? Webhook.find({ where: { id: In(webhookIds), guild_id: guildId } }) : [],
+        ]);
         const resp: AuditLogResponse = {
             audit_log_entries: auditLogEntries,
             users: [],
-            integrations: [], // TODO once schemas exist
-            webhooks: [], // TODO once schemas exist
+            integrations: applications.map((app) => ({ id: app.id, type: "discord", name: app.name, account: { id: app.id, name: app.name }, application_id: app.id })),
+            webhooks: webhooks.map((webhook) => webhookToJSON(webhook, { withToken: false, withUser: false })),
             guild_scheduled_events: [], // TODO once schemas exist
             threads: [], // TODO once schemas exist
             application_commands: [], // TODO once schemas exist
