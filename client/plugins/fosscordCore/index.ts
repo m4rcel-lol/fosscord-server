@@ -37,6 +37,13 @@ export default definePlugin({
             },
         },
         {
+            find: "https://cdn.discordapp.com/assets/krisp_browser_models/",
+            replacement: {
+                match: /https:\/\/cdn\.discordapp\.com\/assets\/krisp_browser_models\//g,
+                replace: () => `${location.protocol}//${(window as any).GLOBAL_ENV?.CDN_HOST || location.host}/krisp_browser_models/`,
+            },
+        },
+        {
             find: "fetchChangelogConfig(){",
             replacement: {
                 match: /https:\/\/cdn\.discordapp\.com\/changelogs\//g,
