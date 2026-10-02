@@ -377,7 +377,7 @@ export class Member extends BaseClassWithoutId {
             joined_at: new Date(),
             deaf: false,
             mute: false,
-            pending: false,
+            pending: !!guild.features.includes("MEMBER_VERIFICATION_GATE_ENABLED") && !!guild.member_verification?.form_fields?.length && guild.owner_id !== user_id,
             bio: "",
             source_invite_code: source?.source_invite_code ?? null,
             join_source_type: source?.join_source_type ?? null,
