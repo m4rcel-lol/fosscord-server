@@ -377,7 +377,7 @@ export class Guild extends BaseClass {
         this.premium_tier = GuildPremiumTier.TIER_3;
         this.premium_subscription_count = Math.max(this.premium_subscription_count ?? 0, GuildBoostCount);
         this.features = [...new Set([...(this.features ?? []), ...GuildBoostFeatures])];
-        this.premium_features = { features: GuildPowerupFeatures, additional_emoji_slots: 0, additional_sticker_slots: 0, additional_sound_slots: 0 };
+        this.premium_features = { features: GuildPowerupFeatures, additional_emoji_slots: 200, additional_sticker_slots: 55, additional_sound_slots: 40 };
     }
 
     async toDiscoverableGuild(): Promise<DiscoverableGuild | null> {
