@@ -47,6 +47,7 @@ export * from "./Member";
 export * from "./Message";
 export * from "./Migration";
 export * from "./Note";
+export * from "./OAuth2Token";
 export * from "./RateLimit";
 export * from "./ReadState";
 export * from "./Recipient";

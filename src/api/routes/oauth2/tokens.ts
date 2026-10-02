@@ -17,22 +17,56 @@
 */
 
 import { Router, Request, Response } from "express";
+import { In } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
-import { ApplicationAuthorization } from "@spacebar/database";
-import { ApiError } from "@spacebar/util";
+import { ApplicationAuthorization, OAuth2Token } from "@spacebar/database";
+import { ApiError, emitEvent, OAuth2TokenDeleteEvent } from "@spacebar/util";
 import { toPublicApplication } from "@spacebar/api/util/handlers/Application";
 
 const router = Router({ mergeParams: true });
 
-router.get("/", route({}), async (req: Request, res: Response) => {
-    const authorizations = await ApplicationAuthorization.find({ where: { user_id: req.user_id }, relations: { application: { bot: true } }, order: { created_at: "DESC" } });
-    res.json(authorizations.map((a) => ({ id: a.id, scopes: a.scopes, application: toPublicApplication(a.application) })));
+const serialize = (authorization: ApplicationAuthorization) => ({
+    id: authorization.id,
+    scopes: authorization.scopes,
+    application: toPublicApplication(authorization.application),
 });
 
-router.delete("/:token_id", route({}), async (req: Request, res: Response) => {
+router.get(
+    "/",
+    route({
+        query: { application_ids: { type: "array", description: "The applications to return authorizations for (max 50)" } },
+        responses: { 200: {} },
+    }),
+    async (req: Request, res: Response) => {
+        const ids = [req.query.application_ids ?? []]
+            .flat()
+            .flatMap((id) => String(id).split(","))
+            .filter((id) => /^\d{1,20}$/.test(id));
+        const authorizations = await ApplicationAuthorization.find({
+            where: { user_id: req.user_id, ...(ids.length && { application_id: In(ids.slice(0, 50)) }) },
+            relations: { application: { bot: true } },
+            order: { created_at: "DESC" },
+        });
+        res.json(authorizations.map(serialize));
+    },
+);
+
+router.get("/:token_id", route({ responses: { 200: {}, 404: { body: "APIErrorResponse" } } }), async (req: Request, res: Response) => {
+    const authorization = await ApplicationAuthorization.findOne({ where: { id: req.params.token_id as string, user_id: req.user_id }, relations: { application: { bot: true } } });
+    if (!authorization) throw new ApiError("Unknown token", 10012, 404);
+    res.json(serialize(authorization));
+});
+
+router.delete("/:token_id", route({ responses: { 204: {}, 404: { body: "APIErrorResponse" } } }), async (req: Request, res: Response) => {
     const authorization = await ApplicationAuthorization.findOne({ where: { id: req.params.token_id as string, user_id: req.user_id } });
     if (!authorization) throw new ApiError("Unknown token", 10012, 404);
+    await OAuth2Token.delete({ user_id: req.user_id, application_id: authorization.application_id });
     await ApplicationAuthorization.delete({ id: authorization.id });
+    await emitEvent({
+        event: "OAUTH2_TOKEN_DELETE",
+        user_id: req.user_id,
+        data: { id: authorization.id, application_id: authorization.application_id },
+    } satisfies OAuth2TokenDeleteEvent);
     res.sendStatus(204);
 });
 

@@ -19,7 +19,7 @@
 import { NextFunction, Request, Response } from "express";
 import { Session, User } from "@spacebar/database";
 import { Random } from "@spacebar/extensions";
-import { checkToken, getClientPlatform, Rights, UserTokenData } from "@spacebar/util";
+import { checkOAuth2Token, checkToken, getClientPlatform, isOAuth2AccessToken, Rights, UserTokenData } from "@spacebar/util";
 import { CORS } from "./CORS";
 
 declare global {
@@ -35,6 +35,7 @@ declare global {
             rights: Rights;
             fingerprint?: string;
             isAuthenticated: boolean;
+            oauth2?: UserTokenData["oauth2"];
         }
     }
 }
@@ -60,22 +61,23 @@ export async function Authentication(req: Request, res: Response, next: NextFunc
 }
 
 export async function handleAuthentication(req: Request) {
-    if (!req.headers.authorization) {
+    if (!req.headers.authorization || /^Basic\s/i.test(req.headers.authorization)) {
         req.isAuthenticated = false;
         return;
     }
 
     try {
-        const { decoded, user, session } = (req.tokenData = await checkToken(req.headers.authorization, {
-            ipAddress: req.ip,
-            fingerprint: req.fingerprint,
-        }));
+        const options = { ipAddress: req.ip, fingerprint: req.fingerprint };
+        const { decoded, user, session, oauth2 } = (req.tokenData = isOAuth2AccessToken(req.headers.authorization)
+            ? await checkOAuth2Token(req.headers.authorization, options)
+            : await checkToken(req.headers.authorization, options));
 
         req.token = decoded;
         req.user_id = decoded.id;
         req.user_bot = user.bot;
         req.user = user;
         req.session = session;
+        req.oauth2 = oauth2;
         req.rights = new Rights(Number(user.rights));
         req.isAuthenticated = true;
 

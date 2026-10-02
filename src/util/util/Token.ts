@@ -22,7 +22,8 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import jwt from "jsonwebtoken";
 import { HTTPError } from "lambert-server/HTTPError";
-import { InstanceBan, Session, User } from "@spacebar/database";
+import { MoreThan } from "typeorm";
+import { InstanceBan, OAuth2Token, Session, User } from "@spacebar/database";
 import { Random, sleep, Stopwatch, TimeSpan } from "@spacebar/extensions";
 import { Config } from "./Config";
 import { OrmUtils } from "@spacebar/util";
@@ -49,6 +50,7 @@ export type UserTokenData = {
         // OAuth scopes
         scopes?: string[];
     };
+    oauth2?: { token_id: string; application_id: string; scopes: string[]; expires_at: Date };
 };
 
 function logAuth(text: string) {
@@ -80,7 +82,8 @@ export const checkToken = (
         let legacyVersion: number | undefined = undefined;
 
         const validateUser: jwt.VerifyCallback = async (err, out) => {
-            const decoded = out as UserTokenData["decoded"];
+            const decoded = out as UserTokenData["decoded"] & { typ?: unknown };
+            if (!err && (typeof decoded?.id !== "string" || decoded.typ !== undefined)) err = new jwt.JsonWebTokenError("not a user token");
             if (err || !decoded) {
                 logAuth("validateUser rejected: " + err);
                 return rejectAndLog(reject, 401, `Invalid Token: ${err}`);
@@ -183,6 +186,29 @@ export const checkToken = (
             return validateUser(err, out);
         });
     });
+
+export const hashOAuth2Token = (token: string) => crypto.createHash("sha256").update(token).digest("base64url");
+
+export const isOAuth2AccessToken = (authorization: string) => /^Bearer [A-Za-z0-9_-]{20,}$/.test(authorization);
+
+export async function checkOAuth2Token(authorization: string, opts?: { ipAddress?: string; fingerprint?: string }): Promise<UserTokenData> {
+    const token = await OAuth2Token.findOne({
+        where: { access_token_hash: hashOAuth2Token(authorization.slice("Bearer ".length)), expires_at: MoreThan(new Date()) },
+        relations: { user: true },
+    });
+    const user = token?.user;
+    if (!token || !user || user.disabled || user.deleted) throw new HTTPError("Invalid Token", 401);
+    if (await InstanceBan.hasInstanceBans({ userId: user.id, ipAddress: opts?.ipAddress, fingerprint: opts?.fingerprint })) {
+        const banReasons = await InstanceBan.findInstanceBans({ userId: user.id, ipAddress: opts?.ipAddress, fingerprint: opts?.fingerprint, propagateBan: true });
+        if (banReasons.length > 0) throw new HTTPError("Invalid Token", 418);
+    }
+    return {
+        user,
+        tokenVersion: CurrentTokenFormatVersion,
+        decoded: { id: user.id, iat: Math.floor(token.created_at.getTime() / 1000), scopes: token.scopes },
+        oauth2: { token_id: token.id, application_id: token.application_id, scopes: token.scopes, expires_at: token.expires_at },
+    };
+}
 
 const compactTokenSecret = () =>
     crypto

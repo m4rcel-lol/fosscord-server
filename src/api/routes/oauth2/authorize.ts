@@ -19,9 +19,21 @@
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { Application, ApplicationAuthorization, AuditLog, Member, Role, User } from "@spacebar/database";
-import { DiscordApiErrors, FieldErrors, Permissions, Snowflake, emitEvent, getPermission, GuildIntegrationUpdateEvent, GuildRoleCreateEvent } from "@spacebar/util";
+import {
+    DiscordApiErrors,
+    FieldErrors,
+    Permissions,
+    Snowflake,
+    emitEvent,
+    getPermission,
+    GuildIntegrationUpdateEvent,
+    GuildRoleCreateEvent,
+    OAuth2TokenCreateEvent,
+} from "@spacebar/util";
 import { emitCommandIndexUpdate } from "@spacebar/api/util/handlers/ApplicationCommands";
-import { signTicket } from "@spacebar/api/util";
+import { issueOAuth2Token, signTicket } from "@spacebar/api/util";
+import { toPublicApplication } from "@spacebar/api/util/handlers/Application";
+import { randomBytes } from "node:crypto";
 import { ApplicationAuthorizeSchema, AuditLogEvents } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
@@ -36,6 +48,16 @@ const requestedScopes = (scope: unknown, fallback: string[] = []) => {
 const integrationTypeOf = (req: Request, body?: ApplicationAuthorizeSchema) => {
     if (body?.integration_type !== undefined && body.integration_type !== null) return Number(body.integration_type);
     return req.query.integration_type === undefined ? 0 : Number(req.query.integration_type);
+};
+
+const pkceOf = (req: Request) => {
+    const { code_challenge, code_challenge_method } = req.query;
+    if (code_challenge === undefined && code_challenge_method === undefined) return undefined;
+    if (typeof code_challenge !== "string" || !/^[A-Za-z0-9_-]{43,128}$/.test(code_challenge))
+        throw FieldErrors({ code_challenge: { code: "INVALID_OAUTH2_CODE_CHALLENGE", message: "Invalid code_challenge" } });
+    if (code_challenge_method !== "S256")
+        throw FieldErrors({ code_challenge_method: { code: "INVALID_OAUTH2_CODE_CHALLENGE_METHOD", message: "code_challenge_method must be S256" } });
+    return code_challenge;
 };
 
 const invalidRedirect = () => FieldErrors({ redirect_uri: { code: "INVALID_OAUTH2_REDIRECT_URI", message: "Invalid OAuth2 redirect_uri" } });
@@ -93,7 +115,8 @@ router.get(
         const integrationType = integrationTypeOf(req);
         const scopes = requestedScopes(req.query.scope, integrationType === 1 ? ["applications.commands"] : ["bot"]);
         if (!app.bot && scopes.includes("bot") && integrationType !== 1) throw DiscordApiErrors.OAUTH2_APPLICATION_BOT_ABSENT;
-        if (req.query.response_type === "code") redirectFor(app, req.query.redirect_uri);
+        if (req.query.response_type === "code" || req.query.response_type === "token") redirectFor(app, req.query.redirect_uri);
+        pkceOf(req);
         const existing = await ApplicationAuthorization.findOne({ where: { user_id: req.user_id, application_id: app.id } });
 
         const bot = app.bot;
@@ -233,34 +256,60 @@ router.post(
         if (!app) throw DiscordApiErrors.UNKNOWN_APPLICATION;
         const integrationType = integrationTypeOf(req, body);
         const scopes = requestedScopes(req.query.scope, integrationType === 1 ? ["applications.commands"] : ["bot"]);
+        const code_challenge = pkceOf(req);
         const authorizeUser = async (type: number) => {
             const existing = await ApplicationAuthorization.findOne({ where: { user_id: req.user_id, application_id: app.id } });
-            await ApplicationAuthorization.save({
+            const authorization = await ApplicationAuthorization.save({
                 ...(existing ?? { id: Snowflake.generate(), created_at: new Date() }),
                 user_id: req.user_id,
                 application_id: app.id,
                 integration_type: type === 1 ? 1 : (existing?.integration_type ?? 0),
                 scopes: [...new Set([...(existing?.scopes ?? []), ...scopes.filter((scope) => scope !== "bot")])],
             } as ApplicationAuthorization);
+            await emitEvent({
+                event: "OAUTH2_TOKEN_CREATE",
+                user_id: req.user_id,
+                data: { id: authorization.id, scopes: authorization.scopes, application: toPublicApplication(app) },
+            } satisfies OAuth2TokenCreateEvent);
+            return authorization;
         };
+        const codeFor = (guild_id?: string) =>
+            signTicket(
+                {
+                    typ: "oauth2_code",
+                    uid: req.user_id,
+                    app: app.id,
+                    scopes,
+                    redirect_uri: typeof req.query.redirect_uri === "string" ? req.query.redirect_uri : undefined,
+                    cc: code_challenge,
+                    guild_id,
+                    n: randomBytes(8).toString("hex"),
+                },
+                600,
+            );
         if (integrationType === 1) {
             await authorizeUser(1);
             return res.json({ location: "/oauth2/authorized" });
         }
         if (!scopes.includes("bot") && !body.guild_id) {
             const response_type = req.query.response_type ?? "code";
-            if (response_type !== "code") throw FieldErrors({ response_type: { code: "INVALID_RESPONSE_TYPE", message: "Invalid response_type" } });
+            if (response_type !== "code" && response_type !== "token") throw FieldErrors({ response_type: { code: "INVALID_RESPONSE_TYPE", message: "Invalid response_type" } });
             const redirect = redirectFor(app, req.query.redirect_uri);
-            await authorizeUser(0);
+            const authorization = await authorizeUser(0);
+            if (response_type === "token") {
+                const token = await issueOAuth2Token({ user_id: req.user_id, application_id: app.id, authorization_id: authorization.id, scopes, refresh: false });
+                const fragment = new URLSearchParams({
+                    token_type: token.token_type,
+                    access_token: token.access_token,
+                    expires_in: String(token.expires_in),
+                    scope: token.scope,
+                    ...(typeof req.query.state === "string" && { state: req.query.state }),
+                });
+                return res.json({ location: `${redirect ?? "/oauth2/authorized"}#${fragment}` });
+            }
             if (!redirect) return res.json({ location: "/oauth2/authorized" });
             const location = new URL(redirect);
-            location.searchParams.set(
-                "code",
-                signTicket(
-                    { typ: "oauth2_code", uid: req.user_id, app: app.id, scopes, redirect_uri: typeof req.query.redirect_uri === "string" ? req.query.redirect_uri : undefined },
-                    600,
-                ),
-            );
+            location.searchParams.set("code", codeFor());
             if (typeof req.query.state === "string") location.searchParams.set("state", req.query.state);
             return res.json({ location: location.toString() });
         }
@@ -303,9 +352,15 @@ router.post(
         await emitEvent({ event: "GUILD_INTEGRATIONS_UPDATE", guild_id: body.guild_id, data: { guild_id: body.guild_id } } satisfies GuildIntegrationUpdateEvent);
         await emitCommandIndexUpdate(app.id, body.guild_id);
 
-        return res.json({
-            location: "/oauth2/authorized", // redirect URL
-        });
+        const redirect = req.query.response_type === "code" ? redirectFor(app, req.query.redirect_uri) : null;
+        if (!redirect) return res.json({ location: "/oauth2/authorized" });
+        await authorizeUser(0);
+        const location = new URL(redirect);
+        location.searchParams.set("code", codeFor(body.guild_id));
+        location.searchParams.set("guild_id", body.guild_id);
+        location.searchParams.set("permissions", permissions.toString());
+        if (typeof req.query.state === "string") location.searchParams.set("state", req.query.state);
+        return res.json({ location: location.toString() });
     },
 );
 

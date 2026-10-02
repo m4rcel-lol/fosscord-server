@@ -466,6 +466,16 @@ export interface UserDeleteEvent extends Event {
     };
 }
 
+export interface OAuth2TokenCreateEvent extends Event {
+    event: "OAUTH2_TOKEN_CREATE";
+    data: { id: string; scopes: string[]; application: object };
+}
+
+export interface OAuth2TokenDeleteEvent extends Event {
+    event: "OAUTH2_TOKEN_DELETE";
+    data: { id: string; application_id: string };
+}
+
 export interface UserConnectionsUpdateEvent extends Event {
     event: "USER_CONNECTIONS_UPDATE";
 }
@@ -732,6 +742,8 @@ export interface CallDeleteEvent extends Event {
 }
 
 export type EventData =
+    | OAuth2TokenCreateEvent
+    | OAuth2TokenDeleteEvent
     | CallCreateEvent
     | CallUpdateEvent
     | CallDeleteEvent
@@ -858,6 +870,8 @@ export enum EVENTEnum {
 
 export type EVENT =
     | "READY"
+    | "OAUTH2_TOKEN_CREATE"
+    | "OAUTH2_TOKEN_DELETE"
     | "CHANNEL_CREATE"
     | "CHANNEL_UPDATE"
     | "CHANNEL_DELETE"
