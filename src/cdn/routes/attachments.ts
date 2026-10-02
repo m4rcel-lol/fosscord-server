@@ -113,27 +113,27 @@ router.get("/:channel_id/:attachment_id/:filename", setCacheControl, async (req:
 
         if (att) {
             const attPath = `attachments/${channel_id}/${att.message_id}/${filename}`;
-            if (!(await storage.exists(attPath))) throw new HTTPError("File not found");
-            await storage.move(attPath, path);
+            if (await storage.exists(attPath)) await storage.move(attPath, path).catch(() => undefined);
             file = await storage.get(path);
         }
     }
-    if (!file) throw new HTTPError("File not found");
+    if (!file) throw new HTTPError("File not found", 404);
     const type = await fileTypeFromBuffer(file);
-    let content_type = type?.mime || "application/octet-stream";
 
-    if (SANITIZED_CONTENT_TYPE.includes(content_type)) {
-        content_type = "application/octet-stream";
-    }
-
-    if (req.query.format && content_type.startsWith("video/")) {
+    if (req.query.format && type?.mime.startsWith("video/")) {
         const frame = await extractVideoFrame(file);
         if (!frame) return res.status(415).send("Unable to render a preview frame");
         res.set("Content-Type", "image/jpeg");
         return res.send(frame);
     }
 
-    res.set("Content-Type", content_type);
+    if (type) res.set("Content-Type", SANITIZED_CONTENT_TYPE.includes(type.mime) ? "application/octet-stream" : type.mime);
+    else {
+        res.type(filename);
+        const guessed = String(res.get("Content-Type"));
+        if (SANITIZED_CONTENT_TYPE.some((x) => guessed.startsWith(x)) || /^(text\/(javascript|xml)|image\/svg)/.test(guessed)) res.set("Content-Type", "text/plain; charset=utf-8");
+        else if (!guessed.startsWith("text/") && !guessed.startsWith("application/json")) res.set("Content-Type", "application/octet-stream");
+    }
 
     return res.send(file);
 });
