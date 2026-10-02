@@ -386,6 +386,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
         { result: memberGuildVoiceStates, elapsed: queryGuildVoiceStatesTime },
         { result: threadMembers, elapsed: threadMemberTime },
         { result: allThreadsRaw, elapsed: queryThreadsTime },
+        stageInstances,
     ] = await Promise.all([
         timePromise(() =>
             Guild.find({
@@ -444,6 +445,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
                 },
             }),
         ),
+        memberGuildIds.length ? StageInstance.find({ where: { guild_id: In(memberGuildIds) } }) : [],
     ]);
 
     const [{ elapsed: sessionSaveTime }, { result: friendPresenceMap, elapsed: friendPresenceSessionsQueryTime }, { guildPresenceMembers, guildPresenceMap }] = await Promise.all([
@@ -458,7 +460,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     );
 
     const guildPresenceMembersByGuild = arrayGroupBy(guildPresenceMembers, (m) => m.guild_id);
-    const stageInstancesByGuild = arrayGroupBy(memberGuildIds.length ? await StageInstance.find({ where: { guild_id: In(memberGuildIds) } }) : [], (i) => i.guild_id);
+    const stageInstancesByGuild = arrayGroupBy(stageInstances, (i) => i.guild_id);
     const threadMemberMap = new Map(threadMembers.map((member) => [member.id, member] as const));
     const allThreads = allThreadsRaw.filter(({ id, thread_metadata }) => thread_metadata?.archived === false && threadMemberMap.has(id));
 
