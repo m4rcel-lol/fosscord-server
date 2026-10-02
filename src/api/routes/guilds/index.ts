@@ -59,13 +59,6 @@ router.post(
             source_guild_id: null,
         });
 
-        const { autoJoin } = Config.get().guild;
-        if (autoJoin.enabled && !autoJoin.guilds?.length) {
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            // @ts-ignore
-            await Config.set({ guild: { autoJoin: { guilds: [guild.id] } } });
-        }
-
         await Member.addToGuild(req.user_id, guild.id);
 
         res.status(201).json(guild);
