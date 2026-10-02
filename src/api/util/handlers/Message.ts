@@ -23,6 +23,7 @@ import { fillMessageUrlEmbeds } from "../utility/EmbedHandlers";
 import { getDatabase, Application, Attachment, Channel, CloudAttachment, Guild, Member, Message, ReadState, Role, Session, Sticker, User, Webhook } from "@spacebar/database";
 import { mathLogBase, arrayDistributeSequentially, Stopwatch, Random } from "@spacebar/extensions";
 import {
+    ApiError,
     Config,
     DiscordApiErrors,
     emitEvent,
@@ -309,7 +310,7 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
             permission = await getPermission(opts.author_id, channel.guild_id, channel);
             //FIXME MANAGE_MESSAGES and MANAGE_CHANNELS will need to be removed once they're gone as checks
             if (!permission.has("MANAGE_MESSAGES") && !permission.has("MANAGE_CHANNELS") && !permission.has("BYPASS_SLOWMODE")) {
-                throw DiscordApiErrors.SLOWMODE_RATE_LIMIT;
+                throw Object.assign(new ApiError("You are being rate limited.", 20016, 429), { retry_after: (limit * 1000 - (Date.now() - +lastMsgTime)) / 1000 });
             }
         }
     }
