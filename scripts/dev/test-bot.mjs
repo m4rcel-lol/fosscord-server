@@ -30,6 +30,7 @@ const commands = [
     { name: "selects", description: "Sends user, role, channel and mentionable select menus" },
     { name: "upload", description: "Echoes an uploaded file", options: [{ type: 11, name: "file", description: "Any file", required: true }] },
     { name: "image", description: "Replies with an uploaded image and an embed" },
+    { name: "gallery", description: "Sends a Components V2 message with media" },
     { name: "Wave", type: 2 },
     { name: "Quote", type: 3 },
 ];
@@ -169,6 +170,29 @@ const handlers = {
         respondWithFile(
             i,
             { type: 4, data: { content: "here is a picture", embeds: [{ title: "Embedded attachment", image: { url: "attachment://square.png" } }], attachments: [{ id: 0, filename: "square.png" }] } },
+            "square.png",
+            png,
+        ),
+    gallery: (i) =>
+        respondWithFile(
+            i,
+            {
+                type: 4,
+                data: {
+                    flags: 1 << 15,
+                    attachments: [{ id: 0, filename: "square.png" }],
+                    components: [
+                        {
+                            type: 17,
+                            components: [
+                                { type: 9, components: [{ type: 10, content: "**Section with thumbnail**\nThumbnails sit on the right." }], accessory: { type: 11, media: { url: "attachment://square.png" } } },
+                                { type: 12, items: [{ media: { url: "attachment://square.png" }, description: "a square" }] },
+                                { type: 1, components: [{ type: 2, style: 2, label: "Secondary", custom_id: "v2secondary" }, { type: 2, style: 5, label: "Docs", url: "https://docs.discord.food" }] },
+                            ],
+                        },
+                    ],
+                },
+            },
             "square.png",
             png,
         ),

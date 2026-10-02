@@ -18,7 +18,7 @@
 
 import { HTTPError } from "lambert-server/HTTPError";
 import { In } from "typeorm";
-import { Channel, Member, Message, Role, User } from "@spacebar/database";
+import { Attachment, Channel, Member, Message, Role, User } from "@spacebar/database";
 import {
     ApplicationCommandOptionType,
     ApplicationCommandType,
@@ -61,6 +61,33 @@ const messageRelations = {
     sticker_items: true,
     attachments: true,
 } as const;
+
+function resolveComponentMedia(components: unknown, attachments: Attachment[]) {
+    const visit = (node: unknown) => {
+        if (!node || typeof node !== "object") return;
+        if (Array.isArray(node)) return node.forEach(visit);
+        const record = node as Record<string, unknown>;
+        for (const key of ["media", "file"]) {
+            const media = record[key] as { url?: string } | undefined;
+            if (!media?.url?.startsWith("attachment://")) continue;
+            const attachment = attachments.find((a) => a.filename === media.url!.slice("attachment://".length));
+            if (!attachment) continue;
+            const json = attachment.toJSON();
+            Object.assign(media, {
+                id: attachment.id,
+                url: json.url,
+                proxy_url: json.proxy_url,
+                width: attachment.width ?? undefined,
+                height: attachment.height ?? undefined,
+                content_type: attachment.content_type ?? undefined,
+                attachment_id: attachment.id,
+            });
+            if (key === "file") Object.assign(record, { name: attachment.filename, size: attachment.size });
+        }
+        Object.values(record).forEach(visit);
+    };
+    visit(components);
+}
 
 export function interactionTarget(interaction: Pick<PendingInteraction, "sessionId" | "userId">) {
     return interaction.sessionId ? { session_id: interaction.sessionId } : { user_id: interaction.userId };
@@ -242,6 +269,7 @@ export async function createInteractionMessage(interaction: PendingInteraction, 
         )) as never,
     });
     message.type = type;
+    resolveComponentMedia(message.components, message.attachments ?? []);
     if (referenced?.author_id && !message.content?.match(new RegExp(`<@!?${referenced.author_id}>`)))
         message.mentions = message.mentions.filter((u) => u.id !== referenced.author_id);
     if (!referenced) {
@@ -264,9 +292,9 @@ export async function editInteractionMessage(interaction: PendingInteraction, me
     if (data.embeds !== undefined) message.embeds = data.embeds ?? [];
     if (data.components !== undefined) {
         const flags = data.flags ?? message.flags;
-        const handle = data.components ? handleComps(data.components, flags) : undefined;
-        await handle?.(message.id, message.author as User, await Channel.findOneOrFail({ where: { id: message.channel_id } }));
+        if (data.components) handleComps(data.components, flags);
         message.components = data.components ?? [];
+        resolveComponentMedia(message.components, message.attachments ?? []);
     }
     if (data.poll !== undefined) message.poll = data.poll as never;
     if (data.flags !== undefined) message.flags = (message.flags & (EPHEMERAL | LOADING)) | (data.flags & SETTABLE_FLAGS & ~EPHEMERAL);
