@@ -67,9 +67,13 @@ const step = (from: Date, rule: RecurrenceRule) => {
             return new Date(from.getTime() + 7 * interval * DAY);
         case 3: {
             const days = rule.by_weekday?.length ? new Set(rule.by_weekday) : null;
-            let next = new Date(from.getTime() + interval * DAY);
-            while (days && !days.has(weekday(next))) next = new Date(next.getTime() + DAY);
-            return next;
+            const first = new Date(from.getTime() + interval * DAY);
+            if (!days) return first;
+            for (let offset = 0; offset < 7; offset++) {
+                const next = new Date(first.getTime() + offset * DAY);
+                if (days.has(weekday(next))) return next;
+            }
+            return null;
         }
         default:
             return null;
