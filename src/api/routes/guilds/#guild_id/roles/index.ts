@@ -20,7 +20,7 @@ import { Request, Response, Router } from "express";
 import { Not } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
 import { Member, Role } from "@spacebar/database";
-import { Config, DiscordApiErrors, emitEvent, GuildRoleCreateEvent, GuildRoleUpdateEvent, Snowflake } from "@spacebar/util";
+import { Config, DiscordApiErrors, emitEvent, GuildRoleCreateEvent, GuildRoleUpdateEvent, handleFile, Snowflake } from "@spacebar/util";
 import { RoleModifySchema, RolePositionUpdateSchema } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
@@ -66,20 +66,21 @@ router.post(
 
         const everyoneRole = await Role.findOne({ where: { id: guild_id } });
 
+        const role_id = Snowflake.generate();
         const role = Role.create({
             // values before ...body are default and can be overridden
             position: 1,
             hoist: false,
-            color: 0,
             mentionable: false,
             ...body,
             guild_id: guild_id,
             managed: false,
             permissions: String((req.permission?.bitfield || 0n) & BigInt(body.permissions || everyoneRole?.permissions || 0)),
             tags: undefined,
-            icon: undefined,
-            unicode_emoji: undefined,
-            id: Snowflake.generate(),
+            icon: body.icon ? await handleFile(`/role-icons/${role_id}`, body.icon) : undefined,
+            unicode_emoji: body.unicode_emoji || undefined,
+            id: role_id,
+            color: body.colors?.primary_color || body.color || 0,
             colors: {
                 primary_color: body.colors?.primary_color || body.color || 0,
                 secondary_color: body.colors?.secondary_color || undefined, // gradient
@@ -139,6 +140,8 @@ router.patch(
             where: body.map((x) => ({ id: x.id, guild_id })),
         });
 
+        res.json(await Role.find({ where: { guild_id }, order: { position: "ASC" } }));
+
         await Promise.all(
             roles.map((x) =>
                 emitEvent({
@@ -151,8 +154,6 @@ router.patch(
                 } satisfies GuildRoleUpdateEvent),
             ),
         );
-
-        res.json(roles);
     },
 );
 

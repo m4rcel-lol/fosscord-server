@@ -5720,10 +5720,16 @@
                 "type": "integer"
             },
             "icon": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "unicode_emoji": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "colors": {
                 "type": "object",

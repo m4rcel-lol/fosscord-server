@@ -5347,10 +5347,12 @@
                         "type": "integer"
                     },
                     "icon": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "unicode_emoji": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "colors": {
                         "type": "object",
