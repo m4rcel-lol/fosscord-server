@@ -27,6 +27,7 @@ const router: Router = Router({ mergeParams: true });
 router.get(
     "/",
     route({
+        oauth2: ["guilds"],
         responses: {
             200: {
                 body: "APIGuildArray",

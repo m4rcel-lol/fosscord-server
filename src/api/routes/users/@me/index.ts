@@ -19,7 +19,7 @@
 import bcrypt from "bcrypt";
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { EmailChange, Pomelo, authenticatorTypes, revokeSessions } from "@spacebar/api/util";
+import { EmailChange, Pomelo, authenticatorTypes, oauth2User, revokeSessions } from "@spacebar/api/util";
 import { AvatarDecoration, User } from "@spacebar/database";
 import {
     broadcastUserUpdate,
@@ -41,6 +41,7 @@ const router: Router = Router({ mergeParams: true });
 router.get(
     "/",
     route({
+        oauth2: ["identify"],
         responses: {
             200: {
                 body: "PrivateUser",
@@ -48,6 +49,14 @@ router.get(
         },
     }),
     async (req: Request, res: Response) => {
+        if (req.oauth2) {
+            const user = await User.findOneOrFail({
+                where: { id: req.user_id },
+                select: Object.fromEntries(PrivateUserProjection.map((i) => [i, true])),
+                relations: { avatar_decoration: true, settings: true },
+            });
+            return res.json(oauth2User(user, req.oauth2.scopes));
+        }
         const user = await User.findOneOrFail({
             select: Object.fromEntries(PrivateUserProjection.map((i) => [i, true])),
             where: { id: req.user_id },

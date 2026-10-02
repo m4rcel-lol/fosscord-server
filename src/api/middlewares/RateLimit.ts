@@ -170,7 +170,7 @@ export async function initRateLimits(app: Router) {
     );
     app.use(["/applications", "/teams", "/oauth2/applications"], rateLimit({ onlyWrites: true, ...routes.application }));
     app.use("/interactions", rateLimit({ onlyWrites: true, ...routes.interaction }));
-    app.use(["/oauth2/authorize", "/oauth2/tokens"], rateLimit({ onlyWrites: true, ...routes.oauth2 }));
+    app.use(["/oauth2/authorize", "/oauth2/token", "/oauth2/tokens"], rateLimit({ onlyWrites: true, ...routes.oauth2 }));
     app.use(["/reporting", "/safety-hub", "/attachments/report-false-positive", "/attachments/sender-report-false-positive"], rateLimit({ onlyWrites: true, ...routes.report }));
     app.use("/read-states", rateLimit({ onlyWrites: true, ...routes.readState }));
     app.use("/stage-instances", rateLimit({ onlyWrites: true, ...routes.channel }));

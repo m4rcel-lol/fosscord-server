@@ -35,6 +35,7 @@ export * from "./utility/pomelo";
 export * from "./utility/StickerPacks";
 export * from "./utility/Soundboard";
 export * from "./utility/mfa";
+export * from "./utility/oauth2";
 export * from "./utility/statusPage";
 export * from "./utility/phoneVerification";
 export * from "./utility/harvest";

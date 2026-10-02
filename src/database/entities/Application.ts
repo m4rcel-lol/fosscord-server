@@ -57,6 +57,9 @@ export class Application extends BaseClass {
     @Column({ type: "text", nullable: true, select: false })
     interactions_private_key?: string;
 
+    @Column({ type: "varchar", nullable: true, select: false })
+    client_secret_hash?: string | null;
+
     @JoinColumn({ name: "owner_id", foreignKeyConstraintName: "FK_application_owner_id" })
     @ManyToOne(() => User, { onDelete: "CASCADE" })
     owner: User;

@@ -208,7 +208,7 @@ async function assertCanReadPermissions(req: Request) {
 
 export function commandPermissionsListRouter() {
     const router = Router({ mergeParams: true });
-    router.get("/", route({}), async (req: Request, res: Response) => {
+    router.get("/", route({ oauth2: ["applications.commands.permissions.update"] }), async (req: Request, res: Response) => {
         await assertCanReadPermissions(req);
         const rows = await ApplicationCommandPermission.find({ where: { guild_id: req.params.guild_id as string, application_id: req.params.application_id as string } });
         res.json(rows.map((r) => r.toJSON()));
@@ -235,7 +235,7 @@ export function commandPermissionsRouter() {
         return { applicationId, guildId, commandId };
     };
 
-    router.get("/", route({}), async (req: Request, res: Response) => {
+    router.get("/", route({ oauth2: ["applications.commands.permissions.update"] }), async (req: Request, res: Response) => {
         await assertCanReadPermissions(req);
         const { guildId, commandId } = await target(req);
         const row = await ApplicationCommandPermission.findOne({ where: { id: commandId, guild_id: guildId } });
@@ -243,20 +243,24 @@ export function commandPermissionsRouter() {
         res.json(row.toJSON());
     });
 
-    router.put("/", route({ requestBody: "ApplicationCommandPermissionsUpdateSchema" }), async (req: Request, res: Response) => {
-        const { applicationId, guildId, commandId } = await target(req);
-        if (!(await Member.exists({ where: { guild_id: guildId, id: applicationId } }))) throw DiscordApiErrors.UNKNOWN_APPLICATION;
-        const permission = await getPermission(req.user_id, guildId);
-        permission.hasThrow("MANAGE_GUILD");
-        permission.hasThrow("MANAGE_ROLES");
-        const body = req.body as { permissions: ApplicationCommandPermissionOverwrite[] };
-        if (body.permissions.length > 100) throw FieldErrors({ permissions: { code: "BASE_TYPE_MAX_LENGTH", message: "Must be 100 or fewer in length." } });
-        const row = ApplicationCommandPermission.create({ id: commandId, guild_id: guildId, application_id: applicationId, permissions: body.permissions });
-        if (body.permissions.length) await row.save();
-        else await ApplicationCommandPermission.delete({ id: commandId, guild_id: guildId });
-        await emitEvent({ event: "APPLICATION_COMMAND_PERMISSIONS_UPDATE", guild_id: guildId, data: row.toJSON() });
-        res.json(row.toJSON());
-    });
+    router.put(
+        "/",
+        route({ requestBody: "ApplicationCommandPermissionsUpdateSchema", oauth2: ["applications.commands.permissions.update"] }),
+        async (req: Request, res: Response) => {
+            const { applicationId, guildId, commandId } = await target(req);
+            if (!(await Member.exists({ where: { guild_id: guildId, id: applicationId } }))) throw DiscordApiErrors.UNKNOWN_APPLICATION;
+            const permission = await getPermission(req.user_id, guildId);
+            permission.hasThrow("MANAGE_GUILD");
+            permission.hasThrow("MANAGE_ROLES");
+            const body = req.body as { permissions: ApplicationCommandPermissionOverwrite[] };
+            if (body.permissions.length > 100) throw FieldErrors({ permissions: { code: "BASE_TYPE_MAX_LENGTH", message: "Must be 100 or fewer in length." } });
+            const row = ApplicationCommandPermission.create({ id: commandId, guild_id: guildId, application_id: applicationId, permissions: body.permissions });
+            if (body.permissions.length) await row.save();
+            else await ApplicationCommandPermission.delete({ id: commandId, guild_id: guildId });
+            await emitEvent({ event: "APPLICATION_COMMAND_PERMISSIONS_UPDATE", guild_id: guildId, data: row.toJSON() });
+            res.json(row.toJSON());
+        },
+    );
 
     return router;
 }
@@ -264,20 +268,27 @@ export function commandPermissionsRouter() {
 export function commandListRouter() {
     const router = Router({ mergeParams: true });
 
-    router.get("/", route({ query: { with_localizations: { type: "boolean", required: false } } }), async (req: Request, res: Response) => {
-        const application = await assertCanManageCommands(req);
-        const commands = await ApplicationCommand.find({ where: { application_id: application.id, guild_id: (req.params.guild_id as string) ?? IsNull() }, order: { id: "ASC" } });
-        res.json(commands.map(serializeCommand));
-    });
+    router.get(
+        "/",
+        route({ query: { with_localizations: { type: "boolean", required: false } }, oauth2: ["applications.commands", "applications.commands.update"] }),
+        async (req: Request, res: Response) => {
+            const application = await assertCanManageCommands(req);
+            const commands = await ApplicationCommand.find({
+                where: { application_id: application.id, guild_id: (req.params.guild_id as string) ?? IsNull() },
+                order: { id: "ASC" },
+            });
+            res.json(commands.map(serializeCommand));
+        },
+    );
 
-    router.post("/", route({ requestBody: "ApplicationCommandCreateSchema" }), async (req: Request, res: Response) => {
+    router.post("/", route({ requestBody: "ApplicationCommandCreateSchema", oauth2: ["applications.commands.update"] }), async (req: Request, res: Response) => {
         const application = await assertCanManageCommands(req);
         const { command, created } = await upsert(application.id, req.params.guild_id as string | undefined, req.body as ApplicationCommandCreateSchema);
         await emitCommandIndexUpdate(application.id, req.params.guild_id as string | undefined);
         res.status(created ? 201 : 200).json(serializeCommand(command));
     });
 
-    router.put("/", route({ requestBody: "BulkApplicationCommandCreateSchema" }), async (req: Request, res: Response) => {
+    router.put("/", route({ requestBody: "BulkApplicationCommandCreateSchema", oauth2: ["applications.commands.update"] }), async (req: Request, res: Response) => {
         const application = await assertCanManageCommands(req);
         const guildId = req.params.guild_id as string | undefined;
         const body = req.body as ApplicationCommandCreateSchema[];
@@ -308,12 +319,12 @@ export function commandRouter() {
         return { application, command };
     };
 
-    router.get("/", route({}), async (req: Request, res: Response) => {
+    router.get("/", route({ oauth2: ["applications.commands", "applications.commands.update"] }), async (req: Request, res: Response) => {
         const { command } = await find(req);
         res.json(serializeCommand(command));
     });
 
-    router.patch("/", route({ requestBody: "ApplicationCommandModifySchema" }), async (req: Request, res: Response) => {
+    router.patch("/", route({ requestBody: "ApplicationCommandModifySchema", oauth2: ["applications.commands.update"] }), async (req: Request, res: Response) => {
         const { application, command } = await find(req);
         const body = req.body as Partial<ApplicationCommandCreateSchema>;
         apply(command, { ...body, name: body.name ?? command.name, type: command.type } as ApplicationCommandCreateSchema, application.id, command.guild_id ?? undefined);
@@ -322,7 +333,7 @@ export function commandRouter() {
         res.json(serializeCommand(command));
     });
 
-    router.delete("/", route({}), async (req: Request, res: Response) => {
+    router.delete("/", route({ oauth2: ["applications.commands.update"] }), async (req: Request, res: Response) => {
         const { application, command } = await find(req);
         await ApplicationCommand.delete({ id: command.id });
         await emitCommandIndexUpdate(application.id, command.guild_id ?? undefined);

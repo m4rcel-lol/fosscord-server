@@ -18,8 +18,8 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { AuditLog, Ban, Emoji, Guild, Member, PublicGuildRelations, Role, Sticker, VoiceChannels, VoiceState } from "@spacebar/database";
-import { IsNull, Not } from "typeorm";
+import { Application, AuditLog, Ban, Emoji, Guild, Member, OAuth2Token, PublicGuildRelations, Role, Sticker, VoiceChannels, VoiceState } from "@spacebar/database";
+import { IsNull, MoreThan, Not } from "typeorm";
 import {
     CollectibleItemType,
     Collectibles,
@@ -32,11 +32,72 @@ import {
     GuildCreateEvent,
     GuildMemberUpdateEvent,
     handleFile,
+    hashOAuth2Token,
     ReadyGuildDTO,
 } from "@spacebar/util";
 import { AuditLogEvents, MemberChangeSchema, PublicMemberProjection, PublicUserProjection } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
+
+const addMemberWithAccessToken = async (req: Request, res: Response, guild_id: string, member_id: string) => {
+    const body = (req.body ?? {}) as { access_token?: unknown; nick?: unknown; roles?: unknown; mute?: unknown; deaf?: unknown };
+    if (!req.user_bot) throw DiscordApiErrors.MISSING_REQUIRED_OAUTH2_SCOPE;
+    if (typeof body.access_token !== "string" || !body.access_token)
+        throw FieldErrors({ access_token: { code: "BASE_TYPE_REQUIRED", message: req.t("common:field.BASE_TYPE_REQUIRED") } });
+    const app = await Application.findOne({ where: { bot: { id: req.user_id } }, select: { id: true } });
+    const token = app
+        ? await OAuth2Token.findOne({ where: { access_token_hash: hashOAuth2Token(body.access_token), application_id: app.id, expires_at: MoreThan(new Date()) } })
+        : null;
+    if (!token || token.user_id !== member_id) throw DiscordApiErrors.INVALID_OAUTH_TOKEN;
+    if (!token.scopes.includes("guilds.join")) throw DiscordApiErrors.MISSING_REQUIRED_OAUTH2_SCOPE;
+
+    const permission = await getPermission(req.user_id, guild_id);
+    permission.hasThrow("CREATE_INSTANT_INVITE");
+    if (await Member.existsBy({ id: member_id, guild_id })) return res.sendStatus(204);
+
+    const nick = typeof body.nick === "string" && body.nick ? body.nick : undefined;
+    const roles = Array.isArray(body.roles) ? [...new Set(body.roles.filter((role): role is string => typeof role === "string" && role !== guild_id))] : [];
+    if (nick) permission.hasThrow("MANAGE_NICKNAMES");
+    if (roles.length) permission.hasThrow("MANAGE_ROLES");
+    if (body.mute === true) permission.hasThrow("MUTE_MEMBERS");
+    if (body.deaf === true) permission.hasThrow("DEAFEN_MEMBERS");
+
+    const guild = await Guild.findOneOrFail({ where: { id: guild_id }, select: { id: true, owner_id: true } });
+    if (roles.length) {
+        const found = await Role.find({ where: roles.map((id) => ({ id, guild_id })), select: { id: true, position: true, managed: true } });
+        if (found.length !== roles.length || found.some((role) => role.managed)) throw DiscordApiErrors.UNKNOWN_ROLE;
+        if (guild.owner_id !== req.user_id) {
+            const botMember = await Member.findOneOrFail({
+                where: { id: req.user_id, guild_id },
+                relations: { roles: true },
+                select: { id: true, roles: { id: true, position: true } },
+            });
+            const highest = Math.max(0, ...botMember.roles.map((role) => role.position));
+            if (found.some((role) => role.position >= highest)) throw DiscordApiErrors.MISSING_PERMISSIONS;
+        }
+    }
+
+    await Member.addToGuild(member_id, guild_id, false, { join_source_type: 1, inviter_id: req.user_id });
+    if (body.mute === true || body.deaf === true) await Member.update({ id: member_id, guild_id }, { mute: body.mute === true, deaf: body.deaf === true });
+    for (const role of roles) await Member.addRole(member_id, guild_id, role);
+    if (nick) await Member.changeNickname(member_id, guild_id, nick);
+
+    const member = await Member.findOneOrFail({
+        where: { id: member_id, guild_id },
+        relations: { roles: true, user: true },
+        select: {
+            index: true,
+            ...Object.fromEntries(PublicMemberProjection.map((x) => [x, true])),
+            user: Object.fromEntries(PublicUserProjection.map((x) => [x, true])),
+            roles: { id: true },
+        },
+    });
+    return res.status(201).json({
+        ...member.toPublicMember(),
+        user: member.user.toPublicUser(),
+        roles: member.roles.map((x) => x.id).filter((id) => id !== guild_id),
+    });
+};
 
 router.get(
     "/",
@@ -265,9 +326,7 @@ router.put(
             rights.hasThrow("JOIN_GUILDS");
             if (req.user_bot && !Config.get().user.botsCanUseInvites) throw DiscordApiErrors.BOT_PROHIBITED_ENDPOINT;
         } else {
-            // TODO: check oauth2 scope
-
-            throw DiscordApiErrors.MISSING_REQUIRED_OAUTH2_SCOPE;
+            return addMemberWithAccessToken(req, res, guild_id, member_id);
         }
 
         const guild = await Guild.findOne({

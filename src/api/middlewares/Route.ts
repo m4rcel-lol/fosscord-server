@@ -92,6 +92,7 @@ export interface RouteOptions {
      * @defaultValue "required"
      */
     authentication?: "never" | "optional" | "required";
+    oauth2?: string[];
 }
 export function stripNull(obj: object) {
     for (const [key, value] of Object.entries(obj)) {
@@ -147,6 +148,12 @@ export function route(opts: RouteOptions) {
     opts.authentication ??= "required";
 
     return async (req: Request, res: Response, next: NextFunction) => {
+        const applicationParam = (req.params as Record<string, string | undefined>).application_id;
+        if (req.oauth2 && applicationParam !== undefined && applicationParam !== req.oauth2.application_id) throw new ApiError("401: Unauthorized", 0, 401);
+        if (req.oauth2 && !(opts.oauth2 && (!opts.oauth2.length || opts.oauth2.some((scope) => req.oauth2!.scopes.includes(scope))))) {
+            if (opts.authentication === "required") throw new ApiError("401: Unauthorized", 0, 401);
+            Object.assign(req, { isAuthenticated: false, user_id: undefined, user: undefined, oauth2: undefined });
+        }
         if (opts.authentication === "required" && !req.isAuthenticated) throw new ApiError("401: Unauthorized", 0, 401);
 
         const malformed = (["channel_id", "message_id"] as const).find((key) => {
