@@ -18,7 +18,6 @@
 
 import { Router, Response, Request } from "express";
 import { fileTypeFromBuffer } from "file-type";
-import { HTTPError } from "lambert-server/HTTPError";
 import { AvatarDecoration } from "@spacebar/database";
 import { storage, setCacheControl } from "../util";
 
@@ -30,8 +29,9 @@ router.get("/:avatar_decoration_data_asset", setCacheControl, async (req: Reques
 
     const file = await storage.get(path);
     if (!file) {
-        if (!(await tryReturnFromCollectiblesShop(req, res, avatar_decoration_data_asset))) return;
-        else throw new HTTPError("not found", 404);
+        if (await tryReturnFromCollectiblesShop(req, res, avatar_decoration_data_asset)) return;
+        const query = new URLSearchParams(req.query as Record<string, string>).toString();
+        return res.redirect(`https://cdn.discordapp.com/avatar-decoration-presets/${encodeURIComponent(avatar_decoration_data_asset)}${query ? `?${query}` : ""}`);
     }
     const type = await fileTypeFromBuffer(file);
 

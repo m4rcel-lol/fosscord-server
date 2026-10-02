@@ -26,6 +26,7 @@ interface UserEntityPleaseRewriteThankYou {
     id: Snowflake;
     username: string;
     discriminator: string;
+    global_name?: string | null;
     avatar?: string;
     accent_color?: number;
     banner?: string;
@@ -63,6 +64,7 @@ interface UserEntityPleaseRewriteThankYou {
     display_name_styles?: DisplayNameStyle;
     collectibles?: Collectibles;
     primary_guild?: PrimaryGuild;
+    profile_effect?: ProfileEffectData | null;
 }
 
 export interface PartialUser {
@@ -86,6 +88,11 @@ export interface AvatarDecorationData {
     asset: string;
     sku_id: Snowflake;
     expires_at: string | null;
+}
+
+export interface ProfileEffectData {
+    id: Snowflake;
+    expires_at: number | null;
 }
 
 export interface Collectibles {
@@ -116,6 +123,7 @@ export interface PrimaryGuild {
 export enum PublicUserEnum {
     username,
     discriminator,
+    global_name,
     id,
     public_flags,
     avatar,
@@ -236,4 +244,5 @@ export class UserProfileModifySchema {
     //@deprecated - what even was this
     emoji_id?: Snowflake | null;
     profile_effect_id?: Snowflake | null;
+    profile_frame_id?: Snowflake | null;
 }

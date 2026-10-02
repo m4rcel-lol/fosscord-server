@@ -20,8 +20,8 @@ import bcrypt from "bcrypt";
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { AvatarDecoration, User } from "@spacebar/database";
-import { ApiError, Config, DiscordApiErrors, emitEvent, FieldErrors, generateToken, handleFile, UserUpdateEvent } from "@spacebar/util";
-import { DisplayNameStyle, PrivateUserProjection, UserModifySchema } from "@spacebar/schemas";
+import { CollectibleItemType, Collectibles, Config, emitEvent, FieldErrors, generateToken, handleFile, UserUpdateEvent } from "@spacebar/util";
+import { PrivateUserProjection, UserFlags, UserModifySchema } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
 
@@ -68,92 +68,74 @@ router.patch(
             select: Object.fromEntries([...PrivateUserProjection, "data"].map((i) => [i, true])), //TODO: cleanup
         });
 
-        // Populated on password change
         let newToken: string | undefined;
 
-        if (body.avatar) body.avatar = await handleFile(`/avatars/${req.user_id}`, body.avatar as string);
-        if (body.banner) body.banner = await handleFile(`/banners/${req.user_id}`, body.banner as string);
-
-        if (body.password) {
-            if (user.data?.hash) {
-                const same_password = await bcrypt.compare(body.password, user.data.hash || "");
-                if (!same_password) {
-                    throw FieldErrors({
-                        password: {
-                            message: req.t("auth:login.INVALID_PASSWORD"),
-                            code: "INVALID_PASSWORD",
-                        },
-                    });
-                }
-            } else {
-                user.data.hash = await bcrypt.hash(body.password, 12);
-            }
-        }
-
-        if (body.email) {
-            if (!body.email && Config.get().register.email.required)
-                throw FieldErrors({
-                    email: {
-                        message: req.t("auth:register.EMAIL_INVALID"),
-                        code: "EMAIL_INVALID",
-                    },
-                });
+        const checkPassword = async () => {
             if (!body.password)
                 throw FieldErrors({
                     password: {
+                        code: "PASSWORD_DOES_NOT_MATCH",
                         message: req.t("auth:login.INVALID_PASSWORD"),
-                        code: "INVALID_PASSWORD",
                     },
                 });
+            if (user.data?.hash && !(await bcrypt.compare(body.password, user.data.hash)))
+                throw FieldErrors({
+                    password: {
+                        code: "PASSWORD_DOES_NOT_MATCH",
+                        message: req.t("auth:login.INVALID_PASSWORD"),
+                    },
+                });
+        };
+
+        if (body.avatar !== undefined) Object.assign(user, { avatar: body.avatar ? await handleFile(`/avatars/${req.user_id}`, body.avatar) : null });
+        if (body.banner !== undefined) Object.assign(user, { banner: body.banner ? await handleFile(`/banners/${req.user_id}`, body.banner) : null });
+
+        if (body.email && body.email !== user.email) {
+            await checkPassword();
+            if (await User.findOne({ where: { email: body.email }, select: { id: true } }))
+                throw FieldErrors({
+                    email: {
+                        code: "EMAIL_ALREADY_REGISTERED",
+                        message: req.t("auth:register.EMAIL_ALREADY_REGISTERED"),
+                    },
+                });
+            user.email = body.email;
         }
 
         if (body.new_password) {
-            if (!body.password && user.email) {
-                throw FieldErrors({
-                    password: {
-                        code: "BASE_TYPE_REQUIRED",
-                        message: req.t("common:field.BASE_TYPE_REQUIRED"),
-                    },
-                });
-            }
+            await checkPassword();
             user.data.hash = await bcrypt.hash(body.new_password, 12);
             user.data.valid_tokens_since = new Date();
             newToken = (await generateToken(user.id)) as string;
         }
 
-        if (body.username) {
-            const check_username = body?.username?.replace(/\s/g, "").trim();
-            if (!check_username) {
-                throw FieldErrors({
-                    username: {
-                        code: "BASE_TYPE_REQUIRED",
-                        message: req.t("common:field.BASE_TYPE_REQUIRED"),
-                    },
-                });
-            }
-
+        if (body.username && body.username !== user.username) {
+            const username = body.username.trim();
             const { maxUsername } = Config.get().limits.user;
-            if (check_username.length > maxUsername || check_username.length < 2) {
+            if (username.replace(/\s/g, "").length < 2 || username.length > maxUsername)
                 throw FieldErrors({
                     username: {
                         code: "BASE_TYPE_BAD_LENGTH",
                         message: `Must be between 2 and ${maxUsername} in length.`,
                     },
                 });
-            }
+            await checkPassword();
 
-            if (!body.password) {
-                throw FieldErrors({
-                    password: {
-                        message: req.t("auth:login.INVALID_PASSWORD"),
-                        code: "INVALID_PASSWORD",
-                    },
-                });
+            if (await User.findOne({ where: { username, discriminator: body.discriminator || user.discriminator }, select: { id: true } })) {
+                const discriminator = await User.generateDiscriminator(username);
+                if (!discriminator)
+                    throw FieldErrors({
+                        username: {
+                            code: "USERNAME_TOO_MANY_USERS",
+                            message: req.t("auth:register.USERNAME_TOO_MANY_USERS"),
+                        },
+                    });
+                user.discriminator = discriminator;
             }
+            user.username = username;
         }
 
-        if (body.discriminator) {
-            // TODO: HACK - maybe make this optional?
+        if (body.discriminator && body.discriminator !== user.discriminator) {
             if (!/^\d{4}$/.test(body.discriminator)) {
                 throw FieldErrors({
                     discriminator: {
@@ -163,14 +145,7 @@ router.patch(
                 });
             }
 
-            if (
-                await User.findOne({
-                    where: {
-                        discriminator: body.discriminator,
-                        username: body.username || user.username,
-                    },
-                })
-            ) {
+            if (await User.findOne({ where: { discriminator: body.discriminator, username: user.username }, select: { id: true } })) {
                 throw FieldErrors({
                     discriminator: {
                         code: "INVALID_DISCRIMINATOR",
@@ -178,9 +153,14 @@ router.patch(
                     },
                 });
             }
+            user.discriminator = body.discriminator;
         }
 
-        if (body.bio) {
+        if (body.global_name !== undefined) {
+            user.global_name = body.global_name?.trim() || null;
+        }
+
+        if (body.bio !== undefined) {
             const { maxBio } = Config.get().limits.user;
             if (body.bio.length > maxBio) {
                 throw FieldErrors({
@@ -190,68 +170,71 @@ router.patch(
                     },
                 });
             }
+            user.bio = body.bio;
         }
 
-        if ("display_name_font_id" in body) {
-            if (!body.display_name_font_id) user.display_name_styles = undefined;
+        if (body.accent_color !== undefined) Object.assign(user, { accent_color: body.accent_color });
+
+        if (body.flags !== undefined) {
+            const mutable = Number(UserFlags.FLAGS.PREMIUM_PROMO_DISMISSED | UserFlags.FLAGS.HAS_UNREAD_URGENT_MESSAGES);
+            user.flags = (Number(user.flags) & ~mutable) | (body.flags & mutable);
+        }
+
+        if (body.display_name_font_id !== undefined || body.display_name_effect_id !== undefined || body.display_name_colors !== undefined) {
+            const font_id = body.display_name_font_id !== undefined ? body.display_name_font_id : user.display_name_styles?.font_id;
+            const effect_id = body.display_name_effect_id !== undefined ? body.display_name_effect_id : user.display_name_styles?.effect_id;
+            const colors = body.display_name_colors !== undefined ? body.display_name_colors : user.display_name_styles?.colors;
+            Object.assign(user, {
+                display_name_styles: font_id == null && effect_id == null && !colors?.length ? null : { font_id: font_id ?? 0, effect_id: effect_id ?? 0, colors: colors ?? [] },
+            });
+        }
+
+        const decorationSku = body.avatar_decoration_sku_id !== undefined ? body.avatar_decoration_sku_id : body.avatar_decoration_id;
+        if (decorationSku !== undefined) {
+            Object.assign(user, { avatar_decoration_data: null, avatar_decoration_id: null });
+            if (decorationSku) {
+                const catalogItem = await Collectibles.item(decorationSku, CollectibleItemType.AVATAR_DECORATION);
+                if (catalogItem?.asset) user.avatar_decoration_data = { asset: catalogItem.asset, sku_id: catalogItem.sku_id, expires_at: null };
+                else {
+                    const avatarDecoration = await AvatarDecoration.findOne({ where: { id: decorationSku } });
+                    if (!avatarDecoration) throw FieldErrors({ avatar_decoration_sku_id: { code: "50057", message: "Invalid SKU" } });
+                    if (!(await avatarDecoration.canUseAvatarDecoration(req.user_id)))
+                        throw FieldErrors({ avatar_decoration_sku_id: { code: "40018", message: "You do not have access to this avatar decoration" } });
+                    user.avatar_decoration_id = decorationSku;
+                }
+            }
+        }
+
+        if (body.nameplate_sku_id !== undefined) {
+            if (!body.nameplate_sku_id) user.collectibles = { ...user.collectibles, nameplate: null };
             else {
-                user.display_name_styles ??= {} as unknown as DisplayNameStyle;
-                user.display_name_styles!.font_id = body.display_name_font_id;
+                const nameplate = await Collectibles.item(body.nameplate_sku_id, CollectibleItemType.NAMEPLATE);
+                if (!nameplate?.asset) throw FieldErrors({ nameplate_sku_id: { code: "50057", message: "Invalid SKU" } });
+                user.collectibles = {
+                    ...user.collectibles,
+                    nameplate: { asset: nameplate.asset, sku_id: nameplate.sku_id, label: nameplate.label ?? "", palette: nameplate.palette ?? "", expires_at: null },
+                };
             }
         }
 
-        if ("display_name_effect_id" in body) {
-            if (!body.display_name_effect_id) user.display_name_styles = undefined;
-            else {
-                user.display_name_styles ??= {} as unknown as DisplayNameStyle;
-                user.display_name_styles!.effect_id = body.display_name_effect_id;
-            }
-        }
-
-        if ("display_name_colors" in body) {
-            if (!body.display_name_colors) user.display_name_styles = undefined;
-            else {
-                user.display_name_styles ??= {} as unknown as DisplayNameStyle;
-                user.display_name_styles!.colors = body.display_name_colors;
-            }
-        }
-
-        if ("avatar_decoration_sku_id" in body) {
-            if (!body.avatar_decoration_sku_id) {
-                user.avatar_decoration_data = undefined;
-                user.avatar_decoration_id = undefined;
-            } else {
-                const avatarDecoration = await AvatarDecoration.findOne({ where: { id: body.avatar_decoration_sku_id } });
-                if (!avatarDecoration) throw FieldErrors({ avatar_decoration_sku_id: { code: "50057", message: "Invalid SKU" } });
-
-                if (!(await avatarDecoration.canUseAvatarDecoration(req.user_id)))
-                    throw FieldErrors({ avatar_decoration_sku_id: { code: "40018", message: "You do not have access to this avatar decoration" } }); // TODO: find a better code
-
-                user.avatar_decoration_id = body.avatar_decoration_sku_id;
-            }
-        }
-
-        user.assign(body);
         user.validate();
         await user.save();
 
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        //@ts-ignore
-        delete user.data;
+        const updated = await User.findOneOrFail({
+            where: { id: req.user_id },
+            select: Object.fromEntries(PrivateUserProjection.map((i) => [i, true])),
+            relations: { avatar_decoration: true },
+        });
+        const data = updated.toPrivateUser();
 
-        // TODO: send update member list event in gateway
         await emitEvent({
             event: "USER_UPDATE",
             user_id: req.user_id,
-            data: user,
+            data: updated,
         } satisfies UserUpdateEvent);
 
-        res.json({
-            ...user,
-            newToken,
-        });
+        res.json(newToken ? { ...data, token: newToken } : data);
     },
 );
 
 export default router;
-// {"message": "Invalid two-factor code", "code": 60008}

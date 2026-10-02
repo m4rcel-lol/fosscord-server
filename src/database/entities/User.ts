@@ -37,6 +37,7 @@ import {
     PartialUser,
     PrimaryGuild,
     PrivateUserProjection,
+    ProfileEffectData,
     PublicUser,
     PublicUserProjection,
     UserPrivate,
@@ -52,6 +53,9 @@ export class User extends BaseClass {
 
     @Column()
     discriminator: string; // opaque string: 4 digits on discord.com
+
+    @Column({ type: "varchar", nullable: true })
+    global_name?: string | null;
 
     @Column({ nullable: true })
     avatar?: string; // hash of the user avatar
@@ -198,6 +202,9 @@ export class User extends BaseClass {
     @Column({ type: "jsonb", nullable: true })
     primary_guild?: PrimaryGuild;
 
+    @Column({ type: "jsonb", nullable: true })
+    profile_effect?: ProfileEffectData | null;
+
     @JoinColumn({ name: "avatar_decoration_id", foreignKeyConstraintName: "FK_user_avatar_decoration_id" })
     @OneToOne(() => AvatarDecoration, { onDelete: "SET NULL", nullable: true })
     avatar_decoration?: AvatarDecoration;
@@ -240,14 +247,17 @@ export class User extends BaseClass {
             id: this.id,
             username: this.username,
             discriminator: this.discriminator,
-            global_name: undefined, // TODO when pomelo
+            global_name: this.global_name ?? null,
             avatar: this.avatar ?? null,
             avatar_decoration_data: this.avatar_decoration
                 ? {
                       ...this.avatar_decoration?.toJSON(),
                       ...this.avatar_decoration_data,
                   }
-                : null,
+                : (this.avatar_decoration_data ?? null),
+            collectibles: this.collectibles ?? null,
+            display_name_styles: this.display_name_styles ?? null,
+            primary_guild: this.primary_guild ?? null,
             bot: this.bot,
             system: this.system,
             banner: this.banner,

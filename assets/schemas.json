@@ -716,6 +716,12 @@
                     "null",
                     "string"
                 ]
+            },
+            "profile_frame_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
             }
         },
         "additionalProperties": false,
@@ -4076,6 +4082,12 @@
             "discriminator": {
                 "type": "string"
             },
+            "global_name": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
             "public_flags": {
                 "type": "integer"
             },
@@ -6120,57 +6132,155 @@
                 "maxLength": 4,
                 "type": "string"
             },
+            "global_name": {
+                "maxLength": 32,
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "avatar_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "email_token": {
+                "type": "string"
+            },
+            "legacy_username": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "date_of_birth": {
+                "type": "string"
+            },
+            "flags": {
+                "type": "integer"
+            },
             "display_name_colors": {
-                "type": "array",
-                "items": {
-                    "type": "integer"
-                }
+                "anyOf": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
             },
             "display_name_effect_id": {
-                "enum": [
-                    0,
-                    1,
-                    1001,
-                    1002,
-                    1003,
-                    1004,
-                    2,
-                    3,
-                    4,
-                    5,
-                    6,
-                    7,
-                    8
-                ],
-                "type": "number"
+                "anyOf": [
+                    {
+                        "enum": [
+                            0,
+                            1,
+                            1001,
+                            1002,
+                            1003,
+                            1004,
+                            2,
+                            3,
+                            4,
+                            5,
+                            6,
+                            7,
+                            8
+                        ],
+                        "type": "number"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
             },
             "display_name_font_id": {
-                "enum": [
-                    0,
-                    1,
-                    10,
-                    11,
-                    12,
-                    13,
-                    14,
-                    15,
-                    16,
-                    2,
-                    3,
-                    4,
-                    5,
-                    6,
-                    7,
-                    8,
-                    9
-                ],
-                "type": "number"
+                "anyOf": [
+                    {
+                        "enum": [
+                            0,
+                            1,
+                            10,
+                            11,
+                            12,
+                            13,
+                            14,
+                            15,
+                            16,
+                            2,
+                            3,
+                            4,
+                            5,
+                            6,
+                            7,
+                            8,
+                            9
+                        ],
+                        "type": "number"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "avatar_decoration_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "avatar_decoration_sku_id": {
                 "type": [
                     "null",
                     "string"
                 ]
+            },
+            "nameplate_sku_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "primary_guild_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "vad_colors": {
+                "anyOf": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "typing_indicator_style": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "push_provider": {
+                "type": "string"
+            },
+            "push_token": {
+                "type": "string"
+            },
+            "push_voip_provider": {
+                "type": "string"
+            },
+            "push_voip_token": {
+                "type": "string"
             }
         },
         "additionalProperties": false,
@@ -9220,6 +9330,12 @@
             "discriminator": {
                 "type": "string"
             },
+            "global_name": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
             "public_flags": {
                 "type": "integer"
             },
@@ -10468,6 +10584,12 @@
             "discriminator": {
                 "type": "string"
             },
+            "global_name": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
             "avatar": {
                 "type": "string"
             },
@@ -10643,6 +10765,16 @@
             },
             "primary_guild": {
                 "$ref": "#/definitions/PrimaryGuild"
+            },
+            "profile_effect": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/ProfileEffectData"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
             },
             "avatar_decoration": {
                 "$ref": "#/definitions/AvatarDecoration"
@@ -11257,6 +11389,27 @@
             "public_key",
             "user",
             "user_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "ProfileEffectData": {
+        "type": "object",
+        "properties": {
+            "id": {
+                "description": "A Twitter-like snowflake, except the epoch is 2015-01-01T00:00:00.000Z\n```\nIf we have a snowflake '266241948824764416' we can represent it as binary:\n\n64                                          22     17     12          0\n 000000111011000111100001101001000101000000  00001  00000  000000000000\n      number of ms since Discord epoch       worker  pid    increment\n```",
+                "type": "string"
+            },
+            "expires_at": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "expires_at",
+            "id"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
