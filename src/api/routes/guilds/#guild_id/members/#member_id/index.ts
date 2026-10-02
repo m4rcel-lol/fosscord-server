@@ -61,7 +61,7 @@ router.get(
         return res.json({
             ...member.toPublicMember(),
             user: member.user.toPublicUser(),
-            roles: member.roles.map((x) => x.id),
+            roles: member.roles.map((x) => x.id).filter((id) => id !== guild_id),
         });
     },
 );
