@@ -49,6 +49,9 @@ const css = `
 .fe2ee-dialog-body{padding:20px 20px 16px;display:flex;flex-direction:column;gap:12px;font-size:15px;line-height:22px}
 .fe2ee-dialog h2{margin:0;font-size:20px;line-height:24px;font-weight:600;text-wrap:balance;color:var(--header-primary,#f2f3f5)}
 .fe2ee-dialog p{margin:0;text-wrap:pretty;color:var(--text-muted,#b5bac1)}
+.fe2ee-panel{display:flex;flex-direction:column;gap:16px;font-size:15px;line-height:22px;color:var(--text-default,#dbdee1)}
+.fe2ee-panel p{margin:0;text-wrap:pretty;color:var(--text-muted,#b5bac1)}
+.fe2ee-panel > .fe2ee-section:first-child{padding-top:0;border-top:0}
 .fe2ee-dialog-actions{display:flex;justify-content:flex-end;gap:8px;padding:16px 20px;background:var(--modal-footer-background,var(--background-base-lower,#2b2d31));border-radius:0 0 12px 12px}
 .fe2ee-member{display:flex;flex-direction:column;gap:8px;padding-top:8px}
 .fe2ee-member + .fe2ee-member{border-top:1px solid var(--border-subtle,rgb(255 255 255 / .06));padding-top:16px}
@@ -469,110 +472,132 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword }
             actions.append(button("Cancel", "secondary", close), create);
         });
 
-    const showSettings = () =>
-        dialog("Encryption settings", (body, actions, close) => {
-            const browser = section("This browser");
-            const backupSection = section("Key backup");
-            const devices = section("Your devices");
-            body.append(browser, backupSection, devices);
-            const describe = (el: HTMLElement, text: string) => {
-                const p = document.createElement("p");
-                p.textContent = text;
-                el.append(p);
-            };
-            const clear = (el: HTMLElement) => el.querySelectorAll(":scope > :not(h3)").forEach((child) => child.remove());
-            const renderBrowser = () => {
-                clear(browser);
-                describe(browser, engine.linked ? "Unlocked. This browser can read and send encrypted messages." : "Locked. This browser can't read encrypted messages yet.");
-                if (!engine.linked)
-                    browser.append(
-                        button("Unlock this browser", "primary", () => {
-                            close();
-                            showUnlock();
-                        }),
-                    );
-            };
-            const renderBackup = () => {
-                clear(backupSection);
-                const backup = engine.backup;
-                backupSection.dataset.mode = backup?.mode ?? "none";
-                if (engine.backupNeedsPassword) {
-                    describe(backupSection, "Your keys aren't backed up yet, so new browsers can't read your encrypted messages. Enter your account password to back them up.");
-                    backupSection.append(backupPasswordForm(renderBackup));
-                    return;
-                }
-                if (!backup) return describe(backupSection, "Your keys aren't backed up yet. Open the app on a browser that can read your messages to back them up.");
-                if (backup.mode === "recovery")
-                    describe(backupSection, "Your keys are backed up and locked with a recovery code. New browsers ask for that code, and your password can't unlock them.");
-                else if (backup.wrapped_secret)
-                    describe(
-                        backupSection,
-                        "Your keys are backed up and locked with your account password, so new browsers unlock as soon as you sign in. Someone with a copy of the server's database could try to guess a weak password offline.",
-                    );
-                else
-                    describe(
-                        backupSection,
-                        "Your keys are backed up, but they aren't locked with your password yet. Open the app on a browser that can read your messages to finish the backup.",
-                    );
-                if (!engine.hasSecret) return;
-                if (backup.mode === "password") {
-                    backupSection.append(
-                        button("Use a recovery code instead", "secondary", () => {
-                            close();
-                            showRecoveryCode();
-                        }),
-                    );
-                    return;
-                }
-                const { wrap, input, row, setError } = field("Account password", "password", "current-password");
-                const save = button("Use my password instead", "secondary", async () => {
-                    if (!input.value) return setError("Enter your password.");
-                    save.disabled = true;
-                    setError(null);
-                    try {
-                        if (!(await verifyPassword(input.value))) return setError("That password isn't right.");
-                        await engine.setBackupMode("password", input.value);
-                        renderBackup();
-                    } catch (error) {
-                        setError(error instanceof Error ? error.message : String(error));
-                    } finally {
-                        save.disabled = false;
-                    }
-                });
-                row.append(save);
+    const buildSettings = (body: HTMLElement, close: () => void) => {
+        const browser = section("This browser");
+        const backupSection = section("Key backup");
+        const devices = section("Your devices");
+        body.append(browser, backupSection, devices);
+        const describe = (el: HTMLElement, text: string) => {
+            const p = document.createElement("p");
+            p.textContent = text;
+            el.append(p);
+        };
+        const clear = (el: HTMLElement) => el.querySelectorAll(":scope > :not(h3)").forEach((child) => child.remove());
+        const renderBrowser = () => {
+            clear(browser);
+            describe(browser, engine.linked ? "Unlocked. This browser can read and send encrypted messages." : "Locked. This browser can't read encrypted messages yet.");
+            if (!engine.linked)
+                browser.append(
+                    button("Unlock this browser", "primary", () => {
+                        close();
+                        showUnlock();
+                    }),
+                );
+        };
+        const renderBackup = () => {
+            clear(backupSection);
+            const backup = engine.backup;
+            backupSection.dataset.mode = backup?.mode ?? "none";
+            if (engine.backupNeedsPassword) {
+                describe(backupSection, "Your keys aren't backed up yet, so new browsers can't read your encrypted messages. Enter your account password to back them up.");
+                backupSection.append(backupPasswordForm(renderBackup));
+                return;
+            }
+            if (!backup) return describe(backupSection, "Your keys aren't backed up yet. Open the app on a browser that can read your messages to back them up.");
+            if (backup.mode === "recovery")
+                describe(backupSection, "Your keys are backed up and locked with a recovery code. New browsers ask for that code, and your password can't unlock them.");
+            else if (backup.wrapped_secret)
+                describe(
+                    backupSection,
+                    "Your keys are backed up and locked with your account password, so new browsers unlock as soon as you sign in. Someone with a copy of the server's database could try to guess a weak password offline.",
+                );
+            else
+                describe(
+                    backupSection,
+                    "Your keys are backed up, but they aren't locked with your password yet. Open the app on a browser that can read your messages to finish the backup.",
+                );
+            if (!engine.hasSecret) return;
+            if (backup.mode === "password") {
                 backupSection.append(
-                    wrap,
-                    button("Make a new recovery code", "secondary", () => {
+                    button("Use a recovery code instead", "secondary", () => {
                         close();
                         showRecoveryCode();
                     }),
                 );
-            };
-            const renderDevices = () => {
-                clear(devices);
-                for (const device of engine.devices.filter((d) => d.status !== "revoked")) {
-                    const row = document.createElement("div");
-                    row.className = "fe2ee-device";
-                    const current = device.device_id === engine.device?.deviceId;
-                    const added = device.created_at ? `Added ${new Date(device.created_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}` : null;
-                    const state = current ? "This browser" : device.status === "active" ? "Can read encrypted messages" : "Waiting for approval";
-                    row.innerHTML = `<span>${escape(device.name ?? "Unknown browser")}<small>${escape([state, added].filter(Boolean).join(" · "))}</small></span>`;
-                    if (!current)
-                        row.append(
-                            button("Remove", "secondary", async () => {
-                                await engine.removeDevice(device.device_id).catch(() => {});
-                                renderDevices();
-                            }),
-                        );
-                    devices.append(row);
+                return;
+            }
+            const { wrap, input, row, setError } = field("Account password", "password", "current-password");
+            const save = button("Use my password instead", "secondary", async () => {
+                if (!input.value) return setError("Enter your password.");
+                save.disabled = true;
+                setError(null);
+                try {
+                    if (!(await verifyPassword(input.value))) return setError("That password isn't right.");
+                    await engine.setBackupMode("password", input.value);
+                    renderBackup();
+                } catch (error) {
+                    setError(error instanceof Error ? error.message : String(error));
+                } finally {
+                    save.disabled = false;
                 }
-            };
+            });
+            row.append(save);
+            backupSection.append(
+                wrap,
+                button("Make a new recovery code", "secondary", () => {
+                    close();
+                    showRecoveryCode();
+                }),
+            );
+        };
+        const renderDevices = () => {
+            clear(devices);
+            for (const device of engine.devices.filter((d) => d.status !== "revoked")) {
+                const row = document.createElement("div");
+                row.className = "fe2ee-device";
+                const current = device.device_id === engine.device?.deviceId;
+                const added = device.created_at ? `Added ${new Date(device.created_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}` : null;
+                const state = current ? "This browser" : device.status === "active" ? "Can read encrypted messages" : "Waiting for approval";
+                row.innerHTML = `<span>${escape(device.name ?? "Unknown browser")}<small>${escape([state, added].filter(Boolean).join(" · "))}</small></span>`;
+                if (!current)
+                    row.append(
+                        button("Remove", "secondary", async () => {
+                            await engine.removeDevice(device.device_id).catch(() => {});
+                            renderDevices();
+                        }),
+                    );
+                devices.append(row);
+            }
+        };
+        renderBrowser();
+        renderBackup();
+        renderDevices();
+        engine.reloadBackup().then(renderBackup, () => {});
+        return engine.onChange(() => {
             renderBrowser();
-            renderBackup();
             renderDevices();
-            engine.reloadBackup().then(renderBackup, () => {});
+            if (!backupSection.contains(document.activeElement)) renderBackup();
+        });
+    };
+
+    const showSettings = () =>
+        dialog("Encryption settings", (body, actions, close) => {
+            const stop = buildSettings(body, close);
+            body.closest("dialog")?.addEventListener("close", () => stop());
             actions.append(button("Close", "secondary", close));
         });
+
+    const mountSettings = (container: HTMLElement) => {
+        mount();
+        const body = document.createElement("div");
+        body.className = "fe2ee-panel";
+        container.append(body);
+        const stop = buildSettings(body, () => {});
+        return () => {
+            stop();
+            body.remove();
+        };
+    };
 
     const showError = (error: unknown, channelId: string) => {
         const name = (id?: string) => (id && members?.channelId === channelId ? (members.list.find((m) => m.id === id) ?? null) : null);
@@ -743,6 +768,7 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword }
         showApproval,
         dismissApproval,
         showSettings,
+        mountSettings,
         renderUnlock: () => unlockOpen?.render(),
         fail: (text: string) => {
             failure = text;

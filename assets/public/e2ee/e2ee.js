@@ -3640,6 +3640,9 @@ ${approver}`;
 .fe2ee-dialog-body{padding:20px 20px 16px;display:flex;flex-direction:column;gap:12px;font-size:15px;line-height:22px}
 .fe2ee-dialog h2{margin:0;font-size:20px;line-height:24px;font-weight:600;text-wrap:balance;color:var(--header-primary,#f2f3f5)}
 .fe2ee-dialog p{margin:0;text-wrap:pretty;color:var(--text-muted,#b5bac1)}
+.fe2ee-panel{display:flex;flex-direction:column;gap:16px;font-size:15px;line-height:22px;color:var(--text-default,#dbdee1)}
+.fe2ee-panel p{margin:0;text-wrap:pretty;color:var(--text-muted,#b5bac1)}
+.fe2ee-panel > .fe2ee-section:first-child{padding-top:0;border-top:0}
 .fe2ee-dialog-actions{display:flex;justify-content:flex-end;gap:8px;padding:16px 20px;background:var(--modal-footer-background,var(--background-base-lower,#2b2d31));border-radius:0 0 12px 12px}
 .fe2ee-member{display:flex;flex-direction:column;gap:8px;padding-top:8px}
 .fe2ee-member + .fe2ee-member{border-top:1px solid var(--border-subtle,rgb(255 255 255 / .06));padding-top:16px}
@@ -4017,7 +4020,7 @@ ${approver}`;
       });
       actions.append(button("Cancel", "secondary", close), create);
     });
-    const showSettings = () => dialog("Encryption settings", (body, actions, close) => {
+    const buildSettings = (body, close) => {
       const browser = section("This browser");
       const backupSection = section("Key backup");
       const devices = section("Your devices");
@@ -4120,8 +4123,29 @@ ${approver}`;
       renderDevices();
       engine2.reloadBackup().then(renderBackup, () => {
       });
+      return engine2.onChange(() => {
+        renderBrowser();
+        renderDevices();
+        if (!backupSection.contains(document.activeElement)) renderBackup();
+      });
+    };
+    const showSettings = () => dialog("Encryption settings", (body, actions, close) => {
+      const stop = buildSettings(body, close);
+      body.closest("dialog")?.addEventListener("close", () => stop());
       actions.append(button("Close", "secondary", close));
     });
+    const mountSettings = (container) => {
+      mount();
+      const body = document.createElement("div");
+      body.className = "fe2ee-panel";
+      container.append(body);
+      const stop = buildSettings(body, () => {
+      });
+      return () => {
+        stop();
+        body.remove();
+      };
+    };
     const showError = (error, channelId) => {
       const name = (id) => id && members?.channelId === channelId ? members.list.find((m) => m.id === id) ?? null : null;
       let text = "Your message couldn't be encrypted, so it wasn't sent.";
@@ -4273,6 +4297,7 @@ ${approver}`;
       showApproval,
       dismissApproval,
       showSettings,
+      mountSettings,
       renderUnlock: () => unlockOpen?.render(),
       fail: (text) => {
         failure2 = text;
@@ -4542,6 +4567,7 @@ ${approver}`;
     }
     setTimeout(tick, installed.http && installed.dispatcher ? 100 : 20);
   };
+  loader.mountSettings = (container) => ui.mountSettings(container);
   loader.status = () => ({
     ready: initialized && !failure && installed.http && installed.dispatcher && installed.gateway,
     failure,

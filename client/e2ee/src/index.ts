@@ -27,6 +27,7 @@ import { HttpClient, scan, Targets } from "./webpack";
 interface LoaderState {
     reqs: { c?: Record<string, { exports: unknown }> }[];
     status?: () => unknown;
+    mountSettings?: (container: HTMLElement) => () => void;
 }
 
 declare global {
@@ -263,6 +264,8 @@ const tick = () => {
     }
     setTimeout(tick, installed.http && installed.dispatcher ? 100 : 20);
 };
+
+loader.mountSettings = (container) => ui.mountSettings(container);
 
 loader.status = () => ({
     ready: initialized && !failure && installed.http && installed.dispatcher && installed.gateway,
