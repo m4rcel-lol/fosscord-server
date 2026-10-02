@@ -17,7 +17,7 @@
 */
 
 import { HTTPError } from "lambert-server/HTTPError";
-import { Equal, In, Or } from "typeorm";
+import { In } from "typeorm";
 // noinspection ES6PreferShortImport -- Causes a circular reference...
 import { fillMessageUrlEmbeds } from "../utility/EmbedHandlers";
 import { getDatabase, Application, Attachment, Channel, CloudAttachment, Guild, Member, Message, ReadState, Role, Session, Sticker, User, Webhook } from "@spacebar/database";
@@ -415,6 +415,15 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
             message.author.avatar = message.avatar;
         }
     } else {
+        if (!permission && opts.interaction_metadata) {
+            const appPermission = await getPermission(opts.author_id, channel.guild_id, channel).catch(() => null);
+            permission = new Permissions(
+                (appPermission?.bitfield ?? 0n) |
+                    new Permissions(["VIEW_CHANNEL", "SEND_MESSAGES", "EMBED_LINKS", "ATTACH_FILES", "READ_MESSAGE_HISTORY", "USE_EXTERNAL_EMOJIS", "USE_EXTERNAL_STICKERS"])
+                        .bitfield,
+            );
+            if (appPermission) permission.cache = appPermission.cache;
+        }
         permission ||= await getPermission(opts.author_id, channel.guild_id, channel);
         if (permission === null) throw new HTTPError("permission was null after getPermission", 500);
         permission.hasThrow("SEND_MESSAGES");
@@ -483,6 +492,7 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
     // TODO: stickers/activity
     if (
         !allow_empty &&
+        !((opts.flags ?? 0) & Number(MessageFlags.FLAGS.LOADING)) &&
         !opts.content &&
         !opts.embeds?.length &&
         !opts.attachments?.length &&
@@ -551,6 +561,10 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
         if (imageAttachment !== undefined) {
             image!.url = imageAttachment.toJSON().url;
             image!.proxy_url = imageAttachment.toJSON().proxy_url;
+            if (imageAttachment.width && imageAttachment.height) {
+                image!.width = imageAttachment.width;
+                image!.height = imageAttachment.height;
+            }
         }
 
         const author = embed.author;
@@ -887,7 +901,8 @@ async function handleMessageMentionsAsync(message: Message, allowed?: AllowedMen
             let pinged = mention_everyone || channel.type === ChannelType.DM || channel.type === ChannelType.GROUP_DM;
             if (!pinged) pinged = !!message.mentions.find((user) => user.id === id);
             // TODO: can we somehow rewrite this into an In(...) query?
-            if (!pinged) pinged = !!(await Member.find({ where: { id, roles: Or(...message.mention_roles.map(({ id }) => Equal(id))) } }));
+            if (!pinged && message.mention_roles?.length)
+                pinged = (await Member.count({ where: { id, guild_id: channel.guild_id, roles: { id: In(message.mention_roles.map((r) => r.id)) } } })) > 0;
             if (pinged) {
                 //stuff
             }

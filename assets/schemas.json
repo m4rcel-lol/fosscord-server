@@ -1171,8 +1171,27 @@
             "guild_id": {
                 "type": "string"
             },
+            "channel_id": {
+                "type": "string"
+            },
+            "webhook_channel_id": {
+                "type": "string"
+            },
             "permissions": {
                 "type": "string"
+            },
+            "integration_type": {
+                "type": "integer"
+            },
+            "location_context": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": true
+            },
+            "dm_settings": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": true
             },
             "captcha_key": {
                 "type": "string"
@@ -1185,9 +1204,7 @@
         },
         "additionalProperties": false,
         "required": [
-            "authorize",
-            "guild_id",
-            "permissions"
+            "authorize"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -6546,10 +6563,73 @@
                 "type": "string"
             },
             "avatar": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "channel_id": {
                 "type": "string"
+            },
+            "id": {
+                "type": "string"
+            },
+            "type": {
+                "type": "integer"
+            },
+            "guild_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "application_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "user": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": true
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "token": {
+                "type": "string"
+            },
+            "url": {
+                "type": "string"
+            },
+            "source_guild": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": true
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "source_channel": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": true
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
             }
         },
         "additionalProperties": false,
@@ -6929,7 +7009,6 @@
         },
         "additionalProperties": false,
         "required": [
-            "data",
             "type"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
@@ -6956,6 +7035,21 @@
             },
             {
                 "$ref": "#/definitions/MessageDUpdateCallback"
+            },
+            {
+                "$ref": "#/definitions/AutocompleteResultCallback"
+            },
+            {
+                "$ref": "#/definitions/ModalCallback"
+            },
+            {
+                "$ref": "#/definitions/PremiumRequiredCallback"
+            },
+            {
+                "$ref": "#/definitions/IframeModalCallback"
+            },
+            {
+                "$ref": "#/definitions/LaunchActivityCallback"
             }
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
@@ -7088,7 +7182,10 @@
                 "type": "string"
             },
             "interactions_endpoint_url": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "max_participants": {
                 "type": [
@@ -8879,6 +8976,107 @@
         },
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
+    "ApplicationCommandModifySchema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string"
+            },
+            "name_localizations": {
+                "type": "object",
+                "additionalProperties": {
+                    "type": "string"
+                }
+            },
+            "description": {
+                "type": "string"
+            },
+            "description_localizations": {
+                "type": "object",
+                "additionalProperties": {
+                    "type": "string"
+                }
+            },
+            "options": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/ApplicationCommandOption"
+                }
+            },
+            "default_member_permissions": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "dm_permission": {
+                "type": "boolean"
+            },
+            "nsfw": {
+                "type": "boolean"
+            },
+            "integration_types": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/ApplicationIntegrationType"
+                }
+            },
+            "contexts": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/InteractionContextType"
+                }
+            },
+            "handler": {
+                "enum": [
+                    1,
+                    2,
+                    3
+                ],
+                "type": "number"
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "ApplicationCommandPermissionsUpdateSchema": {
+        "type": "object",
+        "properties": {
+            "permissions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string"
+                        },
+                        "type": {
+                            "enum": [
+                                1,
+                                2,
+                                3
+                            ],
+                            "type": "number"
+                        },
+                        "permission": {
+                            "type": "boolean"
+                        }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                        "id",
+                        "permission",
+                        "type"
+                    ]
+                }
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "permissions"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
     "OAuth2UserInfoResponse": {
         "type": "object",
         "properties": {
@@ -8931,8 +9129,34 @@
             "name": {
                 "type": "string"
             },
+            "name_localizations": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
             "description": {
                 "type": "string"
+            },
+            "description_localizations": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
             },
             "required": {
                 "type": "boolean"
@@ -8948,6 +9172,27 @@
                 "items": {
                     "$ref": "#/definitions/ApplicationCommandOption"
                 }
+            },
+            "channel_types": {
+                "type": "array",
+                "items": {
+                    "type": "integer"
+                }
+            },
+            "min_value": {
+                "type": "integer"
+            },
+            "max_value": {
+                "type": "integer"
+            },
+            "min_length": {
+                "type": "integer"
+            },
+            "max_length": {
+                "type": "integer"
+            },
+            "autocomplete": {
+                "type": "boolean"
             }
         },
         "additionalProperties": false,
@@ -8968,7 +9213,10 @@
             5,
             6,
             7,
-            8
+            8,
+            9,
+            10,
+            11
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -8977,6 +9225,19 @@
         "properties": {
             "name": {
                 "type": "string"
+            },
+            "name_localizations": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
             },
             "value": {
                 "type": [
@@ -12469,6 +12730,9 @@
             "verify_key": {
                 "type": "string"
             },
+            "interactions_private_key": {
+                "type": "string"
+            },
             "owner": {
                 "$ref": "#/definitions/User"
             },
@@ -13852,6 +14116,16 @@
                     },
                     "name": {
                         "type": "string"
+                    },
+                    "user": {
+                        "$ref": "#/definitions/PublicUser"
+                    },
+                    "command_id": {
+                        "type": "string"
+                    },
+                    "options": {
+                        "type": "array",
+                        "items": {}
                     }
                 },
                 "additionalProperties": false,
@@ -18385,7 +18659,6 @@
         },
         "additionalProperties": false,
         "required": [
-            "data",
             "type"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
@@ -18405,7 +18678,6 @@
         },
         "additionalProperties": false,
         "required": [
-            "data",
             "type"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
@@ -18421,11 +18693,12 @@
             "type": {
                 "$ref": "#/definitions/InteractionCallbackType.CHANNEL_MESSAGE"
             },
-            "data": {}
+            "data": {
+                "$ref": "#/definitions/InteractionMessage"
+            }
         },
         "additionalProperties": false,
         "required": [
-            "data",
             "type"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
@@ -18433,28 +18706,6 @@
     "InteractionCallbackType.CHANNEL_MESSAGE": {
         "type": "number",
         "const": 3,
-        "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "MessageWSourceCallback": {
-        "type": "object",
-        "properties": {
-            "type": {
-                "$ref": "#/definitions/InteractionCallbackType.CHANNEL_MESSAGE_WITH_SOURCE"
-            },
-            "data": {
-                "$ref": "#/definitions/InteractionMessage"
-            }
-        },
-        "additionalProperties": false,
-        "required": [
-            "data",
-            "type"
-        ],
-        "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "InteractionCallbackType.CHANNEL_MESSAGE_WITH_SOURCE": {
-        "type": "number",
-        "const": 4,
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "InteractionMessage": {
@@ -18504,6 +18755,28 @@
         "additionalProperties": false,
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
+    "MessageWSourceCallback": {
+        "type": "object",
+        "properties": {
+            "type": {
+                "$ref": "#/definitions/InteractionCallbackType.CHANNEL_MESSAGE_WITH_SOURCE"
+            },
+            "data": {
+                "$ref": "#/definitions/InteractionMessage"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "data",
+            "type"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "InteractionCallbackType.CHANNEL_MESSAGE_WITH_SOURCE": {
+        "type": "number",
+        "const": 4,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
     "MessageDWSourceCallback": {
         "type": "object",
         "properties": {
@@ -18516,7 +18789,6 @@
         },
         "additionalProperties": false,
         "required": [
-            "data",
             "type"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
@@ -18560,7 +18832,6 @@
         },
         "additionalProperties": false,
         "required": [
-            "data",
             "type"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
@@ -18568,6 +18839,174 @@
     "InteractionCallbackType.DEFERRED_UPDATE_MESSAGE": {
         "type": "number",
         "const": 6,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AutocompleteResultCallback": {
+        "type": "object",
+        "properties": {
+            "type": {
+                "$ref": "#/definitions/InteractionCallbackType.APPLICATION_COMMAND_AUTOCOMPLETE_RESULT"
+            },
+            "data": {
+                "type": "object",
+                "properties": {
+                    "choices": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string"
+                                },
+                                "name_localizations": {
+                                    "anyOf": [
+                                        {
+                                            "type": "object",
+                                            "additionalProperties": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        {
+                                            "type": "null"
+                                        }
+                                    ]
+                                },
+                                "value": {
+                                    "type": [
+                                        "string",
+                                        "integer"
+                                    ]
+                                }
+                            },
+                            "additionalProperties": false,
+                            "required": [
+                                "name",
+                                "value"
+                            ]
+                        }
+                    }
+                },
+                "additionalProperties": false,
+                "required": [
+                    "choices"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "data",
+            "type"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "InteractionCallbackType.APPLICATION_COMMAND_AUTOCOMPLETE_RESULT": {
+        "type": "number",
+        "const": 8,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "ModalCallback": {
+        "type": "object",
+        "properties": {
+            "type": {
+                "$ref": "#/definitions/InteractionCallbackType.MODAL"
+            },
+            "data": {
+                "type": "object",
+                "properties": {
+                    "custom_id": {
+                        "type": "string"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "components": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": true
+                        }
+                    }
+                },
+                "additionalProperties": false,
+                "required": [
+                    "components",
+                    "custom_id",
+                    "title"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "data",
+            "type"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "InteractionCallbackType.MODAL": {
+        "type": "number",
+        "const": 9,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "PremiumRequiredCallback": {
+        "type": "object",
+        "properties": {
+            "type": {
+                "$ref": "#/definitions/InteractionCallbackType.PREMIUM_REQUIRED"
+            },
+            "data": {}
+        },
+        "additionalProperties": false,
+        "required": [
+            "type"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "InteractionCallbackType.PREMIUM_REQUIRED": {
+        "type": "number",
+        "const": 10,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "IframeModalCallback": {
+        "type": "object",
+        "properties": {
+            "type": {
+                "$ref": "#/definitions/InteractionCallbackType.IFRAME_MODAL"
+            },
+            "data": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": true
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "type"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "InteractionCallbackType.IFRAME_MODAL": {
+        "type": "number",
+        "const": 11,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "LaunchActivityCallback": {
+        "type": "object",
+        "properties": {
+            "type": {
+                "$ref": "#/definitions/InteractionCallbackType.LAUNCH_ACTIVITY"
+            },
+            "data": {}
+        },
+        "additionalProperties": false,
+        "required": [
+            "type"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "InteractionCallbackType.LAUNCH_ACTIVITY": {
+        "type": "number",
+        "const": 12,
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "InteractionGuild": {

@@ -18,6 +18,7 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
+import { ensureInteractionKeys, toOwnedApplication } from "@spacebar/api/util/handlers/Application";
 import { Application } from "@spacebar/database";
 import { Config, createAppBotUser } from "@spacebar/util";
 import { ApplicationCreateSchema } from "@spacebar/schemas";
@@ -39,7 +40,7 @@ router.get(
             where: { owner: { id: req.user_id } },
             relations: { owner: true, bot: true },
         });
-        res.json(results).status(200);
+        res.json(results.map(toOwnedApplication));
     },
 );
 
@@ -69,8 +70,10 @@ router.post(
         if (Config.get().general.autoCreateBotUsers) {
             await createAppBotUser(app, req);
         } else await app.save();
+        await ensureInteractionKeys(app.id);
+        app.verify_key = (await Application.findOneOrFail({ where: { id: app.id }, select: { id: true, verify_key: true } })).verify_key;
 
-        res.json(app);
+        res.json(toOwnedApplication(app));
     },
 );
 

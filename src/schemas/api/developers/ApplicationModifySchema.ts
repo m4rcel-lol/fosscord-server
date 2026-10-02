@@ -20,7 +20,7 @@ export interface ApplicationModifySchema {
     description?: string;
     icon?: string;
     cover_image?: string;
-    interactions_endpoint_url?: string;
+    interactions_endpoint_url?: string | null;
     max_participants?: number | null;
     name?: string;
     privacy_policy_url?: string;

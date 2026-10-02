@@ -16,39 +16,19 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { route } from "@spacebar/api/middlewares";
-import { Application } from "@spacebar/database";
 import { Request, Response, Router } from "express";
-import { In } from "typeorm";
+import { route } from "@spacebar/api/middlewares";
+import { findPublicApplications } from "@spacebar/api/util/handlers/Application";
 
 const router = Router({ mergeParams: true });
 
 router.get("/", route({}), async (req: Request, res: Response) => {
     const raw = req.query.application_ids;
-    const ids = (Array.isArray(raw) ? raw : [raw]).flatMap((x) => String(x ?? "").split(",")).filter((x) => /^\d+$/.test(x));
-    if (!ids.length) return res.json([]);
-
-    const applications = await Application.find({ where: { id: In(ids.slice(0, 100)) } });
-    res.json(
-        applications.map((x) => ({
-            id: x.id,
-            name: x.name,
-            icon: x.icon ?? null,
-            description: x.description,
-            summary: x.summary,
-            type: null,
-            cover_image: x.cover_image ?? null,
-            flags: x.flags,
-            bot_public: x.bot_public,
-            bot_require_code_grant: x.bot_require_code_grant,
-            verify_key: x.verify_key,
-            tags: x.tags ?? [],
-            install_params: x.install_params,
-            custom_install_url: x.custom_install_url,
-            terms_of_service_url: x.terms_of_service_url,
-            privacy_policy_url: x.privacy_policy_url,
-        })),
-    );
+    const ids = (Array.isArray(raw) ? raw : [raw])
+        .flatMap((x) => String(x ?? "").split(","))
+        .filter((id) => /^\d{1,20}$/.test(id))
+        .slice(0, 100);
+    res.json(await findPublicApplications(ids));
 });
 
 export default router;

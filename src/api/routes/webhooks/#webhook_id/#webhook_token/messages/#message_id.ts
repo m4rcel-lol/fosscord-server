@@ -22,10 +22,23 @@ import multer from "multer";
 import { handleMessage, postHandleMessage } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
 import { Channel, Message, Webhook } from "@spacebar/database";
-import { MessageDeleteEvent, MessageUpdateEvent, emitEvent, DiscordApiErrors } from "@spacebar/util";
+import { MessageDeleteEvent, MessageUpdateEvent, emitEvent, DiscordApiErrors, getInteractionByToken } from "@spacebar/util";
+import { deleteInteractionMessage, editInteractionMessage, fetchInteractionMessage, messageBelongsToInteraction } from "@spacebar/api/util/handlers/Interaction";
 import { ChannelType, PublicMessage, WebhookExecuteSchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
+
+async function interactionMessage(req: Request) {
+    const { webhook_id, webhook_token, message_id } = req.params as { [key: string]: string };
+    const interaction = getInteractionByToken(webhook_id, webhook_token);
+    if (!interaction) return undefined;
+    const id = message_id === "@original" ? interaction.responseMessageId : message_id;
+    const message = id ? await fetchInteractionMessage(id) : null;
+    if (!message) throw DiscordApiErrors.UNKNOWN_MESSAGE;
+    const isSource = message.id === interaction.messageId && message.application_id === interaction.applicationId;
+    if (!isSource && !messageBelongsToInteraction(interaction, message)) throw DiscordApiErrors.UNKNOWN_MESSAGE;
+    return { interaction, message };
+}
 // TODO: message content/embed string length limit
 
 async function assertValidWebhookAuth(webhookId: string, webhookToken: string, messageId: string) {
@@ -68,6 +81,13 @@ router.patch(
     async (req: Request, res: Response) => {
         const { webhook_id, webhook_token, message_id } = req.params as { [key: string]: string };
         const body = req.body as WebhookExecuteSchema;
+
+        const fromInteraction = await interactionMessage(req);
+        if (fromInteraction) {
+            const edited = await editInteractionMessage(fromInteraction.interaction, fromInteraction.message, body as Parameters<typeof editInteractionMessage>[2]);
+            if (edited.id === fromInteraction.interaction.responseMessageId) fromInteraction.interaction.responseLoading = false;
+            return res.json(edited.toJSON());
+        }
 
         await assertValidWebhookAuth(webhook_id, webhook_token, message_id);
 
@@ -122,6 +142,9 @@ router.get(
     async (req: Request, res: Response) => {
         const { webhook_id, webhook_token, message_id } = req.params as { [key: string]: string };
 
+        const fromInteraction = await interactionMessage(req);
+        if (fromInteraction) return res.json(fromInteraction.message.toJSON());
+
         await assertValidWebhookAuth(webhook_id, webhook_token, message_id);
 
         const message = await Message.findOneOrFail({
@@ -150,6 +173,12 @@ router.delete(
     }),
     async (req: Request, res: Response) => {
         const { webhook_id, webhook_token, message_id } = req.params as { [key: string]: string };
+
+        const fromInteraction = await interactionMessage(req);
+        if (fromInteraction) {
+            await deleteInteractionMessage(fromInteraction.interaction, fromInteraction.message);
+            return res.sendStatus(204);
+        }
 
         await assertValidWebhookAuth(webhook_id, webhook_token, message_id);
 

@@ -13,7 +13,7 @@ export class MessageFlags extends BitField {
         URGENT: 1n << 4n,
         HAS_THREAD: 1n << 5n,
         EPHEMERAL: 1n << 6n,
-        LOADING: 1n << 17n,
+        LOADING: 1n << 7n,
         FAILED_TO_MENTION_SOME_ROLES_IN_THREAD: 1n << 8n,
         GUILD_FEED_HIDDEN: 1n << 9n,
         SHOULD_SHOW_LINK_NOT_DISCORD_WARNING: 1n << 10n,

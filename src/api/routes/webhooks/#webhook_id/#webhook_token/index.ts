@@ -17,13 +17,12 @@
 */
 
 import { Request, Response, Router } from "express";
-import { HTTPError } from "lambert-server/HTTPError";
 import multer from "multer";
 import { route } from "@spacebar/api/middlewares";
-import { Webhook, Message } from "@spacebar/database";
-import { Config, DiscordApiErrors, emitEvent, handleFile, ValidateName, WebhooksUpdateEvent } from "@spacebar/util";
-import { executeWebhook } from "@spacebar/api/util/handlers/Webhook";
-import type { WebhookResponse, WebhookUpdateSchema } from "@spacebar/schemas";
+import { Webhook } from "@spacebar/database";
+import { Config, DiscordApiErrors, emitEvent, WebhooksUpdateEvent } from "@spacebar/util";
+import { applyWebhookUpdate, executeWebhook, webhookToJSON } from "@spacebar/api/util/handlers/Webhook";
+import type { WebhookUpdateSchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
 
@@ -56,13 +55,7 @@ router.get(
             throw DiscordApiErrors.INVALID_WEBHOOK_TOKEN_PROVIDED;
         }
 
-        return res.json({
-            ...webhook,
-            user: webhook.user.toPartialUser(),
-            source_guild: webhook.source_guild?.toIntegrationGuild(),
-            source_channel: webhook.source_channel?.toWebhookChannel(),
-            url: Config.get().api.endpointPublic + "/webhooks/" + webhook.id + "/" + webhook.token,
-        } satisfies WebhookResponse);
+        return res.json(webhookToJSON(webhook, { withToken: true }));
     },
 );
 
@@ -141,7 +134,6 @@ router.delete(
         if (webhook.token !== webhook_token) throw DiscordApiErrors.INVALID_WEBHOOK_TOKEN_PROVIDED;
 
         const channel_id = webhook.channel_id;
-        await Message.delete({ channel_id, webhook_id });
         await Webhook.delete({ id: webhook_id });
 
         await emitEvent({
@@ -184,16 +176,7 @@ router.patch(
         if (webhook.token != webhook_token) throw DiscordApiErrors.INVALID_WEBHOOK_TOKEN_PROVIDED;
 
         const channel_id = webhook.channel_id;
-        if (!body.name && !body.avatar) {
-            throw new HTTPError("Empty webhook updates are not allowed", 50006);
-        }
-        if (body.avatar) body.avatar = await handleFile(`/avatars/${webhook_id}`, body.avatar as string);
-
-        if (body.name) {
-            ValidateName(body.name);
-        }
-
-        webhook.assign(body);
+        await applyWebhookUpdate(webhook, body, false);
 
         await Promise.all([
             webhook.save(),
@@ -206,7 +189,7 @@ router.patch(
                 },
             } satisfies WebhooksUpdateEvent),
         ]);
-        res.status(204);
+        res.json(webhookToJSON(webhook, { withToken: true }));
     },
 );
 

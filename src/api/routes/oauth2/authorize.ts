@@ -18,8 +18,9 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { Application, Member, Role, User } from "@spacebar/database";
-import { ApiError, DiscordApiErrors, FieldErrors, Permissions, getPermission } from "@spacebar/util";
+import { Application, ApplicationAuthorization, Member, Role, User } from "@spacebar/database";
+import { DiscordApiErrors, FieldErrors, Permissions, Snowflake, emitEvent, getPermission, GuildRoleCreateEvent } from "@spacebar/util";
+import { emitCommandIndexUpdate } from "@spacebar/api/util/handlers/ApplicationCommands";
 import { ApplicationAuthorizeSchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
@@ -67,7 +68,7 @@ router.get(
         // TODO: use DiscordApiErrors
         // findOneOrFail throws code 404
         if (!app) throw DiscordApiErrors.UNKNOWN_APPLICATION;
-        if (!app.bot) throw DiscordApiErrors.OAUTH2_APPLICATION_BOT_ABSENT;
+        if (!app.bot && req.query.integration_type !== "1") throw DiscordApiErrors.OAUTH2_APPLICATION_BOT_ABSENT;
 
         const bot = app.bot;
         delete app.bot;
@@ -140,7 +141,7 @@ router.get(
                 verify_key: app.verify_key,
                 flags: app.flags,
             },
-            bot: {
+            bot: bot && {
                 id: bot.id,
                 username: bot.username,
                 avatar: bot.avatar,
@@ -148,9 +149,12 @@ router.get(
                 discriminator: bot.discriminator,
                 public_flags: bot.public_flags,
                 bot: true,
-                approximated_guild_count: 0, // TODO
+                approximated_guild_count: await Member.count({ where: { id: bot.id } }),
             },
-            authorized: false,
+            authorized:
+                req.query.integration_type === "1"
+                    ? await ApplicationAuthorization.exists({ where: { user_id: req.user_id, application_id: app.id, integration_type: 1 } })
+                    : false,
         });
     },
 );
@@ -193,14 +197,7 @@ router.post(
             });
         }
 
-        // TODO: ensure guild_id is not an empty string
-        // TODO: captcha verification
-        // TODO: MFA verification
-
-        const perms = await getPermission(req.user_id, body.guild_id, undefined, { member_relations: ["user"] });
-        // getPermission cache won't exist if we're owner
-        if (Object.keys(perms.cache || {}).length > 0 && perms.cache.member?.user.bot) throw DiscordApiErrors.UNAUTHORIZED;
-        perms.hasThrow("MANAGE_GUILD");
+        if (!body.authorize) return res.json({ location: "/oauth2/authorized" });
 
         const app = await Application.findOne({
             where: {
@@ -208,28 +205,50 @@ router.post(
             },
             relations: { bot: true },
         });
+        if (!app) throw DiscordApiErrors.UNKNOWN_APPLICATION;
+        if (body.integration_type === 1) {
+            const scopes = String(req.query.scope ?? "applications.commands")
+                .split(/[\s+]+/)
+                .filter(Boolean);
+            const existing = await ApplicationAuthorization.findOne({ where: { user_id: req.user_id, application_id: app.id } });
+            await ApplicationAuthorization.save({
+                ...(existing ?? { id: Snowflake.generate(), created_at: new Date() }),
+                user_id: req.user_id,
+                application_id: app.id,
+                integration_type: 1,
+                scopes: [...new Set([...(existing?.scopes ?? []), ...scopes])],
+            } as ApplicationAuthorization);
+            return res.json({ location: "/oauth2/authorized" });
+        }
+        if (!app.bot) throw DiscordApiErrors.OAUTH2_APPLICATION_BOT_ABSENT;
+        if (!body.guild_id) throw FieldErrors({ guild_id: { code: "BASE_TYPE_REQUIRED", message: req.t("common:field.BASE_TYPE_REQUIRED") } });
 
-        // TODO: use DiscordApiErrors
-        // findOneOrFail throws code 404
-        if (!app) throw new ApiError("Unknown Application", 10002, 404);
-        if (!app.bot) throw new ApiError("OAuth2 application does not have a bot", 50010, 400);
+        const perms = await getPermission(req.user_id, body.guild_id, undefined, { member_relations: ["user"] });
+        if (Object.keys(perms.cache || {}).length > 0 && perms.cache.member?.user.bot) throw DiscordApiErrors.UNAUTHORIZED;
+        perms.hasThrow("MANAGE_GUILD");
+
+        if (await Member.exists({ where: { id: app.bot.id, guild_id: body.guild_id } })) return res.json({ location: "/oauth2/authorized" });
 
         await Member.addToGuild(app.bot.id, body.guild_id);
-        if (body.permissions) {
+        const permissions = new Permissions(body.permissions ?? "0").bitfield & perms.bitfield;
+        if (permissions) {
             const role = Role.create({
                 managed: true,
                 name: app.name,
-                permissions: body.permissions,
+                permissions: permissions.toString(),
                 guild_id: body.guild_id,
                 color: 0,
                 colors: { primary_color: 0 },
                 hoist: false,
                 mentionable: false,
-                position: 1, // TODO: calculate actual position and move stuff around
+                position: 1,
+                tags: { bot_id: app.bot.id },
             });
             await role.save();
+            await emitEvent({ event: "GUILD_ROLE_CREATE", guild_id: body.guild_id, data: { guild_id: body.guild_id, role } } satisfies GuildRoleCreateEvent);
             await Member.addRole(app.bot.id, body.guild_id, role.id);
         }
+        await emitCommandIndexUpdate(app.id, body.guild_id);
 
         return res.json({
             location: "/oauth2/authorized", // redirect URL

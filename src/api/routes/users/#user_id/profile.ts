@@ -20,9 +20,11 @@ import { Request, Response, Router } from "express";
 import { In } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
 import { profileMetadata, resolveProfileCollectibles } from "@spacebar/api/util";
-import { Application, Badge, Member, Relationship, User } from "@spacebar/database";
+import { Badge, Member, Relationship, User } from "@spacebar/database";
 import { Config, emitEvent, FieldErrors, handleFile, UserUpdateEvent } from "@spacebar/util";
 import { PartialConnectedAccountResponse, PrivateUserProjection, PublicUserProjection, RelationshipType, UserProfileModifySchema } from "@spacebar/schemas";
+
+import { profileApplication } from "@spacebar/api/util/handlers/Application";
 
 const router: Router = Router({ mergeParams: true });
 
@@ -109,8 +111,6 @@ router.get("/", route({ responses: { 200: { body: "UserProfileResponse" } } }), 
             ...(x.metadata_visibility != 0 && x.metadata_ ? { metadata: x.metadata_ } : {}),
         }));
 
-    const application = user.bot ? await Application.findOne({ where: { bot: { id: user_id } }, select: { id: true, flags: true } }) : null;
-
     res.json({
         user: { ...user.toPartialUser(), bio: user.bio ?? "" },
         connected_accounts,
@@ -123,7 +123,7 @@ router.get("/", route({ responses: { 200: { body: "UserProfileResponse" } } }), 
         guild_badges: [],
         widgets: [],
         legacy_username: null,
-        ...(application ? { application: { id: application.id, flags: application.flags, verified: false } } : {}),
+        ...(user.bot ? { application: await profileApplication(user.id) } : {}),
         ...(mutual_guilds ? { mutual_guilds } : {}),
         ...(mutual_friends ? { mutual_friends } : {}),
         ...(mutual_friends_count !== undefined ? { mutual_friends_count } : {}),

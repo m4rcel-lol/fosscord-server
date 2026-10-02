@@ -569,6 +569,36 @@ export interface InteractionFailureEvent extends Event {
     };
 }
 
+export interface InteractionModalCreateEvent extends Event {
+    event: "INTERACTION_MODAL_CREATE";
+    data: {
+        id: Snowflake;
+        nonce?: string;
+        channel_id: Snowflake;
+        custom_id: string;
+        title: string;
+        components: object[];
+        application: object;
+    };
+}
+
+export interface GuildApplicationCommandIndexUpdateEvent extends Event {
+    event: "GUILD_APPLICATION_COMMAND_INDEX_UPDATE";
+    data: {
+        guild_id: Snowflake;
+        application_command_counts: Record<number, number>;
+        version: Snowflake;
+    };
+}
+
+export interface ApplicationCommandAutocompleteResponseEvent extends Event {
+    event: "APPLICATION_COMMAND_AUTOCOMPLETE_RESPONSE";
+    data: {
+        nonce?: string;
+        choices: object[];
+    };
+}
+
 export interface MessageAckEvent extends Event {
     event: "MESSAGE_ACK";
     data: {
@@ -852,6 +882,10 @@ export type EVENT =
     | "INTERACTION_CREATE"
     | "INTERACTION_SUCCESS"
     | "INTERACTION_FAILURE"
+    | "INTERACTION_MODAL_CREATE"
+    | "APPLICATION_COMMAND_AUTOCOMPLETE_RESPONSE"
+    | "GUILD_APPLICATION_COMMAND_INDEX_UPDATE"
+    | "APPLICATION_COMMAND_PERMISSIONS_UPDATE"
     | "VOICE_STATE_UPDATE"
     | "VOICE_SERVER_UPDATE"
     | "STREAM_CREATE"

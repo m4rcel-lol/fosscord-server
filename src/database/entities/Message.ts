@@ -44,6 +44,7 @@ import {
     Reaction,
     UnfurledMediaItem,
     PartialUser,
+    PublicUser,
     InteractionType,
 } from "@spacebar/schemas";
 import { MessageFlags, proxyEmbedMedia } from "@spacebar/util";
@@ -114,8 +115,8 @@ export class Message extends BaseClass {
     @JsonRemoveEmpty
     webhook_id?: string;
 
-    @JoinColumn({ name: "webhook_id", foreignKeyConstraintName: "FK_message_webhook_id" })
-    @ManyToOne(() => Webhook)
+    @JoinColumn({ name: "webhook_id" })
+    @ManyToOne(() => Webhook, { createForeignKeyConstraints: false })
     webhook?: Webhook;
 
     @Column({ nullable: true })
@@ -264,6 +265,9 @@ export class Message extends BaseClass {
         id: string;
         type: InteractionType;
         name: string;
+        user?: PublicUser;
+        command_id?: string;
+        options?: unknown[];
     };
 
     @Column({ type: "jsonb", nullable: true })
@@ -363,7 +367,7 @@ export class Message extends BaseClass {
             author_id: undefined,
             member_id: undefined,
             webhook_id: this.webhook_id ?? undefined,
-            application_id: undefined,
+            application_id: this.application_id ?? undefined,
             mentions: this.mentions?.map((user) => {
                 if (user && !user.toPublicUser) console.trace("toPublic user missing!!!");
                 return (user?.toPublicUser?.() ?? user ?? undefined) as unknown as PartialUser;
@@ -377,7 +381,7 @@ export class Message extends BaseClass {
             tts: this.tts ?? false,
             guild: undefined,
             webhook: this.webhook?.toMessageWebhook() ?? undefined,
-            interaction: this.interaction ?? undefined,
+            interaction: this.interaction ? { id: this.interaction.id, type: this.interaction.type, name: this.interaction.name, user: this.interaction.user } : undefined,
             interaction_metadata: this.interaction_metadata ?? undefined,
             reactions: undefined,
             sticker_items: this.sticker_items ?? undefined,
