@@ -492,4 +492,14 @@ export class Member extends BaseClassWithoutId {
 
         return member as PublicMember;
     }
+
+    toSupplementalMember() {
+        return {
+            member: { ...this.toPublicMember(), roles: (this.roles ?? []).map((r) => r.id).filter((id) => id !== this.guild_id) },
+            source_invite_code: null,
+            join_source_type: 0,
+            inviter_id: null,
+            integration_type: null,
+        };
+    }
 }
