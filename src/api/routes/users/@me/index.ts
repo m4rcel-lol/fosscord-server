@@ -21,7 +21,7 @@ import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { EmailChange } from "@spacebar/api/util";
 import { AvatarDecoration, User } from "@spacebar/database";
-import { CollectibleItemType, Collectibles, Config, emitEvent, FieldErrors, generateToken, handleFile, UserUpdateEvent } from "@spacebar/util";
+import { CollectibleItemType, Collectibles, Config, emitEvent, FieldErrors, generateToken, handleFile, Snowflake, UserUpdateEvent } from "@spacebar/util";
 import { PrivateUserProjection, UserFlags, UserModifySchema } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
@@ -66,7 +66,7 @@ router.patch(
 
         const user = await User.findOneOrFail({
             where: { id: req.user_id },
-            select: Object.fromEntries([...PrivateUserProjection, "data"].map((i) => [i, true])), //TODO: cleanup
+            select: Object.fromEntries([...PrivateUserProjection, "data", "recent_avatars"].map((i) => [i, true])), //TODO: cleanup
         });
 
         let newToken: string | undefined;
@@ -88,7 +88,19 @@ router.patch(
                 });
         };
 
-        if (body.avatar !== undefined) Object.assign(user, { avatar: body.avatar ? await handleFile(`/avatars/${req.user_id}`, body.avatar) : null });
+        if (body.avatar_id) {
+            const recent = user.recent_avatars?.find((x) => x.id === body.avatar_id);
+            if (!recent) throw FieldErrors({ avatar_id: { code: "UNKNOWN_AVATAR", message: "Unknown avatar" } });
+            user.avatar = recent.storage_hash;
+        } else if (body.avatar !== undefined) {
+            const avatar = body.avatar ? await handleFile(`/avatars/${req.user_id}`, body.avatar) : null;
+            Object.assign(user, { avatar });
+            if (avatar)
+                user.recent_avatars = [
+                    { id: Snowflake.generate(), storage_hash: avatar, description: body.avatar_description ?? null },
+                    ...(user.recent_avatars ?? []).filter((x) => x.storage_hash !== avatar),
+                ].slice(0, 10);
+        }
         if (body.banner !== undefined) Object.assign(user, { banner: body.banner ? await handleFile(`/banners/${req.user_id}`, body.banner) : null });
 
         if (body.email && body.email !== user.email) {

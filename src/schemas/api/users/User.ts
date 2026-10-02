@@ -90,6 +90,12 @@ export interface AvatarDecorationData {
     expires_at: string | null;
 }
 
+export interface RecentAvatar {
+    id: Snowflake;
+    storage_hash: string;
+    description: string | null;
+}
+
 export interface ProfileCollectible {
     sku_id: Snowflake;
     type: number;

@@ -10945,6 +10945,19 @@
                     }
                 ]
             },
+            "recent_avatars": {
+                "anyOf": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/definitions/RecentAvatar"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
             "avatar_decoration": {
                 "$ref": "#/definitions/AvatarDecoration"
             },
@@ -11583,6 +11596,31 @@
             "expires_at",
             "sku_id",
             "type"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "RecentAvatar": {
+        "type": "object",
+        "properties": {
+            "id": {
+                "description": "A Twitter-like snowflake, except the epoch is 2015-01-01T00:00:00.000Z\n```\nIf we have a snowflake '266241948824764416' we can represent it as binary:\n\n64                                          22     17     12          0\n 000000111011000111100001101001000101000000  00001  00000  000000000000\n      number of ms since Discord epoch       worker  pid    increment\n```",
+                "type": "string"
+            },
+            "storage_hash": {
+                "type": "string"
+            },
+            "description": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "description",
+            "id",
+            "storage_hash"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },

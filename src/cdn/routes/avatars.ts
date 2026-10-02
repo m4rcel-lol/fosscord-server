@@ -89,6 +89,7 @@ export const getAvatar = async (req: Request, res: Response) => {
 };
 
 router.get("/:user_id/:hash", setCacheControl, getAvatar);
+router.get("/:user_id/archived/:avatar_id/:hash", setCacheControl, getAvatar);
 
 router.delete("/:user_id/:id", async (req: Request, res: Response) => {
     if (req.headers.signature !== Config.get().security.requestSignature) throw new HTTPError("Invalid request signature");
