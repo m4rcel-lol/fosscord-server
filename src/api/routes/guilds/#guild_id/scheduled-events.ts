@@ -130,14 +130,19 @@ const applyBody = async (userId: string, guildId: string, body: EventBody, event
     }
     if (body.scheduled_start_time !== undefined) {
         const start = parseTime("scheduled_start_time", body.scheduled_start_time);
-        if ((creating || start.getTime() !== new Date(event.scheduled_start_time).getTime()) && start.getTime() < Date.now() - 60_000 && event.status === GuildScheduledEventStatus.SCHEDULED)
+        if (
+            (creating || start.getTime() !== new Date(event.scheduled_start_time).getTime()) &&
+            start.getTime() < Date.now() - 60_000 &&
+            event.status === GuildScheduledEventStatus.SCHEDULED
+        )
             fail("scheduled_start_time", "Cannot schedule event in the past.", "GUILD_SCHEDULED_EVENT_SCHEDULE_PAST");
         event.scheduled_start_time = start;
     }
     if (body.scheduled_end_time !== undefined) event.scheduled_end_time = body.scheduled_end_time === null ? null : parseTime("scheduled_end_time", body.scheduled_end_time);
     if (body.entity_metadata !== undefined) {
         const location = body.entity_metadata?.location;
-        if (location != null && (typeof location !== "string" || location.length > 100)) fail("entity_metadata.location", "Must be between 1 and 100 in length.", "BASE_TYPE_BAD_LENGTH");
+        if (location != null && (typeof location !== "string" || location.length > 100))
+            fail("entity_metadata.location", "Must be between 1 and 100 in length.", "BASE_TYPE_BAD_LENGTH");
         event.entity_metadata = location ? { location: location.trim() } : null;
     }
     if (body.channel_id !== undefined) event.channel_id = body.channel_id || null;
@@ -282,8 +287,24 @@ router.get("/:event_id/users/counts", route({ responses: { 200: {}, 404: { body:
     const exceptionIds = (Array.isArray(raw) ? raw : raw ? String(raw).split(",") : []).map(String).filter(Boolean).slice(0, 10);
     const total = (await ScheduledEvents.userCounts([event.id])).get(event.id) ?? 0;
     const exceptionCounts: Record<string, number> = {};
-    for (const id of exceptionIds)
-        exceptionCounts[id] = await GuildScheduledEventUser.count({ where: { guild_scheduled_event_id: event.id, guild_scheduled_event_exception_id: id, response: 0 } });
+    if (exceptionIds.length) {
+        const series = await GuildScheduledEventUser.find({
+            where: { guild_scheduled_event_id: event.id, guild_scheduled_event_exception_id: IsNull(), response: 1 },
+            select: { user_id: true },
+        });
+        const overrides = await GuildScheduledEventUser.find({
+            where: { guild_scheduled_event_id: event.id, guild_scheduled_event_exception_id: In(exceptionIds) },
+            select: { user_id: true, guild_scheduled_event_exception_id: true, response: true },
+        });
+        for (const id of exceptionIds) {
+            const interested = new Set(series.map((row) => row.user_id));
+            for (const row of overrides.filter((o) => o.guild_scheduled_event_exception_id === id)) {
+                if (row.response === 1) interested.add(row.user_id);
+                else interested.delete(row.user_id);
+            }
+            exceptionCounts[id] = interested.size;
+        }
+    }
     res.json({ guild_scheduled_event_count: total, guild_scheduled_event_exception_counts: exceptionCounts });
 });
 
@@ -317,27 +338,31 @@ router.delete("/:event_id/users/@me", route({ responses: { 204: {}, 404: { body:
 router.put("/:event_id/:exception_id/users/@me", route({ responses: { 200: {}, 404: { body: "APIErrorResponse" } } }), putMe);
 router.delete("/:event_id/:exception_id/users/@me", route({ responses: { 204: {}, 404: { body: "APIErrorResponse" } } }), deleteMe);
 
-router.post("/:event_id/exceptions", route({ responses: { 200: {}, 400: { body: "APIErrorResponse" }, 403: { body: "APIErrorResponse" } } }), async (req: Request, res: Response) => {
-    const event = await findVisibleEvent(req);
-    await assertCanManage(req.user_id, event.guild_id, event);
-    if (!event.recurrence_rule) fail("recurrence_rule", "Event is not recurring.", "GUILD_SCHEDULED_EVENT_NOT_RECURRING");
-    const { original_scheduled_start_time, scheduled_start_time, scheduled_end_time, is_canceled } = req.body ?? {};
-    const original = parseTime("original_scheduled_start_time", original_scheduled_start_time).toISOString();
-    const existing = event.exceptions.find((e) => e.original_scheduled_start_time === original);
-    const exception = {
-        event_exception_id: existing?.event_exception_id ?? Snowflake.generate(),
-        event_id: event.id,
-        guild_id: event.guild_id,
-        original_scheduled_start_time: original,
-        scheduled_start_time: scheduled_start_time ? parseTime("scheduled_start_time", scheduled_start_time).toISOString() : null,
-        scheduled_end_time: scheduled_end_time ? parseTime("scheduled_end_time", scheduled_end_time).toISOString() : null,
-        is_canceled: !!is_canceled,
-    };
-    event.exceptions = [...event.exceptions.filter((e) => e.event_exception_id !== exception.event_exception_id), exception];
-    await event.save();
-    await emitEvent({ event: existing ? "GUILD_SCHEDULED_EVENT_EXCEPTION_UPDATE" : "GUILD_SCHEDULED_EVENT_EXCEPTION_CREATE", guild_id: event.guild_id, data: exception });
-    res.json(exception);
-});
+router.post(
+    "/:event_id/exceptions",
+    route({ responses: { 200: {}, 400: { body: "APIErrorResponse" }, 403: { body: "APIErrorResponse" } } }),
+    async (req: Request, res: Response) => {
+        const event = await findVisibleEvent(req);
+        await assertCanManage(req.user_id, event.guild_id, event);
+        if (!event.recurrence_rule) fail("recurrence_rule", "Event is not recurring.", "GUILD_SCHEDULED_EVENT_NOT_RECURRING");
+        const { original_scheduled_start_time, scheduled_start_time, scheduled_end_time, is_canceled } = req.body ?? {};
+        const original = parseTime("original_scheduled_start_time", original_scheduled_start_time).toISOString();
+        const existing = event.exceptions.find((e) => e.original_scheduled_start_time === original);
+        const exception = {
+            event_exception_id: existing?.event_exception_id ?? Snowflake.generate(),
+            event_id: event.id,
+            guild_id: event.guild_id,
+            original_scheduled_start_time: original,
+            scheduled_start_time: scheduled_start_time ? parseTime("scheduled_start_time", scheduled_start_time).toISOString() : null,
+            scheduled_end_time: scheduled_end_time ? parseTime("scheduled_end_time", scheduled_end_time).toISOString() : null,
+            is_canceled: !!is_canceled,
+        };
+        event.exceptions = [...event.exceptions.filter((e) => e.event_exception_id !== exception.event_exception_id), exception];
+        await event.save();
+        await emitEvent({ event: existing ? "GUILD_SCHEDULED_EVENT_EXCEPTION_UPDATE" : "GUILD_SCHEDULED_EVENT_EXCEPTION_CREATE", guild_id: event.guild_id, data: exception });
+        res.json(exception);
+    },
+);
 
 router.patch("/:event_id/exceptions/:exception_id", route({ responses: { 200: {}, 404: { body: "APIErrorResponse" } } }), async (req: Request, res: Response) => {
     const event = await findVisibleEvent(req);
@@ -394,11 +419,15 @@ router.patch("/:event_id", route({ responses: { 200: {}, 400: { body: "APIErrorR
     await event.save();
 
     const stage = status !== event.status && event.entity_type === GuildScheduledEventEntityType.STAGE_INSTANCE && event.channel_id ? event.channel_id : null;
-    if (stage && status === GuildScheduledEventStatus.ACTIVE && !(await StageInstances.get(stage))) await StageInstances.create(event.guild_id, stage, event.name, event.privacy_level, event.id);
+    if (stage && status === GuildScheduledEventStatus.ACTIVE && !(await StageInstances.get(stage)))
+        await StageInstances.create(event.guild_id, stage, event.name, event.privacy_level, event.id);
     if (stage && status === GuildScheduledEventStatus.COMPLETED) await StageInstances.delete(stage);
 
     const fresh = await findEvent(event.guild_id, event.id);
-    const data = fresh.status === event.status && status !== event.status ? await ScheduledEvents.setStatus(fresh, status) : await ScheduledEvents.publish(fresh, "GUILD_SCHEDULED_EVENT_UPDATE");
+    const data =
+        fresh.status === event.status && status !== event.status
+            ? await ScheduledEvents.setStatus(fresh, status)
+            : await ScheduledEvents.publish(fresh, "GUILD_SCHEDULED_EVENT_UPDATE");
 
     await AuditLog.log({
         guild_id: event.guild_id,
