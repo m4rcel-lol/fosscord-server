@@ -38,6 +38,7 @@ import {
     PartialMessage,
     Poll,
     PublicMessage,
+    PublicReaction,
     Reaction,
     UnfurledMediaItem,
     PartialUser,
@@ -315,6 +316,17 @@ export class Message extends BaseClass {
         }
     }
 
+    static publicReactions(reactions: Reaction[] | undefined, userId?: string): PublicReaction[] {
+        return (reactions ?? []).map(({ emoji, user_ids, burst_user_ids, burst_colors }) => ({
+            emoji,
+            count: user_ids.length + (burst_user_ids?.length ?? 0),
+            count_details: { burst: burst_user_ids?.length ?? 0, normal: user_ids.length },
+            burst_colors: burst_colors ?? [],
+            me: !!userId && user_ids.includes(userId),
+            me_burst: !!userId && !!burst_user_ids?.includes(userId),
+        }));
+    }
+
     toJSON(shallow = false): PublicMessage {
         // this.clean_data();
         return {
@@ -344,7 +356,7 @@ export class Message extends BaseClass {
             webhook: this.webhook?.toMessageWebhook() ?? undefined,
             interaction: this.interaction ?? undefined,
             interaction_metadata: this.interaction_metadata ?? undefined,
-            reactions: this.reactions ?? undefined,
+            reactions: undefined,
             sticker_items: this.sticker_items ?? undefined,
             message_reference: this.message_reference ?? undefined,
             mention_everyone: this.mention_everyone ?? false,

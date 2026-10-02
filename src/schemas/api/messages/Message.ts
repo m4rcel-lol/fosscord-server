@@ -123,6 +123,17 @@ export interface Reaction {
     //// not saved in the database // me: boolean; // whether the current user reacted using this emoji
     emoji: PartialEmoji;
     user_ids: Snowflake[];
+    burst_user_ids?: Snowflake[];
+    burst_colors?: string[];
+}
+
+export interface PublicReaction {
+    count: number;
+    count_details: { burst: number; normal: number };
+    emoji: PartialEmoji;
+    me: boolean;
+    me_burst: boolean;
+    burst_colors: string[];
 }
 
 // aka { animated } & OneOf<{id},{name}>
@@ -179,7 +190,7 @@ export interface PublicMessage {
     mention_channels?: PublicChannel[]; // TODO: PartialPublicChannel
     attachments: PublicAttachment[];
     embeds: Embed[];
-    reactions?: Reaction[];
+    reactions?: PublicReaction[];
     nonce?: number | string;
     pinned: boolean;
     webhook_id?: Snowflake;

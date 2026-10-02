@@ -12447,6 +12447,18 @@
                         "items": {
                             "type": "string"
                         }
+                    },
+                    "burst_user_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "burst_colors": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
                     }
                 },
                 "required": [
@@ -15465,7 +15477,7 @@
                     "reactions": {
                         "type": "array",
                         "items": {
-                            "$ref": "#/components/schemas/Reaction"
+                            "$ref": "#/components/schemas/PublicReaction"
                         }
                     },
                     "nonce": {
@@ -15566,6 +15578,53 @@
                     "tts",
                     "type",
                     "webhook"
+                ]
+            },
+            "PublicReaction": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer"
+                    },
+                    "count_details": {
+                        "type": "object",
+                        "properties": {
+                            "burst": {
+                                "type": "integer"
+                            },
+                            "normal": {
+                                "type": "integer"
+                            }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                            "burst",
+                            "normal"
+                        ]
+                    },
+                    "emoji": {
+                        "$ref": "#/components/schemas/PartialEmoji"
+                    },
+                    "me": {
+                        "type": "boolean"
+                    },
+                    "me_burst": {
+                        "type": "boolean"
+                    },
+                    "burst_colors": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "burst_colors",
+                    "count",
+                    "count_details",
+                    "emoji",
+                    "me",
+                    "me_burst"
                 ]
             },
             "MessageActivity": {

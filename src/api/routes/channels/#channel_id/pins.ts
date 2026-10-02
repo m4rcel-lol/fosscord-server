@@ -197,7 +197,7 @@ router.get(
         });
         await Message.fillReplies(pins);
 
-        res.send(pins.map((_) => _.toJSON()));
+        res.send(pins.map((message) => ({ ...message.toJSON(), reactions: Message.publicReactions(message.reactions, req.user_id) })));
     },
 );
 

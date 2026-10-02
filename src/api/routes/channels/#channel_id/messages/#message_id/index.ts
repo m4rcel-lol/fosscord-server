@@ -102,7 +102,7 @@ router.patch(
                 data: { ...message.toJSON(), nonce: undefined },
             } satisfies MessageUpdateEvent);
             if (unsuppressed) postHandleMessage(message).catch((e) => console.error("[Message] post-message handler failed", e));
-            return res.json(message.toJSON());
+            return res.json({ ...message.toJSON(), reactions: Message.publicReactions(message.reactions, req.user_id) });
         }
 
         if (message.poll) {
@@ -140,7 +140,7 @@ router.patch(
 
         postHandleMessage(new_message).catch((e) => console.error("[Message] post-message handler failed", e));
 
-        return res.json(new_message.toJSON());
+        return res.json({ ...new_message.toJSON(), reactions: Message.publicReactions(new_message.reactions, req.user_id) });
     },
 );
 
@@ -282,7 +282,7 @@ router.get(
 
         if (message.author_id !== req.user_id) permissions.hasThrow("READ_MESSAGE_HISTORY");
 
-        return res.json(message.toJSON());
+        return res.json({ ...message.toJSON(), reactions: Message.publicReactions(message.reactions, req.user_id) });
     },
 );
 

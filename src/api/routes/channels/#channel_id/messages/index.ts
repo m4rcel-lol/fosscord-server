@@ -49,7 +49,6 @@ import {
     PartialUser,
     PollAnswerCount,
     PublicMessage,
-    Reaction,
     ReadStateType,
     RelationshipType,
 } from "@spacebar/schemas";
@@ -173,13 +172,7 @@ router.get(
         await Message.fillReplies(messages);
         const ret = messages.map((msg) => {
             const x = msg.toJSON();
-
-            (x.reactions || []).forEach((y: Partial<Reaction>) => {
-                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-                //@ts-ignore
-                if ((y.user_ids || []).includes(req.user_id)) y.me = true;
-                delete y.user_ids;
-            });
+            if (msg.reactions?.length) x.reactions = Message.publicReactions(msg.reactions, req.user_id);
             if (!x.author)
                 x.author = {
                     id: "4",

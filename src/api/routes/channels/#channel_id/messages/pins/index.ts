@@ -197,7 +197,7 @@ router.get(
         await Message.fillReplies(pins);
 
         const items = pins.map((message: Message) => ({
-            message: message.toJSON(),
+            message: { ...message.toJSON(), reactions: Message.publicReactions(message.reactions, req.user_id) },
             pinned_at: message.pinned_at,
         }));
 
