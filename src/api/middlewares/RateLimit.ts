@@ -122,11 +122,11 @@ export default function rateLimit(opts: {
                     if (current && current.hits >= max_hits) return reject(current);
                     setHeaders(current);
                     res.once("finish", () => {
-                        if (counts()) hitStoredRoute(hitOpts).catch((e) => console.error("[RateLimit] failed to store hit", e));
+                        if (counts()) StoredRateLimit.hit(key, executor_id, max_hits, opts.window).catch((e) => console.error("[RateLimit] failed to store hit", e));
                     });
                     return next();
                 }
-                const limit = await hitStoredRoute(hitOpts);
+                const limit = await StoredRateLimit.hit(key, executor_id, max_hits, opts.window);
                 if (limit.hits > max_hits) return reject(limit);
                 setHeaders(limit);
                 next();
@@ -150,20 +150,6 @@ export default function rateLimit(opts: {
 
         next();
     };
-}
-
-async function hitStoredRoute(opts: { key: string; executor_id: string; max_hits: number; window: number }): Promise<RateLimit> {
-    const now = new Date();
-    const [row] = (await StoredRateLimit.getRepository().query(
-        `INSERT INTO rate_limits (id, executor_id, hits, blocked, expires_at) VALUES ($1, $2, 1, $3, $4)
-         ON CONFLICT (id) DO UPDATE SET
-             hits = CASE WHEN rate_limits.expires_at <= $5 THEN 1 ELSE rate_limits.hits + 1 END,
-             expires_at = CASE WHEN rate_limits.expires_at <= $5 THEN EXCLUDED.expires_at ELSE rate_limits.expires_at END,
-             blocked = (CASE WHEN rate_limits.expires_at <= $5 THEN 1 ELSE rate_limits.hits + 1 END) >= $6
-         RETURNING hits, blocked, expires_at`,
-        [opts.key, opts.executor_id, opts.max_hits <= 1, new Date(now.getTime() + opts.window * 1000), now, opts.max_hits],
-    )) as { hits: number; blocked: boolean; expires_at: Date }[];
-    return { id: opts.key, executor_id: opts.executor_id, hits: row.hits, blocked: row.blocked, expires_at: new Date(row.expires_at) };
 }
 
 export async function initRateLimits(app: Router) {
