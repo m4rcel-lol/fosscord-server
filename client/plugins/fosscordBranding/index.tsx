@@ -20,6 +20,8 @@ import definePlugin from "@utils/types";
 
 import { FosscordAuthor } from "../fosscordCore/shared";
 
+const NOT_AN_ARGUMENT = String.raw`(?<!\[\d+,"[\w$]*)`;
+
 const instanceName = () => String((window as any).GLOBAL_ENV?.INSTANCE_NAME || "Fosscord").replace(/['"\\<>]/g, "");
 
 const LOGO_PATH =
@@ -54,20 +56,16 @@ export default definePlugin({
             noWarn: true,
             replacement: [
                 {
-                    match: /Discord Nitro/g,
-                    replace: () => `${instanceName()} Premium`,
-                },
-                {
-                    match: /(["> ])Nitro(?=[ ."<,!?])/g,
-                    replace: "$1Premium",
+                    match: new RegExp(`${NOT_AN_ARGUMENT}Nitro`, "g"),
+                    replace: "Premium",
                 },
                 {
                     match: /"Qq\+A6i":\["Scan this with the ",\[8,"\$b",\["[^"]*"\]\]," to log in instantly\."\]/,
                     replace: () => `"Qq+A6i":["Scan this with the camera of a phone that is ",[8,"$b",["logged in to ${instanceName()}"]]," to log in instantly."]`,
                 },
                 {
-                    match: /(["> ])Discord(?=['’]s|[ ."<,!?:]|\\u2019|\\u2014|\\'|-|\))/g,
-                    replace: (_, before) => `${before}${instanceName()}`,
+                    match: new RegExp(`${NOT_AN_ARGUMENT}Discord`, "g"),
+                    replace: () => instanceName(),
                 },
             ],
         },

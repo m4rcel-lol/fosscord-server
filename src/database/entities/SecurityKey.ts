@@ -49,8 +49,10 @@ export class SecurityKey extends BaseClass {
     static async authenticatorTypes(user_id: string) {
         const [keys, user] = await Promise.all([
             SecurityKey.count({ where: { user_id } }),
-            User.findOne({ where: { id: user_id }, select: { id: true, mfa_enabled: true, totp_secret: true } }),
+            User.findOne({ where: { id: user_id }, select: { id: true, mfa_enabled: true, totp_secret: true, flags: true, phone: true } }),
         ]);
-        return [...(keys ? [1] : []), ...(user?.mfa_enabled && user.totp_secret ? [2] : [])];
+        const totp = !!(user?.mfa_enabled && user.totp_secret);
+        const sms = totp && !!user?.phone && (BigInt(String(user.flags ?? 0)) & 16n) === 16n;
+        return [...(keys ? [1] : []), ...(totp ? [2] : []), ...(sms ? [3] : [])];
     }
 }

@@ -24,7 +24,9 @@ import { verifyToken } from "node-2fa";
 import { In } from "typeorm";
 import { BackupCode, SecurityKey, Session, User, generateMfaBackupCodes } from "@spacebar/database";
 import { EVENT, Event, JwtKeypairManager, UserUpdateEvent, emitEvent } from "@spacebar/util";
-import { PrivateUserProjection } from "@spacebar/schemas";
+import { PrivateUserProjection, UserFlags } from "@spacebar/schemas";
+import { revokeStaleE2eeDevices } from "./e2ee";
+import { PhoneVerification } from "./phoneVerification";
 
 export class ResponseError extends Error {
     constructor(
@@ -93,6 +95,25 @@ export async function consumeBackupCode(user_id: string, code: unknown) {
 }
 
 export const authenticatorTypes = (user_id: string) => SecurityKey.authenticatorTypes(user_id);
+
+export const hasSmsFlag = (flags: unknown) => (BigInt(String(flags ?? 0)) & UserFlags.FLAGS.MFA_SMS) === UserFlags.FLAGS.MFA_SMS;
+
+export async function smsPhone(user_id: string) {
+    const user = await User.findOne({ where: { id: user_id }, select: { id: true, flags: true, phone: true, mfa_enabled: true, totp_secret: true } });
+    if (!user?.phone || !user.mfa_enabled || !user.totp_secret || !hasSmsFlag(user.flags)) return null;
+    return user.phone;
+}
+
+export async function setSmsFlag(user_id: string, enabled: boolean) {
+    const user = await User.findOneOrFail({ where: { id: user_id }, select: { id: true, flags: true } });
+    const flags = BigInt(String(user.flags ?? 0));
+    const next = enabled ? flags | UserFlags.FLAGS.MFA_SMS : flags & ~UserFlags.FLAGS.MFA_SMS;
+    if (next === flags) return false;
+    await User.update({ id: user_id }, { flags: Number(next) });
+    return true;
+}
+
+export const redactPhone = (phone: string) => `+${"*".repeat(Math.max(phone.length - 5, 0))}${phone.slice(-4)}`;
 
 export function assertionOptions(origin: string, credentials: SecurityKey[], userVerification = "preferred", mediation?: string) {
     const challenge = b64url(crypto.randomBytes(32));
@@ -230,6 +251,7 @@ export async function mfaChallenge(req: Request, user_id: string) {
         methods.push({ type: "webauthn", challenge: options });
     }
     if (user.mfa_enabled && user.totp_secret) methods.push({ type: "totp", backup_codes_allowed: true });
+    if (await smsPhone(user_id)) methods.push({ type: "sms" });
     if (methods.length) methods.push({ type: "backup" });
     else if (user.data?.hash) methods.push({ type: "password" });
     return { ticket: signTicket({ typ: "mfa", uid: user_id, ch, origin }), methods };
@@ -244,6 +266,10 @@ export async function verifyMfaMethod(user_id: string, type: string, data: unkno
     if (type === "password") {
         const user = await User.findOneOrFail({ where: { id: user_id }, select: { id: true, data: true } });
         return typeof data === "string" && !!user.data?.hash && bcrypt.compare(data, user.data.hash);
+    }
+    if (type === "sms") {
+        const phone = await smsPhone(user_id);
+        return !!phone && !!PhoneVerification.verify(phone, data, user_id);
     }
     if (type === "webauthn") {
         if (!ticket.ch || !ticket.origin) return false;
@@ -290,13 +316,14 @@ export async function loginMfaResponse(req: Request, user: User, extra: Record<s
     const keys = await SecurityKey.find({ where: { user_id: user.id } });
     const totp = !!(user.mfa_enabled && user.totp_secret);
     if (!totp && !keys.length) return null;
+    const sms = !!(await smsPhone(user.id));
     const origin = requestOrigin(req);
     const assertion = keys.length ? assertionOptions(origin, keys) : null;
     return {
         user_id: user.id,
         token: null,
         mfa: true,
-        sms: false,
+        sms,
         totp,
         backup: true,
         webauthn: assertion?.options ?? null,
@@ -344,6 +371,7 @@ export async function revokeSessions(user_id: string, except?: string) {
         await emitEvent({ session_id: session.session_id, event: "SB_SESSION_REMOVE", origin: "Sessions revoked" } as Event);
         await Session.delete({ session_id: session.session_id });
     }
+    await revokeStaleE2eeDevices(user_id);
 }
 
 export const currentToken = (req: Request) => (req.headers.authorization ?? "").replace(/^(Bot|Bearer) /, "");

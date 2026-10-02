@@ -88,6 +88,18 @@ router.patch(
             });
         }
 
+        if (body.redirect_uris) {
+            const invalid = body.redirect_uris.findIndex((uri) => {
+                try {
+                    return uri.length > 2048 || !new URL(uri).protocol;
+                } catch {
+                    return true;
+                }
+            });
+            if (invalid !== -1) throw FieldErrors({ [`redirect_uris.${invalid}`]: { code: "URL_TYPE_INVALID_URL", message: "Not a well formed URL." } });
+            body.redirect_uris = [...new Set(body.redirect_uris)];
+        }
+
         if (body.guild_id) {
             const guild = await Guild.findOneOrFail({
                 where: { id: body.guild_id },

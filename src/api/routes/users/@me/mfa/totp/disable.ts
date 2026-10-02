@@ -18,7 +18,7 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { MfaInvalidCode, ResponseError, currentToken, emitUserUpdate, hasRecentMfa, requireMfa, verifyMfaMethod } from "@spacebar/api/util";
+import { MfaInvalidCode, ResponseError, currentToken, emitUserUpdate, hasRecentMfa, requireMfa, setSmsFlag, verifyMfaMethod } from "@spacebar/api/util";
 import { BackupCode, SecurityKey, User } from "@spacebar/database";
 
 const router = Router({ mergeParams: true });
@@ -46,6 +46,7 @@ router.post(
 
         const keys = await SecurityKey.count({ where: { user_id: req.user_id } });
         await User.update({ id: req.user_id }, { mfa_enabled: keys > 0, totp_secret: "" });
+        await setSmsFlag(req.user_id, false);
         if (!keys) await BackupCode.update({ user: { id: req.user_id } }, { expired: true });
         await emitUserUpdate(req.user_id);
 

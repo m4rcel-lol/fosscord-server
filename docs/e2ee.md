@@ -22,6 +22,8 @@ The MVP has no per-message forward secrecy. Weekly prekey rotation with old priv
 
 A new device registers as pending. Peers only encrypt to it once the identity key signs it. The new device gets the identity key from the key backup, unlocked by the account password, by a recovery code, or by another device approving it over the gateway. The next section covers all three.
 
+The server ties each device to the session that registered it, and the client re-links its stored device to the current session every time it loads. Logging a session out, whether from that browser, from Logged-in Devices or through a password change, revokes the devices that no longer belong to a live session, so senders stop wrapping keys to them.
+
 The server rejects a send with `409 E2EE_DEVICE_MISMATCH` when the envelope skips an active device of any recipient, including the sender's own other devices. The client then refetches keys and re-encrypts before the UI sees a failure. This check only catches mistakes, the server is never trusted with confidentiality.
 
 Safety numbers use Signal's numeric fingerprint (60 digits plus a QR code). A changed identity key blocks sending in that DM until the user acknowledges it, and a verified contact drops back to unverified.
@@ -44,6 +46,7 @@ Content keys reach the backup in two ways. Every new envelope carries a `backup`
 This is the default. The client patch hooks `POST /auth/login`, `POST /auth/register` and `PATCH /users/@me` in the HTTP client, so it sees the password before it leaves the browser and uses it only after the server accepts it. It derives a 32-byte key with Argon2id from `hash-wasm` (64 MiB, 3 iterations, parallelism 1) and the salt in the backup row. Nothing derived from the password goes to the server, only the sealed secret.
 
 - After the first login, the device creates the identity and the backup in one go.
+- A device that holds the identity but never saw the password, such as a session from before the backup existed or a QR login, doesn't create a backup without a sealed secret. It shows a notice above the composer in encrypted conversations and a field in Settings > Encryption that ask for the password, checks it with `POST /users/@me/e2ee/password`, and then creates or seals the backup.
 - On a new browser, logging in fetches the backup, unseals the secret, restores the identity key, signs the new device and decrypts the history. There are no prompts.
 - A password change reseals the backup secret under the new password with a fresh salt. The backup keypair stays, so no content key needs resealing. If the browser doing the change doesn't hold the secret, it unseals it with the old password first.
 - If a device holds the secret and logs in with a password that doesn't open the backup, it reseals the backup with that password, since the login just proved it's correct.
@@ -52,7 +55,7 @@ Users from before the backup existed have an identity key that WebCrypto created
 
 ### Recovery-code mode
 
-In the encryption settings the backup can switch to a recovery code: 32 characters from Crockford's base32 alphabet, about 160 bits, shown once as a grid of four-character groups. The code only replaces the password lock after the user clicks "I saved it", and the dialog can't be closed with Escape or a backdrop click while the code is on screen. The secret is then sealed under HKDF-SHA256 of the code, and the password no longer opens it. A new browser shows the unlock dialog after login and asks for the code. Switching back to the password asks for it and checks it with `POST /users/@me/e2ee/password` before resealing, which works for accounts without an email.
+In Settings > Encryption the backup can switch to a recovery code: 32 characters from Crockford's base32 alphabet, about 160 bits, shown once as a grid of four-character groups. The code only replaces the password lock after the user clicks "I saved it", and the dialog can't be closed with Escape or a backdrop click while the code is on screen. The secret is then sealed under HKDF-SHA256 of the code, and the password no longer opens it. A new browser shows the unlock dialog after login and asks for the code. Switching back to the password asks for it and checks it with `POST /users/@me/e2ee/password` before resealing, which works for accounts without an email.
 
 ### Resetting encryption
 
@@ -118,7 +121,7 @@ A small loader in `assets/client_patches/10-e2ee-loader.js` pushes a fake chunk 
 
 The heavy code is bundled with esbuild into `assets/public/e2ee/e2ee.js`. The `fosscordE2ee` Vencord plugin connects it to Discord's own UI: a pre-send hook that keeps a refused message in the composer, the sticker and attach menu changes, and the Encryption page in User Settings. When the loader can't find a hook it shows an "E2EE unavailable in this client build" banner and refuses to send in encrypted channels. It never falls back to plaintext. `scripts/e2ee-anchors.js` checks the anchor strings after every `npm run generate:client`.
 
-The UI adds a lock after each decrypted message, a lock button in the DM header that turns encryption on (one way, so it can't be downgraded) and shows a check once every member is verified, safety numbers with a QR code and a verify button, key-change notices and the device settings.
+The UI adds a lock after each decrypted message, a lock button in the DM header that turns encryption on (one way, so it can't be downgraded) and shows a check once every member is verified, safety numbers with a QR code and a verify button, key-change notices, and an Encryption page in User Settings for the key backup, the recovery code and the device list.
 
 ## Server work
 

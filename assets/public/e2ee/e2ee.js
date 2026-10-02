@@ -2635,6 +2635,17 @@ ${sig}`;
     get locked() {
       return !!this.userId && !this.linked;
     }
+    get backupNeedsPassword() {
+      if (!this.linked || !this.identity || this.identity.publicKey !== this.serverKey) return false;
+      const backup = this.backup?.identity_key === this.serverKey ? this.backup : null;
+      if (!backup) return true;
+      return backup.mode === "password" && !backup.wrapped_secret && !!this.secret;
+    }
+    async backUpWithPassword(password) {
+      this.password = { value: password, at: Date.now() };
+      await this.refresh();
+      if (this.backupNeedsPassword) throw new E2eeError("BAD_SECRET", "Your keys couldn't be backed up. Try again in a moment.");
+    }
     rememberPassword(value) {
       this.password = { value, at: Date.now() };
       if (this.userId) this.refresh().catch((error) => console.error("[e2ee] password refresh failed", error));
@@ -2730,6 +2741,7 @@ ${sig}`;
       return this.password?.value ?? null;
     }
     async createBackup(state, identityJwk) {
+      if (!this.passwordValue()) return;
       const userId = this.userId;
       let identity = this.identity;
       if (!identityJwk) {
@@ -2746,10 +2758,11 @@ ${sig}`;
         identity = await this.adoptIdentity(identityJwk);
         this.directory.delete(userId);
       }
+      const password = this.passwordValue();
+      if (!password) return;
       const secret = randomBytes(32);
       const backupJwk = await generateExportable("X25519");
-      const password = this.passwordValue();
-      const secretFields = password ? await wrapSecret(userId, "password", password, secret) : { mode: "password", kdf: PASSWORD_KDF, salt: toB64u(randomBytes(16)), wrapped_secret: null };
+      const secretFields = await wrapSecret(userId, "password", password, secret);
       this.backup = await this.api.request("put", "/users/@me/e2ee/backup", {
         version: this.backup?.version ?? 0,
         ...secretFields,
@@ -2759,7 +2772,7 @@ ${sig}`;
         backup_key_signature: await sign(identity.privateKey, backupKeyMessage(userId, backupJwk.x)),
         wrapped_backup_key: await sealJwk(secret, "backup-key", userId, backupJwk)
       });
-      if (password) this.password = null;
+      this.password = null;
       this.secret = secret;
       await this.store.set("backup-secret", secret);
       this.backupKeyPair = { publicKey: backupJwk.x, keyPair: await importAgreementJwk(backupJwk) };
@@ -2801,7 +2814,6 @@ ${sig}`;
       this.encryptedChannels = new Set(state.channels);
       this.identity = await store.get("identity") ?? null;
       this.trustedKey = await store.get("trusted-identity") ?? null;
-      this.device = await store.get("device") ?? null;
       this.prekeys = await store.get("prekeys") ?? [];
       this.secret = await store.get("backup-secret") ?? null;
       this.backup = await this.fetchBackup();
@@ -2892,6 +2904,8 @@ ${sig}`;
     }
     async unlockWith(kind, input) {
       const backup = this.backup = await this.fetchBackup();
+      if (kind === "password" && (!backup || backup.mode === "password" && !backup.wrapped_secret))
+        throw new E2eeError("BAD_SECRET", "Your keys aren't backed up with your password yet.");
       if (!backup?.wrapped_secret || backup.mode !== kind) throw new E2eeError("BAD_SECRET", "There's no backup to unlock with that");
       const secret = await unwrapSecret(this.userId, backup, input).catch(() => null);
       if (!secret) throw new E2eeError("BAD_SECRET", kind === "password" ? "That password didn't unlock your keys" : "That recovery code didn't work");
@@ -4160,6 +4174,7 @@ ${approver}`;
     let members = null;
     let scheduled = false;
     let tooltip = null;
+    let backupPromptDismissed = false;
     const mount = () => {
       if (!style.isConnected) document.head.append(style);
     };
@@ -4466,7 +4481,14 @@ ${approver}`;
       dialog("Unlock encrypted messages", (body, actions, { el, close }) => {
         const backup = engine2.backup;
         describe(body, "This browser can't read your encrypted messages yet. Bring your keys over with one of these.");
-        if (backup?.wrapped_secret && backup.identity_key === engine2.serverKey) {
+        if (!backup || backup.mode === "password" && !backup.wrapped_secret) {
+          const own = section(
+            "Enter your password",
+            "If your keys aren't backed up with your password yet, open the app on a browser you used before. It asks for your password once, and then it works here too."
+          );
+          own.append(unlockForm("password"));
+          body.append(own);
+        } else if (backup.wrapped_secret && backup.identity_key === engine2.serverKey) {
           const own = section(
             backup.mode === "recovery" ? "Enter your recovery code" : "Enter your password",
             backup.mode === "recovery" ? "Use the code you saved when you switched to a recovery code." : void 0
@@ -4558,6 +4580,40 @@ ${approver}`;
       });
     };
     const dismissApproval = (requestId) => approvals.get(requestId)?.();
+    const backupPasswordForm = (onDone) => {
+      const { wrap, input, row, setError } = field("Account password", "password", "current-password");
+      const save = button("Back up keys", "primary", async () => {
+        if (!input.value) return setError("Enter your password.");
+        save.disabled = true;
+        setError(null);
+        try {
+          if (!await verifyPassword2(input.value)) return setError("That password isn't right.");
+          await engine2.backUpWithPassword(input.value);
+          onDone();
+        } catch (error) {
+          setError(error instanceof Error ? error.message : String(error));
+        } finally {
+          save.disabled = false;
+        }
+      });
+      input.addEventListener("keydown", (event) => event.key === "Enter" && save.click());
+      row.append(save);
+      return wrap;
+    };
+    const showBackupPassword = () => dialog("Back up your encryption keys", (body, actions, { close }) => {
+      describe(
+        body,
+        "Your encryption keys only exist in this browser right now. Enter your account password to lock a backup of them with it, so any browser you sign in to can read your encrypted messages."
+      );
+      body.append(
+        backupPasswordForm(() => {
+          close();
+          const channelId = currentChannel();
+          if (channelId) flash(channelId, { tone: "info", text: "Your encryption keys are backed up." }, 5e3);
+        })
+      );
+      actions.append(button("Not now", "secondary", close));
+    });
     const showRecoveryCode = () => dialog("Use a recovery code", (body, actions, { close, setDismissable }) => {
       const intro = describe(
         body,
@@ -4662,12 +4718,17 @@ ${approver}`;
       let backupKey = "";
       const renderBackup = (force = false) => {
         const backup = engine2.backup;
-        const key = `${backup?.mode}|${backup?.version}|${!!backup?.wrapped_secret}|${engine2.hasSecret}`;
+        const key = `${backup?.mode}|${backup?.version}|${!!backup?.wrapped_secret}|${engine2.hasSecret}|${engine2.backupNeedsPassword}`;
         if (!force && key === backupKey) return;
         backupKey = key;
         clear(backupSection);
         backupSection.dataset.mode = backup?.mode ?? "none";
-        if (!backup) return void describe(backupSection, "Your keys aren't backed up yet. Sign in on a browser that can read your messages to create the backup.");
+        if (engine2.backupNeedsPassword) {
+          describe(backupSection, "Your keys aren't backed up yet, so new browsers can't read your encrypted messages. Enter your account password to back them up.");
+          backupSection.append(backupPasswordForm(() => renderBackup(true)));
+          return;
+        }
+        if (!backup) return void describe(backupSection, "Your keys aren't backed up yet. Open the app on a browser that can read your messages to back them up.");
         if (backup.mode === "recovery")
           describe(backupSection, "Your keys are backed up and locked with a recovery code. New browsers ask for that code, and your password can't unlock them.");
         else if (backup.wrapped_secret)
@@ -4675,7 +4736,11 @@ ${approver}`;
             backupSection,
             "Your keys are backed up and locked with your account password, so new browsers unlock as soon as you sign in. Someone with a copy of the server's database could try to guess a weak password offline."
           );
-        else describe(backupSection, "Your keys are backed up. The password lock gets added the next time you sign in.");
+        else
+          describe(
+            backupSection,
+            "Your keys are backed up, but they aren't locked with your password yet. Open the app on a browser that can read your messages to finish the backup."
+          );
         if (!engine2.hasSecret) return;
         if (backup.mode === "password") {
           backupSection.append(
@@ -4727,7 +4792,6 @@ ${approver}`;
       };
       const render = () => {
         renderBrowser();
-        renderBackup();
         renderDevices();
       };
       render();
@@ -4874,6 +4938,19 @@ ${approver}`;
         };
       if (temporary) return temporary;
       if (engine2.locked) return { tone: "info", text: "Unlock this browser to read and send encrypted messages here.", action: { label: "Unlock", run: showUnlock } };
+      if (engine2.backupNeedsPassword && !backupPromptDismissed)
+        return {
+          tone: "info",
+          text: "Back up your encryption keys with your password so your other browsers can read your encrypted messages.",
+          action: {
+            label: "Back up",
+            run: () => {
+              backupPromptDismissed = true;
+              refresh();
+              showBackupPassword();
+            }
+          }
+        };
       return null;
     };
     const decorateNotice = (channelId) => {

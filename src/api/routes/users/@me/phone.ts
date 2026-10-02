@@ -20,7 +20,7 @@ import bcrypt from "bcrypt";
 import { Request, Response, Router } from "express";
 import { Not } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
-import { PhoneVerification, emitUserUpdate, passwordMismatch } from "@spacebar/api/util";
+import { PhoneVerification, emitUserUpdate, passwordMismatch, setSmsFlag } from "@spacebar/api/util";
 import { User } from "@spacebar/database";
 import { FieldErrors } from "@spacebar/util";
 
@@ -47,6 +47,7 @@ router.post("/", route({ responses: { 204: {}, 400: { body: "APIErrorResponse" }
     await User.update({ id: req.user_id }, { phone: verified });
     for (const other of previous) {
         await User.update({ id: other.id }, { phone: null });
+        await setSmsFlag(other.id, false);
         await emitUserUpdate(other.id);
     }
     await emitUserUpdate(req.user_id);
@@ -56,6 +57,7 @@ router.post("/", route({ responses: { 204: {}, 400: { body: "APIErrorResponse" }
 router.delete("/", route({ responses: { 204: {}, 400: { body: "APIErrorResponse" } } }), async (req: Request, res: Response) => {
     await checkPassword(req.user_id, (req.body as { password?: string })?.password);
     await User.update({ id: req.user_id }, { phone: null });
+    await setSmsFlag(req.user_id, false);
     await emitUserUpdate(req.user_id);
     res.sendStatus(204);
 });
