@@ -118,9 +118,9 @@ router.delete(
             req.permission!.hasThrow("MANAGE_THREADS");
             const data = { id: channel_id, guild_id: channel.guild_id, parent_id: channel.parent_id, type: channel.type };
             const transaction_id = Snowflake.generate();
+            await Channel.delete({ id: channel_id });
             await emitEvent({ event: "THREAD_DELETE", data, channel_id, transaction_id } satisfies ThreadDeleteEvent);
             if (!channel.isPrivateThread()) await emitEvent({ event: "THREAD_DELETE", data, channel_id: channel.parent_id!, transaction_id } satisfies ThreadDeleteEvent);
-            await Channel.delete({ id: channel_id });
         } else {
             req.permission!.hasThrow("MANAGE_CHANNELS");
             if (channel.type == ChannelType.GUILD_CATEGORY) {
@@ -141,14 +141,12 @@ router.delete(
                 }
             }
 
-            await Promise.all([
-                Channel.deleteChannel(channel),
-                emitEvent({
-                    event: "CHANNEL_DELETE",
-                    data: channel.toJSON(),
-                    channel_id,
-                } satisfies ChannelDeleteEvent),
-            ]);
+            await Channel.deleteChannel(channel);
+            await emitEvent({
+                event: "CHANNEL_DELETE",
+                data: channel.toJSON(),
+                channel_id,
+            } satisfies ChannelDeleteEvent);
         }
 
         res.send(channel);
