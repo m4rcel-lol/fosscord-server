@@ -17,6 +17,7 @@
 */
 
 import crypto from "node:crypto";
+import { IncomingMessage } from "node:http";
 import WS from "ws";
 import jwt from "jsonwebtoken";
 import { JwtKeypairManager, listenEvent } from "@spacebar/util";
@@ -27,7 +28,18 @@ const HEARTBEAT_INTERVAL = 41250;
 const encrypt = (key: crypto.KeyObject, data: Buffer | string) =>
     crypto.publicEncrypt({ key, padding: crypto.constants.RSA_PKCS1_OAEP_PADDING, oaepHash: "sha256" }, Buffer.from(data)).toString("base64");
 
-export function RemoteAuthConnection(socket: WS) {
+export function RemoteAuthConnection(socket: WS, request: IncomingMessage) {
+    const origin = request.headers.origin;
+    if (origin && origin !== "null") {
+        let host: string | undefined;
+        try {
+            host = new URL(origin).host;
+        } catch {
+            host = undefined;
+        }
+        if (host !== request.headers.host) return socket.close(4000, "Invalid origin");
+    }
+
     let publicKey: crypto.KeyObject | undefined;
     let encodedKey: string | undefined;
     let nonce: Buffer | undefined;

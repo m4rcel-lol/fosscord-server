@@ -43,7 +43,7 @@ export class GatewayServer extends Server {
         this.http.on("upgrade", (request, socket, head) => {
             if (request.url?.startsWith("/remote-auth"))
                 return this.remoteAuth.handleUpgrade(request, socket, head, (socket) => {
-                    RemoteAuthConnection(socket);
+                    RemoteAuthConnection(socket, request);
                 });
             this.ws.handleUpgrade(request, socket, head, (socket) => {
                 this.ws.emit("connection", socket, request);
