@@ -89,7 +89,7 @@ export class Session extends BaseClassWithoutId {
     getDiscordDeviceInfo() {
         return {
             id_hash: crypto.createHash("sha256").update(this.session_id).digest("hex"),
-            approx_last_used_time: (this.last_seen ?? new Date(0)).toISOString(),
+            approx_last_used_time: (this.last_seen ?? this.created_at ?? new Date()).toISOString(),
             client_info: {
                 os: this.client_info?.os,
                 platform:
@@ -108,7 +108,7 @@ export class Session extends BaseClassWithoutId {
             status: this.status,
             activities: this.activities,
             client_status: this.client_status,
-            approx_last_used_time: (this.last_seen ?? new Date(0)).toISOString(),
+            approx_last_used_time: (this.last_seen ?? this.created_at ?? new Date()).toISOString(),
             client_info: {
                 ...(this.client_info ?? {}),
                 location: this.last_seen_location,
