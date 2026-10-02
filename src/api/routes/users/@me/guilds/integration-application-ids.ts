@@ -1,48 +1,38 @@
 /*
 	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
-	Copyright (C) 2023 Spacebar and Spacebar Contributors
-	
+	Copyright (C) 2026 Spacebar and Spacebar Contributors
+
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU Affero General Public License as published
 	by the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
-	
+
 	This program is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU Affero General Public License for more details.
-	
+
 	You should have received a copy of the GNU Affero General Public License
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Router, Request, Response } from "express";
-import { Member } from "@spacebar/database";
+import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
+import { Member } from "@spacebar/database";
 
 const router = Router({ mergeParams: true });
 
 router.get("/", route({}), async (req: Request, res: Response) => {
-    const { guild_id, role_id } = req.params as { [key: string]: string };
+    const rows: { guild_id: string; application_id: string }[] = await Member.createQueryBuilder("bot")
+        .select("bot.guild_id", "guild_id")
+        .addSelect("bot.id", "application_id")
+        .innerJoin("bot.user", "user", "user.bot = true")
+        .innerJoin(Member, "me", "me.guild_id = bot.guild_id AND me.id = :user_id", { user_id: req.user_id })
+        .getRawMany();
 
-    await Member.IsInGuildOrFail(req.user_id, guild_id);
-
-    // Does not return results for the @everyone role
-    if (guild_id == role_id) return res.json([]);
-
-    // TODO: Is this route really not paginated?
-    const members = await Member.find({
-        select: { index: true, id: true },
-        where: {
-            roles: {
-                id: role_id,
-            },
-            guild_id,
-        },
-        take: 100,
-    });
-
-    return res.json(members.map((x) => x.id));
+    const result: Record<string, string[]> = {};
+    for (const { guild_id, application_id } of rows) (result[guild_id] ??= []).push(`${application_id}`);
+    res.json(result);
 });
 
 export default router;

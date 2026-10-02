@@ -4135,6 +4135,16 @@
                     }
                 ]
             },
+            "incidents_data": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/GuildIncidentsData"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
             "premium_features": {
                 "type": "object",
                 "properties": {
@@ -14006,6 +14016,16 @@
                     }
                 ]
             },
+            "incidents_data": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/GuildIncidentsData"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
             "premium_features": {
                 "type": "object",
                 "properties": {
@@ -15604,6 +15624,49 @@
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
+    "GuildIncidentsData": {
+        "type": "object",
+        "properties": {
+            "invites_disabled_until": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "dms_disabled_until": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "dm_spam_detected_at": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "raid_detected_at": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "lockdown_duration_hours": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "dm_spam_detected_at",
+            "dms_disabled_until",
+            "invites_disabled_until",
+            "raid_detected_at"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
     "UserGuildSettings": {
         "type": "object",
         "properties": {
@@ -16125,6 +16188,7 @@
             "type": {
                 "enum": [
                     "article",
+                    "auto_moderation_message",
                     "gifv",
                     "image",
                     "link",

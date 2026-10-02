@@ -70,6 +70,7 @@ export interface IReadyGuildDTO {
         vanity_url_code?: string | null;
         premium_tier: number | undefined;
         premium_progress_bar_enabled: boolean;
+        incidents_data: unknown | null;
         system_channel_flags: number | undefined;
         discovery_splash?: string | null;
         rules_channel_id?: string | null;
@@ -129,6 +130,7 @@ export class ReadyGuildDTO implements IReadyGuildDTO {
         vanity_url_code?: string | null;
         premium_tier: number | undefined;
         premium_progress_bar_enabled: boolean;
+        incidents_data: unknown | null;
         system_channel_flags: number | undefined;
         discovery_splash?: string | null;
         rules_channel_id?: string | null;
@@ -198,6 +200,7 @@ export class ReadyGuildDTO implements IReadyGuildDTO {
             vanity_url_code: guild.vanity_url_code ?? null,
             premium_tier: guild.premium_tier,
             premium_progress_bar_enabled: guild.premium_progress_bar_enabled,
+            incidents_data: guild.incidents_data ?? null,
             system_channel_flags: guild.system_channel_flags,
             discovery_splash: guild.discovery_splash,
             rules_channel_id: guild.rules_channel_id,

@@ -1,43 +1,40 @@
 /*
 	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
-	Copyright (C) 2023 Spacebar and Spacebar Contributors
-	
+	Copyright (C) 2026 Spacebar and Spacebar Contributors
+
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU Affero General Public License as published
 	by the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
-	
+
 	This program is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU Affero General Public License for more details.
-	
+
 	You should have received a copy of the GNU Affero General Public License
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
-import { MoreThan } from "typeorm";
+import { Brackets } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
 import { Member } from "@spacebar/database";
-import { PublicMemberProjection, PublicUserProjection } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
-
-// TODO: send over websocket
-// TODO: check for GUILD_MEMBERS intent
 
 router.get(
     "/",
     route({
         query: {
+            query: {
+                type: "string",
+                description: "username, global name or nickname prefix to match",
+            },
             limit: {
                 type: "number",
                 description: "max number of members to return (1-1000). default 1",
-            },
-            after: {
-                type: "string",
             },
         },
         responses: {
@@ -53,25 +50,28 @@ router.get(
         const { guild_id } = req.params as { [key: string]: string };
         const limit = Number(req.query.limit) || 1;
         if (limit > 1000 || limit < 1) throw new HTTPError("Limit must be between 1 and 1000");
-        const after = typeof req.query.after === "string" && /^\d+$/.test(req.query.after) ? req.query.after : "0";
+        const query = typeof req.query.query === "string" ? req.query.query.toLowerCase() : "";
 
         await Member.IsInGuildOrFail(req.user_id, guild_id);
 
-        const members = await Member.find({
-            where: { guild_id, id: MoreThan(after) },
-            relations: { user: true, roles: true },
-            select: {
-                index: true,
-                ...Object.fromEntries(PublicMemberProjection.map((x) => [x, true])),
-                user: Object.fromEntries(PublicUserProjection.map((x) => [x, true])),
-                roles: { id: true },
-            },
-            take: limit,
-            order: { id: "ASC" },
-        });
+        const prefix = `${query.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+        const members = await Member.createQueryBuilder("member")
+            .leftJoinAndSelect("member.user", "user")
+            .leftJoinAndSelect("member.roles", "role")
+            .where("member.guild_id = :guild_id", { guild_id })
+            .andWhere(
+                new Brackets((qb) =>
+                    qb
+                        .where("LOWER(user.username) LIKE :prefix", { prefix })
+                        .orWhere("LOWER(user.global_name) LIKE :prefix", { prefix })
+                        .orWhere("LOWER(member.nick) LIKE :prefix", { prefix }),
+                ),
+            )
+            .orderBy("member.joined_at", "ASC")
+            .getMany();
 
         return res.json(
-            members.map((m) => ({
+            members.slice(0, limit).map((m) => ({
                 ...m.toPublicMember(),
                 user: m.user.toPublicUser(),
                 roles: m.roles.map((x) => x.id).filter((id) => id !== guild_id),

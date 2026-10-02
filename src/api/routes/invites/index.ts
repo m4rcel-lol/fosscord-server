@@ -17,7 +17,7 @@
 */
 
 import { route } from "@spacebar/api/middlewares";
-import { AuditLog, Ban, Guild, Invite, PublicInviteRelation } from "@spacebar/database";
+import { AuditLog, Ban, Guild, Invite, Member, PublicInviteRelation } from "@spacebar/database";
 import { Config, DiscordApiErrors, emitEvent, getPermission, InviteDeleteEvent } from "@spacebar/util";
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
@@ -51,6 +51,7 @@ router.get(
             throw DiscordApiErrors.UNKNOWN_INVITE;
         }
 
+        await invite.guild.withPresenceCount();
         res.status(200).send(invite.toPublicJSON());
     },
 );
@@ -84,7 +85,7 @@ router.post(
         });
         if (!found) throw DiscordApiErrors.UNKNOWN_INVITE;
         const { guild_id } = found;
-        const { features } = await Guild.findOneOrFail({
+        const { features, incidents_data } = await Guild.findOneOrFail({
             where: { id: guild_id },
         });
         const ban = await Ban.findOne({
@@ -112,6 +113,11 @@ router.post(
         if (features.includes("INVITES_DISABLED")) {
             console.log(`[Invite] User ${req.user_id} tried to join guild ${guild_id} but joins are closed.`);
             throw new HTTPError("Sorry, this guild has joins closed.", 403);
+        }
+
+        const invitesPaused = incidents_data?.invites_disabled_until && new Date(incidents_data.invites_disabled_until).getTime() > Date.now();
+        if (invitesPaused && !(await Member.findOne({ where: { id: req.user_id, guild_id }, select: { index: true } }))) {
+            throw new HTTPError("Invites to this server are paused.", 403);
         }
 
         const { new_member } = await Invite.joinGuild(req.user_id, invite_code);

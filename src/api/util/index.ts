@@ -39,3 +39,6 @@ export * from "./utility/phoneVerification";
 export * from "./utility/harvest";
 export * from "./utility/games";
 export * from "./utility/domainConnection";
+export * from "./utility/GuildPowerups";
+export * from "./utility/automod";
+export * from "./utility/detectableGames";

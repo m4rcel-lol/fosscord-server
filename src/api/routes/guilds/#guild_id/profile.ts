@@ -41,7 +41,7 @@ router.get(
         const guild = await Guild.findOne({ where: { id: guild_id } });
         if (!guild) throw DiscordApiErrors.UNKNOWN_GUILD;
 
-        res.send(guild.toGuildProfile());
+        res.send((await guild.withPresenceCount()).toGuildProfile());
     },
 );
 
@@ -100,7 +100,7 @@ router.patch(
             guild_id,
         } satisfies GuildUpdateEvent);
 
-        res.json(guild.toGuildProfile());
+        res.json((await guild.withPresenceCount()).toGuildProfile());
     },
 );
 

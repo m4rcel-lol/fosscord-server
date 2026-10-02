@@ -67,6 +67,14 @@ import { InviteGuild } from "@spacebar/schemas/api/guilds/Invite";
 // 		"Gacha"
 // 	],
 
+export interface GuildIncidentsData {
+    invites_disabled_until: string | null;
+    dms_disabled_until: string | null;
+    dm_spam_detected_at: string | null;
+    raid_detected_at: string | null;
+    lockdown_duration_hours?: number | null;
+}
+
 export const GuildPowerupFeatures = [
     "ENHANCED_ROLE_COLORS",
     "GUILD_TAGS",
@@ -77,7 +85,7 @@ export const GuildPowerupFeatures = [
     "GUILD_THEME",
 ];
 
-export const GuildBoostFeatures = ["ANIMATED_BANNER", "ANIMATED_ICON", "BANNER", "INVITE_SPLASH", "ROLE_ICONS", "VANITY_URL", ...GuildPowerupFeatures];
+export const GuildBoostFeatures = ["ANIMATED_BANNER", "ANIMATED_ICON", "BANNER", "INVITE_SPLASH", "ROLE_ICONS", "VANITY_URL", "PREMIUM_TIER_3_OVERRIDE", ...GuildPowerupFeatures];
 
 export const GuildBoostCount = 33;
 
@@ -354,6 +362,9 @@ export class Guild extends BaseClass {
     @Column({ type: "jsonb", nullable: true })
     discovery_metadata?: GuildDiscoveryMetadata | null;
 
+    @Column({ type: "jsonb", nullable: true })
+    incidents_data?: GuildIncidentsData | null;
+
     premium_features?: {
         features: string[];
         additional_emoji_slots: number;
@@ -366,7 +377,7 @@ export class Guild extends BaseClass {
         this.premium_tier = GuildPremiumTier.TIER_3;
         this.premium_subscription_count = Math.max(this.premium_subscription_count ?? 0, GuildBoostCount);
         this.features = [...new Set([...(this.features ?? []), ...GuildBoostFeatures])];
-        this.premium_features = { features: GuildPowerupFeatures, additional_emoji_slots: 0, additional_sticker_slots: 0, additional_sound_slots: 0 };
+        this.premium_features = { features: GuildPowerupFeatures, additional_emoji_slots: 200, additional_sticker_slots: 55, additional_sound_slots: 40 };
     }
 
     async toDiscoverableGuild(): Promise<DiscoverableGuild | null> {
@@ -590,6 +601,7 @@ export class Guild extends BaseClass {
             discovery_weight: undefined,
             discovery_excluded: undefined,
             vanity_url_code: this.vanity_url_code ?? null,
+            incidents_data: this.incidents_data ?? null,
             profile: this.profile?.tag ? ({ tag: this.profile.tag, badge: this.profile.badge_hash ?? null } as GuildProfileSettings) : null,
             home_settings: undefined,
             onboarding: undefined,
@@ -619,6 +631,19 @@ export class Guild extends BaseClass {
             nsfw: this.nsfw,
             nsfw_level: this.nsfw_level ?? GuildNsfwLevel.DEFAULT,
         } satisfies InviteGuild;
+    }
+
+    static async countPresences(guild_id: string) {
+        const [{ count }] = await Member.query(
+            `SELECT COUNT(DISTINCT s.user_id) AS count FROM sessions s INNER JOIN members m ON m.id = s.user_id WHERE m.guild_id = $1 AND s.status NOT IN ('offline', 'invisible')`,
+            [guild_id],
+        );
+        return Number(count) || 0;
+    }
+
+    async withPresenceCount() {
+        this.presence_count = await Guild.countPresences(this.id);
+        return this;
     }
 
     toGuildProfile(): GuildProfileResponse {

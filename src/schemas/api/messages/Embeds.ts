@@ -56,6 +56,7 @@ export enum EmbedType {
     article = "article",
     link = "link",
     poll_result = "poll_result",
+    auto_moderation_message = "auto_moderation_message",
 }
 
 export interface EmbedImage {
