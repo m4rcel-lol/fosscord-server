@@ -19,7 +19,7 @@
 import { In, Not } from "typeorm";
 import { PreloadedUserSettings } from "discord-protos";
 import { Capabilities, CLOSECODES, OPCODES, Payload, Send, setupListener, WebSocket } from "@spacebar/gateway";
-import { arrayGroupBy, ElapsedTime, Stopwatch, timeFunction, timePromise, Random } from "@spacebar/extensions";
+import { arrayGroupBy, ElapsedTime, Stopwatch, timeFunction, timePromise } from "@spacebar/extensions";
 import {
     getDatabase,
     Application,
@@ -40,6 +40,12 @@ import {
     VoiceState,
 } from "@spacebar/database";
 import {
+    Activity,
+    broadcastPresence,
+    getClientPlatform,
+    getConnectedSessions,
+    getUserPresences,
+    PRESENCE_STALE_AFTER_MS,
     checkToken,
     Config,
     CurrentTokenFormatVersion,
@@ -50,9 +56,6 @@ import {
     Intents,
     OPCodes,
     OrmUtils,
-    getMostRelevantSession,
-    Presence,
-    PresenceUpdateEvent,
     ReadyEventData,
     ReadyGuildDTO,
     ReadyUserGuildSettingsEntries,
@@ -76,6 +79,8 @@ import { check } from "./instanceOf";
 // TODO: user sharding
 // TODO: check privileged intents, if defined in the config
 
+const SettableStatuses = ["online", "idle", "dnd", "invisible"];
+
 export async function onIdentify(this: WebSocket, data: Payload) {
     const totalSw = Stopwatch.startNew();
     const taskSw = Stopwatch.startNew();
@@ -93,6 +98,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     const identify: IdentifySchema = data.d;
 
     this.capabilities = new Capabilities(identify.capabilities || 0);
+    const prioritizedReady = this.capabilities.has(Capabilities.FLAGS.PRIORITIZED_READY_PAYLOAD);
     this.large_threshold = identify.large_threshold || 250;
     const parseAndValidateTime = taskSw.getElapsedAndReset();
 
@@ -181,41 +187,12 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     if (typeof this.session.client_info === "string") this.session.client_info = JSON.parse(this.session.client_info);
     // noinspection SuspiciousTypeOfGuard - typeorm being weird
     if (typeof this.session.last_seen_location_info === "string") this.session.last_seen_location_info = JSON.parse(this.session.last_seen_location_info);
-    this.session.client_info.platform = identify.properties?.$device ?? identify.properties?.$device;
+    this.session.client_info.platform = getClientPlatform(identify.properties);
     this.session.client_info.os = identify.properties?.os || identify.properties?.$os;
-    this.session.client_status = {};
-    this.session.activities = identify.presence?.activities ?? []; // TODO: validation
 
     if (this.ipAddress && this.ipAddress !== this.session.last_seen_ip) {
         this.session.last_seen_ip = this.ipAddress;
         await this.session.updateIpInfo();
-    }
-
-    let mustAnnouncePresence = false;
-    let presenceUpdateEventData: PresenceUpdateEvent | undefined;
-
-    if (identify.presence?.status) {
-        let newStatus = identify.presence.status;
-        if (newStatus == "unknown") newStatus = this.session.status;
-        if (newStatus == "offline") {
-            newStatus = "online";
-            mustAnnouncePresence = true;
-        }
-
-        this.session.status = newStatus;
-        if (mustAnnouncePresence) {
-            presenceUpdateEventData = {
-                event: "PRESENCE_UPDATE",
-                data: {
-                    user: tokenData.user.toPublicUser(),
-                    status: this.session.getPublicStatus(),
-                    client_status: this.session.client_status,
-                    activities: this.session.activities,
-                },
-                origin: "GATEWAY_IDENTIFY",
-                transaction_id: `IDENT_${this.user_id}_${Random.getString("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789", 6)}`,
-            } satisfies PresenceUpdateEvent;
-        }
     }
 
     const createSessionTime = taskSw.getElapsedAndReset();
@@ -226,7 +203,6 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     // * recipients ( dm channels )
     // * the bot application, if it exists
     const [
-        { elapsed: sessionSaveTime },
         { result: sessions, elapsed: sessionQueryTime },
         { result: relationships, elapsed: relationshipQueryTime },
         { result: settings, elapsed: settingsQueryTime },
@@ -236,13 +212,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
         { result: members, elapsed: membersQueryTime },
         { result: recipients, elapsed: recipientsQueryTime },
     ] = await Promise.all([
-        // avoid a round trip to check if it exists...
-        timePromise(() => (isNewSession ? Session.insert(session) : Session.update({ session_id: session.session_id }, session)) as Promise<unknown>),
-        timePromise(() =>
-            Session.find({
-                where: { user_id: this.user_id, is_admin_session: false, session_id: Not(this.session_id) },
-            }),
-        ),
+        timePromise(() => getConnectedSessions(this.user_id).then((x) => x.filter((s) => s.session_id !== this.session_id))),
         timePromise(() =>
             Relationship.find({
                 where: { from_id: this.user_id },
@@ -335,51 +305,64 @@ export async function onIdentify(this: WebSocket, data: Payload) {
 
     const userMetaQueryTime = taskSw.getElapsedAndReset();
 
-    const friendPresenceUserIds = [...new Set(relationships.filter((relationship) => relationship.type === RelationshipType.FRIEND).map((relationship) => relationship.to_id))];
-    const { result: friendPresenceSessions, elapsed: friendPresenceSessionsQueryTime } = await timePromise(() =>
-        friendPresenceUserIds.length === 0
-            ? Promise.resolve([] as Session[])
-            : getDatabase()!
-                  .getRepository(Session)
-                  .find({
-                      where: {
-                          user_id: In(friendPresenceUserIds),
-                          is_admin_session: false,
-                          // "unknown" isn't part of PrivateStatus, but clients can send it on identify, so guard against it having been persisted
-                          status: Not(In(["offline", "invisible", "unknown"] as PrivateStatus[])),
-                      },
-                      relations: { user: true },
-                      select: {
-                          user_id: true,
-                          status: true,
-                          activities: true,
-                          client_status: true,
-                          user: Object.fromEntries(PublicUserProjection.map((x) => [x, true])),
-                      },
-                  }),
+    const statusSettings = settingsProtos?.userSettings?.status;
+    const requestedStatus = identify.presence?.status;
+    const savedStatus = statusSettings?.status?.value || settings?.status;
+    this.session.status = (
+        requestedStatus && SettableStatuses.includes(requestedStatus) ? requestedStatus : savedStatus && SettableStatuses.includes(savedStatus) ? savedStatus : "online"
+    ) as PrivateStatus;
+    const customStatus = statusSettings?.customStatus;
+    const customStatusActive =
+        customStatus && (customStatus.text || customStatus.emojiName) && (!Number(customStatus.expiresAtMs) || Number(customStatus.expiresAtMs) > Date.now());
+    this.session.activities =
+        identify.presence?.activities ??
+        (customStatusActive
+            ? [
+                  {
+                      name: "Custom Status",
+                      type: 4,
+                      state: customStatus.text || undefined,
+                      emoji: customStatus.emojiName
+                          ? { name: customStatus.emojiName, id: Number(customStatus.emojiId) ? String(customStatus.emojiId) : undefined, animated: false }
+                          : undefined,
+                      flags: "0",
+                  } as Activity,
+              ]
+            : []);
+    this.session.client_status = this.session.status === "invisible" ? {} : { [this.session.client_info.platform!]: this.session.status };
+    const { elapsed: sessionSaveTime } = await timePromise(
+        () => (isNewSession ? Session.insert(this.session!) : Session.update({ session_id: this.session!.session_id }, this.session!)) as Promise<unknown>,
     );
 
-    const { result: friendPresences, elapsed: generateFriendPresencesTime } = timeFunction<Presence[]>(() => {
-        const sessionsByUserId = arrayGroupBy(friendPresenceSessions, (session) => session.user_id);
+    const friendPresenceUserIds = [...new Set(relationships.filter((relationship) => relationship.type === RelationshipType.FRIEND).map((relationship) => relationship.to_id))];
+    const memberGuildIds = members.map((m) => m.guild_id);
 
-        return friendPresenceUserIds.flatMap((userId) => {
-            const sessions = sessionsByUserId.get(userId);
-            if (!sessions?.length) return [];
+    const { result: friendPresenceMap, elapsed: friendPresenceSessionsQueryTime } = await timePromise(() => getUserPresences(friendPresenceUserIds));
+    const { result: friendPresences, elapsed: generateFriendPresencesTime } = timeFunction(() =>
+        relationships
+            .filter((x) => x.type === RelationshipType.FRIEND && friendPresenceMap.has(x.to_id))
+            .map((x) => ({ user: x.to.toPublicUser(), ...friendPresenceMap.get(x.to_id)! })),
+    );
 
-            const session = getMostRelevantSession(sessions);
-            return [
-                {
-                    user: session.user.toPublicUser(),
-                    status: session.getPublicStatus(),
-                    activities: session.activities,
-                    client_status: session.client_status,
-                    processed_at_timestamp: session.last_seen?.getTime() ?? new Date(0).getTime(), // TODO: does this have a different meaning?
-                },
-            ];
+    const { result: guildPresenceMembers } = await timePromise(async () => {
+        if (!memberGuildIds.length) return [] as Member[];
+        const onlineSessions = await Session.createQueryBuilder("session")
+            .select("session.user_id", "user_id")
+            .distinct(true)
+            .where("session.user_id IN (SELECT m.id FROM members m WHERE m.guild_id IN (:...guildIds))", { guildIds: memberGuildIds })
+            .andWhere("session.status NOT IN ('offline', 'invisible')")
+            .andWhere("session.is_admin_session = false")
+            .andWhere("session.user_id != :self", { self: this.user_id })
+            .andWhere("session.last_seen > :since", { since: new Date(Date.now() - PRESENCE_STALE_AFTER_MS) })
+            .limit(1000)
+            .getRawMany<{ user_id: string }>();
+        if (!onlineSessions.length) return [] as Member[];
+        return Member.find({
+            where: { id: In(onlineSessions.map((x) => x.user_id)), guild_id: In(memberGuildIds) },
+            relations: { user: true, roles: true },
         });
     });
-
-    const memberGuildIds = members.map((m) => m.guild_id);
+    const guildPresenceMap = await getUserPresences([...new Set(guildPresenceMembers.map((x) => x.id))]);
 
     // select relations
     const [
@@ -615,7 +598,8 @@ export async function onIdentify(this: WebSocket, data: Payload) {
 
     // Populated with users from private channels, relationships.
     // Uses a set to dedupe for us.
-    const users: Set<PublicUser> = new Set();
+    const users = new Map<string, PublicUser>();
+    const addUser = (value: PublicUser) => users.has(value.id) || users.set(value.id, value);
 
     // Generate dm channels from recipients list. Append recipients to `users` list
     const channels = recipients
@@ -630,11 +614,11 @@ export async function onIdentify(this: WebSocket, data: Payload) {
 
             let channelUsers = channel.recipients?.map((recipient) => recipient.user.toPublicUser());
 
-            if (channelUsers && channelUsers.length > 0) channelUsers.forEach((user) => users.add(user));
+            if (channelUsers && channelUsers.length > 0) channelUsers.forEach(addUser);
             // HACK: insert self into recipients for DMs with users that no longer exist
             else if (channel.type === ChannelType.DM) {
                 const selfUser = user.toPublicUser();
-                users.add(selfUser);
+                addUser(selfUser);
                 channelUsers ??= [];
                 channelUsers.push(selfUser);
             }
@@ -654,34 +638,19 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     const generateDmChannelsTime = taskSw.getElapsedAndReset();
 
     // From user relationships ( friends ), also append to `users` list
-    user.relationships.forEach((x) => users.add(x.to.toPublicUser()));
+    user.relationships.forEach((x) => addUser(x.to.toPublicUser()));
     const appendRelationshipsTime = taskSw.getElapsedAndReset();
 
-    // Send SESSIONS_REPLACE and PRESENCE_UPDATE
     const allSessions = sessions.concat(this.session!).map((x) => x.toPrivateGatewayDeviceInfo());
     const findAndGenerateSessionReplaceTime = taskSw.getElapsedAndReset();
 
-    const [{ elapsed: emitSessionsReplaceTime }, { elapsed: emitPresenceUpdateTime }] = await Promise.all([
-        timePromise(() =>
-            emitEvent({
-                event: "SESSIONS_REPLACE",
-                user_id: this.user_id,
-                data: allSessions,
-            } as SessionsReplace),
-        ),
-        timePromise(() =>
-            emitEvent({
-                event: "PRESENCE_UPDATE",
-                user_id: this.user_id,
-                data: {
-                    user: user.toPublicUser(),
-                    activities: this.session!.activities,
-                    client_status: this.session!.client_status,
-                    status: this.session!.getPublicStatus(),
-                },
-            } satisfies PresenceUpdateEvent),
-        ),
-    ]);
+    const { elapsed: emitSessionsReplaceTime } = await timePromise(() =>
+        emitEvent({
+            event: "SESSIONS_REPLACE",
+            user_id: this.user_id,
+            data: allSessions,
+        } as SessionsReplace),
+    );
 
     taskSw.reset();
     // Build READY
@@ -744,10 +713,10 @@ export async function onIdentify(this: WebSocket, data: Payload) {
                     version: 0, // TODO
                 },
                 private_channels: channels,
-                presences: [], // TODO: Send actual data
+                presences: prioritizedReady ? [] : friendPresences,
                 session_id: this.session_id,
-                country_code: this.session?.last_seen_location_info?.country_code ?? user.settings!.locale,
-                users: Array.from(users),
+                country_code: this.session?.last_seen_location_info?.country_code ?? (user.settings?.locale?.split("-")[1] || "US").toUpperCase(),
+                users: Array.from(users.values()),
                 merged_members: merged_members,
                 sessions: allSessions,
 
@@ -811,7 +780,6 @@ export async function onIdentify(this: WebSocket, data: Payload) {
         appendRelationshipsTime,
         findAndGenerateSessionReplaceTime,
         emitSessionsReplaceTime,
-        emitPresenceUpdateTime,
         remapReadStateIdsTime,
         buildReadyEventDataTime,
         threadMemberTime,
@@ -917,56 +885,35 @@ export async function onIdentify(this: WebSocket, data: Payload) {
         };
     });
 
-    // TODO: ready supplemental - merged_members and guild presences are still empty
+    const guildPresenceMembersByGuild = arrayGroupBy(guildPresenceMembers, (m) => m.guild_id);
+    const supplementalGuildMembers = guilds.map((guild) =>
+        (guildPresenceMembersByGuild.get(guild.id) ?? [])
+            .filter((m) => guildPresenceMap.has(m.id))
+            .map((m) => ({ ...m.toPublicMember(), roles: m.roles.filter((r) => r.id !== guild.id).map((r) => r.id), user: m.user.toPublicUser() })),
+    );
+
     await Send(this, {
         op: OPCodes.DISPATCH,
         t: EVENTEnum.ReadySupplemental,
         s: this.sequence++,
         d: {
-            guilds: readySupplementalGuilds, // { voice_states: [], id: string, embedded_activities: [], activity_instances: [] }
-            merged_members: guilds.map(() => []), // these merged members seem to be all users currently in vc in your guilds
+            guilds: readySupplementalGuilds,
+            merged_members: supplementalGuildMembers,
             merged_presences: {
                 friends: friendPresences,
-                guilds: guilds.map(() => []),
+                guilds: supplementalGuildMembers.map((members) => members.map((m) => ({ user: m.user, ...guildPresenceMap.get(m.user.id)! }))),
             },
             lazy_private_channels: [],
-            // embedded_activities are users currently in an activity?
-            disclose: [], // Config.get().general.uniqueUsernames ? ["pomelo"] : []
+            disclose: [],
             game_invites: [],
         },
     });
 
-    //TODO send GUILD_MEMBER_LIST_UPDATE
-    //TODO send VOICE_STATE_UPDATE to let the client know if another device is already connected to a voice channel
     await setupListener.call(this);
     console.log(
         `[Gateway/${this.user_id}] IDENTIFY ${this.user_id} in ${totalSw.elapsed().totalMilliseconds}ms`,
         process.env.LOG_GATEWAY_TRACES ? JSON.stringify(d._trace, null, 2) : "",
     );
 
-    // actually send presence updates - not using distributePresenceUpdate because we already have all of the data at hand
-    if (presenceUpdateEventData) {
-        for (const rel of d.relationships ?? []) {
-            await emitEvent({
-                ...presenceUpdateEventData,
-                user_id: rel.user.id,
-            });
-        }
-        for (const guild of d.guilds) {
-            await emitEvent({
-                ...presenceUpdateEventData,
-                guild_id: guild.id,
-            });
-        }
-        for (const dmChannel of d.private_channels) {
-            // TODO: check if other side has the channel still open
-            for (const recpt of dmChannel.recipients) {
-                if (recpt.id != this.user_id)
-                    await emitEvent({
-                        ...presenceUpdateEventData,
-                        user_id: recpt.id,
-                    });
-            }
-        }
-    }
+    await broadcastPresence(this.user_id, user.toPublicUser());
 }

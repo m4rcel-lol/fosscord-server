@@ -2105,6 +2105,9 @@
     "GuildSubscriptionSchema": {
         "type": "object",
         "properties": {
+            "activities": {
+                "type": "boolean"
+            },
             "channels": {
                 "type": "object",
                 "additionalProperties": {
@@ -2116,9 +2119,6 @@
                         }
                     }
                 }
-            },
-            "activities": {
-                "type": "boolean"
             },
             "threads": {
                 "type": "boolean"
@@ -8353,6 +8353,9 @@
             },
             "v": {
                 "type": "integer"
+            },
+            "qos_token": {
+                "type": "string"
             }
         },
         "additionalProperties": false,

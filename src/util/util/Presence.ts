@@ -16,10 +16,10 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Member, Recipient, Relationship, Session } from "@spacebar/database";
-import { emitEvent, PresenceUpdateEvent } from "@spacebar/util";
-import { RelationshipType } from "@spacebar/schemas";
-import { Not } from "typeorm";
+import { Member, Recipient, Relationship, Session, User } from "@spacebar/database";
+import { Activity, emitEvent, Presence, PresenceUpdateEvent, SessionsReplace } from "@spacebar/util";
+import { ClientStatus, PublicStatus, PublicUser, RelationshipType } from "@spacebar/schemas";
+import { In, Not } from "typeorm";
 
 export function getMostRelevantSession(sessions: Session[]) {
     const statusMap = {
@@ -74,4 +74,114 @@ export async function distributePresenceUpdate(userId: string, data: PresenceUpd
             });
         }
     }
+}
+
+export const PRESENCE_STALE_AFTER_MS = 3 * 60 * 1000;
+
+export type PresenceSession = Pick<Session, "user_id" | "status" | "activities" | "client_status" | "client_info" | "last_seen">;
+
+export interface AggregatedPresence {
+    status: PublicStatus;
+    activities: Activity[];
+    client_status: ClientStatus;
+}
+
+const PresencePriority: Record<string, number> = { dnd: 0, online: 1, idle: 2 };
+const ClientPlatforms = ["desktop", "mobile", "web", "embedded", "vr"] as const;
+export type ClientPlatform = (typeof ClientPlatforms)[number];
+
+export function getClientPlatform(properties?: { browser?: string; $browser?: string; os?: string; $os?: string }): ClientPlatform {
+    const browser = (properties?.browser ?? properties?.$browser ?? "").toLowerCase();
+    const os = (properties?.os ?? properties?.$os ?? "").toLowerCase();
+    if (browser.includes("android") || browser.includes("ios") || os === "android" || os === "ios") return "mobile";
+    if (browser === "discord client" || browser.includes("electron")) return "desktop";
+    if (browser.includes("embedded")) return "embedded";
+    if (browser.includes("vr")) return "vr";
+    return "web";
+}
+
+export function isSessionConnected(session: PresenceSession, now = Date.now()) {
+    if (!session.status || session.status === "offline") return false;
+    return (session.last_seen?.getTime() ?? 0) > now - PRESENCE_STALE_AFTER_MS;
+}
+
+export function aggregatePresence(sessions: PresenceSession[]): AggregatedPresence {
+    const now = Date.now();
+    const visible = sessions.filter((s) => isSessionConnected(s, now) && s.status in PresencePriority);
+    if (!visible.length) return { status: "offline", activities: [], client_status: {} };
+
+    const best = (a: string | undefined, b: string) => (a === undefined || PresencePriority[b] < PresencePriority[a] ? b : a);
+    let status: string | undefined;
+    const client_status: ClientStatus = {};
+    const activities: Activity[] = [];
+    const seenActivities = new Set<string>();
+
+    for (const session of visible) {
+        status = best(status, session.status);
+        const platform = ClientPlatforms.find((x) => x === session.client_info?.platform) ?? "web";
+        client_status[platform] = best(client_status[platform], session.status);
+        for (const activity of session.activities ?? []) {
+            const key = activity.type === 4 ? "custom" : `${activity.type}:${activity.application_id ?? activity.name}`;
+            if (seenActivities.has(key)) continue;
+            seenActivities.add(key);
+            activities.push(activity);
+        }
+    }
+
+    return { status: status as PublicStatus, activities, client_status };
+}
+
+export async function getUserPresences(userIds: string[]) {
+    const result = new Map<string, AggregatedPresence>();
+    if (!userIds.length) return result;
+    const sessions = await Session.find({
+        where: { user_id: In(userIds), is_admin_session: false, status: Not("offline") },
+        select: { user_id: true, status: true, activities: true, client_status: true, client_info: true, last_seen: true },
+    });
+    const byUser = new Map<string, Session[]>();
+    for (const session of sessions) byUser.set(session.user_id, [...(byUser.get(session.user_id) ?? []), session]);
+    for (const [userId, userSessions] of byUser) {
+        const presence = aggregatePresence(userSessions);
+        if (presence.status !== "offline") result.set(userId, presence);
+    }
+    return result;
+}
+
+export async function getUserPresence(userId: string): Promise<AggregatedPresence> {
+    return (await getUserPresences([userId])).get(userId) ?? { status: "offline", activities: [], client_status: {} };
+}
+
+export async function getConnectedSessions(userId: string) {
+    const now = Date.now();
+    return (await Session.find({ where: { user_id: userId, is_admin_session: false, status: Not("offline") } })).filter((x) => isSessionConnected(x, now));
+}
+
+export async function emitSessionsReplace(userId: string) {
+    const sessions = await getConnectedSessions(userId);
+    await emitEvent({ event: "SESSIONS_REPLACE", user_id: userId, data: sessions.map((x) => x.toPrivateGatewayDeviceInfo()) } satisfies SessionsReplace);
+    return sessions;
+}
+
+export async function broadcastPresence(userId: string, user?: PublicUser) {
+    const [presence, publicUser, friends, guilds, recipients] = await Promise.all([
+        getUserPresence(userId),
+        user ? Promise.resolve(user) : User.getPublicUser(userId),
+        Relationship.find({ where: { from_id: userId, type: RelationshipType.FRIEND }, select: { to_id: true } }),
+        Member.find({ where: { id: userId }, select: { guild_id: true } }),
+        Recipient.find({ where: { user_id: userId, closed: false }, select: { channel_id: true } }),
+    ]);
+
+    const data: Presence = { user: publicUser, ...presence };
+    await emitEvent({ event: "PRESENCE_UPDATE", user_id: userId, data } satisfies PresenceUpdateEvent);
+    await Promise.all(guilds.map(({ guild_id }) => emitEvent({ event: "PRESENCE_UPDATE", guild_id, data: { ...data, guild_id } } satisfies PresenceUpdateEvent)));
+
+    if (!recipients.length) return presence;
+    const friendIds = new Set(friends.map((x) => x.to_id));
+    const others = await Recipient.find({
+        where: { channel_id: In(recipients.map((x) => x.channel_id)), user_id: Not(userId), closed: false },
+        select: { user_id: true },
+    });
+    const dmUserIds = new Set(others.map((x) => x.user_id).filter((id) => !friendIds.has(id)));
+    await Promise.all([...dmUserIds].map((id) => emitEvent({ event: "PRESENCE_UPDATE", user_id: id, data } satisfies PresenceUpdateEvent)));
+    return presence;
 }

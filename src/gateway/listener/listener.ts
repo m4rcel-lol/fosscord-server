@@ -31,9 +31,9 @@ import { CLOSECODES, OPCODES, Send } from "../util";
 // Sharding: calculate if the current shard id matches the formula: shard_id = (guild_id >> 22) % num_shards
 // https://discord.com/developers/docs/topics/gateway#sharding
 
-export function handlePresenceUpdate(this: WebSocket, { event, acknowledge, data }: EventOpts) {
+export function handlePresenceUpdate(this: WebSocket, { event, acknowledge, data, user_id }: EventOpts) {
     acknowledge?.();
-    if (event === EVENTEnum.PresenceUpdate) {
+    if (event === EVENTEnum.PresenceUpdate && data?.user?.id === user_id && user_id !== this.user_id) {
         return Send(this, {
             op: OPCODES.Dispatch,
             t: event,
@@ -298,7 +298,9 @@ async function consume(this: WebSocket, opts: EventOpts) {
         case "GUILD_MEMBER_ADD":
         case "GUILD_MEMBER_REMOVE":
         case "GUILD_MEMBER_UPDATE": // only send them, if the user subscribed for this part of the member list, or is a bot
-        case "PRESENCE_UPDATE": // exception if user is friend
+            break;
+        case "PRESENCE_UPDATE":
+            if (data?.user?.id === this.user_id && !data.guild_id) return;
             break;
         case "GUILD_BAN_ADD":
         case "GUILD_BAN_REMOVE":

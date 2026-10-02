@@ -16,39 +16,32 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Session, User } from "@spacebar/database";
+import { Session } from "@spacebar/database";
 import { WebSocket, Payload } from "@spacebar/gateway";
-import { emitEvent, PresenceUpdateEvent } from "@spacebar/util";
-import { ActivitySchema, InternalStatusOrder, PrivateStatus } from "@spacebar/schemas";
+import { broadcastPresence } from "@spacebar/util";
+import { ActivitySchema, PrivateStatus } from "@spacebar/schemas";
 import { check } from "./instanceOf";
 
+const SettableStatuses = ["online", "idle", "dnd", "invisible"];
+
 export async function onPresenceUpdate(this: WebSocket, { d }: Payload) {
-    const startTime = Date.now();
     check.call(this, ActivitySchema, d);
     const presence = d as ActivitySchema;
+    if (!this.session) return;
 
-    if (d.status === "unknown") {
-        const sessions = await Session.find({ where: { user_id: this.user_id } });
-        d.status = sessions.sort((a, b) => InternalStatusOrder[a.status] - InternalStatusOrder[b.status])[0].getPublicStatus();
-    }
+    const previous = JSON.stringify([this.session.status, this.session.activities, this.session.client_status]);
 
-    await Session.update({ session_id: this.session_id }, { status: presence.status as PrivateStatus, activities: presence.activities });
+    if (SettableStatuses.includes(presence.status)) this.session.status = presence.status as PrivateStatus;
+    this.session.activities = presence.activities ?? [];
+    const platform = this.session.client_info?.platform ?? "web";
+    this.session.client_status = this.session.status === "invisible" ? {} : { [platform]: this.session.status };
+    this.session.last_seen = new Date();
 
-    const session = await Session.findOneOrFail({
-        select: { client_status: true },
-        where: { session_id: this.session_id },
-    });
+    if (previous === JSON.stringify([this.session.status, this.session.activities, this.session.client_status])) return;
 
-    await emitEvent({
-        event: "PRESENCE_UPDATE",
-        user_id: this.user_id,
-        data: {
-            user: await User.getPublicUser(this.user_id),
-            status: session.getPublicStatus(),
-            activities: presence.activities ?? [],
-            client_status: session.client_status,
-        },
-    } satisfies PresenceUpdateEvent);
-
-    console.log(`Presence update for user ${this.user_id} processed in ${Date.now() - startTime}ms`);
+    await Session.update(
+        { session_id: this.session_id },
+        { status: this.session.status, activities: this.session.activities, client_status: this.session.client_status, last_seen: this.session.last_seen },
+    );
+    await broadcastPresence(this.user_id);
 }
