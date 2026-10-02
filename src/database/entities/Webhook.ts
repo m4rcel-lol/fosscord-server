@@ -81,7 +81,7 @@ export class Webhook extends BaseClass {
     user: User;
 
     @Column({ nullable: true })
-    @RelationId((webhook: Webhook) => webhook.guild)
+    @RelationId((webhook: Webhook) => webhook.source_guild)
     source_guild_id?: string;
 
     @JoinColumn({ name: "source_guild_id", foreignKeyConstraintName: "FK_webhook_source_guild_id" })
@@ -91,7 +91,7 @@ export class Webhook extends BaseClass {
     source_guild?: Guild;
 
     @Column({ nullable: true })
-    @RelationId((webhook: Webhook) => webhook.channel)
+    @RelationId((webhook: Webhook) => webhook.source_channel)
     source_channel_id: string;
 
     @JoinColumn({ name: "source_channel_id", foreignKeyConstraintName: "FK_webhook_source_channel_id" })
