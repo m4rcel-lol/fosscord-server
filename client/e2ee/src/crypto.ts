@@ -64,6 +64,56 @@ export const aesEncrypt = async (raw: Bytes, iv: Bytes, plaintext: Bytes, aad: s
 export const aesDecrypt = async (raw: Bytes, iv: Bytes, ciphertext: Bytes, aad: string) =>
     new Uint8Array(await subtle().decrypt({ name: "AES-GCM", iv, additionalData: utf8(aad) }, await aesKey(raw, "decrypt"), ciphertext));
 
+export interface OkpJwk {
+    kty: "OKP";
+    crv: "Ed25519" | "X25519";
+    x: string;
+    d: string;
+}
+
+export const generateExportable = async (name: "Ed25519" | "X25519") => {
+    const pair = (await subtle().generateKey({ name }, true, name === "Ed25519" ? ["sign", "verify"] : ["deriveBits"])) as CryptoKeyPair;
+    const { kty, crv, x, d } = (await subtle().exportKey("jwk", pair.privateKey)) as OkpJwk;
+    return { kty, crv, x, d } as OkpJwk;
+};
+
+export const importSigningJwk = (jwk: OkpJwk) => subtle().importKey("jwk", { ...jwk, key_ops: ["sign"] }, { name: "Ed25519" }, false, ["sign"]);
+
+export const importAgreementJwk = async (jwk: OkpJwk): Promise<CryptoKeyPair> => ({
+    privateKey: await subtle().importKey("jwk", { ...jwk, key_ops: ["deriveBits"] }, { name: "X25519" }, false, ["deriveBits"]),
+    publicKey: await subtle().importKey("raw", fromB64u(jwk.x), { name: "X25519" }, true, []),
+});
+
+export const x25519 = async (privateKey: CryptoKey, publicKey: string) => {
+    const peer = await subtle().importKey("raw", fromB64u(publicKey), { name: "X25519" }, false, []);
+    return new Uint8Array(await subtle().deriveBits({ name: "X25519", public: peer }, privateKey, 256));
+};
+
+export const hkdf = async (ikm: Bytes, salt: Bytes, info: string) => {
+    const base = await subtle().importKey("raw", ikm, "HKDF", false, ["deriveBits"]);
+    return new Uint8Array(await subtle().deriveBits({ name: "HKDF", hash: "SHA-256", salt, info: utf8(info) }, base, 256));
+};
+
+export const sealBox = async (key: Bytes, plaintext: Bytes, aad: string) => {
+    const iv = new Uint8Array(12);
+    crypto.getRandomValues(iv);
+    const ct = await aesEncrypt(key, iv, plaintext, aad);
+    const out = new Uint8Array(12 + ct.length);
+    out.set(iv);
+    out.set(ct, 12);
+    return toB64u(out);
+};
+
+export const openBox = (key: Bytes, box: string, aad: string) => {
+    const raw = fromB64u(box);
+    if (raw.length < 28) throw new Error("box too short");
+    return aesDecrypt(key, raw.slice(0, 12), raw.slice(12), aad);
+};
+
+export const rotationMessage = (userId: string, previousKey: string, nextKey: string) => `fosscord-e2ee/v1/identity-rotate\n${userId}\n${previousKey}\n${nextKey}`;
+
+export const backupKeyMessage = (userId: string, publicKey: string) => `fosscord-e2ee/v1/backup-key\n${userId}\n${publicKey}`;
+
 export const deviceMessage = (userId: string, deviceId: string, signingKey: string) => `fosscord-e2ee/v1/device\n${userId}\n${deviceId}\n${signingKey}`;
 
 export const prekeyMessage = (deviceId: string, prekeyId: number, publicKey: string) => `fosscord-e2ee/v1/prekey\n${deviceId}\n${prekeyId}\n${publicKey}`;
