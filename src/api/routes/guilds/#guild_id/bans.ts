@@ -239,7 +239,7 @@ router.put(
                 select: { id: true, channel_id: true },
             });
             const byChannel = Map.groupBy(messages, (message) => message.channel_id!);
-            await Message.delete(messages.map((message) => message.id));
+            if (messages.length) await Message.delete(messages.map((message) => message.id));
             for (const [channel_id, list] of byChannel)
                 await emitEvent({ event: "MESSAGE_DELETE_BULK", channel_id, data: { ids: list.map((m) => m.id), channel_id, guild_id } } satisfies MessageDeleteBulkEvent);
         }
