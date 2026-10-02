@@ -2105,6 +2105,9 @@
     "GuildSubscriptionSchema": {
         "type": "object",
         "properties": {
+            "activities": {
+                "type": "boolean"
+            },
             "channels": {
                 "type": "object",
                 "additionalProperties": {
@@ -2116,9 +2119,6 @@
                         }
                     }
                 }
-            },
-            "activities": {
-                "type": "boolean"
             },
             "threads": {
                 "type": "boolean"
@@ -4075,6 +4075,12 @@
             },
             "discriminator": {
                 "type": "string"
+            },
+            "global_name": {
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "public_flags": {
                 "type": "integer"
@@ -6091,6 +6097,13 @@
             "username": {
                 "minLength": 2,
                 "type": "string"
+            },
+            "global_name": {
+                "maxLength": 32,
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "avatar": {
                 "type": [
@@ -8605,6 +8618,9 @@
             },
             "v": {
                 "type": "integer"
+            },
+            "qos_token": {
+                "type": "string"
             }
         },
         "additionalProperties": false,
@@ -9471,6 +9487,12 @@
             },
             "discriminator": {
                 "type": "string"
+            },
+            "global_name": {
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "public_flags": {
                 "type": "integer"
@@ -10730,6 +10752,12 @@
             },
             "discriminator": {
                 "type": "string"
+            },
+            "global_name": {
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "avatar": {
                 "type": "string"

@@ -189,7 +189,9 @@ router.put(
             where: { id: guild_id },
         });
 
-        if (!guild.features.includes("DISCOVERABLE")) {
+        const alreadyMember = await Member.existsBy({ id: member_id, guild_id });
+
+        if (!alreadyMember && !guild.features.includes("DISCOVERABLE")) {
             throw DiscordApiErrors.UNKNOWN_GUILD;
         }
 
@@ -205,7 +207,7 @@ router.put(
             where: { guild_id: guild_id },
         });
 
-        await Member.addToGuild(member_id, guild_id);
+        if (!alreadyMember) await Member.addToGuild(member_id, guild_id);
         res.send({ ...guild, emojis: emoji, roles: roles, stickers: stickers });
     },
 );

@@ -26,6 +26,7 @@ interface UserEntityPleaseRewriteThankYou {
     id: Snowflake;
     username: string;
     discriminator: string;
+    global_name?: string | null;
     avatar?: string;
     accent_color?: number;
     banner?: string;
@@ -116,6 +117,7 @@ export interface PrimaryGuild {
 export enum PublicUserEnum {
     username,
     discriminator,
+    global_name,
     id,
     public_flags,
     avatar,

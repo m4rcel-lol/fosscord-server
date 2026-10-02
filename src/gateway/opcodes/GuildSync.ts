@@ -17,11 +17,11 @@
 */
 
 import { In } from "typeorm";
-import { Member, Session } from "@spacebar/database";
+import { Member } from "@spacebar/database";
 import { Stopwatch, timePromise } from "@spacebar/extensions";
 import { WebSocket, Payload, OPCODES, Send, handleOffloadedGatewayRequest } from "@spacebar/gateway";
 import { PublicMember } from "@spacebar/schemas";
-import { Presence, Config, getMostRelevantSession } from "@spacebar/util";
+import { Presence, Config, getUserPresences } from "@spacebar/util";
 
 // TODO: only show roles/members that have access to this channel
 // TODO: config: to list all members (even those who are offline) sorted by role, or just those who are online
@@ -68,27 +68,8 @@ async function handleGuildSync(ws: WebSocket, guild_id: string) {
     const members = await Member.find({ where: { guild_id }, relations: { user: true, roles: true, guild: true } });
     res.members = members.map((m) => m.toPublicMember());
 
-    const sessions = await Session.find({ where: { user_id: In(members.map((m) => m.id)) }, order: { user_id: "ASC" } });
-    const sessionsByUserId = new Map<string, Session[]>();
-    for (const session of sessions) {
-        if (!sessionsByUserId.has(session.user_id)) sessionsByUserId.set(session.user_id, []);
-        sessionsByUserId.get(session.user_id)!.push(session);
-    }
-
-    for (const member of members) {
-        const userSessions = sessionsByUserId.get(member.id) || [];
-        if (userSessions.length === 0) continue;
-
-        const mostRelevantSession = getMostRelevantSession(userSessions);
-        const presence: Presence = {
-            user: member.user.toPublicUser(),
-            guild_id: guild_id,
-            status: mostRelevantSession.getPublicStatus(),
-            activities: mostRelevantSession.activities,
-            client_status: mostRelevantSession.client_status,
-        };
-        res.presences.push(presence);
-    }
+    const presences = await getUserPresences(members.map((m) => m.id));
+    res.presences = members.filter((m) => presences.has(m.id)).map((m) => ({ user: m.user.toPublicUser(), guild_id, ...presences.get(m.id)! }));
 
     await Send(ws, {
         op: OPCODES.Dispatch,

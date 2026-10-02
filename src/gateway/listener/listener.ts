@@ -22,7 +22,8 @@ import { Ban, Member, Message, Recipient, Relationship } from "@spacebar/databas
 import { EVENTEnum, EventOpts, getPermission, listenEvent, ListenEventOpts, NewUrlUserSignatureData, Permissions, RabbitMQ } from "@spacebar/util";
 import { WebSocket } from "@spacebar/gateway";
 import { PublicMember, RelationshipType } from "@spacebar/schemas";
-import { CLOSECODES, OPCODES, Send } from "../util";
+import { CLOSECODES, holdForResume, OPCODES, resolveSocket, Send } from "../util";
+import { scheduleMemberListSync } from "../opcodes/LazyRequest";
 
 // TODO: close connection on Invalidated Token
 // TODO: check intent
@@ -31,9 +32,11 @@ import { CLOSECODES, OPCODES, Send } from "../util";
 // Sharding: calculate if the current shard id matches the formula: shard_id = (guild_id >> 22) % num_shards
 // https://discord.com/developers/docs/topics/gateway#sharding
 
-export function handlePresenceUpdate(this: WebSocket, { event, acknowledge, data }: EventOpts) {
+export function handlePresenceUpdate(this: WebSocket, opts: EventOpts): Promise<unknown> | undefined {
+    if (this.resumedBy) return handlePresenceUpdate.call(resolveSocket(this), opts);
+    const { event, acknowledge, data, user_id } = opts;
     acknowledge?.();
-    if (event === EVENTEnum.PresenceUpdate) {
+    if (event === EVENTEnum.PresenceUpdate && data?.user?.id === user_id && user_id !== this.user_id) {
         return Send(this, {
             op: OPCODES.Dispatch,
             t: event,
@@ -156,8 +159,7 @@ export async function setupListener(this: WebSocket) {
     RabbitMQ.on("reconnected", handleReconnect);
     RabbitMQ.on("disconnected", handleDisconnect);
 
-    this.once("close", async () => {
-        // Unsubscribe from RabbitMQ events
+    this.listenerCleanup = async () => {
         RabbitMQ.off("reconnected", handleReconnect);
         RabbitMQ.off("disconnected", handleDisconnect);
 
@@ -178,11 +180,13 @@ export async function setupListener(this: WebSocket) {
             }
             opts.channel.off("error", handleChannelError);
         }
-    });
+    };
+    this.once("close", () => holdForResume(this, this.listenerCleanup!));
 }
 
 // TODO: only subscribe for events that are in the connection intents
-async function consume(this: WebSocket, opts: EventOpts) {
+async function consume(this: WebSocket, opts: EventOpts): Promise<void> {
+    if (this.resumedBy) return consume.call(resolveSocket(this), opts);
     const { data, event } = opts;
     const id = (opts.guild_id || opts.channel_id || opts.user_id || opts.session_id) as string;
     const permission = this.permissions[id] || new Permissions("ADMINISTRATOR"); // default permission for dm
@@ -298,7 +302,9 @@ async function consume(this: WebSocket, opts: EventOpts) {
         case "GUILD_MEMBER_ADD":
         case "GUILD_MEMBER_REMOVE":
         case "GUILD_MEMBER_UPDATE": // only send them, if the user subscribed for this part of the member list, or is a bot
-        case "PRESENCE_UPDATE": // exception if user is friend
+            break;
+        case "PRESENCE_UPDATE":
+            if (data?.user?.id === this.user_id && !data.guild_id) return;
             break;
         case "GUILD_BAN_ADD":
         case "GUILD_BAN_REMOVE":
@@ -384,4 +390,18 @@ async function consume(this: WebSocket, opts: EventOpts) {
         d: data,
         s: this.sequence++,
     });
+
+    const listGuildId = opts.guild_id ?? data?.guild_id;
+    if (listGuildId && this.member_lists?.[listGuildId] && MemberListEvents.has(event)) scheduleMemberListSync(this, listGuildId);
 }
+
+const MemberListEvents = new Set([
+    "PRESENCE_UPDATE",
+    "GUILD_MEMBER_ADD",
+    "GUILD_MEMBER_UPDATE",
+    "GUILD_MEMBER_REMOVE",
+    "GUILD_ROLE_CREATE",
+    "GUILD_ROLE_UPDATE",
+    "GUILD_ROLE_DELETE",
+    "CHANNEL_UPDATE",
+]);

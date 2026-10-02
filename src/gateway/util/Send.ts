@@ -21,6 +21,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { JSONReplacer } from "@spacebar/util";
+import { bufferForResume, rememberDispatch, resolveSocket } from "./SessionResume";
 import * as erlpack from "harmony-erlpack";
 
 // don't care
@@ -37,7 +38,14 @@ const recurseJsonReplace = (json: any) => {
     return json;
 };
 
-export async function Send(socket: WebSocket, data: Payload) {
+export async function Send(target: WebSocket, data: Payload) {
+    const socket = resolveSocket(target);
+    if (socket.pendingDispatches && data.op === 0 && data.t !== "READY" && data.t !== "READY_SUPPLEMENTAL" && data.t !== "GUILD_CREATE") {
+        socket.pendingDispatches.push(data);
+        return;
+    }
+    if (socket.readyState !== 1 && data.op === 0 && bufferForResume(socket, data)) return;
+    rememberDispatch(socket, data);
     if (process.env.WS_VERBOSE) console.log(`[Websocket] Outgoing message: ${JSON.stringify(data)}`);
 
     if (process.env.WS_DUMP) {
@@ -65,7 +73,7 @@ export async function Send(socket: WebSocket, data: Payload) {
     } else if (socket.compress === "zstd-stream") {
         if (typeof buffer === "string") buffer = Buffer.from(buffer as string);
 
-        buffer = (await socket.zstdEncoder!.encode(buffer as Buffer)) as Buffer;
+        buffer = socket.zstdEncoder!.encodeSync(buffer as Buffer);
     }
 
     return new Promise((res, rej) => {

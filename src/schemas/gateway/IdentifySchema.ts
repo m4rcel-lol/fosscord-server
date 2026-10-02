@@ -57,30 +57,11 @@ export const IdentifySchema = {
     $shard: [BigInt, BigInt],
     $guild_subscriptions: Boolean,
     $capabilities: Number,
-    $client_state: {
-        $guild_hashes: Object,
-        $highest_last_message_id: Number,
-        $read_state_version: Number,
-        $user_guild_settings_version: Number,
-        $user_settings_version: undefined,
-        $useruser_guild_settings_version: undefined,
-        $private_channels_version: Number,
-        $guild_versions: Object,
-        $api_code_version: Number,
-        $initial_guild_id: String,
-    },
-    $clientState: {
-        $guildHashes: Object,
-        $highestLastMessageId: Number,
-        $readStateVersion: Number,
-        $useruserGuildSettingsVersion: undefined,
-        $userGuildSettingsVersion: undefined,
-        $guildVersions: Object,
-        $apiCodeVersion: Number,
-        $initialGuildId: String,
-    },
+    $client_state: Object,
+    $clientState: Object,
     $v: Number,
     $version: Number,
+    $qos_token: String,
 };
 
 export interface IdentifySchema {
@@ -106,7 +87,7 @@ export interface IdentifySchema {
         client_event_source?: string;
         client_version?: string;
         system_locale?: string;
-		qos_token?: string;
+        qos_token?: string;
     };
     intents?: bigint; // discord uses a Integer for bitfields we use bigints tho. | instanceOf will automatically convert the Number to a BigInt
     presence?: ActivitySchema;
@@ -143,4 +124,5 @@ export interface IdentifySchema {
         initialGuildId?: string;
     };
     v?: number;
+    qos_token?: string;
 }

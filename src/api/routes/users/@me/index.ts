@@ -150,6 +150,14 @@ router.patch(
                     },
                 });
             }
+
+            if (user.discriminator === "0" && (await User.isUsernameTaken(body.username, user.id)))
+                throw FieldErrors({
+                    username: {
+                        code: "USERNAME_ALREADY_TAKEN",
+                        message: "Username is unavailable. Try adding numbers, letters, underscores _ , or periods.",
+                    },
+                });
         }
 
         if (body.discriminator) {

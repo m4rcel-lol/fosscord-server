@@ -16,11 +16,11 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Member, Session, User, VoiceState } from "@spacebar/database";
-import { Random } from "@spacebar/extensions";
+import { Member, Session, VoiceState } from "@spacebar/database";
 import { WebSocket } from "@spacebar/gateway/util";
-import { emitEvent, PresenceUpdateEvent, SessionsReplace, VoiceStateUpdateEvent, distributePresenceUpdate } from "@spacebar/util";
+import { broadcastPresence, emitEvent, emitSessionsReplace, VoiceStateUpdateEvent } from "@spacebar/util";
 import { ProcessLifecycle } from "@spacebar/util/util/ProcessLifecycle";
+import { openConnections } from "./Connection";
 
 export async function Close(this: WebSocket, code: number, reason: Buffer) {
     console.log("[WebSocket] closed", code, reason.toString());
@@ -36,30 +36,16 @@ export async function Close(this: WebSocket, code: number, reason: Buffer) {
 
         if (!(ProcessLifecycle.state === "stopping" || ProcessLifecycle.state === "stopped"))
             setTimeout(async () => {
-                console.log("Handling presence update after disconnect");
                 try {
                     if (authSessionId && this.user_id) {
                         const s = await Session.findOne({
                             where: { user_id: this.user_id, session_id: authSessionId },
                         });
-                        if (s && (s.last_seen?.getTime() ?? 0) <= closedAt) {
-                            console.log("... updating session");
+                        if (s && (s.last_seen?.getTime() ?? 0) <= closedAt && !openConnections.some((x) => x.session_id === authSessionId && x.user_id === this.user_id)) {
                             await Session.update({ user_id: this.user_id, session_id: authSessionId }, { status: "offline", activities: [], client_status: {} });
-                            this.session = await Session.findOneOrFail({ where: { session_id: this.session_id } });
-                            console.log("... distributing PRESENCE_UPDATE");
-                            await distributePresenceUpdate(this.user_id, {
-                                event: "PRESENCE_UPDATE",
-                                data: {
-                                    user: (await User.findOneOrFail({ where: { id: this.user_id } })).toPublicUser(),
-                                    status: this.session!.getPublicStatus(),
-                                    client_status: this.session!.client_status,
-                                    activities: this.session!.activities,
-                                },
-                                origin: "GATEWAY_CLOSE",
-                                transaction_id: `IDENT_${this.user_id}_${Random.getString("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789", 6)}`,
-                            } satisfies PresenceUpdateEvent);
-                            console.log("... done!");
-                        } else console.log("... Discarding presence update as the session reactivated");
+                            await emitSessionsReplace(this.user_id);
+                            await broadcastPresence(this.user_id);
+                        }
                     }
                 } catch (e) {
                     console.error("[WebSocket] Close session cleanup failed", code, e);
@@ -102,36 +88,5 @@ export async function Close(this: WebSocket, code: number, reason: Buffer) {
                 channel_id: prevChannelId,
             } satisfies VoiceStateUpdateEvent);
         }
-    }
-
-    if (this.user_id) {
-        const sessions = await Session.find({
-            where: { user_id: this.user_id },
-        });
-        await emitEvent({
-            event: "SESSIONS_REPLACE",
-            user_id: this.user_id,
-            data: sessions.map((x) => x.toPrivateGatewayDeviceInfo()),
-        } as SessionsReplace);
-        const session = sessions[0] || {
-            activities: [],
-            client_status: {},
-            status: "offline",
-        };
-
-        const user = await User.getPublicUser(this.user_id).catch(() => undefined);
-
-        // Special case: dont emit a presence update for deleted users
-        if (user !== undefined)
-            await emitEvent({
-                event: "PRESENCE_UPDATE",
-                user_id: this.user_id,
-                data: {
-                    user: user,
-                    activities: session.activities,
-                    client_status: session?.client_status,
-                    status: session.getPublicStatus?.() ?? session.status,
-                },
-            } satisfies PresenceUpdateEvent);
     }
 }

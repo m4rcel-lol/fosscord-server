@@ -53,6 +53,9 @@ export class User extends BaseClass {
     @Column()
     discriminator: string; // opaque string: 4 digits on discord.com
 
+    @Column({ type: String, nullable: true })
+    global_name?: string | null;
+
     @Column({ nullable: true })
     avatar?: string; // hash of the user avatar
 
@@ -208,7 +211,7 @@ export class User extends BaseClass {
 
     // TODO: I don't like this method?
     validate() {
-        if (this.discriminator) {
+        if (this.discriminator && this.discriminator !== "0") {
             const discrim = Number(this.discriminator);
             if (isNaN(discrim) || !Number.isInteger(discrim) || discrim <= 0 || discrim >= 10000)
                 throw FieldErrors({
@@ -240,7 +243,7 @@ export class User extends BaseClass {
             id: this.id,
             username: this.username,
             discriminator: this.discriminator,
-            global_name: undefined, // TODO when pomelo
+            global_name: this.global_name ?? null,
             avatar: this.avatar ?? null,
             avatar_decoration_data: this.avatar_decoration
                 ? {
@@ -311,11 +314,35 @@ export class User extends BaseClass {
         }
     }
 
-    public get tag(): string {
-        //const { uniqueUsernames } = Config.get().general;
-        const uniqueUsernames = false;
+    static isValidPomeloUsername(username: string) {
+        return /^[a-z0-9_.]{2,32}$/i.test(username) && !username.includes("..");
+    }
 
-        return uniqueUsernames ? this.username : `${this.username}#${this.discriminator}`;
+    static async isUsernameTaken(username: string, exceptUserId?: string) {
+        const query = User.createQueryBuilder("u").where("LOWER(u.username) = LOWER(:username)", { username }).andWhere("u.bot = false");
+        if (exceptUserId) query.andWhere("u.id != :id", { id: exceptUserId });
+        return (await query.getCount()) > 0;
+    }
+
+    static async suggestUsername(source: string, exceptUserId?: string) {
+        const base =
+            source
+                .toLowerCase()
+                .normalize("NFKD")
+                .replace(/[^a-z0-9_.]/g, "")
+                .replace(/\.{2,}/g, ".")
+                .slice(0, 26) || "user";
+        const padded = base.length < 2 ? `${base}_` : base;
+        if (!(await User.isUsernameTaken(padded, exceptUserId))) return padded;
+        for (let tries = 0; tries < 20; tries++) {
+            const candidate = `${padded}${Random.nextInt(0, 9999).toString().padStart(4, "0")}`;
+            if (!(await User.isUsernameTaken(candidate, exceptUserId))) return candidate;
+        }
+        return `${padded}${Date.now().toString(36)}`;
+    }
+
+    public get tag(): string {
+        return this.discriminator === "0" ? this.username : `${this.username}#${this.discriminator}`;
     }
 
     static async register({
@@ -325,8 +352,10 @@ export class User extends BaseClass {
         id,
         req,
         bot,
+        global_name,
     }: {
         username: string;
+        global_name?: string;
         password?: string;
         email?: string;
         date_of_birth?: Date; // "2000-04-03"
@@ -344,7 +373,15 @@ export class User extends BaseClass {
         // trim special utf8 control characters -> Backspace, Newline, ...
         username = trimSpecial(username);
 
-        const discriminator = await User.generateDiscriminator(username);
+        if (!bot && (await User.isUsernameTaken(username)))
+            throw FieldErrors({
+                username: {
+                    code: "USERNAME_ALREADY_TAKEN",
+                    message: "Username is unavailable. Try adding numbers, letters, underscores _ , or periods.",
+                },
+            });
+
+        const discriminator = bot ? await User.generateDiscriminator(username) : "0";
         if (!discriminator) {
             // We've failed to generate a valid and unused discriminator
             throw FieldErrors({
@@ -368,6 +405,7 @@ export class User extends BaseClass {
         const user = User.create({
             username: username,
             discriminator,
+            global_name: global_name?.trim() || null,
             id: id || Snowflake.generate(),
             email: email,
             data: {
