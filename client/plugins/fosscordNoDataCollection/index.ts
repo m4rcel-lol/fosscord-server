@@ -41,5 +41,12 @@ export default definePlugin({
             find: ".DATA_USAGE_PERSONALIZATION_SETTING,{",
             replacement: hideSetting("DATA_USAGE_PERSONALIZATION_SETTING"),
         },
+        {
+            find: 'value:"Ads",label:',
+            replacement: {
+                match: /Ads:\{value:"Ads",label:[^}]+,checked:!1\},/,
+                replace: "",
+            },
+        },
     ],
 });
