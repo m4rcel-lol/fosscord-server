@@ -25,9 +25,10 @@
     };
     const nativeFetch = window.fetch;
     window.fetch = function (input, init) {
-        if (typeof input !== "string" && !(input instanceof URL)) return nativeFetch.call(this, input, init);
-        const target = rewrites.reduce((acc, [pattern, to]) => (pattern.test(acc) ? acc.replace(pattern, to()) : acc), String(input));
-        return nativeFetch.call(this, target, init);
+        const url = input instanceof Request ? input.url : String(input);
+        const target = rewrites.reduce((acc, [pattern, to]) => (pattern.test(acc) ? acc.replace(pattern, to()) : acc), url);
+        if (target === url) return nativeFetch.call(this, input, init);
+        return nativeFetch.call(this, input instanceof Request ? new Request(target, input) : target, init);
     };
 
     const quest = 'path[d^="M7.5 21.7a8.95 8.95 0 0 1 9 0"]';
