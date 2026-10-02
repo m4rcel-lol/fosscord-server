@@ -13,7 +13,7 @@
             <form class="card login-card" id="login-form" autocomplete="on">
                 <h1>Admin sign in</h1>
                 <p class="muted">Sign in with an account that has admin rights on this instance.</p>
-                <label>Email<input name="login" type="email" autocomplete="username" required /></label>
+                <label>Email or username<input name="login" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required /></label>
                 <label>Password<input name="password" type="password" autocomplete="current-password" required /></label>
                 <label id="mfa-field" hidden>Two-factor code<input name="code" inputmode="numeric" autocomplete="one-time-code" /></label>
                 <p class="form-error" id="login-error" hidden></p>
