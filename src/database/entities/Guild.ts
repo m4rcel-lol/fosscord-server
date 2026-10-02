@@ -411,6 +411,7 @@ export class Guild extends BaseClass {
         owner_id?: string;
         roles?: Partial<Role>[];
         channels?: Partial<Channel>[];
+        system_channel_id?: string | null;
         source_guild_id: string | null;
     }) {
         const guild_id = Snowflake.generate();
@@ -484,7 +485,12 @@ export class Guild extends BaseClass {
         }
 
         if (!body.channels || !body.channels.length) {
-            body.channels = [{ id: "01", type: 0, name: "general", nsfw: false }];
+            body.channels = [
+                { id: "00", type: 4, name: "Text Channels" },
+                { id: "01", type: 0, name: "general", nsfw: false, parent_id: "00" },
+                { id: "10", type: 4, name: "Voice Channels" },
+                { id: "11", type: 2, name: "General", parent_id: "10" },
+            ];
         }
 
         const ids = new Map();
@@ -508,6 +514,12 @@ export class Guild extends BaseClass {
             });
 
             await Guild.insertChannelInOrder(guild.id, saved.id, parent_id ?? channel.position ?? 0, guild);
+        }
+
+        const systemChannelId = (body.system_channel_id && ids.get(body.system_channel_id)) ?? ids.get(body.channels.find((c) => c.type === 0)?.id);
+        if (systemChannelId) {
+            guild.system_channel_id = systemChannelId;
+            await Guild.update({ id: guild.id }, { system_channel_id: systemChannelId });
         }
 
         return guild;
