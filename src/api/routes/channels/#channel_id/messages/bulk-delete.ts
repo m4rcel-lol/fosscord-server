@@ -19,9 +19,10 @@
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
-import { Channel, Message } from "@spacebar/database";
+import { AuditLog, Channel, Message } from "@spacebar/database";
 import { Config, emitEvent, FieldErrors, getPermission, getRights, MessageDeleteBulkEvent } from "@spacebar/util";
 import { In } from "typeorm";
+import { AuditLogEvents } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
 
@@ -65,6 +66,15 @@ router.post(
         const messageIdsInChannel = (await Message.find({ where: { id: In(messages), channel_id: channel_id }, select: { id: true } })).map((x) => x.id);
 
         await Message.delete({ id: In(messageIdsInChannel), channel_id: channel_id });
+        if (messageIdsInChannel.length)
+            await AuditLog.log({
+                guild_id: channel.guild_id,
+                user_id: req.user_id,
+                action_type: AuditLogEvents.MESSAGE_BULK_DELETE,
+                target_id: channel_id,
+                options: { count: `${messageIdsInChannel.length}` },
+                reason: req.headers["x-audit-log-reason"],
+            });
 
         await emitEvent({
             event: "MESSAGE_DELETE_BULK",

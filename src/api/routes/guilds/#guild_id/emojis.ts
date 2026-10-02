@@ -19,9 +19,9 @@
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
-import { Emoji, Member } from "@spacebar/database";
+import { AuditLog, Emoji, Member } from "@spacebar/database";
 import { Config, DiscordApiErrors, FieldErrors, GuildEmojisUpdateEvent, Snowflake, deleteFile, emitEvent, handleFile } from "@spacebar/util";
-import { EmojiCreateSchema, EmojiModifySchema } from "@spacebar/schemas";
+import { AuditLogEvents, EmojiCreateSchema, EmojiModifySchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
 
@@ -144,6 +144,14 @@ router.post(
             available: true,
             roles: body.roles ?? [],
         }).save();
+        await AuditLog.log({
+            guild_id,
+            user_id: req.user_id,
+            action_type: AuditLogEvents.EMOJI_CREATE,
+            target_id: id,
+            changes: AuditLog.diff({}, { name }, ["name"]),
+            reason: req.headers["x-audit-log-reason"],
+        });
 
         await emitEmojisUpdate(guild_id);
 
@@ -175,9 +183,20 @@ router.patch(
         });
         if (!emoji) throw DiscordApiErrors.UNKNOWN_EMOJI;
 
+        const auditBefore = { name: emoji.name, roles: emoji.roles };
         if (body.name !== undefined) emoji.name = normalizeName(body.name)!;
         if (body.roles !== undefined) emoji.roles = body.roles ?? [];
         await emoji.save();
+        const changes = AuditLog.diff(auditBefore, emoji, ["name", "roles"]);
+        if (changes.length)
+            await AuditLog.log({
+                guild_id,
+                user_id: req.user_id,
+                action_type: AuditLogEvents.EMOJI_UPDATE,
+                target_id: emoji_id,
+                changes,
+                reason: req.headers["x-audit-log-reason"],
+            });
 
         await emitEmojisUpdate(guild_id);
 
@@ -203,6 +222,14 @@ router.delete(
         if (!emoji) throw DiscordApiErrors.UNKNOWN_EMOJI;
 
         await Emoji.delete({ id: emoji_id, guild_id });
+        await AuditLog.log({
+            guild_id,
+            user_id: req.user_id,
+            action_type: AuditLogEvents.EMOJI_DELETE,
+            target_id: emoji_id,
+            changes: AuditLog.diff(emoji, {}, ["name"]),
+            reason: req.headers["x-audit-log-reason"],
+        });
         await deleteFile(`/emojis/${emoji_id}`).catch(() => undefined);
 
         await emitEmojisUpdate(guild_id);

@@ -17,11 +17,11 @@
 */
 
 import { route } from "@spacebar/api/middlewares";
-import { Guild } from "@spacebar/database";
+import { AuditLog, Guild } from "@spacebar/database";
 import { DiscordApiErrors, handleFile } from "@spacebar/util";
 import { applyGuildTag, syncTagAdopters } from "@spacebar/api/util";
 import { Request, Response, Router } from "express";
-import { GuildProfileModifySchema } from "@spacebar/schemas";
+import { AuditLogEvents, GuildProfileModifySchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
 
@@ -59,6 +59,8 @@ router.patch(
         const body = req.body as GuildProfileModifySchema;
         const guild = await Guild.findOneOrFail({ where: { id: guild_id } });
         const profile = { ...(guild.profile ?? {}) };
+        const auditKeys = ["name", "description", "icon"];
+        const auditBefore = { name: guild.name, description: guild.description, icon: guild.icon };
 
         if (body.name != null) guild.name = body.name;
         if (body.description !== undefined) guild.description = body.description ?? undefined;
@@ -77,6 +79,16 @@ router.patch(
             badge_color_secondary: body.badge_color_secondary,
         });
         await guild.save();
+        const changes = AuditLog.diff(auditBefore, guild, auditKeys);
+        if (changes.length)
+            await AuditLog.log({
+                guild_id,
+                user_id: req.user_id,
+                action_type: AuditLogEvents.GUILD_UPDATE,
+                target_id: guild_id,
+                changes,
+                reason: req.headers["x-audit-log-reason"],
+            });
         if (tagChanged) await syncTagAdopters(guild);
 
         await Guild.emitUpdate(guild_id);

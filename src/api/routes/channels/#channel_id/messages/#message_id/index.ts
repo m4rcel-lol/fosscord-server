@@ -21,7 +21,7 @@ import { HTTPError } from "lambert-server/HTTPError";
 import multer from "multer";
 import { checkAutomod, handleMessage, postHandleMessage, syncCrosspostCopies } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
-import { Attachment, Channel, Message } from "@spacebar/database";
+import { Attachment, AuditLog, Channel, Message } from "@spacebar/database";
 import {
     MessageCreateEvent,
     MessageDeleteEvent,
@@ -330,6 +330,8 @@ router.delete(
         } else rights.hasThrow("SELF_DELETE_MESSAGES");
 
         await Message.delete({ id: message_id, channel_id: channel_id });
+        if (channel.guild_id && message.author_id && message.author_id !== req.user_id)
+            await AuditLog.logMessageDelete(channel.guild_id, req.user_id, message.author_id, channel_id, req.headers["x-audit-log-reason"]);
         if (channel.isThread() && message.id !== channel.id && message.type !== MessageType.THREAD_STARTER_MESSAGE && (channel.message_count ?? 0) > 0)
             await Channel.getRepository().decrement({ id: channel.id }, "message_count", 1);
 

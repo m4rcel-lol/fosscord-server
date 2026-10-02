@@ -19,7 +19,8 @@
 import { Request, Response, Router } from "express";
 import { IsNull, LessThan, Not } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
-import { Message, User } from "@spacebar/database";
+import { AuditLogEvents } from "@spacebar/schemas";
+import { AuditLog, Message, User } from "@spacebar/database";
 import { ChannelPinsUpdateEvent, Config, DiscordApiErrors, emitEvent, MessageCreateEvent, MessageUpdateEvent } from "@spacebar/util";
 
 const router: Router = Router({ mergeParams: true });
@@ -101,6 +102,18 @@ router.put(
                 },
             } satisfies ChannelPinsUpdateEvent),
             systemPinMessage.save(),
+            ...(message.guild_id
+                ? [
+                      AuditLog.log({
+                          guild_id: message.guild_id,
+                          user_id: req.user_id,
+                          action_type: AuditLogEvents.MESSAGE_PIN,
+                          target_id: message.author_id,
+                          options: { channel_id, message_id },
+                          reason: req.headers["x-audit-log-reason"],
+                      }),
+                  ]
+                : []),
             emitEvent({
                 event: "MESSAGE_CREATE",
                 channel_id: message.channel_id,
@@ -155,6 +168,18 @@ router.delete(
                     last_pin_timestamp: (await Message.findOne({ where: { channel_id, pinned_at: Not(IsNull()) }, order: { pinned_at: "DESC" } }))?.pinned_at?.toISOString(),
                 },
             } satisfies ChannelPinsUpdateEvent),
+            ...(message.guild_id
+                ? [
+                      AuditLog.log({
+                          guild_id: message.guild_id,
+                          user_id: req.user_id,
+                          action_type: AuditLogEvents.MESSAGE_UNPIN,
+                          target_id: message.author_id,
+                          options: { channel_id, message_id },
+                          reason: req.headers["x-audit-log-reason"],
+                      }),
+                  ]
+                : []),
         ]);
 
         res.sendStatus(204);
