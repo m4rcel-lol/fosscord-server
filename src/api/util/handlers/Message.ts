@@ -300,8 +300,9 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
 
     let permission: null | Permissions = null;
     const limit = channel.rate_limit_per_user;
+    const isEdit = !!opts.edited_timestamp;
 
-    if (limit) {
+    if (limit && !isEdit) {
         const lastMsgTime = (await Message.findOne({ where: { channel_id: channel.id, author_id: opts.author_id }, select: { timestamp: true }, order: { timestamp: "DESC" } }))
             ?.timestamp;
         if (lastMsgTime && Date.now() - limit * 1000 < +lastMsgTime) {
@@ -342,12 +343,12 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
     }
 
     const ephermal = (message.flags & (1 << 6)) !== 0;
-    if (!ephermal && channel.type === ChannelType.GUILD_PUBLIC_THREAD) {
+    if (!isEdit && !ephermal && channel.type === ChannelType.GUILD_PUBLIC_THREAD) {
         const rep = Channel.getRepository();
         await rep.increment({ id: channel.id }, "message_count", 1);
         await rep.increment({ id: channel.id }, "total_message_sent", 1);
     }
-    if (!ephermal) {
+    if (!isEdit && !ephermal) {
         channel.last_message_id = message.id;
         await channel.save();
     }
@@ -513,7 +514,7 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
         }
     }
 
-    await handleMessageMentionsAsync(message, opts.allowed_mentions);
+    await handleMessageMentionsAsync(message, opts.allowed_mentions, isEdit);
 
     const attachmentIndices = new Map(message.attachments?.map((attachment, index) => [`attachment://${attachment.filename}`, index]));
     const attachmentsToRemove = new Set<number>();
@@ -690,7 +691,7 @@ export async function convertCloudAttachmentToAttachment(cloudAttachmentReferenc
     return realAtt;
 }
 
-async function handleMessageMentionsAsync(message: Message, allowed?: AllowedMentions | null) {
+async function handleMessageMentionsAsync(message: Message, allowed?: AllowedMentions | null, isEdit = false) {
     const sw = Stopwatch.startNew(),
         totalSw = Stopwatch.startNew();
     const trace: TraceNode = { micros: 0, calls: [] };
@@ -869,7 +870,9 @@ async function handleMessageMentionsAsync(message: Message, allowed?: AllowedMen
         }
     };
 
-    if ((message.flags & (1 << 6)) !== 0) {
+    if (isEdit) {
+        trace.calls.push("skipReadStatesForEdit", { micros: sw.getElapsedAndReset().totalMicroseconds });
+    } else if ((message.flags & (1 << 6)) !== 0) {
         // ephemeral messages
         const id = message.interaction_metadata?.user_id;
         if (id) {
