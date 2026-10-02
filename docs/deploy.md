@@ -10,7 +10,9 @@ If the cache was generated before the compression step existed, run it once by h
 node scripts/compress-client.js
 ```
 
-The script only recompresses files whose source changed, so rerunning it is cheap. `CLIENT_CACHE_PATH` and `CLIENT_COMPRESSED_PATH` override the input and output directories. The server reads `CLIENT_COMPRESSED_PATH` too.
+`node scripts/client.js --missing` keeps the cached `index.html` and only downloads assets the cached build references but the cache lacks, such as the WebAssembly modules webpack loads by hash (`<hash>.module.wasm`). Run it when `assets/cacheMisses` lists files the client asked for and the server had to fetch from Discord.
+
+The compression script only recompresses files whose source changed, so rerunning it is cheap. `CLIENT_CACHE_PATH` and `CLIENT_COMPRESSED_PATH` override the input and output directories. The server reads `CLIENT_COMPRESSED_PATH` too.
 
 With `NODE_ENV=production`, hashed asset names are served with `Cache-Control: public, max-age=31536000, immutable` and the HTML page with `no-cache` and an ETag. In development everything is `no-cache`.
 

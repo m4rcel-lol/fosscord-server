@@ -81,16 +81,23 @@ const chunkNames = (source) => {
     return names;
 };
 
-const references = (text) => new Set([...text.matchAll(ASSET_NAME)].map((m) => m[1]));
+const WASM_MODULE = /\.v\(\w+,\w+\.id,"([0-9a-f]{8,32})"/g;
+const references = (text) => new Set([...[...text.matchAll(ASSET_NAME)].map((m) => m[1]), ...[...text.matchAll(WASM_MODULE)].map((m) => `${m[1]}.module.wasm`)]);
+const onlyMissing = process.argv.includes("--missing");
 
 (async () => {
     await fs.mkdir(CACHE_PATH, { recursive: true });
     const started = Date.now();
 
-    const appRes = await fetch(`${BASE_URL}/app`, { headers: { "user-agent": USER_AGENT } });
-    if (!appRes.ok) throw new Error(`GET /app returned ${appRes.status}`);
-    const html = await appRes.text();
-    await fs.writeFile(path.join(CACHE_PATH, "index.html"), html);
+    const indexFile = path.join(CACHE_PATH, "index.html");
+    let html;
+    if (onlyMissing && existsSync(indexFile)) html = await fs.readFile(indexFile, "utf8");
+    else {
+        const appRes = await fetch(`${BASE_URL}/app`, { headers: { "user-agent": USER_AGENT } });
+        if (!appRes.ok) throw new Error(`GET /app returned ${appRes.status}`);
+        html = await appRes.text();
+        await fs.writeFile(indexFile, html);
+    }
 
     const queue = [...new Set([...html.matchAll(/\/assets\/([\w.-]+)/g)].map((m) => m[1]))];
     const seen = new Set(queue);
