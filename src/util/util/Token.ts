@@ -178,6 +178,7 @@ export async function generateCompactToken(id: string): Promise<string> {
         client_status: {},
         status: "offline",
         client_info: {},
+        last_seen: new Date(),
     });
     await session.save();
     return jwt.sign({ id, iat: Math.floor(Date.now() / 1000), ver: CurrentTokenFormatVersion, did: session.session_id }, compactTokenSecret(), {
@@ -199,6 +200,7 @@ export async function generateToken(id: string, isAdminSession: boolean = false,
             client_status: {},
             status: "offline", // will be set to online upon IDENTIFY
             client_info: {},
+            last_seen: new Date(),
         });
     } while (await Session.findOne({ where: { session_id: newSession.session_id } }));
 
