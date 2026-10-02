@@ -3492,7 +3492,16 @@ ${approver}`;
       if (!engine2.device || engine2.linked) return;
       const pair = await generateAgreementKey();
       const publicKey = await exportPublic(pair.publicKey);
-      const current = { requestId: toB64u(randomBytes(16)), state: "waiting", sas: null, approverName: null, pair, publicKey, approver: null, approverKey: null };
+      const current = {
+        requestId: toB64u(randomBytes(16)),
+        state: "waiting",
+        sas: null,
+        approverName: null,
+        pair,
+        publicKey,
+        approver: null,
+        approverKey: null
+      };
       outgoing = current;
       hooks2.onChange();
       const body = { request_id: current.requestId, stage: "request", name: deviceName(), commit: toB64u(await sha256(fromB64u(publicKey))) };
