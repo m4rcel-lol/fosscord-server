@@ -67,17 +67,55 @@ export const sendBrandImage = (res: Response, image: BrandImage, cacheControl = 
     return res.sendFile(image.file, { cacheControl: false, dotfiles: "allow" });
 };
 
+const remoteIcons = new Map<string, Promise<string | null>>();
+
+const MIME_TYPES: Record<string, string> = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml",
+};
+
+const fetchDataUri = async (url: string) => {
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) }).catch(() => null);
+    const type = res?.headers.get("content-type")?.split(";")[0];
+    if (!res?.ok || !type?.startsWith("image/")) return null;
+    return `data:${type};base64,${Buffer.from(await res.arrayBuffer()).toString("base64")}`;
+};
+
+export const instanceIconDataUri = async () => {
+    const icon = instanceIcon();
+    if (!icon) return null;
+    if ("file" in icon) {
+        const data = await fs.promises.readFile(icon.file).catch(() => null);
+        return data ? `data:${MIME_TYPES[path.extname(icon.file).toLowerCase()] ?? "image/png"};base64,${data.toString("base64")}` : null;
+    }
+    if (!remoteIcons.has(icon.url)) {
+        const pending = fetchDataUri(icon.url);
+        remoteIcons.set(icon.url, pending);
+        void pending.then((uri) => uri ?? remoteIcons.delete(icon.url));
+    }
+    return remoteIcons.get(icon.url) ?? null;
+};
+
 const escapeXml = (text: string) => text.replace(/[<>&"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
-export const wordmarkSvg = (box?: [number, number]) => {
+const iconMarkup = (x: number, y: number, size: number, iconUri: string | null) =>
+    iconUri
+        ? `<image href="${escapeXml(iconUri)}" x="${x}" y="${y}" width="${size}" height="${size}" preserveAspectRatio="xMidYMid meet"/>`
+        : `<path fill="#fff" transform="translate(${x} ${y}) scale(${size / 24})" d="${INSTANCE_ICON_PATH}"/>`;
+
+export const wordmarkSvg = (box?: [number, number], iconUri: string | null = null) => {
     const name = instanceName();
     const width = Math.ceil(34 + [...name].length * 12.5);
     const [boxWidth, boxHeight] = box ?? [width, 24];
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${boxWidth}" height="${boxHeight}" viewBox="0 0 ${width} 24" fill="none"><path fill="#fff" d="${INSTANCE_ICON_PATH}"/><text x="32" y="19.5" fill="#fff" font-family="'gg sans','Noto Sans','Helvetica Neue',Helvetica,Arial,sans-serif" font-size="20" font-weight="800">${escapeXml(name)}</text></svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${boxWidth}" height="${boxHeight}" viewBox="0 0 ${width} 24" fill="none">${iconMarkup(0, 0, 24, iconUri)}<text x="32" y="19.5" fill="#fff" font-family="'gg sans','Noto Sans','Helvetica Neue',Helvetica,Arial,sans-serif" font-size="20" font-weight="800">${escapeXml(name)}</text></svg>`;
 };
 
-export const qrLogoSvg = () =>
-    `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="#000"/><path fill="#fff" transform="translate(23 23) scale(2.25)" d="${INSTANCE_ICON_PATH}"/></svg>`;
+export const qrLogoSvg = (iconUri: string | null = null) =>
+    `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="#000"/>${iconMarkup(23, 23, 54, iconUri)}</svg>`;
 
 export const defaultAvatarSvg = (index: number) =>
     `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><rect width="256" height="256" fill="${DEFAULT_AVATAR_COLORS[index % DEFAULT_AVATAR_COLORS.length]}"/><path fill="#fff" transform="translate(53 54) scale(6.25)" d="${INSTANCE_ICON_PATH}"/></svg>`;

@@ -23,7 +23,7 @@ import vm from "node:vm";
 import zlib from "node:zlib";
 import { createHash } from "node:crypto";
 import { pipeline } from "node:stream/promises";
-import { brandImageUrls, Config, DEFAULT_ICON_FILE, helpUrl, instanceIcon, qrLogoSvg, sendBrandImage, wordmarkSvg } from "@spacebar/util";
+import { brandImageUrls, Config, DEFAULT_ICON_FILE, helpUrl, instanceIcon, instanceIconDataUri, qrLogoSvg, sendBrandImage, wordmarkSvg } from "@spacebar/util";
 
 const ASSET_FOLDER_PATH = path.join(__dirname, "..", "..", "assets");
 const CACHE_PATH = path.join(ASSET_FOLDER_PATH, "cache");
@@ -88,22 +88,22 @@ const serveAsset = async (req: Request, res: Response, next: NextFunction, root:
     await pipeline(fs.createReadStream(source), compressor(encodings[0]), res).catch(() => res.destroy());
 };
 
-const BRANDED_ASSETS: Record<string, { custom: () => string | null; svg: () => string }> = {
-    "131c318dd45b7aa4.svg": { custom: () => brandImageUrls().logo, svg: () => wordmarkSvg() },
-    "bbbc3d376d38e7bc.svg": { custom: () => brandImageUrls().logo, svg: () => wordmarkSvg([112, 36]) },
-    "dd05fd1ea37e7747.png": { custom: () => brandImageUrls().icon, svg: qrLogoSvg },
+const BRANDED_ASSETS: Record<string, { wordmark?: boolean; svg: (iconUri: string | null) => string }> = {
+    "131c318dd45b7aa4.svg": { wordmark: true, svg: (iconUri) => wordmarkSvg(undefined, iconUri) },
+    "bbbc3d376d38e7bc.svg": { wordmark: true, svg: (iconUri) => wordmarkSvg([112, 36], iconUri) },
+    "dd05fd1ea37e7747.png": { svg: qrLogoSvg },
 };
 
 export function TestClientAssets(app: Application) {
     const noCache = { setHeaders: (res: Response) => res.set("Cache-Control", "no-cache") };
     app.get("/assets/favicon.ico", (req, res) => void sendBrandImage(res, instanceIcon() ?? { file: DEFAULT_ICON_FILE }, "no-cache"));
-    app.get("/assets/:file", (req, res, next) => {
+    app.get("/assets/:file", async (req, res, next) => {
         const branded = BRANDED_ASSETS[req.params.file as string];
         if (!branded) return next();
         res.set("Cache-Control", "no-cache");
-        const custom = branded.custom();
-        if (custom) return res.redirect(302, custom);
-        res.type("image/svg+xml").send(branded.svg());
+        const logo = branded.wordmark && brandImageUrls().logo;
+        if (logo) return res.redirect(302, logo);
+        res.type("image/svg+xml").send(branded.svg(await instanceIconDataUri()));
     });
     app.use("/assets", express.static(path.join(ASSET_FOLDER_PATH, "public")));
     app.get("/assets/vencord/:file", (req, res, next) => void serveAsset(req, res, next, VENCORD_PATH, false).catch(next));
