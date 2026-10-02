@@ -37,3 +37,4 @@ export * from "./utility/mfa";
 export * from "./utility/statusPage";
 export * from "./utility/GuildPowerups";
 export * from "./utility/automod";
+export * from "./utility/detectableGames";
