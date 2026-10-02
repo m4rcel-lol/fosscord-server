@@ -18,7 +18,7 @@
 
 import definePlugin from "@utils/types";
 
-import { FosscordAuthor, hideSetting } from "../fosscordCore/shared";
+import { FosscordAuthor } from "../fosscordCore/shared";
 
 const instanceName = () => String((window as any).GLOBAL_ENV?.INSTANCE_NAME || "Fosscord").replace(/['"\\<>]/g, "");
 
@@ -62,10 +62,6 @@ export default definePlugin({
                 match: /d:"M19\.73 4\.87a18\.2 18\.2 0 0 0-4\.6-1\.44[^"]*"/,
                 replace: () => `d:"${LOGO_PATH}"`,
             },
-        },
-        {
-            find: ".APPEARANCE_IN_APP_ICON_CATEGORY,{useTitle:",
-            replacement: hideSetting("APPEARANCE_IN_APP_ICON_CATEGORY"),
         },
     ],
 });

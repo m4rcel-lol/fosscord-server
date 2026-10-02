@@ -68,14 +68,7 @@ export default definePlugin({
         },
         {
             find: ".BILLING_SECTION,{",
-            replacement: [
-                hideSetting("BILLING_SECTION"),
-                hideSetting("ACCOUNT_FAMILY_CENTER_CATEGORY"),
-                {
-                    match: /(\.APPEARANCE_IN_APP_ICON_CATEGORY,\{.{0,120}?)useSubtitle:\(\)=>[^,]+?,(?=useHeaderDecoration)/,
-                    replace: "$1",
-                },
-            ],
+            replacement: [hideSetting("BILLING_SECTION"), hideSetting("ACCOUNT_FAMILY_CENTER_CATEGORY"), hideSetting("APPEARANCE_IN_APP_ICON_CATEGORY")],
         },
         {
             find: ".COLLECTIBLES_PROFILE_SETTINGS_UPSELL),",
@@ -115,6 +108,21 @@ export default definePlugin({
                 match: /\i\.gifts\?\.button!=null(?=&&)/,
                 replace: "!1",
             },
+        },
+        {
+            find: /JSON\.parse\('\{"[\w+/]{6}":\["/,
+            all: true,
+            noWarn: true,
+            replacement: [
+                {
+                    match: / Animated GIF emojis? may be used by members with [^."]+\./g,
+                    replace: "",
+                },
+                {
+                    match: / (?:Nitro|Premium) members will be able to access these sounds in any server(?: on [^."]+)?\./g,
+                    replace: "",
+                },
+            ],
         },
         {
             find: "queryInAppNavigations(",
