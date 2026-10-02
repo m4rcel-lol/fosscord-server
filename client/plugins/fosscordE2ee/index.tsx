@@ -19,6 +19,7 @@
 import { updateMessage } from "@api/MessageUpdater";
 import SettingsPlugin from "@plugins/_core/settings";
 import definePlugin, { IconProps } from "@utils/types";
+import { findComponentByCodeLazy } from "@webpack";
 import { useEffect, useRef, useState } from "@webpack/common";
 
 import { FosscordAuthor } from "../fosscordCore/shared";
@@ -36,7 +37,15 @@ interface LayoutNode {
     fosscordE2ee?: boolean;
 }
 
+interface SystemMessageProps {
+    message: { author?: { username?: string; globalName?: string | null; global_name?: string | null }; timestamp?: unknown };
+    compact?: boolean;
+}
+
 const ENTRY_KEY = "fosscord_encryption_sidebar_item";
+const E2EE_ENABLED_TYPE = 1000;
+
+const SystemMessage = findComponentByCodeLazy("iconContainerClassName", "timestampFormat");
 const LOCK_PATH = "M7 10V7a5 5 0 0 1 10 0v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1Zm2 0h6V7a3 3 0 0 0-6 0v3Z";
 
 const bridge = () => (window as unknown as { __fosscordE2ee?: E2eeBridge }).__fosscordE2ee;
@@ -52,6 +61,17 @@ const EncryptionIcon = ({ width = 20, height = 20, className }: IconProps) => (
         <path fillRule="evenodd" d={LOCK_PATH} />
     </svg>
 );
+
+function EncryptionEnabledMessage({ message, compact }: SystemMessageProps) {
+    const author = message.author;
+    const name = author?.globalName || author?.global_name || author?.username || "Someone";
+    return (
+        <SystemMessage iconNode={<EncryptionIcon width={16} height={16} />} timestamp={message.timestamp} compact={compact}>
+            <span style={{ fontWeight: 500, color: "var(--text-strong, var(--header-primary))" }}>{name}</span> turned on end-to-end encryption. Messages sent before this weren't
+            encrypted.
+        </SystemMessage>
+    );
+}
 
 function EncryptionPage() {
     const ref = useRef<HTMLDivElement>(null);
@@ -88,6 +108,20 @@ export default definePlugin({
 
     patches: [
         {
+            find: "unknown message type ",
+            replacement: {
+                match: /\{type:(\i)\}=(\i),(\i)=(\i)\[\1\];/,
+                replace: "{type:$1}=$2,$3=$4[$1]??$self.systemMessage($1);",
+            },
+        },
+        {
+            find: "FORWARDABLE.has(",
+            replacement: {
+                match: /if\(null==(\i)\|\|!\((\i)\.state!==/,
+                replace: "if(null==$1||$self.isEncrypted($1.channel_id)||!($2.state!==",
+            },
+        },
+        {
             find: 'navId:"channel-attach"',
             replacement: {
                 match: /id:"(clips|poll)",/g,
@@ -95,6 +129,10 @@ export default definePlugin({
             },
         },
     ],
+
+    systemMessage(type: number) {
+        return type === E2EE_ENABLED_TYPE ? EncryptionEnabledMessage : undefined;
+    },
 
     isEncrypted(channelId?: string) {
         return !!channelId && !!bridge()?.isEncrypted?.(channelId);

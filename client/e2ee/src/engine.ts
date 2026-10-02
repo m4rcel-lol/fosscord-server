@@ -40,7 +40,7 @@ import {
     verify,
 } from "./crypto";
 import { parsePayload, Payload } from "./files";
-import { Contact, scoped, Store, StoredDevice, StoredIdentity, StoredPrekey } from "./store";
+import { Contact, dropPendingPassword, holdPendingPassword, scoped, Store, StoredDevice, StoredIdentity, StoredPrekey, takePendingPassword } from "./store";
 
 export const FALLBACK_CONTENT = "🔒 Encrypted message";
 const WRAP_INFO = "fosscord-e2ee/v1/wrap";
@@ -105,6 +105,7 @@ export interface ServerDevice {
     name: string | null;
     prekey: { id: number; public_key: string; signature: string };
     created_at?: string;
+    revoked_at?: string | null;
     session?: { signed_in: boolean; last_seen: string | null; os: string | null; browser: string | null; location: string | null } | null;
 }
 
@@ -115,6 +116,7 @@ interface SignedKey {
 
 interface ServerUserKeys {
     identity_key: string | null;
+    identity_created_at?: string | null;
     previous_identity?: SignedKey | null;
     backup_key?: SignedKey | null;
     devices: ServerDevice[];
@@ -131,11 +133,13 @@ export interface DirectoryDevice {
     name: string | null;
     prekeyId: number;
     prekeyPublic: string;
+    revokedAt: number | null;
 }
 
 export interface DirectoryEntry {
     userId: string;
     identityKey: string | null;
+    identityCreatedAt: number | null;
     identityChanged: boolean;
     backupKey: string | null;
     devices: DirectoryDevice[];
@@ -154,13 +158,36 @@ export interface Api {
 
 export class E2eeError extends Error {
     constructor(
-        readonly code: "NOT_READY" | "NOT_LINKED" | "LOCKED" | "BAD_SECRET" | "IDENTITY_CHANGED" | "NO_DEVICES" | "UNSUPPORTED" | "BAD_ENVELOPE" | "NO_KEY" | "BAD_SIGNATURE",
+        readonly code:
+            "NOT_READY" | "NOT_LINKED" | "LOCKED" | "BAD_SECRET" | "IDENTITY_CHANGED" | "NO_DEVICES" | "UNSUPPORTED" | "BAD_ENVELOPE" | "NO_KEY" | "BAD_SIGNATURE" | "RESET",
         message: string,
         readonly userId?: string,
     ) {
         super(message);
     }
 }
+
+export const errorText = (error: unknown): string => {
+    if (error instanceof Error) return error.message;
+    const failure = error as { status?: number; body?: { message?: unknown; retry_after?: unknown } } | null;
+    if (failure && typeof failure === "object") {
+        if (failure.status === 429) {
+            const minutes = Math.max(1, Math.ceil(Number(failure.body?.retry_after ?? 60) / 60));
+            return `Too many attempts. Try again in ${minutes === 1 ? "a minute" : `${minutes} minutes`}.`;
+        }
+        if (typeof failure.body?.message === "string") return failure.body.message;
+        if (failure.status) return `The server answered with an error (${failure.status}).`;
+    }
+    return String(error);
+};
+
+export const snowflakeTime = (id: string) => {
+    try {
+        return Number((BigInt(id) >> 22n) + 1420070400000n);
+    } catch {
+        return 0;
+    }
+};
 
 const binding = (mid: string | undefined, nonce: string | undefined) => (mid ? `m:${mid}` : `n:${nonce ?? ""}`);
 
@@ -225,6 +252,23 @@ export const deviceName = () => {
     return os ? `${browser} on ${os}` : browser;
 };
 
+const addedAt = (iso: string, seconds: boolean) =>
+    new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", ...(seconds && { second: "2-digit" }) });
+
+export const deviceAdded = (devices: ServerDevice[], device: ServerDevice) => {
+    if (!device.created_at) return null;
+    const minutes = devices.filter((d) => d.status !== "revoked" && d.created_at).map((d) => addedAt(d.created_at!, false));
+    return addedAt(device.created_at, new Set(minutes).size < minutes.length);
+};
+
+export const deviceLabel = (devices: ServerDevice[], deviceId: string, fallback: string) => {
+    const device = devices.find((d) => d.device_id === deviceId);
+    if (!device?.name) return fallback;
+    const twins = devices.filter((d) => d.status !== "revoked" && d.name === device.name);
+    const added = twins.length > 1 ? deviceAdded(twins, device) : null;
+    return added ? `${device.name}, added ${added}` : device.name;
+};
+
 export class Engine {
     userId = "";
     linked = false;
@@ -232,6 +276,8 @@ export class Engine {
     identity: StoredIdentity | null = null;
     trustedKey: string | null = null;
     serverKey: string | null = null;
+    identityCreatedAt: number | null = null;
+    previousIdentities: string[] = [];
     device: StoredDevice | null = null;
     devices: ServerDevice[] = [];
     prekeys: StoredPrekey[] = [];
@@ -249,12 +295,14 @@ export class Engine {
     private plaintext = new Map<string, Payload>();
     private listeners = new Set<() => void>();
     private unlockListeners = new Set<() => void>();
+    private wipeListeners = new Set<() => void>();
     private uploads = new Map<string, { message_id: string; enc: string; wrapped: string; sig: string }>();
     private uploadTimer: ReturnType<typeof setTimeout> | null = null;
     private lookups = new Map<string, { promise: Promise<EnvelopeBackupKey | null>; resolve: (value: EnvelopeBackupKey | null) => void }>();
     private lookupTimer: ReturnType<typeof setTimeout> | null = null;
     private storedKeys = new Map<string, EnvelopeBackupKey>();
     private backfilling = false;
+    private wiped = false;
     private freshIdentity: OkpJwk | null = null;
 
     constructor(private api: Api) {}
@@ -267,6 +315,21 @@ export class Engine {
     onUnlock(listener: () => void) {
         this.unlockListeners.add(listener);
         return () => this.unlockListeners.delete(listener);
+    }
+
+    onWipe(listener: () => void) {
+        this.wipeListeners.add(listener);
+        return () => this.wipeListeners.delete(listener);
+    }
+
+    private holdPassword(value: string, persist = false) {
+        this.password = { value, at: Date.now() };
+        if (persist) holdPendingPassword(this.userId, value).catch((error) => console.error("[e2ee] couldn't keep the password for a reload", error));
+    }
+
+    private dropPassword() {
+        this.password = null;
+        dropPendingPassword();
     }
 
     emit() {
@@ -289,13 +352,14 @@ export class Engine {
     }
 
     async backUpWithPassword(password: string) {
-        this.password = { value: password, at: Date.now() };
+        this.holdPassword(password);
         await this.refresh();
         if (this.backupNeedsPassword) throw new E2eeError("BAD_SECRET", "Your keys couldn't be backed up. Try again in a moment.");
     }
 
-    rememberPassword(value: string) {
+    rememberPassword(value: string, userId?: string) {
         this.password = { value, at: Date.now() };
+        holdPendingPassword(userId ?? this.userId, value).catch((error) => console.error("[e2ee] couldn't keep the password for a reload", error));
         if (this.userId) this.refresh().catch((error) => console.error("[e2ee] password refresh failed", error));
     }
 
@@ -307,14 +371,14 @@ export class Engine {
             let secret = this.secret;
             if (!secret && previous && backup.wrapped_secret) secret = await unwrapSecret(this.userId, backup, previous).catch(() => null);
             if (!secret) {
-                this.password = { value: next, at: Date.now() };
+                this.holdPassword(next, true);
                 return;
             }
             this.backup = await api.request<BackupRecord>("patch", "/users/@me/e2ee/backup", {
                 version: backup.version,
                 ...(await wrapSecret(this.userId, "password", next, secret)),
             });
-            this.password = null;
+            this.dropPassword();
         });
         this.emit();
     }
@@ -323,6 +387,9 @@ export class Engine {
         this.userId = userId;
         this.store = scoped(userId);
         this.contacts = (await this.store.get<Record<string, Contact>>("contacts")) ?? {};
+        this.previousIdentities = (await this.store.get<string[]>("previous-identities")) ?? [];
+        const pending = await takePendingPassword(userId, PASSWORD_TTL_MS);
+        if (pending && !this.password) this.password = pending;
         await this.refresh();
     }
 
@@ -335,10 +402,18 @@ export class Engine {
         return run;
     }
 
+    private exclusive<T>(task: () => Promise<T>): Promise<T> {
+        return navigator.locks ? navigator.locks.request(`fosscord-e2ee-keys:${this.userId}`, task) : task();
+    }
+
     async refresh() {
         const wasLinked = this.linked;
         const hadBackupKey = !!this.backupKeyPair;
-        await this.serialized(() => this.ensureKeys());
+        await this.serialized(() => this.exclusive(() => this.ensureKeys()));
+        if (this.wiped) {
+            this.wiped = false;
+            this.wipeListeners.forEach((listener) => listener());
+        }
         this.emit();
         if ((!wasLinked && this.linked) || (!hadBackupKey && this.backupKeyPair)) this.unlockListeners.forEach((listener) => listener());
         if (this.linked && this.backupKeyPair) this.backfill().catch((error) => console.error("[e2ee] backfill failed", error));
@@ -376,8 +451,15 @@ export class Engine {
         return identity;
     }
 
+    private async rememberIdentity(key: string | null) {
+        if (!key || this.previousIdentities.includes(key)) return;
+        this.previousIdentities = [...this.previousIdentities, key].slice(-16);
+        await this.store!.set("previous-identities", this.previousIdentities);
+    }
+
     private async trust(key: string) {
         if (this.trustedKey === key) return;
+        await this.rememberIdentity(this.trustedKey);
         this.trustedKey = key;
         await this.store!.set("trusted-identity", key);
     }
@@ -431,7 +513,7 @@ export class Engine {
             backup_key_signature: await sign(identity.privateKey, backupKeyMessage(userId, backupJwk.x)),
             wrapped_backup_key: await sealJwk(secret, "backup-key", userId, backupJwk),
         });
-        this.password = null;
+        this.dropPassword();
         this.secret = secret;
         await this.store!.set("backup-secret", secret);
         this.backupKeyPair = { publicKey: backupJwk.x, keyPair: await importAgreementJwk(backupJwk) };
@@ -442,7 +524,7 @@ export class Engine {
         const backup = this.backup;
         if (!password || !this.secret || !backup) return;
         if (backup.mode !== "password") {
-            this.password = null;
+            this.dropPassword();
             return;
         }
         const current = backup.wrapped_secret ? await unwrapSecret(this.userId, backup, password).catch(() => null) : null;
@@ -451,11 +533,12 @@ export class Engine {
                 version: backup.version,
                 ...(await wrapSecret(this.userId, "password", password, this.secret)),
             });
-        this.password = null;
+        this.dropPassword();
     }
 
     private async wipeLocal(keepTrust: boolean) {
         const store = this.store!;
+        if (!keepTrust) await this.rememberIdentity(this.trustedKey);
         for (const name of ["identity", "device", "prekeys", "backup-secret", ...(keepTrust ? [] : ["trusted-identity"])]) await store.del(name);
         this.identity = null;
         this.device = null;
@@ -463,7 +546,23 @@ export class Engine {
         this.secret = null;
         this.backupKeyPair = null;
         this.linked = false;
+        this.deviceStatus = "unregistered";
         if (!keepTrust) this.trustedKey = null;
+        this.wiped = true;
+    }
+
+    async forget() {
+        this.dropPassword();
+        if (!this.store) return;
+        await this.serialized(() => this.wipeLocal(true));
+        this.wiped = false;
+        this.userId = "";
+        this.backup = null;
+        this.devices = [];
+        this.plaintext.clear();
+        this.directory.clear();
+        this.members.clear();
+        this.emit();
     }
 
     private async ensureKeys() {
@@ -478,6 +577,7 @@ export class Engine {
         this.trustedKey = (await store.get<string>("trusted-identity")) ?? null;
         this.prekeys = (await store.get<StoredPrekey[]>("prekeys")) ?? [];
         this.secret = (await store.get<Bytes>("backup-secret")) ?? null;
+        if (!this.secret) this.backupKeyPair = null;
         this.backup = await this.fetchBackup();
         let identityJwk: OkpJwk | null = this.freshIdentity;
         this.freshIdentity = null;
@@ -491,6 +591,7 @@ export class Engine {
         }
         const serverKey = state.identity_key!;
         this.serverKey = serverKey;
+        this.identityCreatedAt = state.identity_created_at ? Date.parse(state.identity_created_at) : null;
 
         if (this.identity && this.identity.publicKey !== serverKey) {
             const previous = state.previous_identity;
@@ -578,9 +679,9 @@ export class Engine {
         const backup = (this.backup = await this.fetchBackup());
         if (kind === "password" && (!backup || (backup.mode === "password" && !backup.wrapped_secret)))
             throw new E2eeError("BAD_SECRET", "Your keys aren't backed up with your password yet.");
-        if (!backup?.wrapped_secret || backup.mode !== kind) throw new E2eeError("BAD_SECRET", "There's no backup to unlock with that");
+        if (!backup?.wrapped_secret || backup.mode !== kind) throw new E2eeError("BAD_SECRET", "There's no backup to unlock with that.");
         const secret = await unwrapSecret(this.userId, backup, input).catch(() => null);
-        if (!secret) throw new E2eeError("BAD_SECRET", kind === "password" ? "That password didn't unlock your keys" : "That recovery code didn't work");
+        if (!secret) throw new E2eeError("BAD_SECRET", kind === "password" ? "That password didn't unlock your keys." : "That recovery code didn't work.");
         await this.unlockWithSecret(secret);
     }
 
@@ -588,7 +689,7 @@ export class Engine {
         await this.store!.set("backup-secret", secret);
         this.secret = secret;
         await this.refresh();
-        if (!this.linked) throw new E2eeError("BAD_SECRET", "That key didn't unlock this browser");
+        if (!this.linked) throw new E2eeError("BAD_SECRET", "That key didn't unlock this browser.");
     }
 
     exportSecret() {
@@ -615,16 +716,18 @@ export class Engine {
     }
 
     async reset(password: string) {
-        await this.serialized(async () => {
-            const identityJwk = await generateExportable("Ed25519");
-            await this.api.request("post", "/users/@me/e2ee/reset", { password, public_key: identityJwk.x });
-            await this.wipeLocal(false);
-            await this.adoptIdentity(identityJwk);
-            this.freshIdentity = identityJwk;
-            this.backup = null;
-            this.password = { value: password, at: Date.now() };
-            this.directory.clear();
-        });
+        await this.serialized(() =>
+            this.exclusive(async () => {
+                const identityJwk = await generateExportable("Ed25519");
+                await this.api.request("post", "/users/@me/e2ee/reset", { password, public_key: identityJwk.x });
+                await this.wipeLocal(false);
+                await this.adoptIdentity(identityJwk);
+                this.freshIdentity = identityJwk;
+                this.backup = null;
+                this.holdPassword(password);
+                this.directory.clear();
+            }),
+        );
         await this.refresh();
     }
 
@@ -720,6 +823,7 @@ export class Engine {
                 previous?.public_key === contact.identityKey &&
                 (await verify(previous.public_key, rotationMessage(userId, previous.public_key, identityKey), previous.signature))
             ) {
+                contact.previousKeys = [...new Set([...(contact.previousKeys ?? []), contact.identityKey])].slice(-16);
                 contact.identityKey = identityKey;
                 contact.pendingKey = null;
                 await this.saveContacts();
@@ -736,10 +840,15 @@ export class Engine {
         const devices: DirectoryDevice[] = [];
         let backupKey: string | null = null;
         if (identityKey) {
+            const known = this.knownKeys(userId, identityKey);
             for (const device of keys.devices) {
                 if (!device.identity_signature) continue;
                 if ((await deviceIdFor(device.signing_key)) !== device.device_id) continue;
-                if (!(await verify(identityKey, deviceMessage(userId, device.device_id, device.signing_key), device.identity_signature))) continue;
+                const message = deviceMessage(userId, device.device_id, device.signing_key);
+                const signers = device.status === "revoked" ? known : [identityKey];
+                let signed = false;
+                for (const key of signers) if (!signed) signed = await verify(key, message, device.identity_signature);
+                if (!signed) continue;
                 if (!(await verify(device.signing_key, prekeyMessage(device.device_id, device.prekey.id, device.prekey.public_key), device.prekey.signature))) continue;
                 devices.push({
                     deviceId: device.device_id,
@@ -748,17 +857,26 @@ export class Engine {
                     name: device.name,
                     prekeyId: device.prekey.id,
                     prekeyPublic: device.prekey.public_key,
+                    revokedAt: device.revoked_at ? Date.parse(device.revoked_at) : null,
                 });
             }
             const backup = keys.backup_key;
             if (backup && (await verify(identityKey, backupKeyMessage(userId, backup.public_key), backup.signature))) backupKey = backup.public_key;
         }
-        return { userId, identityKey, identityChanged, backupKey, devices, fetchedAt: Date.now() };
+        const identityCreatedAt = keys.identity_created_at ? Date.parse(keys.identity_created_at) : null;
+        return { userId, identityKey, identityCreatedAt, identityChanged, backupKey, devices, fetchedAt: Date.now() };
+    }
+
+    private knownKeys(userId: string, current: string) {
+        if (userId === this.userId) return [current, this.trustedKey, ...this.previousIdentities].filter((key): key is string => !!key);
+        const contact = this.contacts[userId];
+        return [current, contact?.identityKey, ...(contact?.previousKeys ?? [])].filter((key): key is string => !!key);
     }
 
     async acceptIdentity(userId: string) {
         const contact = this.contacts[userId];
         if (!contact?.pendingKey) return;
+        contact.previousKeys = [...new Set([...(contact.previousKeys ?? []), contact.identityKey])].slice(-16);
         contact.identityKey = contact.pendingKey;
         contact.pendingKey = null;
         contact.verified = false;
@@ -791,7 +909,15 @@ export class Engine {
             const current = this.currentPrekey();
             targets.push({
                 userId: this.userId,
-                device: { deviceId: this.device.deviceId, signingKey: this.device.signingKey, status: "active", name: null, prekeyId: current.id, prekeyPublic: current.publicKey },
+                device: {
+                    deviceId: this.device.deviceId,
+                    signingKey: this.device.signingKey,
+                    status: "active",
+                    name: null,
+                    prekeyId: current.id,
+                    prekeyPublic: current.publicKey,
+                    revokedAt: null,
+                },
             });
         }
 
@@ -849,11 +975,16 @@ export class Engine {
 
         let [entry] = await this.keysFor([senderId]);
         let sender = entry.devices.find((d) => d.deviceId === env.sender_device);
-        if (!sender) {
+        if (!sender && Date.now() - entry.fetchedAt > 3000) {
             [entry] = await this.keysFor([senderId], true);
             sender = entry.devices.find((d) => d.deviceId === env.sender_device);
         }
-        if (!sender) throw new E2eeError("BAD_SIGNATURE", "Unknown sender device");
+        const sentAt = snowflakeTime(message.id);
+        if (!sender) {
+            if (entry.identityCreatedAt && sentAt < entry.identityCreatedAt) throw new E2eeError("RESET", "Sent before encryption was reset");
+            throw new E2eeError("BAD_SIGNATURE", "The sender's device couldn't be verified");
+        }
+        if (sender.status === "revoked" && (!sender.revokedAt || sentAt >= sender.revokedAt)) throw new E2eeError("BAD_SIGNATURE", "Sent from a device that was removed");
         const bind = binding(env.mid, nonce);
         const { sig, ...unsigned } = env;
         if (!(await verify(sender.signingKey, signedPayload(message.channel_id, senderId, bind, unsigned), sig))) throw new E2eeError("BAD_SIGNATURE", "Signature check failed");
@@ -873,6 +1004,7 @@ export class Engine {
         }
         if (!contentKey) {
             if (!this.linked || !backupKey) throw new E2eeError("LOCKED", "This browser isn't unlocked yet");
+            if (this.identityCreatedAt && sentAt < this.identityCreatedAt) throw new E2eeError("RESET", "Sent before encryption was reset");
             throw new E2eeError("NO_KEY", "Sent before this browser was set up");
         }
         const payload = parsePayload(JSON.parse(fromUtf8(await aesDecrypt(contentKey, fromB64u(env.iv), fromB64u(env.ct), aad))));
