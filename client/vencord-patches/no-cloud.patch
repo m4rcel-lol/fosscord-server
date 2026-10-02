@@ -1,0 +1,42 @@
+diff --git a/src/Vencord.ts b/src/Vencord.ts
+index 1779013..fa310e3 100644
+--- a/src/Vencord.ts
++++ b/src/Vencord.ts
+@@ -52,6 +52,8 @@ if (IS_REPORTER) {
+ }
+ 
+ async function syncSettings() {
++    if (IS_WEB) return;
++
+     // pre-check for local shared settings
+     if (
+         Settings.cloud.authenticated &&
+diff --git a/src/plugins/_core/settings.tsx b/src/plugins/_core/settings.tsx
+index 990472c..6b8858e 100644
+--- a/src/plugins/_core/settings.tsx
++++ b/src/plugins/_core/settings.tsx
+@@ -17,8 +17,8 @@
+ */
+ 
+ import { definePluginSettings } from "@api/Settings";
+-import { BackupRestoreIcon, CloudIcon, MainSettingsIcon, PaintbrushIcon, PatchHelperIcon, PlaceholderIcon, PluginsIcon, UpdaterIcon, VesktopSettingsIcon } from "@components/Icons";
+-import { BackupAndRestoreTab, CloudTab, PatchHelperTab, PluginsTab, ThemesTab, UpdaterTab, VencordTab } from "@components/settings/tabs";
++import { BackupRestoreIcon, MainSettingsIcon, PaintbrushIcon, PatchHelperIcon, PlaceholderIcon, PluginsIcon, UpdaterIcon, VesktopSettingsIcon } from "@components/Icons";
++import { BackupAndRestoreTab, PatchHelperTab, PluginsTab, ThemesTab, UpdaterTab, VencordTab } from "@components/settings/tabs";
+ import { Devs } from "@utils/constants";
+ import { isTruthy } from "@utils/guards";
+ import definePlugin, { IconProps, OptionType } from "@utils/types";
+@@ -194,13 +194,6 @@ export default definePlugin({
+                 Component: UpdaterTab,
+                 Icon: UpdaterIcon
+             }),
+-            buildEntry({
+-                key: "vencord_cloud",
+-                title: "Cloud",
+-                panelTitle: "Vencord Cloud",
+-                Component: CloudTab,
+-                Icon: CloudIcon
+-            }),
+             buildEntry({
+                 key: "vencord_backup_restore",
+                 title: "Backup & Restore",
