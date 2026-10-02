@@ -104,7 +104,7 @@ export const checkToken = (
             }
 
             // we need to round it to seconds as it saved as seconds in jwt iat and valid_tokens_since is stored in milliseconds
-            if (decoded.iat * 1000 < new Date(user.data.valid_tokens_since).setSeconds(0, 0)) {
+            if (decoded.iat < Math.floor(new Date(user.data.valid_tokens_since).getTime() / 1000)) {
                 logAuth("validateUser rejected: Token not yet valid");
                 return rejectAndLog(reject, 401, "Invalid Token");
             }
