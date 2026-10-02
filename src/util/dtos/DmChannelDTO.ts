@@ -16,22 +16,24 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { MinimalPublicUserDTO } from "./UserDTO";
+import { In } from "typeorm";
 import { Channel, User } from "../../database/entities";
-import { PublicUserProjection } from "@spacebar/schemas";
+import { PartialUser, PublicUserProjection } from "@spacebar/schemas";
 
 export class DmChannelDTO {
+    flags: number;
     icon: string | null;
     id: string;
     last_message_id: string | null;
     name: string | null;
     origin_channel_id: string | null;
     owner_id?: string;
-    recipients: MinimalPublicUserDTO[];
+    recipients: PartialUser[];
     type: number;
 
     static async from(channel: Channel, excluded_recipients: string[] = [], origin_channel_id?: string) {
         const obj = new DmChannelDTO();
+        obj.flags = channel.flags ?? 0;
         obj.icon = channel.icon || null;
         obj.id = channel.id;
         obj.last_message_id = channel.last_message_id || null;
@@ -39,18 +41,15 @@ export class DmChannelDTO {
         obj.origin_channel_id = origin_channel_id || null;
         obj.owner_id = channel.owner_id;
         obj.type = channel.type;
-        obj.recipients = (
-            await Promise.all(
-                channel.recipients
-                    ?.filter((r) => !excluded_recipients.includes(r.user_id))
-                    .map((r) =>
-                        User.findOneOrFail({
-                            where: { id: r.user_id },
-                            select: Object.fromEntries(PublicUserProjection.map((i) => [i, true])), // TODO: clean up
-                        }),
-                    ) || [],
-            )
-        ).map((u) => new MinimalPublicUserDTO(u));
+        const ids = channel.recipients?.map((r) => r.user_id).filter((id) => !excluded_recipients.includes(id)) ?? [];
+        const users = ids.length
+            ? await User.find({
+                  where: { id: In(ids) },
+                  select: Object.fromEntries(PublicUserProjection.map((i) => [i, true])),
+              })
+            : [];
+        const byId = new Map(users.map((u) => [u.id, u]));
+        obj.recipients = ids.flatMap((id) => byId.get(id)?.toPartialUser() ?? []);
         return obj;
     }
 
