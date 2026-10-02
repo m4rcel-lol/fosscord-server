@@ -78,6 +78,7 @@ router.post("/:channel_id/:message_id", multer.single("file"), async (req: Reque
 router.get("/:channel_id/:attachment_id/:filename", setCacheControl, async (req: Request, res: Response) => {
     const { channel_id, attachment_id, filename } = req.params as { [key: string]: string };
     // const { format } = req.query;
+    if (!/^\d+$/.test(channel_id) || !/^\d+$/.test(attachment_id)) throw new HTTPError("File not found", 404);
 
     const path = `attachments/${channel_id}/${attachment_id}/${filename}`;
 

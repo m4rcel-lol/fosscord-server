@@ -409,14 +409,19 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
             message.username = opts.username;
             message.author.username = message.username;
         }
-        if (opts.avatar_url) {
-            const avatarData = await fetch(opts.avatar_url);
-            const base64 = await avatarData.arrayBuffer().then((x) => Buffer.from(x).toString("base64"));
-
-            const dataUri = "data:" + avatarData.headers.get("content-type") + ";base64," + base64;
-
-            message.avatar = await handleFile(`/avatars/${opts.webhook_id}`, dataUri as string);
-            message.author.avatar = message.avatar;
+        if (opts.avatar_url && URL.canParse(opts.avatar_url) && /^https?:$/.test(new URL(opts.avatar_url).protocol)) {
+            const avatar = await fetch(opts.avatar_url, { signal: AbortSignal.timeout(10_000) })
+                .then(async (res) => {
+                    const type = res.headers.get("content-type");
+                    if (!res.ok || !type?.startsWith("image/")) return undefined;
+                    const base64 = Buffer.from(await res.arrayBuffer()).toString("base64");
+                    return handleFile(`/avatars/${opts.webhook_id}`, `data:${type};base64,${base64}`);
+                })
+                .catch(() => undefined);
+            if (avatar) {
+                message.avatar = avatar;
+                message.author.avatar = avatar;
+            }
         }
     } else {
         if (!permission && opts.interaction_metadata) {

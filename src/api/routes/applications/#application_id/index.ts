@@ -88,24 +88,12 @@ router.patch(
             });
         }
 
-        if (body.icon) {
-            body.icon = await handleFile(`/app-icons/${app.id}`, body.icon as string);
-        }
-        if (body.cover_image) {
-            body.cover_image = await handleFile(`/app-icons/${app.id}`, body.cover_image as string);
-        }
-
         if (body.guild_id) {
             const guild = await Guild.findOneOrFail({
                 where: { id: body.guild_id },
                 select: { owner_id: true },
             });
             if (guild.owner_id != req.user_id) throw new HTTPError("You must be the owner of the guild to link it to an application", 400);
-        }
-
-        if (app.bot) {
-            app.bot.assign({ bio: body.description });
-            await app.bot.save();
         }
 
         if (body.interactions_endpoint_url !== undefined && body.interactions_endpoint_url !== app.interactions_endpoint_url) {
@@ -115,6 +103,18 @@ router.patch(
                 });
             app.verify_key = (await Application.findOneOrFail({ where: { id: app.id }, select: { id: true, verify_key: true } })).verify_key;
             body.interactions_endpoint_url ||= null;
+        }
+
+        if (body.icon) {
+            body.icon = await handleFile(`/app-icons/${app.id}`, body.icon as string);
+        }
+        if (body.cover_image) {
+            body.cover_image = await handleFile(`/app-icons/${app.id}`, body.cover_image as string);
+        }
+
+        if (app.bot && body.description !== undefined) {
+            app.bot.assign({ bio: body.description });
+            await app.bot.save();
         }
 
         app.assign(body);

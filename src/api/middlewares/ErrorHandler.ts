@@ -78,6 +78,10 @@ export function ErrorHandler(error: Error & { type?: string }, req: Request, res
             message = error.message;
             errors = error.errors;
             _ajvErrors = error._ajvErrors;
+        } else if (error.name === "QueryFailedError" && /invalid input syntax for type bigint/.test(error.message)) {
+            code = 0;
+            httpcode = 404;
+            message = "404: Not Found";
         } else if (error?.type == "entity.parse.failed") {
             // body-parser failed
             httpcode = 400;

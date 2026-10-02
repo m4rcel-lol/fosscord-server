@@ -20,10 +20,10 @@ import crypto from "node:crypto";
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
-import { Application, Channel, User, Webhook } from "@spacebar/database";
+import { Application, AuditLog, Channel, User, Webhook } from "@spacebar/database";
 import { Config, DiscordApiErrors, emitEvent, handleFile, ValidateName, WebhooksUpdateEvent } from "@spacebar/util";
 import { webhookToJSON } from "@spacebar/api/util/handlers/Webhook";
-import { isTextChannel, WebhookCreateSchema, WebhookType } from "@spacebar/schemas";
+import { AuditLogEvents, isTextChannel, WebhookCreateSchema, WebhookType } from "@spacebar/schemas";
 import { trimSpecial } from "@spacebar/extensions";
 
 const router: Router = Router({ mergeParams: true });
@@ -101,6 +101,14 @@ router.post(
         }).save();
 
         hook.user = await User.findOneOrFail({ where: { id: req.user_id } });
+        await AuditLog.log({
+            guild_id: channel.guild_id,
+            user_id: req.user_id,
+            action_type: AuditLogEvents.WEBHOOK_CREATE,
+            target_id: hook.id,
+            changes: AuditLog.diff({}, { type: hook.type, name: hook.name, channel_id: hook.channel_id, avatar_hash: hook.avatar }, ["type", "name", "channel_id", "avatar_hash"]),
+            reason: req.headers["x-audit-log-reason"],
+        });
 
         await emitEvent({
             event: "WEBHOOKS_UPDATE",

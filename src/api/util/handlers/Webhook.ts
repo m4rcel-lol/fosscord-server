@@ -81,7 +81,7 @@ export const executeWebhook = async (req: Request, res: Response) => {
     if (webhook.token !== webhook_token) throw DiscordApiErrors.INVALID_WEBHOOK_TOKEN_PROVIDED;
 
     if (body.username) {
-        ValidateName(body.username);
+        ValidateName(body.username, 1, 80);
     }
 
     // ensure one of content, embeds, components, or file is present

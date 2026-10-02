@@ -19,7 +19,8 @@
 import { Router, Response, Request } from "express";
 import { In } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
-import { Application, Member, Role } from "@spacebar/database";
+import { Application, AuditLog, Member, Role } from "@spacebar/database";
+import { AuditLogEvents } from "@spacebar/schemas";
 import { DiscordApiErrors, emitEvent, GuildIntegrationUpdateEvent, GuildRoleDeleteEvent } from "@spacebar/util";
 import { emitCommandIndexUpdate } from "@spacebar/api/util/handlers/ApplicationCommands";
 
@@ -59,7 +60,18 @@ router.delete("/:integration_id", route({ permission: "MANAGE_GUILD" }), async (
     const integrationId = req.params.integration_id as string;
     if (!(await Member.exists({ where: { guild_id: guildId, id: integrationId, user: { bot: true } } }))) throw DiscordApiErrors.UNKNOWN_INTEGRATION;
     const roles = (await Role.find({ where: { guild_id: guildId, managed: true } })).filter((r) => r.tags?.bot_id === integrationId);
+    const app = await Application.findOne({ where: { id: integrationId }, select: { id: true, name: true } });
     await Member.removeFromGuild(integrationId, guildId);
+    const reason = req.headers["x-audit-log-reason"];
+    await AuditLog.log({
+        guild_id: guildId,
+        user_id: req.user_id,
+        action_type: AuditLogEvents.INTEGRATION_DELETE,
+        target_id: integrationId,
+        changes: AuditLog.diff({ type: "discord", name: app?.name }, {}, ["type", "name"]),
+        reason,
+    });
+    await AuditLog.log({ guild_id: guildId, user_id: req.user_id, action_type: AuditLogEvents.MEMBER_KICK, target_id: integrationId, reason });
     for (const role of roles) {
         await Role.delete({ id: role.id });
         await emitEvent({ event: "GUILD_ROLE_DELETE", guild_id: guildId, data: { guild_id: guildId, role_id: role.id } } satisfies GuildRoleDeleteEvent);
