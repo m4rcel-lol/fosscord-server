@@ -4467,7 +4467,7 @@ ${approver}`;
         }));
         approval.append(status, code, again);
         body.append(approval);
-        const lost = section("Lost your code?");
+        const lost = section(backup?.mode === "recovery" ? "Lost your code?" : "Can't unlock this browser?");
         describe(lost, "If you can't use any of these, reset encryption to keep chatting. Messages sent before the reset can't be read anymore.");
         lost.append(button("Reset encryption", "link", () => showReset(done)));
         body.append(lost);
