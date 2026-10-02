@@ -64,6 +64,51 @@ export interface AdminUserUpdateSchema {
      * Instance badges shown on the user's profile, in display order
      */
     badge_ids?: string[];
+    /**
+     * Overrides the standing shown on the user's account standing page (AccountStandingState: 100 all good, 200 limited,
+     * 300 very limited, 400 at risk, 500 suspended); null works it out from their active violations
+     */
+    account_standing?: 100 | 200 | 300 | 400 | 500 | null;
+}
+
+export interface AdminViolationActionSchema {
+    /**
+     * ClassificationActionType
+     * @minimum 0
+     */
+    action_type: number;
+    descriptions?: string[];
+}
+
+export interface AdminViolationCreateSchema {
+    /**
+     * ClassificationType, what the user broke (spam, harassment, ...)
+     * @minimum 1
+     */
+    classification_type: number;
+    /**
+     * Shown to the user on their account standing page
+     * @minLength 1
+     * @maxLength 2000
+     */
+    description: string;
+    actions?: AdminViolationActionSchema[];
+    /**
+     * How long it counts against the user; omit or null for permanent
+     * @minimum 1
+     */
+    expires_in_days?: number | null;
+}
+
+export interface AdminViolationUpdateSchema {
+    /**
+     * Resolve an appeal: 2 upheld, 3 overturned (stops counting against the user); null clears the appeal
+     */
+    appeal_status?: 2 | 3 | null;
+    /**
+     * New expiry as an ISO timestamp
+     */
+    expires_at?: string;
 }
 
 export type AdminUserTag = "none" | "verified_bot" | "ai" | "verified_ai";
@@ -106,6 +151,25 @@ export interface AdminGuildUpdateSchema {
     description?: string | null;
     features?: string[];
     owner_id?: string;
+    /**
+     * The server tag. Unlike the regular guild profile route there's no length or character limit here; null removes it
+     */
+    tag?: string | null;
+    /**
+     * Server tag badge type
+     * @minimum 0
+     * @maximum 40
+     */
+    badge?: number;
+    /**
+     * Badge colours as #rrggbb; null uses the badge's own colours
+     * @pattern ^#[0-9a-fA-F]{6}$
+     */
+    badge_color_primary?: string | null;
+    /**
+     * @pattern ^#[0-9a-fA-F]{6}$
+     */
+    badge_color_secondary?: string | null;
 }
 
 export type AdminStatusComponentState = "operational" | "degraded_performance" | "partial_outage" | "major_outage" | "under_maintenance";
@@ -170,4 +234,22 @@ export interface AdminStatusIncidentPostUpdateSchema {
      * @minLength 1
      */
     body: string;
+}
+
+export interface AdminAnnouncementCreateSchema {
+    /**
+     * @minLength 1
+     * @maxLength 256
+     */
+    title: string;
+    /**
+     * Markdown, shown as the announcement's text
+     * @minLength 1
+     * @maxLength 4000
+     */
+    body: string;
+    /**
+     * everyone: every user on the instance; staff: only people with admin panel access
+     */
+    audience: "everyone" | "staff";
 }

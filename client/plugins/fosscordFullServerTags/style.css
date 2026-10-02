@@ -1,0 +1,30 @@
+/*
+ * The client caps a server tag's text at 70px and the server menu at a fixed 220px, which only fits discord's
+ * 4-character tags. Let the tag box grow to fit its tag, and the server menu grow to fit the box. Class hashes
+ * change between client builds, so match on the readable part of the class names.
+ */
+
+/* the tag box sizes to its tag; it only falls back to "…" when there's truly no more room */
+[class*="chipletContainerInner_"] {
+    min-width: 0;
+    max-width: 100%;
+    /* in a row with a name (member list, dms) the tag gives up space before the name does */
+    flex-shrink: 1000;
+}
+
+[class*="chipletContainerInner_"] [class*="text_"] {
+    max-width: none !important;
+    min-width: 0;
+}
+
+/* the server dropdown: grow past its fixed 220px when the server tag item needs it */
+[class*="menu_"][class*="fixed_"]:has([id$="-guild-tag"]) {
+    width: auto !important;
+    min-width: 220px;
+    max-width: min(480px, calc(100vw - 32px));
+}
+
+[id$="-guild-tag"] [class*="iconContainer_"] {
+    width: auto !important;
+    max-width: none;
+}

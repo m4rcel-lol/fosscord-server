@@ -18,13 +18,12 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
+import { ADMIN_PANEL_RIGHTS } from "@spacebar/api/util";
 import { Guild, Member, Message, RESOLVED_INCIDENT_STATES, StatusIncident, User } from "@spacebar/database";
 import { Config, getRevInfoOrFail, getRights, SpacebarApiErrors } from "@spacebar/util";
 import { In, Not } from "typeorm";
 
 const router = Router({ mergeParams: true });
-
-const ADMIN_RIGHTS = ["OPERATOR", "MANAGE_USERS", "MANAGE_GUILDS"] as const;
 
 router.get(
     "/",
@@ -34,7 +33,7 @@ router.get(
     }),
     async (req: Request, res: Response) => {
         const rights = await getRights(req.user_id);
-        if (!rights.any([...ADMIN_RIGHTS])) throw SpacebarApiErrors.MISSING_RIGHTS.withParams(ADMIN_RIGHTS.join(" | "));
+        if (!rights.any([...ADMIN_PANEL_RIGHTS])) throw SpacebarApiErrors.MISSING_RIGHTS.withParams(ADMIN_PANEL_RIGHTS.join(" | "));
 
         const [users, guilds, messages, members, disabledUsers, openIncidents] = await Promise.all([
             User.count({ where: { bot: false } }),

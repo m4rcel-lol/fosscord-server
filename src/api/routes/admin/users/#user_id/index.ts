@@ -23,6 +23,7 @@ import { Badge, Guild, InstanceBan, Member, Session, User } from "@spacebar/data
 import { emitEvent, Rights, UserUpdateEvent } from "@spacebar/util";
 import { AdminUserUpdateSchema, PrivateUserProjection } from "@spacebar/schemas";
 import { In } from "typeorm";
+import { currentStanding, hasAdminPanelAccess, notifyStandingDrop, syncStaffBadge } from "@spacebar/api/util";
 import { ADMIN_USER_COLUMNS, applyUserTag, pickAdminUser } from "../index";
 
 const router = Router({ mergeParams: true });
@@ -74,6 +75,7 @@ router.patch(
         const callerIsOperator = req.rights.has("OPERATOR");
         const targetIsOperator = new Rights(user.rights).has("OPERATOR");
         const isSelf = user.id === req.user_id;
+        const hadAdminAccess = hasAdminPanelAccess(user.rights);
 
         if (targetIsOperator && !callerIsOperator && !isSelf) throw new HTTPError("Only operators can edit other operators", 403);
         if (isSelf && body.disabled) throw new HTTPError("You can't disable your own account", 400);
@@ -86,6 +88,8 @@ router.patch(
         }
 
         if (body.hide_premium_badge !== undefined) user.hide_premium_badge = body.hide_premium_badge;
+        const standingBefore = body.account_standing !== undefined ? await currentStanding(user.id) : null;
+        if (body.account_standing !== undefined) user.account_standing = body.account_standing;
         if (body.tag !== undefined) applyUserTag(user, body.tag);
         if (body.badge_ids !== undefined) {
             const ids = [...new Set(body.badge_ids)];
@@ -104,7 +108,11 @@ router.patch(
             user.premium = body.premium_type > 0;
         }
 
+        if (body.rights !== undefined) await syncStaffBadge(user, hadAdminAccess);
+
         await user.save();
+
+        if (standingBefore !== null) await notifyStandingDrop(user.id, standingBefore, await currentStanding(user.id));
 
         // a disabled account must not keep its live sessions
         if (body.disabled) await Session.delete({ user_id: user.id });

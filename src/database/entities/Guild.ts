@@ -668,8 +668,8 @@ export class Guild extends BaseClass {
             game_activity: {},
             tag: profile.tag ?? null,
             badge: profile.badge ?? null,
-            badge_color_primary: profile.badge_color_primary ?? "",
-            badge_color_secondary: profile.badge_color_secondary ?? "",
+            badge_color_primary: profile.badge_color_primary || null,
+            badge_color_secondary: profile.badge_color_secondary || null,
             badge_hash: profile.badge_hash ?? "",
             traits: (profile.traits ?? []).map((trait) => ({
                 ...trait,

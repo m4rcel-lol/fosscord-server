@@ -4421,6 +4421,9 @@
             "bot": {
                 "type": "boolean"
             },
+            "system": {
+                "type": "boolean"
+            },
             "premium_type": {
                 "type": "integer"
             },
@@ -4477,6 +4480,7 @@
             "premium_usage_flags",
             "public_flags",
             "purchased_flags",
+            "system",
             "username",
             "verified"
         ],
@@ -8939,10 +8943,16 @@
                 ]
             },
             "badge_color_primary": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "badge_color_secondary": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "badge_hash": {
                 "type": "string"
@@ -9456,6 +9466,107 @@
                 "items": {
                     "type": "string"
                 }
+            },
+            "account_standing": {
+                "description": "Overrides the standing shown on the user's account standing page (AccountStandingState: 100 all good, 200 limited,\n300 very limited, 400 at risk, 500 suspended); null works it out from their active violations",
+                "anyOf": [
+                    {
+                        "enum": [
+                            100,
+                            200,
+                            300,
+                            400,
+                            500
+                        ],
+                        "type": "number"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminViolationActionSchema": {
+        "type": "object",
+        "properties": {
+            "action_type": {
+                "description": "ClassificationActionType",
+                "minimum": 0,
+                "type": "integer"
+            },
+            "descriptions": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "action_type"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminViolationCreateSchema": {
+        "type": "object",
+        "properties": {
+            "classification_type": {
+                "description": "ClassificationType, what the user broke (spam, harassment, ...)",
+                "minimum": 1,
+                "type": "integer"
+            },
+            "description": {
+                "description": "Shown to the user on their account standing page",
+                "minLength": 1,
+                "maxLength": 2000,
+                "type": "string"
+            },
+            "actions": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/AdminViolationActionSchema"
+                }
+            },
+            "expires_in_days": {
+                "description": "How long it counts against the user; omit or null for permanent",
+                "minimum": 1,
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "classification_type",
+            "description"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminViolationUpdateSchema": {
+        "type": "object",
+        "properties": {
+            "appeal_status": {
+                "description": "Resolve an appeal: 2 upheld, 3 overturned (stops counting against the user); null clears the appeal",
+                "anyOf": [
+                    {
+                        "enum": [
+                            2,
+                            3
+                        ],
+                        "type": "number"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "expires_at": {
+                "description": "New expiry as an ISO timestamp",
+                "type": "string"
             }
         },
         "additionalProperties": false,
@@ -9537,6 +9648,34 @@
             },
             "owner_id": {
                 "type": "string"
+            },
+            "tag": {
+                "description": "The server tag. Unlike the regular guild profile route there's no length or character limit here; null removes it",
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "badge": {
+                "description": "Server tag badge type",
+                "minimum": 0,
+                "maximum": 40,
+                "type": "integer"
+            },
+            "badge_color_primary": {
+                "description": "Badge colours as #rrggbb; null uses the badge's own colours",
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "badge_color_secondary": {
+                "pattern": "^#[0-9a-fA-F]{6}$",
+                "type": [
+                    "null",
+                    "string"
+                ]
             }
         },
         "additionalProperties": false,
@@ -9717,6 +9856,37 @@
         "required": [
             "body",
             "status"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminAnnouncementCreateSchema": {
+        "type": "object",
+        "properties": {
+            "title": {
+                "minLength": 1,
+                "maxLength": 256,
+                "type": "string"
+            },
+            "body": {
+                "description": "Markdown, shown as the announcement's text",
+                "minLength": 1,
+                "maxLength": 4000,
+                "type": "string"
+            },
+            "audience": {
+                "description": "everyone: every user on the instance; staff: only people with admin panel access",
+                "enum": [
+                    "everyone",
+                    "staff"
+                ],
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "audience",
+            "body",
+            "title"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -11420,6 +11590,9 @@
             "bot": {
                 "type": "boolean"
             },
+            "system": {
+                "type": "boolean"
+            },
             "premium_type": {
                 "type": "integer"
             },
@@ -11442,6 +11615,7 @@
             "premium_since",
             "premium_type",
             "public_flags",
+            "system",
             "username"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
@@ -12772,6 +12946,12 @@
             "hide_premium_badge": {
                 "type": "boolean",
                 "default": false
+            },
+            "account_standing": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
             },
             "email": {
                 "type": "string"
@@ -18400,7 +18580,14 @@
                 "items": {}
             },
             "appeal_status": {
-                "$ref": "#/definitions/AppealStatus"
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/AppealStatus"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
             },
             "is_coppa": {
                 "type": "boolean"
@@ -18575,7 +18762,14 @@
                 "items": {}
             },
             "appeal_status": {
-                "$ref": "#/definitions/AppealStatus"
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/AppealStatus"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
             },
             "is_coppa": {
                 "type": "boolean"

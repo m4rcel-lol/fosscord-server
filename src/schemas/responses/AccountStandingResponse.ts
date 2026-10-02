@@ -124,7 +124,7 @@ export interface Classification {
     actions: ClassificationAction[];
     max_expiration_time: string; // ISO 8601 timestamp
     flagged_content: unknown[]; // TODO
-    appeal_status: AppealStatus;
+    appeal_status: AppealStatus | null; // null until the user appeals
     is_coppa: boolean;
     is_spam: boolean;
     appeal_ingestion_type: AppealIngestionType;

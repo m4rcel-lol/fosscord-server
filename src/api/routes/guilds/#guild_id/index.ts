@@ -46,7 +46,7 @@ router.get(
         if (!member) throw new ApiError("Missing Access", 50001, 403);
 
         return res.send({
-            ...guild,
+            ...guild.toJSON(),
             joined_at: member?.joined_at,
         });
     },

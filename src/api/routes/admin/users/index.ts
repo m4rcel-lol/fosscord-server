@@ -42,6 +42,7 @@ export const ADMIN_USER_COLUMNS = [
     "public_flags",
     "badge_ids",
     "hide_premium_badge",
+    "account_standing",
 ] as const;
 
 // entities carry class-level defaults for every column, so only ever send the columns we selected

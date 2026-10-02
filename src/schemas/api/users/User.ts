@@ -138,6 +138,7 @@ export enum PublicUserEnum {
     banner,
     bio,
     bot,
+    system,
     premium_since,
     premium_type,
     theme_colors,

@@ -44,7 +44,7 @@ router.get(
         const offset = Math.max(Number(req.query.offset) || 0, 0);
 
         const query = Guild.createQueryBuilder("guild")
-            .select(["guild.id", "guild.name", "guild.icon", "guild.owner_id", "guild.features", "guild.description"])
+            .select(["guild.id", "guild.name", "guild.icon", "guild.owner_id", "guild.features", "guild.description", "guild.profile"])
             .addSelect((sub) => sub.select("COUNT(*)", "count").from(Member, "member").where("member.guild_id = guild.id"), "member_count")
             .orderBy("guild.id", "DESC")
             .limit(limit)
@@ -67,6 +67,7 @@ router.get(
                 description: g.description ?? null,
                 features: g.features,
                 member_count: Number(raw[i]?.member_count ?? 0),
+                tag: g.profile?.tag ? { tag: g.profile.tag, badge_hash: g.profile.badge_hash ?? null } : null,
                 owner: g.owner_id
                     ? pickOwner(
                           owners.find((o) => o.id === g.owner_id),

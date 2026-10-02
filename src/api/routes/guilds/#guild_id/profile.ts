@@ -16,13 +16,11 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import crypto from "node:crypto";
 import { route } from "@spacebar/api/middlewares";
-import { Guild, User } from "@spacebar/database";
-import { Raw } from "typeorm";
+import { Guild } from "@spacebar/database";
 import { DiscordApiErrors, emitEvent, GuildUpdateEvent, handleFile } from "@spacebar/util";
+import { applyGuildTag, syncTagAdopters } from "@spacebar/api/util";
 import { Request, Response, Router } from "express";
-import { HTTPError } from "lambert-server/HTTPError";
 import { GuildProfileModifySchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
@@ -71,28 +69,15 @@ router.patch(
         if (body.game_application_ids) profile.game_application_ids = body.game_application_ids;
         if (body.traits) profile.traits = body.traits.filter((trait) => trait?.label).map((trait, position) => ({ ...trait!, position: trait!.position ?? position }));
 
-        if (body.tag !== undefined) {
-            if (body.tag !== null && !/^[\p{L}\p{N}]{2,4}$/u.test(body.tag)) throw new HTTPError("Tag must be 2 to 4 letters or numbers", 400);
-            profile.tag = body.tag;
-        }
-        if (body.badge !== undefined) profile.badge = body.badge;
-        if (body.badge_color_primary !== undefined) profile.badge_color_primary = body.badge_color_primary;
-        if (body.badge_color_secondary !== undefined) profile.badge_color_secondary = body.badge_color_secondary;
-        if (body.badge !== undefined || body.badge_color_primary !== undefined || body.badge_color_secondary !== undefined)
-            profile.badge_hash = crypto.createHash("md5").update(`${profile.badge}:${profile.badge_color_primary}:${profile.badge_color_secondary}`).digest("hex");
-
         guild.profile = profile;
+        const tagChanged = applyGuildTag(guild, {
+            tag: body.tag,
+            badge: body.badge,
+            badge_color_primary: body.badge_color_primary,
+            badge_color_secondary: body.badge_color_secondary,
+        });
         await guild.save();
-
-        if (body.tag !== undefined || body.badge !== undefined || body.badge_color_primary !== undefined || body.badge_color_secondary !== undefined) {
-            const adopters = await User.find({ where: { primary_guild: Raw((alias) => `${alias} ->> 'identity_guild_id' = :guild_id`, { guild_id }) } });
-            for (const user of adopters) {
-                user.primary_guild = profile.tag
-                    ? { identity_guild_id: guild_id, identity_enabled: user.primary_guild?.identity_enabled ?? true, tag: profile.tag, badge: profile.badge_hash ?? null }
-                    : { identity_guild_id: guild_id, identity_enabled: false, tag: null, badge: null };
-                await user.save();
-            }
-        }
+        if (tagChanged) await syncTagAdopters(guild);
 
         await emitEvent({
             event: "GUILD_UPDATE",

@@ -17,6 +17,7 @@
 */
 
 import http from "node:http";
+import type { Duplex } from "node:stream";
 import ws from "ws";
 import { green, yellow } from "picocolors";
 import { initDatabase } from "@spacebar/database";
@@ -33,9 +34,13 @@ export class WebrtcServer {
     public server: http.Server;
     public production: boolean;
 
-    constructor({ port, server, production }: { port: number; server?: http.Server; production?: boolean }) {
+    // when set there's no listener of our own: whoever owns the http server hands upgrades to handleUpgrade
+    public readonly noServer: boolean;
+
+    constructor({ port, server, production, noServer }: { port: number; server?: http.Server; production?: boolean; noServer?: boolean }) {
         this.port = port;
         this.production = production || false;
+        this.noServer = noServer ?? false;
 
         if (server) this.server = server;
         else {
@@ -58,7 +63,7 @@ export class WebrtcServer {
 
         this.ws = new ws.Server({
             maxPayload: 1024 * 1024 * 100,
-            server: this.server,
+            ...(this.noServer ? { noServer: true } : { server: this.server }),
         });
         this.ws.on("connection", Connection);
         this.ws.on("error", console.error);
@@ -86,7 +91,7 @@ export class WebrtcServer {
             return;
         }
 
-        if (!this.server.listening) {
+        if (!this.noServer && !this.server.listening) {
             this.server.listen(this.port);
             console.log(`[WebRTC] ${green(`online on 0.0.0.0:${this.port}`)}`);
             await SystemdLifecycle.setStatus(`Listening on 0.0.0.0:${this.port}...`);
@@ -95,9 +100,13 @@ export class WebrtcServer {
         await ProcessLifecycle.Ready();
     }
 
+    handleUpgrade(request: http.IncomingMessage, socket: Duplex, head: Buffer) {
+        this.ws.handleUpgrade(request, socket, head, (socket) => this.ws.emit("connection", socket, request));
+    }
+
     async stop() {
         await ProcessLifecycle.Shutdown();
-        this.server.close();
+        if (!this.noServer) this.server.close();
         await mediaServer?.stop();
         await ProcessLifecycle.Finalize();
     }

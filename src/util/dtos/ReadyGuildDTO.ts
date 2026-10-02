@@ -98,6 +98,13 @@ export interface IReadyGuildDTO {
     unavailable: boolean;
 }
 
+// Identify hands this guilds that already went through Guild.toJSON(), where the profile is { tag, badge: <hash> },
+// as well as raw guilds where the hash is badge_hash and badge is the badge type; both come out as { tag, badge: <hash> }
+function publicGuildProfile(profile: { tag?: string | null; badge?: unknown; badge_hash?: string | null } | null | undefined) {
+    if (!profile?.tag) return null;
+    return { tag: profile.tag, badge: profile.badge_hash ?? (typeof profile.badge === "string" ? profile.badge : null) };
+}
+
 export class ReadyGuildDTO implements IReadyGuildDTO {
     application_command_counts?: { 1: number; 2: number; 3: number }; // ????????????
     channels: Channel[];
@@ -217,7 +224,7 @@ export class ReadyGuildDTO implements IReadyGuildDTO {
             nsfw: guild.nsfw,
             safety_alerts_channel_id: null,
             premium_features: guild.premium_features,
-            profile: guild.profile?.tag ? { tag: guild.profile.tag, badge: guild.profile.badge_hash ?? null } : null,
+            profile: publicGuildProfile(guild.profile),
         };
         this.roles = guild.roles.map((x) => x.toJSON());
         this.stage_instances = (guild as { stage_instances?: unknown[] }).stage_instances ?? [];

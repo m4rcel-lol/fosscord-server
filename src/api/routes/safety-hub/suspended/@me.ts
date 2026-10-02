@@ -19,7 +19,8 @@
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { User } from "@spacebar/database";
-import { AccountStandingResponse, AccountStandingState, AppealEligibility } from "@spacebar/schemas";
+import { AccountStandingResponse, AppealEligibility } from "@spacebar/schemas";
+import { accountStanding, getUserViolations, toClassification } from "@spacebar/api/util";
 
 const router = Router({ mergeParams: true });
 
@@ -38,14 +39,15 @@ router.get(
     async (req: Request, res: Response) => {
         const user = await User.findOneOrFail({
             where: { id: req.user_id },
-            select: { data: true },
+            select: { id: true, username: true, discriminator: true, disabled: true, account_standing: true },
         });
+        const violations = await getUserViolations(user.id);
 
         res.send({
-            classifications: [],
+            classifications: violations.map(toClassification),
             guild_classifications: [],
             account_standing: {
-                state: AccountStandingState.ALL_GOOD,
+                state: accountStanding(user, violations),
             },
             is_dsa_eligible: true,
             username: user.username,
