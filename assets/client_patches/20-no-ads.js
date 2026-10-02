@@ -37,6 +37,8 @@ li:has(> ul > li[data-settings-sidebar-item="billing_panel"]),
 .container__5287f,
 .emptyState__70126,
 .container__8279f,
+div:has(> i.iconApple_b68a35),
+div:has(> i.iconMetaQuest_b68a35),
 [role="button"]:has(> img[src="/assets/eea7561d0cfcff41.svg"]),
 [role="button"]:has(> img[src*="/bc3217e772906510d881b75ebefea754b9c3ba903ddf6f994e46e5c5a85770a3."]) {
     display: none !important;
