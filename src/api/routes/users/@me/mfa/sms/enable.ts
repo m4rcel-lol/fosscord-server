@@ -18,8 +18,8 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { MfaInvalidCode, ResponseError, currentToken, emitUserUpdate, hasRecentMfa, requireMfa, setSmsFlag, verifyMfaMethod } from "@spacebar/api/util";
-import { BackupCode, SecurityKey, User } from "@spacebar/database";
+import { ResponseError, emitUserUpdate, requireMfa, setSmsFlag } from "@spacebar/api/util";
+import { User } from "@spacebar/database";
 
 const router = Router({ mergeParams: true });
 
@@ -27,30 +27,21 @@ router.post(
     "/",
     route({
         responses: {
-            200: {
-                body: "TokenOnlyResponse",
-            },
+            204: {},
             400: {
                 body: "APIErrorResponse",
             },
         },
     }),
     async (req: Request, res: Response) => {
-        const user = await User.findOneOrFail({ where: { id: req.user_id }, select: { id: true, mfa_enabled: true, totp_secret: true } });
+        const user = await User.findOneOrFail({ where: { id: req.user_id }, select: { id: true, mfa_enabled: true, totp_secret: true, phone: true } });
         if (!user.mfa_enabled || !user.totp_secret) throw new ResponseError(400, { message: "Two factor is not enabled.", code: 60002 });
+        if (!user.phone) throw new ResponseError(400, { message: "You need to verify your phone number before you can enable SMS authentication.", code: 70006 });
 
-        const { code } = req.body as { code?: string };
-        if (code && !hasRecentMfa(req)) {
-            if (!(await verifyMfaMethod(req.user_id, "totp", code, { typ: "mfa" }))) throw MfaInvalidCode();
-        } else await requireMfa(req);
+        await requireMfa(req, { password: (req.body as { password?: string })?.password });
 
-        const keys = await SecurityKey.count({ where: { user_id: req.user_id } });
-        await User.update({ id: req.user_id }, { mfa_enabled: keys > 0, totp_secret: "" });
-        await setSmsFlag(req.user_id, false);
-        if (!keys) await BackupCode.update({ user: { id: req.user_id } }, { expired: true });
-        await emitUserUpdate(req.user_id);
-
-        res.json({ token: currentToken(req) });
+        if (await setSmsFlag(req.user_id, true)) await emitUserUpdate(req.user_id);
+        res.sendStatus(204);
     },
 );
 
