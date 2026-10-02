@@ -1,0 +1,13 @@
+diff --git a/src/webpack/common/utils.ts b/src/webpack/common/utils.ts
+index 32eb73a7..38ee9f6c 100644
+--- a/src/webpack/common/utils.ts
++++ b/src/webpack/common/utils.ts
+@@ -166,7 +166,7 @@ export const ChannelRouter: t.ChannelRouter = mapMangledModuleLazy('"Thread must
+ });
+ 
+ export let SettingsRouter: any;
+-waitFor(["openUserSettings", "USER_SETTINGS_MODAL_KEY"], m => SettingsRouter = m);
++waitFor(["openUserSettings"], m => SettingsRouter = m);
+ 
+ export const PermissionsBits: t.PermissionsBits = findLazy(m => typeof m.ADMINISTRATOR === "bigint");
+ 

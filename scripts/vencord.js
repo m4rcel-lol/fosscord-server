@@ -24,6 +24,7 @@ const { spawnSync } = require("node:child_process");
 const ROOT = path.join(__dirname, "..");
 const CONFIG = JSON.parse(fs.readFileSync(path.join(ROOT, "client", "vencord.json"), "utf8"));
 const PLUGINS = path.join(ROOT, "client", "plugins");
+const SOURCE_PATCHES = path.join(ROOT, "client", "vencord-patches");
 const CACHE = path.resolve(process.env.VENCORD_DIR || path.join(ROOT, ".vencord"));
 const SOURCE = path.join(CACHE, "src");
 const OUTPUT = path.join(ROOT, "assets", "vencord");
@@ -43,11 +44,19 @@ const checkout = () => {
         run("git", ["init", "-q"]);
         run("git", ["remote", "add", "origin", CONFIG.repository]);
     }
-    const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: SOURCE, encoding: "utf8" }).stdout?.trim();
-    if (head === CONFIG.commit && succeeds("git", ["diff", "--quiet", "HEAD"])) return;
-    console.log(`[vencord] checking out ${CONFIG.commit}`);
-    if (!succeeds("git", ["cat-file", "-e", `${CONFIG.commit}^{commit}`])) run("git", ["fetch", "-q", "--depth", "1", "origin", CONFIG.commit]);
+    if (!succeeds("git", ["cat-file", "-e", `${CONFIG.commit}^{commit}`])) {
+        console.log(`[vencord] fetching ${CONFIG.commit}`);
+        run("git", ["fetch", "-q", "--depth", "1", "origin", CONFIG.commit]);
+    }
     run("git", ["checkout", "-q", "--force", CONFIG.commit]);
+    if (!fs.existsSync(SOURCE_PATCHES)) return;
+    for (const patch of fs
+        .readdirSync(SOURCE_PATCHES)
+        .filter((x) => x.endsWith(".patch"))
+        .sort()) {
+        console.log(`[vencord] applying ${patch}`);
+        run("git", ["apply", "--whitespace=nowarn", path.join(SOURCE_PATCHES, patch)]);
+    }
 };
 
 const pnpm = () => {
