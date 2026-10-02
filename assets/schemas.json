@@ -14139,6 +14139,9 @@
             "allow_multiselect": {
                 "type": "boolean"
             },
+            "layout_type": {
+                "type": "integer"
+            },
             "results": {
                 "$ref": "#/definitions/PollResult"
             }

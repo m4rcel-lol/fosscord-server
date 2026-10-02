@@ -37,6 +37,7 @@ import {
     MessageType,
     PartialMessage,
     Poll,
+    PollAnswerCount,
     PublicMessage,
     PublicReaction,
     Reaction,
@@ -327,6 +328,23 @@ export class Message extends BaseClass {
         }));
     }
 
+    static publicPoll(poll: Poll | undefined, userId?: string): Poll | undefined {
+        if (!poll) return undefined;
+        const counts = (poll.results?.answer_counts ?? []) as (PollAnswerCount & { voters?: string[] })[];
+        return {
+            ...poll,
+            layout_type: poll.layout_type ?? 1,
+            results: {
+                is_finalized: poll.results?.is_finalized ?? false,
+                answer_counts: counts.map(({ id, count, voters }) => ({ id: Number(id) as unknown as string, count, me_voted: !!userId && !!voters?.includes(userId) })),
+            },
+        };
+    }
+
+    toPublicJSON(userId: string): PublicMessage {
+        return { ...this.toJSON(), reactions: Message.publicReactions(this.reactions, userId), poll: Message.publicPoll(this.poll, userId) };
+    }
+
     toJSON(shallow = false): PublicMessage {
         // this.clean_data();
         return {
@@ -369,7 +387,7 @@ export class Message extends BaseClass {
             activity: this.activity ?? undefined,
             application: this.application ?? undefined,
             components: this.components ?? [],
-            poll: this.poll ?? undefined,
+            poll: Message.publicPoll(this.poll),
             content: this.content ?? "",
             pinned: this.pinned,
             thread: this.thread ? this.thread.toJSON() : this.thread,

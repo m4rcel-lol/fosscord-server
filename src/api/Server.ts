@@ -140,7 +140,10 @@ export class SpacebarServer extends Server {
         app.get("/external/:hash/{*path}", ExternalProxy);
 
         // Pickup non-expired polls
-        const nonExpiredPolls = await Message.createQueryBuilder("message").where("message.poll->>'expiry' > :now", { now: new Date().toISOString() }).getMany();
+        const nonExpiredPolls = await Message.createQueryBuilder("message")
+            .where("message.poll IS NOT NULL")
+            .andWhere("COALESCE(message.poll->'results'->>'is_finalized', 'false') <> 'true'")
+            .getMany();
 
         for (const message of nonExpiredPolls) {
             if (!message.poll) {

@@ -171,8 +171,7 @@ router.get(
 
         await Message.fillReplies(messages);
         const ret = messages.map((msg) => {
-            const x = msg.toJSON();
-            if (msg.reactions?.length) x.reactions = Message.publicReactions(msg.reactions, req.user_id);
+            const x = msg.toPublicJSON(req.user_id);
             if (!x.author)
                 x.author = {
                     id: "4",
@@ -207,15 +206,6 @@ router.get(
 
                     return att;
                 }) ?? [];
-
-            if (x.poll?.results) {
-                (x.poll.results.answer_counts as (PollAnswerCount & { voters?: string[] })[]).map((answer) => {
-                    answer.me_voted = answer.voters!.includes(req.user_id);
-                    delete answer.voters;
-
-                    return answer;
-                });
-            }
 
             /**
 			Some clients ( discord.js ) only check if a property exists within the response,

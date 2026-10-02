@@ -137,7 +137,7 @@ export function searchResponse(userId: string, result: { messages: Message[]; to
         analytics_id: null,
         doing_deep_historical_index: false,
         total_results: result.total_results,
-        messages: result.messages.map((message) => [{ ...message.toJSON(), reactions: Message.publicReactions(message.reactions, userId), hit: true }]),
+        messages: result.messages.map((message) => [{ ...message.toPublicJSON(userId), hit: true }]),
         threads: [],
         members: [],
     };

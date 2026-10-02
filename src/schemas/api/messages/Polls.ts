@@ -23,6 +23,7 @@ export interface Poll {
     answers: PollAnswer[];
     expiry: Date;
     allow_multiselect: boolean;
+    layout_type?: number;
     results?: PollResult;
 }
 
