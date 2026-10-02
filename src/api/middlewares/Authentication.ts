@@ -41,6 +41,7 @@ declare global {
 
 export async function Authentication(req: Request, res: Response, next: NextFunction) {
     if (req.method === "OPTIONS") return CORS(req, res, next);
+    if (req.isAuthenticated !== undefined) return next();
 
     if (req.headers.cookie?.split("; ").find((x) => x.startsWith("__sb_sessid=")))
         req.fingerprint = req.headers.cookie
