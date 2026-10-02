@@ -119,7 +119,7 @@ code,
     width: 36px;
     height: 36px;
     border-radius: 10px;
-    object-fit: cover;
+    object-fit: contain;
     background: var(--panel-2);
 }
 

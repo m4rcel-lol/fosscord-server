@@ -9,6 +9,8 @@
         [/\(0,([\w$]+)\.jsx\)\([\w$]+,\{\}\),(\(0,\1\.jsx\)\([\w$]+,\{consent:)/g, '(0,$1.jsx)("div",{ref:window.fcCapSlot}),$2'],
         [/"tUjnxr":\["Email or Phone Number"\]/g, '"tUjnxr":["Email or Username"]'],
         [/isClaimed\(\)\{return null!=this\.email\|\|null!=this\.phone\}/g, "isClaimed(){return!0}"],
+        [/if\(null!=([\w$]+)&&[\w$]+\)return\(0,([\w$]+)\.jsx\)\(([\w$]+),\{invite:\1,authBoxClassName:/g, "if(!1)return(0,$2.jsx)($3,{invite:$1,authBoxClassName:"],
+        [/!([\w$]+)&&null!=([\w$]+)&&[\w$]+&&\2\.state===([\w$.]+)\.RESOLVED&&\(([\w$]+)=/g, "!$1&&null!=$2&&$2.state===$3.RESOLVED&&($4="],
         [
             /(case [\w$.]+\.RECAPTCHA:return\(0,([\w$]+)\.jsx\)\([\w$.]+,\{\.\.\.[\w$]+,onLoad:[\w$]+,onRender:[\w$]+,onVerify:([\w$]+),onError:([\w$]+),sitekey:[\w$]+\}\);)/g,
             'case"cap":return(0,$2.jsx)("div",{ref:window.fcCapChallenge($3,$4)});$1',

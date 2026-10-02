@@ -200,7 +200,7 @@ const start = async (userId: string) => {
             }
         });
         ui.refresh();
-        if (engine.locked) ui.showUnlock();
+        if (engine.locked && !ui.unlockSnoozed()) ui.showUnlock();
     } catch (error) {
         fail(`Self-test failed: ${error instanceof Error ? error.message : String(error)}`);
     }

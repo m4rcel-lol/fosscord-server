@@ -1,0 +1,59 @@
+diff --git a/src/components/settings/tabs/vencord/index.tsx b/src/components/settings/tabs/vencord/index.tsx
+index ca4dded..cd48445 100644
+--- a/src/components/settings/tabs/vencord/index.tsx
++++ b/src/components/settings/tabs/vencord/index.tsx
+@@ -135,54 +135,8 @@ function Switches() {
+ }
+ 
+ function VencordSettings() {
+-    const donateImage = useMemo(() =>
+-        Math.random() > 0.5 ? DEFAULT_DONATE_IMAGE : SHIGGY_DONATE_IMAGE,
+-        []
+-    );
+-
+-    const user = UserStore?.getCurrentUser();
+-
+     return (
+         <SettingsTab>
+-            {isDonor(user?.id)
+-                ? (
+-                    <SpecialCard
+-                        title="Donations"
+-                        subtitle="Thank you for donating!"
+-                        description="You can manage your perks at any time by messaging @vending.machine."
+-                        cardImage={VENNIE_DONATOR_IMAGE}
+-                        backgroundImage={DONOR_BACKGROUND_IMAGE}
+-                        backgroundColor="#ED87A9"
+-                    >
+-                        <DonateButtonComponent />
+-                    </SpecialCard>
+-                )
+-                : (
+-                    <SpecialCard
+-                        title="Support the Project"
+-                        description="Please consider supporting the development of Vencord by donating!"
+-                        cardImage={donateImage}
+-                        backgroundImage={DONOR_BACKGROUND_IMAGE}
+-                        backgroundColor="#c3a3ce"
+-                    >
+-                        <DonateButtonComponent />
+-                    </SpecialCard>
+-                )
+-            }
+-
+-            {isPluginDev(user?.id) && (
+-                <SpecialCard
+-                    title="Contributions"
+-                    subtitle="Thank you for contributing!"
+-                    description="Since you've contributed to Vencord you now have a cool new badge!"
+-                    cardImage={COZY_CONTRIB_IMAGE}
+-                    backgroundImage={CONTRIB_BACKGROUND_IMAGE}
+-                    backgroundColor="#EDCC87"
+-                    buttonTitle="See what you've contributed to"
+-                    buttonOnClick={() => openContributorModal(user)}
+-                />
+-            )}
+-
+             <section>
+                 <Forms.FormTitle tag="h5">Quick Actions</Forms.FormTitle>
+ 

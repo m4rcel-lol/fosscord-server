@@ -4130,6 +4130,22 @@ ${approver}`;
     }
     return "";
   };
+  var UNLOCK_SNOOZE_KEY = "fe2ee-unlock-snoozed-until";
+  var UNLOCK_SNOOZE_MS = 7 * 24 * 60 * 60 * 1e3;
+  var unlockSnoozed = () => {
+    try {
+      return Number(localStorage.getItem(UNLOCK_SNOOZE_KEY)) > Date.now();
+    } catch {
+      return false;
+    }
+  };
+  var snoozeUnlock = () => {
+    try {
+      localStorage.setItem(UNLOCK_SNOOZE_KEY, String(Date.now() + UNLOCK_SNOOZE_MS));
+    } catch {
+      return;
+    }
+  };
   var createUi = ({ engine: engine2, states: states2, enableChannel, link: link2, verifyPassword: verifyPassword2, reset }) => {
     const style = document.createElement("style");
     style.textContent = css;
@@ -4494,6 +4510,7 @@ ${approver}`;
         el.addEventListener("close", () => {
           stop();
           unlockOpen = null;
+          if (engine2.locked) snoozeUnlock();
         });
         actions.append(
           button("Not now", "secondary", () => {
@@ -4908,6 +4925,7 @@ ${approver}`;
       refresh,
       showError,
       showUnlock,
+      unlockSnoozed,
       showApproval,
       dismissApproval,
       showSettings,
@@ -5121,7 +5139,7 @@ ${approver}`;
         }
       });
       ui.refresh();
-      if (engine.locked) ui.showUnlock();
+      if (engine.locked && !ui.unlockSnoozed()) ui.showUnlock();
     } catch (error) {
       fail(`Self-test failed: ${error instanceof Error ? error.message : String(error)}`);
     }
