@@ -934,6 +934,9 @@ async function handleMessageMentionsAsync(message: Message, allowed?: AllowedMen
                 : []
             ).map((member) => member.id),
             ...message.mentions.map((user) => user.id),
+            ...(channel.type === ChannelType.DM || channel.type === ChannelType.GROUP_DM
+                ? (channel.recipients ?? []).map((r) => r.user_id).filter((id) => id !== permissionTargetId)
+                : []),
         ]);
         trace.calls.push("getUsers", { micros: sw.getElapsedAndReset().totalMicroseconds });
 
