@@ -29,6 +29,14 @@ const RING_TIMEOUT = 60_000;
 const rings = new Map<string, Map<string, NodeJS.Timeout>>();
 
 export class PrivateCalls {
+    static async endStaleCalls() {
+        await Message.createQueryBuilder()
+            .update()
+            .set({ call: () => `jsonb_set("call", '{ended_timestamp}', to_jsonb(to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')))` })
+            .where(`"type" = :type AND "call" IS NOT NULL AND "call"->>'ended_timestamp' IS NULL`, { type: MessageType.CALL })
+            .execute();
+    }
+
     static region() {
         const { regions } = Config.get();
         return regions.available.find((region) => region.id === regions.default)?.id ?? regions.default;
