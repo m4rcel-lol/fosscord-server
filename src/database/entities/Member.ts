@@ -479,8 +479,8 @@ export class Member extends BaseClassWithoutId {
         logTrace("Save member info");
 
         const welcomeChannelId = guild.system_channel_id;
-        if (welcomeChannelId && (await Channel.exists({ where: { id: welcomeChannelId } }))) {
-            // Send a welcome message
+        const suppressJoinNotifications = ((guild.system_channel_flags ?? 0) & 1) !== 0;
+        if (welcomeChannelId && !suppressJoinNotifications && user_id !== guild.owner_id && (await Channel.exists({ where: { id: welcomeChannelId } }))) {
             const message = Message.create({
                 type: 7,
                 guild_id: guild.id,
