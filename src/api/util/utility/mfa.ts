@@ -80,14 +80,7 @@ export async function consumeBackupCode(user_id: string, code: unknown) {
     return true;
 }
 
-export async function authenticatorTypes(user_id: string) {
-    const user = await User.findOne({ where: { id: user_id }, select: { id: true, mfa_enabled: true, totp_secret: true } });
-    const keys = await SecurityKey.count({ where: { user_id } });
-    const types: number[] = [];
-    if (keys > 0) types.push(1);
-    if (user?.mfa_enabled && user.totp_secret) types.push(2);
-    return types;
-}
+export const authenticatorTypes = (user_id: string) => SecurityKey.authenticatorTypes(user_id);
 
 export function assertionOptions(origin: string, credentials: SecurityKey[], userVerification = "preferred", mediation?: string) {
     const challenge = b64url(crypto.randomBytes(32));
@@ -302,7 +295,7 @@ export async function loginMfaResponse(req: Request, user: User, extra: Record<s
 
 export async function emitUserUpdate(user_id: string) {
     const user = await User.findOneOrFail({ where: { id: user_id }, select: Object.fromEntries(PrivateUserProjection.map((x) => [x, true])) });
-    await emitEvent({ event: "USER_UPDATE", user_id, data: user.toPrivateUser() } as unknown as UserUpdateEvent);
+    await emitEvent({ event: "USER_UPDATE", user_id, data: { ...user.toPrivateUser(), authenticator_types: await authenticatorTypes(user_id) } } as unknown as UserUpdateEvent);
 }
 
 export async function emitUserEvent(user_id: string, event: string, data: unknown) {
