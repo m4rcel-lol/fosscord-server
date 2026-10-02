@@ -16,6 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+import type { PatchReplacement } from "@utils/types";
 import { filters, mapMangledModuleLazy } from "@webpack";
 import { useEffect } from "@webpack/common";
 
@@ -33,3 +34,8 @@ function RedirectHome() {
 }
 
 export const redirectHome = () => <RedirectHome />;
+
+export const hideSetting = (key: string, { replacesPredicate = false } = {}): PatchReplacement =>
+    replacesPredicate
+        ? { match: new RegExp(String.raw`(\.${key},\{.{0,400}?)usePredicate:`), replace: "$1usePredicate:()=>!1,_usePredicate:" }
+        : { match: new RegExp(String.raw`\.${key},\{`), replace: "$&usePredicate:()=>!1," };

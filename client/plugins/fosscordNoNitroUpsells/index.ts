@@ -18,7 +18,9 @@
 
 import definePlugin from "@utils/types";
 
-import { FosscordAuthor, redirectHome } from "../fosscordCore/shared";
+import { FosscordAuthor, hideSetting, redirectHome } from "../fosscordCore/shared";
+
+const MAKE_IT_YOURS_ONLY_WITH_PREMIUM = "#{intl::np0X/u::raw}";
 
 export default definePlugin({
     name: "FosscordNoNitroUpsells",
@@ -46,13 +48,11 @@ export default definePlugin({
         {
             find: ".BILLING_SECTION,{",
             replacement: [
+                hideSetting("BILLING_SECTION"),
+                hideSetting("ACCOUNT_FAMILY_CENTER_CATEGORY"),
                 {
-                    match: /\.BILLING_SECTION,\{/,
-                    replace: "$&usePredicate:()=>!1,",
-                },
-                {
-                    match: /\.ACCOUNT_FAMILY_CENTER_CATEGORY,\{/,
-                    replace: "$&usePredicate:()=>!1,",
+                    match: /(\.APPEARANCE_IN_APP_ICON_CATEGORY,\{.{0,120}?)useSubtitle:\(\)=>[^,]+?,(?=useHeaderDecoration)/,
+                    replace: "$1",
                 },
             ],
         },
@@ -61,6 +61,17 @@ export default definePlugin({
             replacement: {
                 match: /=function\(\)\{(?=let [^;]{0,80}?=\(0,\i\.\i\)\(\i\.\i\.COLLECTIBLES_PROFILE_SETTINGS_UPSELL\))/,
                 replace: "$&return null;",
+            },
+        },
+        {
+            find: ".APPEARANCE_CUSTOM_THEMES_UPSELL,{",
+            replacement: hideSetting("APPEARANCE_CUSTOM_THEMES_UPSELL", { replacesPredicate: true }),
+        },
+        {
+            find: MAKE_IT_YOURS_ONLY_WITH_PREMIUM,
+            replacement: {
+                match: /(let (\i)=\(0,\i\.\i\)\(\{type:\i,isPreview:\i,isCoachmark:\i\}\).{0,600}?\.otherwise\(\(\)=>)\i\.intl\.string\(\i\.t\["np0X\/u"\]\)\);/,
+                replace: "$1null);if($2==null)return null;",
             },
         },
         {

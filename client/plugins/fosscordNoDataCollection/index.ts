@@ -21,29 +21,25 @@ import definePlugin from "@utils/types";
 import { FosscordAuthor, hideSetting } from "../fosscordCore/shared";
 
 export default definePlugin({
-    name: "FosscordNoAppUpsells",
-    description: "Removes every prompt to download the desktop or mobile apps.",
+    name: "FosscordNoDataCollection",
+    description: "This instance does no analytics, personalization or sponsored content, so the toggles for them are hidden.",
     authors: [FosscordAuthor],
     required: true,
 
     patches: [
         {
-            find: '"app-download-button"',
-            replacement: {
-                match: /return(?=.{0,50}id:"app-download-button")/,
-                replace: "return null;return",
-            },
+            find: ".DATA_USAGE_STATISTICS_SETTING,{",
+            replacement: [
+                hideSetting("DATA_USAGE_STATISTICS_SETTING"),
+                hideSetting("DATA_USAGE_QUESTS_SETTING", { replacesPredicate: true }),
+                hideSetting("DATA_USAGE_QUESTS_3P_SETTING", { replacesPredicate: true }),
+                hideSetting("SPONSORED_CONTENT_QUESTS_SETTING", { replacesPredicate: true }),
+                hideSetting("SPONSORED_CONTENT_QUESTS_3P_SETTING", { replacesPredicate: true }),
+            ],
         },
         {
-            find: 'key:"download",iconUrl:',
-            replacement: {
-                match: /\(0,\i\.isWeb\)\(\)(?=&&\i\.push\(\{key:"download")/,
-                replace: "!1",
-            },
-        },
-        {
-            find: ".SYSTEM_CUSTOM_KEYBINDS_CATEGORY,{",
-            replacement: hideSetting("SYSTEM_CUSTOM_KEYBINDS_CATEGORY"),
+            find: ".DATA_USAGE_PERSONALIZATION_SETTING,{",
+            replacement: hideSetting("DATA_USAGE_PERSONALIZATION_SETTING"),
         },
     ],
 });

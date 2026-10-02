@@ -64,5 +64,19 @@ export default definePlugin({
                 replace: "$1null",
             },
         },
+        {
+            find: /key:\i\.\i\.ORBS,text:/,
+            replacement: {
+                match: /,\{type:"page",key:(\i\.\i)\.ORBS,text:.{0,160}?onClick:\(\)=>\i\(\1\.ORBS\)\}(?=\])/,
+                replace: "",
+            },
+        },
+        {
+            find: 'location:"BalanceWidgetMenu"',
+            replacement: {
+                match: /function \i\(\i\)\{(?=let\{showNotificationBadge:\i,ctaText:\i,ctaOnClick:\i,analyticsPage:)/,
+                replace: "$&return null;",
+            },
+        },
     ],
 });
