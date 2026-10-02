@@ -34,26 +34,24 @@ export async function Close(this: WebSocket, code: number, reason: Buffer) {
         const authSessionId = this.session?.session_id;
         const closedAt = Date.now();
 
-        if (!(ProcessLifecycle.state === "stopping" || ProcessLifecycle.state === "stopped"))
-            setTimeout(
-                async () => {
-                    try {
-                        if (authSessionId && this.user_id) {
-                            const s = await Session.findOne({
-                                where: { user_id: this.user_id, session_id: authSessionId },
-                            });
-                            if (s && (s.last_seen?.getTime() ?? 0) <= closedAt && !openConnections.some((x) => x.session_id === authSessionId && x.user_id === this.user_id)) {
-                                await Session.update({ user_id: this.user_id, session_id: authSessionId }, { status: "offline", activities: [], client_status: {} });
-                                await emitSessionsReplace(this.user_id);
-                                await broadcastPresence(this.user_id);
-                            }
-                        }
-                    } catch (e) {
-                        console.error("[WebSocket] Close session cleanup failed", code, e);
-                    }
-                },
-                isFinalClose(code) ? 0 : 10_000,
-            );
+        const markOffline = async () => {
+            try {
+                if (!authSessionId || !this.user_id) return;
+                const s = await Session.findOne({
+                    where: { user_id: this.user_id, session_id: authSessionId },
+                });
+                if (!s || (s.last_seen?.getTime() ?? 0) > closedAt || openConnections.some((x) => x !== this && x.session_id === authSessionId && x.user_id === this.user_id))
+                    return;
+                await Session.update({ user_id: this.user_id, session_id: authSessionId }, { status: "offline", activities: [], client_status: {} });
+                await emitSessionsReplace(this.user_id);
+                await broadcastPresence(this.user_id);
+            } catch (e) {
+                console.error("[WebSocket] Close session cleanup failed", code, e);
+            }
+        };
+
+        if (ProcessLifecycle.state === "stopping" || ProcessLifecycle.state === "stopped") await markOffline();
+        else setTimeout(markOffline, isFinalClose(code) ? 0 : 10_000);
 
         if (!this.user_id) console.error("No user id in websocket???", this);
         const voiceState = await VoiceState.findOne({

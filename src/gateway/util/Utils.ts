@@ -17,8 +17,7 @@
 */
 
 import { PrivateCalls, Session, StageInstances, Stream, VoiceState } from "@spacebar/database";
-import { TimeSpan } from "@spacebar/extensions";
-import { Event } from "@spacebar/util";
+import { broadcastPresence, emitSessionsReplace, Event, PRESENCE_STALE_AFTER_MS, RabbitMQ } from "@spacebar/util";
 import { WebSocket } from "./WebSocket";
 import { OPCODES } from "./Constants";
 import { Send } from "./Send";
@@ -88,20 +87,43 @@ export async function cleanupOnStartup(): Promise<void> {
         .then(() => console.log("[Gateway] Successfully cleaned voice states"))
         .catch((e) => console.error("[Gateway] Error cleaning voice states on startup:", e));
 
+    const singleProcess = !process.env.EVENT_TRANSMISSION && !RabbitMQ.connection;
     console.log("[Gateway] Starting async presence expiry...");
-    expireOldPresenceStates()
-        .then(() => console.log("[Gateway] Successfully cleaned expired presence states"))
+    expirePresences(singleProcess)
+        .then((count) => console.log(`[Gateway] Marked ${count} leftover sessions offline`))
         .catch((e) => console.error("[Gateway] Error cleaning expired presence states on startup:", e));
 }
 
-async function expireOldPresenceStates() {
-    for await (const session of await Session.createQueryBuilder("session").where("last_seen >= '2000/01/01' AND status != 'offline'").select().stream()) {
-        // session object has all fields prefixed with `session_`... thanks typeorm
-        if (TimeSpan.fromDates((session.session_last_seen as Date).getTime(), new Date().getTime()).totalMinutes > 30) {
-            console.log(`[Gateway/util/Utils.ts] Expiring presence for session ${session.session_session_id} last seen at ${session.session_last_seen}`);
-            await Session.update({ session_id: session.session_session_id }, { status: "offline" });
-        }
+export async function expirePresences(all = false) {
+    const query = Session.createQueryBuilder().update().set({ status: "offline", activities: [], client_status: {} }).where("status != 'offline'");
+    if (!all) query.andWhere("(last_seen IS NULL OR last_seen < :since)", { since: new Date(Date.now() - PRESENCE_STALE_AFTER_MS) });
+    const { raw } = await query.returning(["user_id"]).execute();
+    const userIds = [...new Set((raw as { user_id: string }[]).map((x) => String(x.user_id)))];
+    if (all) return userIds.length;
+    for (const userId of userIds) {
+        await emitSessionsReplace(userId).catch((e) => console.error(`[Gateway] failed to replace sessions for ${userId}`, e));
+        await broadcastPresence(userId).catch((e) => console.error(`[Gateway] failed to broadcast presence for ${userId}`, e));
     }
+    return userIds.length;
+}
+
+let presenceSweep: NodeJS.Timeout | undefined;
+export function startPresenceSweep() {
+    if (presenceSweep) return;
+    let running = false;
+    presenceSweep = setInterval(() => {
+        if (running) return;
+        running = true;
+        expirePresences()
+            .catch((e) => console.error("[Gateway] presence sweep failed", e))
+            .finally(() => (running = false));
+    }, 15_000);
+    presenceSweep.unref();
+}
+
+export function stopPresenceSweep() {
+    clearInterval(presenceSweep);
+    presenceSweep = undefined;
 }
 
 export async function handleOffloadedGatewayRequest(socket: WebSocket, url: string, body: unknown): Promise<boolean> {

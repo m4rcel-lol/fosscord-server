@@ -28,7 +28,7 @@ import { ProcessLifecycle, SystemdLifecycle } from "../util/util/ProcessLifecycl
 import { Monitoring } from "../util/monitoring/Monitoring";
 import { Connection } from "./events/Connection";
 import { RemoteAuthConnection } from "./events/RemoteAuth";
-import { cleanupOnStartup } from "./util";
+import { cleanupOnStartup, startPresenceSweep, stopPresenceSweep } from "./util";
 import { Authentication, BodyParser, CORS, ErrorHandler } from "@spacebar/api";
 
 export class GatewayServer extends Server {
@@ -68,6 +68,7 @@ export class GatewayServer extends Server {
         await initEvent();
         // temporary fix
         await cleanupOnStartup();
+        startPresenceSweep();
         await JwtKeypairManager.init();
 
         const logRequests = process.env["LOG_REQUESTS"] != undefined;
@@ -107,6 +108,7 @@ export class GatewayServer extends Server {
     }
 
     async stop() {
+        stopPresenceSweep();
         await ProcessLifecycle.Shutdown();
         this.ws.clients.forEach((x) => x.close());
         this.ws.close();

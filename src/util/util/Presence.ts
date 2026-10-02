@@ -76,7 +76,7 @@ export async function distributePresenceUpdate(userId: string, data: PresenceUpd
     }
 }
 
-export const PRESENCE_STALE_AFTER_MS = 3 * 60 * 1000;
+export const PRESENCE_STALE_AFTER_MS = 90 * 1000;
 
 export type PresenceSession = Pick<Session, "user_id" | "status" | "activities" | "client_status" | "client_info" | "last_seen">;
 

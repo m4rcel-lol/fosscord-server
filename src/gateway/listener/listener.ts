@@ -187,7 +187,8 @@ export async function setupListener(this: WebSocket) {
             opts.channel.off("error", handleChannelError);
         }
     };
-    this.once("close", (code: number) => holdForResume(this, this.listenerCleanup!, code));
+    if (this.readyState === this.CLOSED) await this.listenerCleanup();
+    else this.once("close", (code: number) => holdForResume(this, this.listenerCleanup!, code));
 }
 
 // TODO: only subscribe for events that are in the connection intents

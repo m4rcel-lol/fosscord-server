@@ -47,6 +47,7 @@ import {
 import {
     Activity,
     broadcastPresence,
+    emitSessionsReplace,
     sanitizeActivities,
     getClientPlatform,
     getConnectedSessions,
@@ -81,6 +82,7 @@ import {
     RelationshipType,
 } from "@spacebar/schemas";
 import { check } from "./instanceOf";
+import { openConnections } from "../events/Connection";
 
 // TODO: user sharding
 // TODO: check privileged intents, if defined in the config
@@ -116,6 +118,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
         }),
     );
 
+    if (this.readyState !== this.OPEN) return;
     this.accessToken = identify.token;
 
     taskSw.reset(); // don't include checkToken time...
@@ -885,6 +888,15 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     d._trace = [JSON.stringify(_trace)];
 
     await listenerPromise;
+
+    if (this.readyState !== this.OPEN) {
+        if (!openConnections.some((x) => x !== this && x.session_id === this.session_id && x.user_id === this.user_id)) {
+            await Session.update({ user_id: this.user_id, session_id: this.session_id }, { status: "offline", activities: [], client_status: {} });
+            await emitSessionsReplace(this.user_id);
+            await broadcastPresence(this.user_id);
+        }
+        return;
+    }
 
     // Send READY
     await Send(this, {
