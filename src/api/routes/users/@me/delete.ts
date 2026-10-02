@@ -1,26 +1,25 @@
 /*
 	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
 	Copyright (C) 2023 Spacebar and Spacebar Contributors
-	
+
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU Affero General Public License as published
 	by the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
-	
+
 	This program is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU Affero General Public License for more details.
-	
+
 	You should have received a copy of the GNU Affero General Public License
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import bcrypt from "bcrypt";
 import { Request, Response, Router } from "express";
-import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
-import { Guild, Member, User, UserSettingsProtos } from "@spacebar/database";
+import { ResponseError, requireAccountPassword, revokeSessions } from "@spacebar/api/util";
+import { Guild, User } from "@spacebar/database";
 
 const router = Router({ mergeParams: true });
 
@@ -29,46 +28,20 @@ router.post(
     route({
         responses: {
             204: {},
-            401: {
-                body: "APIErrorResponse",
-            },
-            404: {
+            400: {
                 body: "APIErrorResponse",
             },
         },
     }),
     async (req: Request, res: Response) => {
-        const user = await User.findOneOrFail({
-            where: { id: req.user_id },
-            select: { data: true },
-        }); //User object
-        let correctpass = true;
+        await requireAccountPassword(req);
 
-        if (user.data.hash) {
-            // guest accounts can delete accounts without password
-            correctpass = await bcrypt.compare(req.body.password, user.data.hash);
-            if (!correctpass) {
-                throw new HTTPError(req.t("auth:login.INVALID_PASSWORD"));
-            }
-        }
+        if (await Guild.exists({ where: { owner_id: req.user_id } }))
+            throw new ResponseError(400, { message: "You must transfer ownership of any owned servers before deleting your account.", code: 40011 });
 
-        // TODO: decrement guild member count
-
-        if (correctpass) {
-            // Check if the user owns any guilds.
-            const ownedGuilds = await Guild.findOne({ where: { owner_id: req.user_id } });
-            if (ownedGuilds) {
-                throw new HTTPError("User owns guilds and cannot be deleted", 403);
-            }
-
-            const members = await Member.find({ where: { id: req.user_id } });
-            await UserSettingsProtos.delete({ user_id: req.user_id });
-            await Promise.all([User.delete({ id: req.user_id }), ...members.map((member) => Member.removeFromGuild(member.id, member.guild_id))]);
-
-            res.sendStatus(204);
-        } else {
-            res.sendStatus(401);
-        }
+        await User.update({ id: req.user_id }, { deleted: true });
+        res.sendStatus(204);
+        await revokeSessions(req.user_id);
     },
 );
 
