@@ -51,6 +51,7 @@ export * from "./Role";
 export * from "./SecurityKey";
 export * from "./Session";
 export * from "./Sticker";
+export * from "./SoundboardSound";
 export * from "./StickerPack";
 export * from "./Stream";
 export * from "./StreamSession";
