@@ -68,7 +68,7 @@ router.get(
         // TODO: use DiscordApiErrors
         // findOneOrFail throws code 404
         if (!app) throw DiscordApiErrors.UNKNOWN_APPLICATION;
-        if (!app.bot) throw DiscordApiErrors.OAUTH2_APPLICATION_BOT_ABSENT;
+        if (!app.bot && req.query.integration_type !== "1") throw DiscordApiErrors.OAUTH2_APPLICATION_BOT_ABSENT;
 
         const bot = app.bot;
         delete app.bot;
@@ -141,7 +141,7 @@ router.get(
                 verify_key: app.verify_key,
                 flags: app.flags,
             },
-            bot: {
+            bot: bot && {
                 id: bot.id,
                 username: bot.username,
                 avatar: bot.avatar,
@@ -149,7 +149,7 @@ router.get(
                 discriminator: bot.discriminator,
                 public_flags: bot.public_flags,
                 bot: true,
-                approximated_guild_count: 0, // TODO
+                approximated_guild_count: await Member.count({ where: { id: bot.id } }),
             },
             authorized:
                 req.query.integration_type === "1"
