@@ -8736,8 +8736,34 @@
             "name": {
                 "type": "string"
             },
+            "name_localizations": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
             "description": {
                 "type": "string"
+            },
+            "description_localizations": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
             },
             "required": {
                 "type": "boolean"
@@ -8753,6 +8779,27 @@
                 "items": {
                     "$ref": "#/definitions/ApplicationCommandOption"
                 }
+            },
+            "channel_types": {
+                "type": "array",
+                "items": {
+                    "type": "integer"
+                }
+            },
+            "min_value": {
+                "type": "integer"
+            },
+            "max_value": {
+                "type": "integer"
+            },
+            "min_length": {
+                "type": "integer"
+            },
+            "max_length": {
+                "type": "integer"
+            },
+            "autocomplete": {
+                "type": "boolean"
             }
         },
         "additionalProperties": false,
@@ -8773,7 +8820,10 @@
             5,
             6,
             7,
-            8
+            8,
+            9,
+            10,
+            11
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -8782,6 +8832,19 @@
         "properties": {
             "name": {
                 "type": "string"
+            },
+            "name_localizations": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
             },
             "value": {
                 "type": [
