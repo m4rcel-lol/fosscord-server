@@ -15661,6 +15661,16 @@
                     }
                 ]
             },
+            "call": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/MessageCallState"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
             "isWebhook": {
                 "type": "boolean"
             },
@@ -17202,6 +17212,38 @@
             "prekey_id",
             "user_id",
             "wrapped"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "MessageCallState": {
+        "type": "object",
+        "properties": {
+            "ringing": {
+                "$ref": "#/definitions/Record%3Cstring%2Cstring%3E"
+            },
+            "ring_started": {
+                "$ref": "#/definitions/Record%3Cstring%2Cnumber%3E"
+            },
+            "region": {
+                "type": "string"
+            },
+            "participants": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "ended_timestamp": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "ended_timestamp",
+            "participants"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -19283,6 +19325,9 @@
                     "$ref": "#/definitions/MessageSnapshot"
                 }
             },
+            "call": {
+                "$ref": "#/definitions/MessageCall"
+            },
             "thread": {
                 "$ref": "#/definitions/PublicChannel"
             },
@@ -19454,6 +19499,29 @@
         "additionalProperties": false,
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
+    "MessageCall": {
+        "type": "object",
+        "properties": {
+            "participants": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "ended_timestamp": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "ended_timestamp",
+            "participants"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
     "Potion": {
         "type": "object",
         "properties": {
@@ -19578,6 +19646,9 @@
     "DmChannelDTO": {
         "type": "object",
         "properties": {
+            "flags": {
+                "type": "integer"
+            },
             "icon": {
                 "type": [
                     "null",
@@ -19611,7 +19682,7 @@
             "recipients": {
                 "type": "array",
                 "items": {
-                    "$ref": "#/definitions/MinimalPublicUserDTO"
+                    "$ref": "#/definitions/PartialUser"
                 }
             },
             "type": {
@@ -19620,6 +19691,7 @@
         },
         "additionalProperties": false,
         "required": [
+            "flags",
             "icon",
             "id",
             "last_message_id",
@@ -19627,50 +19699,6 @@
             "origin_channel_id",
             "recipients",
             "type"
-        ],
-        "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "MinimalPublicUserDTO": {
-        "type": "object",
-        "properties": {
-            "avatar": {
-                "type": [
-                    "null",
-                    "string"
-                ]
-            },
-            "discriminator": {
-                "type": "string"
-            },
-            "id": {
-                "type": "string"
-            },
-            "public_flags": {
-                "type": "integer"
-            },
-            "username": {
-                "type": "string"
-            },
-            "badge_ids": {
-                "anyOf": [
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "type": "null"
-                    }
-                ]
-            }
-        },
-        "additionalProperties": false,
-        "required": [
-            "discriminator",
-            "id",
-            "public_flags",
-            "username"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },

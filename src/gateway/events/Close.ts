@@ -18,7 +18,7 @@
 
 import { Member, Session, VoiceState } from "@spacebar/database";
 import { WebSocket } from "@spacebar/gateway/util";
-import { broadcastPresence, emitEvent, emitSessionsReplace, VoiceStateUpdateEvent } from "@spacebar/util";
+import { broadcastPresence, emitEvent, emitSessionsReplace, onPrivateVoiceStateChange, VoiceStateUpdateEvent } from "@spacebar/util";
 import { ProcessLifecycle } from "@spacebar/util/util/ProcessLifecycle";
 import { openConnections } from "./Connection";
 
@@ -70,23 +70,19 @@ export async function Close(this: WebSocket, code: number, reason: Buffer) {
             voiceState.self_video = false;
             await voiceState.save();
 
-            voiceState.member = await Member.findOneOrFail({
-                where: {
-                    id: voiceState.user_id,
-                    guild_id: prevGuildId,
-                },
-            });
+            const member = prevGuildId ? await Member.findOne({ where: { id: voiceState.user_id, guild_id: prevGuildId } }) : null;
             // let the users in previous guild/channel know that user disconnected
             await emitEvent({
                 event: "VOICE_STATE_UPDATE",
                 data: {
                     ...voiceState.toPublicVoiceState(),
                     guild_id: prevGuildId, // have to send the previous guild_id because that's what client expects for disconnect messages
-                    member: voiceState.member.toPublicMember(),
+                    member: member?.toPublicMember(),
                 },
                 guild_id: prevGuildId,
                 channel_id: prevChannelId,
             } satisfies VoiceStateUpdateEvent);
+            if (!prevGuildId) await onPrivateVoiceStateChange(voiceState.user_id, prevChannelId, null);
         }
     }
 }

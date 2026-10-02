@@ -46,5 +46,6 @@ export * from "./Application";
 export * from "./NameValidation";
 export * from "./Version";
 export * from "./Presence";
+export * from "./Calls";
 export * from "./MediaProxy";
 export * from "./VideoFrame";

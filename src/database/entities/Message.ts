@@ -33,6 +33,7 @@ import {
     BaseMessageComponents,
     E2eeEnvelope,
     Embed,
+    MessageCallState,
     MessageComponentType,
     MessageSnapshot,
     MessageType,
@@ -300,6 +301,9 @@ export class Message extends BaseClass {
     @Column({ type: "jsonb", nullable: true })
     encrypted?: E2eeEnvelope | null;
 
+    @Column({ type: "jsonb", nullable: true })
+    call?: MessageCallState | null;
+
     get isWebhook() {
         return this.webhook_id != null && this.webhook != null;
     }
@@ -403,6 +407,7 @@ export class Message extends BaseClass {
             thread: this.thread ? this.thread.toJSON() : this.thread,
             referenced_message: shallow ? undefined : this.referenced_message === null ? null : this.referenced_message?.toJSON(true),
             encrypted: this.encrypted ?? undefined,
+            call: this.call ? { participants: this.call.participants, ended_timestamp: this.call.ended_timestamp } : undefined,
         } satisfies PublicMessage;
     }
 

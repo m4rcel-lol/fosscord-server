@@ -156,6 +156,17 @@ export interface AllowedMentions {
     replied_user?: boolean;
 }
 
+export interface MessageCall {
+    participants: Snowflake[];
+    ended_timestamp: string | null;
+}
+
+export interface MessageCallState extends MessageCall {
+    ringing?: Record<Snowflake, Snowflake>;
+    ring_started?: Record<Snowflake, number>;
+    region?: string;
+}
+
 export interface MessageSnapshot {
     message: {
         content: string;
@@ -202,7 +213,7 @@ export interface PublicMessage {
     message_reference?: MessageReference;
     referenced_message?: PublicMessage | null;
     message_snapshots?: MessageSnapshot[];
-    // call?: MessageCall;
+    call?: MessageCall;
     // interaction?: PartialMessageInteraction; // TODO
     // interaction_metadata?: MessageInteraction; // TODO
     // resolved?: ResolvedData; // TODO

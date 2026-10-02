@@ -473,7 +473,7 @@ export interface UserConnectionsUpdateEvent extends Event {
 export interface VoiceStateUpdateEvent extends Event {
     event: "VOICE_STATE_UPDATE";
     data: PublicVoiceState & {
-        member: PublicMember;
+        member?: PublicMember;
     };
 }
 
@@ -705,7 +705,33 @@ export interface ThreadMembersUpdateEvent extends Event {
     };
 }
 
+export interface CallPayload {
+    channel_id: string;
+    message_id: string;
+    region: string;
+    ringing: string[];
+    ongoing_rings: Record<string, string>;
+}
+
+export interface CallCreateEvent extends Event {
+    event: "CALL_CREATE";
+    data: CallPayload & { voice_states: PublicVoiceState[]; embedded_activities: unknown[] };
+}
+
+export interface CallUpdateEvent extends Event {
+    event: "CALL_UPDATE";
+    data: CallPayload;
+}
+
+export interface CallDeleteEvent extends Event {
+    event: "CALL_DELETE";
+    data: { channel_id: string; unavailable?: boolean };
+}
+
 export type EventData =
+    | CallCreateEvent
+    | CallUpdateEvent
+    | CallDeleteEvent
     | InvalidatedEvent
     | ReadyEvent
     | ChannelCreateEvent
@@ -888,6 +914,9 @@ export type EVENT =
     | "APPLICATION_COMMAND_PERMISSIONS_UPDATE"
     | "VOICE_STATE_UPDATE"
     | "VOICE_SERVER_UPDATE"
+    | "CALL_CREATE"
+    | "CALL_UPDATE"
+    | "CALL_DELETE"
     | "STREAM_CREATE"
     | "STREAM_SERVER_UPDATE"
     | "STREAM_DELETE"

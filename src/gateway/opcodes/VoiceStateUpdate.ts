@@ -18,7 +18,7 @@
 
 import { Guild, Member, VoiceState } from "@spacebar/database";
 import { Payload, WebSocket, genVoiceToken } from "@spacebar/gateway";
-import { Config, emitEvent, VoiceServerUpdateEvent, VoiceStateUpdateEvent } from "@spacebar/util";
+import { Config, emitEvent, onPrivateVoiceStateChange, VoiceServerUpdateEvent, VoiceStateUpdateEvent } from "@spacebar/util";
 import { ConfigVoiceRegion, VoiceStateUpdateSchema } from "@spacebar/schemas";
 import { check } from "./instanceOf";
 // TODO: check if a voice server is setup
@@ -120,6 +120,9 @@ export async function onVoiceStateUpdate(this: WebSocket, data: Payload) {
             user_id: voiceState.user_id,
         } satisfies VoiceStateUpdateEvent),
     ]);
+
+    if ((prevState?.channel_id && !prevState.guild_id) || (voiceState.channel_id && !voiceState.guild_id))
+        await onPrivateVoiceStateChange(this.user_id, prevState?.channel_id, voiceState.channel_id);
 
     //If it's null it means that we are leaving the channel and this event is not needed
     if ((isNew || isChanged) && voiceState.channel_id !== null) {
