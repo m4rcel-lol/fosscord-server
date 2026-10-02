@@ -17,6 +17,7 @@
 */
 
 import { Request, Response, Router } from "express";
+import { ILike } from "typeorm";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
 import { Member, Relationship, User } from "@spacebar/database";
@@ -137,10 +138,13 @@ router.post(
             await User.findOneOrFail({
                 relations: { relationships: { to: true } },
                 select: Object.fromEntries(userProjection.map((i) => [i, true])), // TODO: cleanup
-                where: {
-                    discriminator: String(req.body.discriminator).padStart(4, "0"), //Discord send the discriminator as integer, we need to add leading zeroes
-                    username: req.body.username,
-                },
+                where:
+                    req.body.discriminator && Number(req.body.discriminator) !== 0
+                        ? {
+                              discriminator: String(req.body.discriminator).padStart(4, "0"), //Discord send the discriminator as integer, we need to add leading zeroes
+                              username: req.body.username,
+                          }
+                        : { discriminator: "0", username: ILike(String(req.body.username).replace(/[\\%_]/g, "\\$&")) },
             }),
             req.body.type, // TODO: is this even correct? the schema doesnt have a type field...
         ),
