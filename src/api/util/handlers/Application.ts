@@ -17,8 +17,9 @@
 */
 
 import { createPrivateKey, generateKeyPairSync, randomBytes, sign } from "node:crypto";
-import { In } from "typeorm";
-import { Application, Member } from "@spacebar/database";
+import { ILike, In, Not, IsNull } from "typeorm";
+import { Application, ApplicationCommand, Member } from "@spacebar/database";
+import { serializeCommand } from "./ApplicationCommands";
 import { Snowflake } from "@spacebar/util";
 
 export async function ensureInteractionKeys(applicationId: string) {
@@ -100,6 +101,7 @@ export async function findPublicApplications(ids: string[]) {
 
 export async function toDirectoryApplication(app: Application) {
     const guildCount = app.bot ? await Member.count({ where: { id: app.bot.id } }) : 0;
+    const popular = await ApplicationCommand.find({ where: { application_id: app.id, guild_id: IsNull(), type: 1 }, order: { id: "ASC" }, take: 5 });
     return {
         ...toPublicApplication(app),
         categories: [],
@@ -109,7 +111,8 @@ export async function toDirectoryApplication(app: Application) {
             short_description: app.summary || app.description || "",
             supported_locales: ["en-US"],
             carousel_items: [],
-            popular_application_command_ids: [],
+            popular_application_command_ids: popular.map((c) => c.id),
+            popular_application_commands: popular.map(serializeCommand),
             external_urls: [],
             type: 1,
         },
@@ -149,4 +152,15 @@ export function toOwnedApplication(app: Application) {
         discovery_eligibility_flags: app.discovery_eligibility_flags,
         team: app.team ?? null,
     };
+}
+
+export async function listDirectoryApplications(query: string, skip: number, take: number) {
+    const [apps, total] = await Application.findAndCount({
+        where: { bot_public: true, bot: { id: Not(IsNull()) }, ...(query && { name: ILike(`%${query.replace(/[%_\\]/g, (c) => `\\${c}`)}%`) }) },
+        relations: { bot: true },
+        order: { name: "ASC" },
+        skip,
+        take,
+    });
+    return { applications: await Promise.all(apps.map(toDirectoryApplication)), total };
 }
