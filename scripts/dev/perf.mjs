@@ -55,7 +55,7 @@ const visit = async (context) => {
         if (e.response.fromDiskCache || e.response.fromMemoryCache) r.cached = true;
     });
     cdp.on("Network.dataReceived", (e) => (entry(e.requestId).received += e.encodedDataLength));
-    cdp.on("Network.loadingFinished", (e) => (entry(e.requestId).bytes = e.encodedDataLength));
+    cdp.on("Network.loadingFinished", (e) => Object.assign(entry(e.requestId), { bytes: e.encodedDataLength, done: e.timestamp }));
     cdp.on("Network.webSocketFrameSent", (e) => {
         if (identifyAt === null && e.response.payloadData.includes('"op":2')) identifyAt = e.timestamp;
     });
@@ -82,7 +82,21 @@ const visit = async (context) => {
     const boot = snapshot();
     await page.waitForTimeout(Number(flag("settle", "3")) * 1000);
     const settled = snapshot();
-    if (process.env.DUMP) console.error(JSON.stringify([...requests.values()].map((r) => [r.raw ?? r.status, r.type, r.cached, r.bytes, r.url?.slice(0, 120)])));
+    if (process.env.DUMP)
+        console.error(
+            JSON.stringify(
+                [...requests.values()].map((r) => [
+                    r.raw ?? r.status,
+                    r.type,
+                    r.cached,
+                    r.bytes,
+                    r.url?.slice(0, 120),
+                    Math.round((r.at - start) * 1000),
+                    r.done ? Math.round((r.done - start) * 1000) : null,
+                    friends,
+                ]),
+            ),
+        );
     await page.close();
     return {
         friends,
