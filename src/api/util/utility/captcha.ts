@@ -17,23 +17,10 @@
 */
 
 import { Config } from "@spacebar/util";
+import { CaptchaRequiredResponse } from "@spacebar/schemas";
 
-export interface hcaptchaResponse {
+export interface CaptchaVerifyResult {
     success: boolean;
-    challenge_ts: string;
-    hostname: string;
-    credit: boolean;
-    "error-codes": string[];
-    score: number; // enterprise only
-    score_reason: string[]; // enterprise only
-}
-
-export interface recaptchaResponse {
-    success: boolean;
-    score: number; // between 0 - 1
-    action: string;
-    challenge_ts: string;
-    hostname: string;
     "error-codes"?: string[];
 }
 
@@ -42,11 +29,37 @@ const verifyEndpoints = {
     recaptcha: "https://www.google.com/recaptcha/api/siteverify",
 };
 
-export async function verifyCaptcha(response: string, ip?: string) {
-    const { security } = Config.get();
-    const { service, secret, sitekey } = security.captcha;
+export function captchaEnabled() {
+    const { enabled, service, sitekey, secret, instance } = Config.get().security.captcha;
+    if (!enabled || !service || !sitekey || !secret) return false;
+    return service !== "cap" || !!instance;
+}
 
-    if (!service || !secret || !sitekey) throw new Error("CAPTCHA is not configured correctly. https://docs.spacebar.chat/setup/server/security/captcha/");
+export function capEndpoint() {
+    const { service, sitekey, instance } = Config.get().security.captcha;
+    if (service !== "cap" || !sitekey || !instance) return null;
+    return `${instance.replace(/\/+$/, "")}/${encodeURIComponent(sitekey)}/`;
+}
+
+const verifyCap = async (response: string, secret: string): Promise<CaptchaVerifyResult> => {
+    const res = await fetch(`${capEndpoint()}siteverify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ secret, response }),
+        signal: AbortSignal.timeout(10_000),
+    }).catch(() => null);
+    if (!res) return { success: false, "error-codes": ["captcha-unreachable"] };
+    const body = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string; "error-codes"?: string[] };
+    if (body.success === true) return { success: true };
+    return { success: false, "error-codes": body["error-codes"] ?? [body.error ?? "invalid-input-response"] };
+};
+
+export async function verifyCaptcha(response: string, ip?: string): Promise<CaptchaVerifyResult> {
+    const { service, secret, sitekey } = Config.get().security.captcha;
+
+    if (!captchaEnabled() || !service || !secret || !sitekey) throw new Error("CAPTCHA is not configured correctly. https://docs.spacebar.chat/setup/server/security/captcha/");
+
+    if (service === "cap") return verifyCap(response, secret);
 
     const res = await fetch(verifyEndpoints[service], {
         method: "POST",
@@ -60,5 +73,14 @@ export async function verifyCaptcha(response: string, ip?: string) {
             (ip ? `&remoteip=${encodeURIComponent(ip)}` : ""),
     });
 
-    return (await res.json()) as hcaptchaResponse | recaptchaResponse;
+    return (await res.json()) as CaptchaVerifyResult;
+}
+
+export async function checkCaptcha(required: boolean, response: string | null | undefined, ip?: string): Promise<CaptchaRequiredResponse | null> {
+    if (!required || !captchaEnabled()) return null;
+    const { sitekey, service } = Config.get().security.captcha;
+    const challenge = (codes: string[]) => ({ captcha_key: codes, captcha_sitekey: sitekey!, captcha_service: service! });
+    if (!response) return challenge(["captcha-required"]);
+    const verify = await verifyCaptcha(response, ip);
+    return verify.success ? null : challenge(verify["error-codes"] ?? ["invalid-input-response"]);
 }

@@ -21,7 +21,7 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import crypto from "node:crypto";
 import { ILike, MoreThan } from "typeorm";
-import { verifyCaptcha } from "@spacebar/api/util";
+import { checkCaptcha } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
 import { Invite, User, ValidRegistrationToken } from "@spacebar/database";
 import { Config, FieldErrors, generateToken, IpDataClient, AbuseIpDbClient } from "@spacebar/util";
@@ -59,7 +59,7 @@ router.post(
         };
 
         const body = req.body as RegisterSchema;
-        const { register, security, limits } = Config.get();
+        const { register, limits } = Config.get();
         const ip = req.ip!;
 
         // Reg tokens
@@ -109,25 +109,8 @@ router.post(
             });
         }
 
-        if (!regTokenUsed && register.requireCaptcha && security.captcha.enabled) {
-            const { sitekey, service } = security.captcha;
-            if (!body.captcha_key) {
-                return res?.status(400).json({
-                    captcha_key: ["captcha-required"],
-                    captcha_sitekey: sitekey,
-                    captcha_service: service,
-                });
-            }
-
-            const verify = await verifyCaptcha(body.captcha_key, ip);
-            if (!verify.success) {
-                return res.status(400).json({
-                    captcha_key: verify["error-codes"],
-                    captcha_sitekey: sitekey,
-                    captcha_service: service,
-                });
-            }
-        }
+        const captcha = await checkCaptcha(!regTokenUsed && register.requireCaptcha, body.captcha_key, ip);
+        if (captcha) return res.status(400).json(captcha);
 
         if (!regTokenUsed && !register.allowMultipleAccounts) {
             // TODO: check if fingerprint was eligible generated
@@ -262,24 +245,9 @@ router.post(
 
         logTrace("Email checks");
 
-        if (register.dateOfBirth.required && !body.date_of_birth) {
-            throw FieldErrors({
-                date_of_birth: {
-                    code: "BASE_TYPE_REQUIRED",
-                    message: req.t("common:field.BASE_TYPE_REQUIRED"),
-                },
-            });
-        } else if (register.dateOfBirth.required && register.dateOfBirth.minimum) {
-            const minimum = new Date();
-            minimum.setFullYear(minimum.getFullYear() - register.dateOfBirth.minimum);
-
-            let parsedDob;
-            try {
-                parsedDob = new Date(body.date_of_birth as Date);
-                if (isNaN(parsedDob.getTime())) {
-                    throw new Error("Invalid date");
-                }
-            } catch (e) {
+        if (body.date_of_birth) {
+            const parsedDob = new Date(body.date_of_birth);
+            if (Number.isNaN(parsedDob.getTime())) {
                 throw FieldErrors({
                     date_of_birth: {
                         code: "DATE_OF_BIRTH_INVALID",
@@ -288,7 +256,8 @@ router.post(
                 });
             }
 
-            // higher is younger
+            const minimum = new Date();
+            minimum.setFullYear(minimum.getFullYear() - register.dateOfBirth.minimum);
             if (parsedDob > minimum) {
                 throw FieldErrors({
                     date_of_birth: {

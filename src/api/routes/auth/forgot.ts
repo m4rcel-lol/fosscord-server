@@ -17,7 +17,7 @@
 */
 
 import { Request, Response, Router } from "express";
-import { verifyCaptcha } from "@spacebar/api/util";
+import { checkCaptcha } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
 import { User } from "@spacebar/database";
 import { Config, Email, FieldErrors } from "@spacebar/util";
@@ -44,29 +44,11 @@ router.post(
 
         const config = Config.get();
 
-        if (config.passwordReset.requireCaptcha && config.security.captcha.enabled) {
-            const { sitekey, service } = config.security.captcha;
-            if (!captcha_key) {
-                return res.status(400).json({
-                    captcha_key: ["captcha-required"],
-                    captcha_sitekey: sitekey,
-                    captcha_service: service,
-                });
-            }
-
-            const ip = req.ip;
-            const verify = await verifyCaptcha(captcha_key, ip);
-            if (!verify.success) {
-                return res.status(400).json({
-                    captcha_key: verify["error-codes"],
-                    captcha_sitekey: sitekey,
-                    captcha_service: service,
-                });
-            }
-        }
+        const captcha = await checkCaptcha(config.passwordReset.requireCaptcha, captcha_key, req.ip);
+        if (captcha) return res.status(400).json(captcha);
 
         const user = await User.findOne({
-            where: [{ phone: login }, { email: login }],
+            where: User.loginWhere(login),
             select: { username: true, discriminator: true, id: true, email: true, deleted: true },
         });
 

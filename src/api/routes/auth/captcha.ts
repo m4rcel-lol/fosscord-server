@@ -17,7 +17,8 @@
 */
 
 import { route } from "@spacebar/api/middlewares";
-import { IpDataClient } from "@spacebar/util";
+import { capEndpoint, captchaEnabled } from "@spacebar/api/util";
+import { Config } from "@spacebar/util";
 import { Request, Response, Router } from "express";
 const router = Router({ mergeParams: true });
 
@@ -26,19 +27,22 @@ router.get(
     route({
         responses: {
             200: {
-                body: "LocationMetadataResponse",
+                body: "CaptchaConfigResponse",
             },
         },
+        spacebarOnly: true,
         authentication: "never",
     }),
-    async (req: Request, res: Response) => {
-        //TODO
-        //Note: It's most likely related to legal. At the moment Discord hasn't finished this too
-        const country_code = (await IpDataClient.getIpInfo(req.ip!))?.country_code;
+    (req: Request, res: Response) => {
+        const { security, register, login, passwordReset } = Config.get();
+        if (!captchaEnabled()) return res.json({ service: null, sitekey: null, endpoint: null, register: false, login: false, password_reset: false });
         res.json({
-            consent_required: false,
-            country_code: country_code ?? "US",
-            promotional_email_opt_in: { required: false, pre_checked: false },
+            service: security.captcha.service,
+            sitekey: security.captcha.sitekey,
+            endpoint: capEndpoint(),
+            register: register.requireCaptcha,
+            login: login.requireCaptcha,
+            password_reset: passwordReset.requireCaptcha,
         });
     },
 );

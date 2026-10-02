@@ -17,7 +17,7 @@
 */
 
 import { Request } from "express";
-import { AfterLoad, Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, OneToOne, RelationId } from "typeorm";
+import { AfterLoad, Column, Entity, FindOptionsWhere, ILike, Index, JoinColumn, ManyToOne, OneToMany, OneToOne, RelationId } from "typeorm";
 import { Config, Email, FieldErrors, Snowflake } from "@spacebar/util";
 import { Stopwatch, trimSpecial, Random } from "@spacebar/extensions";
 import { BaseClass } from "./BaseClass";
@@ -374,6 +374,11 @@ export class User extends BaseClass {
 
     static isValidPomeloUsername(username: string) {
         return /^[a-z0-9_.]{2,32}$/i.test(username) && !username.includes("..");
+    }
+
+    static loginWhere(login: string): FindOptionsWhere<User>[] {
+        const tag = login.match(/^(.+)#(\d{4})$/);
+        return [{ phone: login }, { email: login }, { username: ILike((tag?.[1] ?? login).replace(/[\\%_]/g, "\\$&")), discriminator: tag?.[2] ?? "0", bot: false }];
     }
 
     static async isUsernameTaken(username: string, exceptUserId?: string) {

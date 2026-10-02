@@ -18,7 +18,8 @@
 
 export class CaptchaConfiguration {
     enabled: boolean = false;
-    service: "recaptcha" | "hcaptcha" | null = null; // TODO: hcaptcha, custom
+    service: "recaptcha" | "hcaptcha" | "cap" | null = null;
     sitekey: string | null = null;
     secret: string | null = null;
+    instance: string | null = null;
 }
