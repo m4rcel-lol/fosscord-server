@@ -439,8 +439,8 @@ export class Member extends BaseClassWithoutId {
         const user = await User.getPublicUser(user_id);
         logTrace("Get user");
 
+        await newMember.save();
         await Promise.all([
-            newMember.save(), // TODO: can we somehow insert the roles manually? We have no entity for this... Would skip a few select's
             Guild.increment({ id: guild_id }, "member_count", 1),
             emitEvent({
                 event: "GUILD_MEMBER_ADD",

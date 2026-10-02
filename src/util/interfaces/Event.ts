@@ -188,7 +188,7 @@ export interface ChannelRecipientRemoveEvent extends Event {
 export interface GuildCreateEvent extends Event {
     event: "GUILD_CREATE";
     data: IReadyGuildDTO & {
-        joined_at: Date;
+        joined_at: Date | null;
         // TODO: add them to guild
         guild_scheduled_events: never[];
         guild_hashes: unknown;
