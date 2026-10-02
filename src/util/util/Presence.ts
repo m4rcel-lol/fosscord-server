@@ -101,6 +101,47 @@ export function getClientPlatform(properties?: { browser?: string; $browser?: st
     return "web";
 }
 
+const ActivityKeys = [
+    "name",
+    "type",
+    "url",
+    "created_at",
+    "timestamps",
+    "application_id",
+    "parent_application_id",
+    "details",
+    "details_url",
+    "state",
+    "state_url",
+    "emoji",
+    "party",
+    "assets",
+    "secrets",
+    "instance",
+    "flags",
+    "id",
+    "sync_id",
+    "metadata",
+    "session_id",
+    "platform",
+    "supported_platforms",
+    "status_display_type",
+    "buttons",
+];
+
+export function sanitizeActivities(activities: unknown, previous: Activity[] = []): Activity[] {
+    if (!Array.isArray(activities)) return [];
+    return activities
+        .filter((x): x is Record<string, unknown> => !!x && typeof x === "object" && typeof x.name === "string" && Number.isInteger(Number(x.type)))
+        .slice(0, 10)
+        .map((x) => {
+            const activity = Object.fromEntries(ActivityKeys.filter((key) => x[key] !== undefined).map((key) => [key, x[key]]));
+            activity.type = Number(activity.type);
+            activity.created_at ??= previous.find((p) => p.type === activity.type && p.name === activity.name)?.created_at ?? Date.now();
+            return activity as unknown as Activity;
+        });
+}
+
 export function isSessionConnected(session: PresenceSession, now = Date.now()) {
     if (!session.status || session.status === "offline") return false;
     return (session.last_seen?.getTime() ?? 0) > now - PRESENCE_STALE_AFTER_MS;

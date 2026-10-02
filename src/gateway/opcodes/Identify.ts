@@ -42,6 +42,7 @@ import {
 import {
     Activity,
     broadcastPresence,
+    sanitizeActivities,
     getClientPlatform,
     getConnectedSessions,
     getUserPresences,
@@ -327,7 +328,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     const customStatusActive =
         customStatus && (customStatus.text || customStatus.emojiName) && (!Number(customStatus.expiresAtMs) || Number(customStatus.expiresAtMs) > Date.now());
     this.session.activities =
-        identify.presence?.activities ??
+        (identify.presence?.activities ? sanitizeActivities(identify.presence.activities) : undefined) ??
         (customStatusActive
             ? [
                   {
@@ -337,7 +338,6 @@ export async function onIdentify(this: WebSocket, data: Payload) {
                       emoji: customStatus.emojiName
                           ? { name: customStatus.emojiName, id: Number(customStatus.emojiId) ? String(customStatus.emojiId) : undefined, animated: false }
                           : undefined,
-                      flags: "0",
                   } as Activity,
               ]
             : []);
