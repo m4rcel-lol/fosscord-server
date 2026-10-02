@@ -241,6 +241,7 @@ router.get(
 );
 
 const isMessageRequest = async (channelId: string, recipientId: string, senderId: string) => {
+    if (recipientId === senderId) return false;
     const friends = await Relationship.exists({ where: { from_id: recipientId, to_id: senderId, type: RelationshipType.FRIEND } });
     if (friends) return false;
     return !(await Message.exists({ where: { channel_id: channelId, author_id: recipientId } }));
