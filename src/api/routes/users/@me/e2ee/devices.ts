@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Request, Response, Router } from "express";
+import { NextFunction, Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
 import {
@@ -37,6 +37,15 @@ import { emitEvent, Event } from "@spacebar/util";
 
 const router: Router = Router({ mergeParams: true });
 
+const registrationLimit = e2eeRateLimit("e2ee_devices", 20, 3600);
+const updateLimit = e2eeRateLimit("e2ee_device_updates", 60, 3600);
+
+const limitNewDevices = async (req: Request, res: Response, next: NextFunction) => {
+    const deviceId = (req.body as { device_id?: unknown } | undefined)?.device_id;
+    const known = typeof deviceId === "string" && (await E2eeDevice.exists({ where: { id: deviceId, user_id: req.user_id } }));
+    return (known ? updateLimit : registrationLimit)(req, res, next);
+};
+
 const checkPrekey = (deviceId: string, signingKey: string, prekey: E2eePrekeySchema) => {
     if (!Number.isInteger(prekey.id) || prekey.id < 0 || !decodeKey(prekey.public_key, 32)) throw E2eeErrors.INVALID_SIGNATURE;
     if (!verifyEd25519(signingKey, e2eePrekeyMessage(deviceId, prekey.id, prekey.public_key), prekey.signature)) throw E2eeErrors.INVALID_SIGNATURE;
@@ -55,7 +64,7 @@ router.get(
 
 router.post(
     "/",
-    e2eeRateLimit("e2ee_devices", 10, 3600),
+    limitNewDevices,
     route({
         spacebarOnly: true,
         requestBody: "E2eeDeviceCreateSchema",
@@ -117,6 +126,7 @@ router.put(
 
 router.delete(
     "/:device_id",
+    e2eeRateLimit("e2ee_device_remove", 20, 600),
     route({
         spacebarOnly: true,
         responses: { 204: {}, 404: { body: "APIErrorResponse" } },
