@@ -40,6 +40,10 @@ const recurseJsonReplace = (json: any) => {
 
 export async function Send(target: WebSocket, data: Payload) {
     const socket = resolveSocket(target);
+    if (socket.pendingDispatches && data.op === 0 && data.t !== "READY" && data.t !== "READY_SUPPLEMENTAL" && data.t !== "GUILD_CREATE") {
+        socket.pendingDispatches.push(data);
+        return;
+    }
     if (socket.readyState !== 1 && data.op === 0 && bufferForResume(socket, data)) return;
     rememberDispatch(socket, data);
     if (process.env.WS_VERBOSE) console.log(`[Websocket] Outgoing message: ${JSON.stringify(data)}`);

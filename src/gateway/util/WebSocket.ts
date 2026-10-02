@@ -59,5 +59,6 @@ export interface WebSocket extends WS {
     resumeBuffer?: Payload[];
     replayBuffer?: Payload[];
     resumeTimer?: NodeJS.Timeout;
+    pendingDispatches?: Payload[];
     member_lists?: Record<string, { channel_id: string; ranges: [number, number][]; timer?: NodeJS.Timeout }>;
 }
