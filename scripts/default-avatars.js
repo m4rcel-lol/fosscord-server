@@ -66,7 +66,4 @@ const main = async () => {
     console.log(`[default-avatars] wrote ${DEFAULT_AVATAR_COLORS.length} avatars from ${path.relative(ROOT, icon)}`);
 };
 
-main().catch((error) => {
-    console.error("[default-avatars]", error);
-    process.exitCode = 1;
-});
+main().catch((error) => console.warn("[default-avatars] could not draw the avatars, the CDN will draw them as SVG instead:", error));
