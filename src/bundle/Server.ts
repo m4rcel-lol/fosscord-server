@@ -17,6 +17,8 @@
 */
 
 import http from "node:http";
+import http2 from "node:http2";
+import net from "node:net";
 import fs from "node:fs";
 import cluster from "node:cluster";
 import morgan from "morgan";
@@ -77,6 +79,39 @@ async function main() {
     }
 
     await new Promise((resolve) => void server.listen({ port }, () => resolve(undefined)));
+    const httpsPort = Number(process.env.HTTPS_PORT) || port;
+    if (process.env.TLS_CERT && process.env.TLS_KEY) {
+        const bridge = (expressProto: object, nodeProto: object) =>
+            Object.create(Object.create(nodeProto, Object.getOwnPropertyDescriptors(Object.getPrototypeOf(expressProto))), Object.getOwnPropertyDescriptors(expressProto));
+        const http2App = Object.create(app, {
+            request: { value: bridge(app.request, http2.Http2ServerRequest.prototype) },
+            response: { value: bridge(app.response, http2.Http2ServerResponse.prototype) },
+        });
+        const secure = http2.createSecureServer({ cert: fs.readFileSync(process.env.TLS_CERT), key: fs.readFileSync(process.env.TLS_KEY), allowHTTP1: true });
+        secure.on("request", (req: http2.Http2ServerRequest, res: http2.Http2ServerResponse) => {
+            if (req.httpVersionMajor !== 2) return app(req as unknown as http.IncomingMessage, res as unknown as http.ServerResponse);
+            req.headers.host ??= req.headers[":authority"];
+            (app as unknown as { handle: (this: object, req: unknown, res: unknown) => void }).handle.call(http2App, req, res);
+        });
+        secure.on("upgrade", (req, socket, head) => server.emit("upgrade", req, socket, head));
+
+        if (httpsPort === port) {
+            const plain = server.listeners("connection")[0] as (socket: net.Socket) => void;
+            server.removeAllListeners("connection");
+            server.on("connection", (socket: net.Socket) => {
+                socket.setTimeout(10000, () => socket.destroy());
+                socket.once("data", (head: Buffer) => {
+                    socket.setTimeout(0);
+                    socket.pause();
+                    socket.unshift(head);
+                    if (head[0] === 0x16) secure.emit("connection", socket);
+                    else plain.call(server, socket);
+                    process.nextTick(() => socket.resume());
+                });
+            });
+        } else await new Promise((resolve) => void secure.listen({ port: httpsPort }, () => resolve(undefined)));
+        console.log(`[Server] ${green(`Serving HTTPS with HTTP/2 on port ${bold(httpsPort)}`)}`);
+    }
     await Promise.all([api.start(), cdn.start(), gateway.start(), webrtc.start()]);
     TestClient(app);
 
