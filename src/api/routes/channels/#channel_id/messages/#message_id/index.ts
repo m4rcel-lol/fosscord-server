@@ -279,8 +279,15 @@ router.get(
         const message = await Message.findOneOrFail({
             where: { id: message_id, channel_id },
             relations: {
-                attachments: true,
                 author: true,
+                webhook: true,
+                application: true,
+                mentions: true,
+                mention_roles: true,
+                mention_channels: true,
+                sticker_items: true,
+                attachments: true,
+                thread: { recipients: { user: true } },
             },
         });
 
