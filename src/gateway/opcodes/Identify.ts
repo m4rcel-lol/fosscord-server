@@ -453,6 +453,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
             .map((x) => ({ user: x.to.toPublicUser(), ...friendPresenceMap.get(x.to_id)! })),
     );
 
+    const guildPresenceMembersByGuild = arrayGroupBy(guildPresenceMembers, (m) => m.guild_id);
     const allThreads = allThreadsRaw.filter(({ thread_metadata }) => thread_metadata?.archived === false);
     const threadMemberMap = new Map(threadMembers.map((member) => [member.id, member] as const));
 
@@ -592,7 +593,11 @@ export async function onIdentify(this: WebSocket, data: Payload) {
                 };
             }),
             guild_scheduled_events: [],
-            presences: [],
+            presences: prioritizedReady
+                ? []
+                : (guildPresenceMembersByGuild.get(member.guild_id) ?? [])
+                      .filter((m) => guildPresenceMap.has(m.id))
+                      .map((m) => ({ user: { id: m.id }, ...guildPresenceMap.get(m.id)! })),
         };
 
         if (user.bot) {
@@ -904,7 +909,6 @@ export async function onIdentify(this: WebSocket, data: Payload) {
         };
     });
 
-    const guildPresenceMembersByGuild = arrayGroupBy(guildPresenceMembers, (m) => m.guild_id);
     const supplementalGuildMembers = guilds.map((guild) =>
         (guildPresenceMembersByGuild.get(guild.id) ?? [])
             .filter((m) => guildPresenceMap.has(m.id))
