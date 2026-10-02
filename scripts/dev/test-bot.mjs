@@ -98,6 +98,7 @@ const buttonsMessage = (count = 0) => ({
                 },
             ],
         },
+        { type: 1, components: [{ type: 2, style: 2, label: "Rename", custom_id: "rename", emoji: { name: "✏️" } }] },
     ],
 });
 
@@ -216,9 +217,18 @@ const onInteraction = async (i) => {
             const names = Object.values({ ...i.data.resolved?.users, ...i.data.resolved?.roles, ...i.data.resolved?.channels }).map((x) => x.username ?? x.name);
             return respond(i, { type: 4, data: { content: `${id}: ${names.join(", ")}`, flags: 64 } });
         }
+        if (id === "rename")
+            return respond(i, {
+                type: 9,
+                data: { custom_id: "rename_modal", title: "Rename", components: [{ type: 18, label: "New text", component: { type: 4, custom_id: "text", style: 1, value: i.message.content } }] },
+            });
         if (id === "select") return respond(i, { type: 4, data: { content: `you picked ${i.data.values.join(", ")}`, flags: 64 } });
         if (id === "v2press") return respond(i, { type: 4, data: { content: "v2 button pressed", flags: 64 } });
         return respond(i, { type: 6 });
+    }
+    if (i.type === 5 && i.data.custom_id === "rename_modal") {
+        const text = i.data.components[0].component.value;
+        return respond(i, { type: 7, data: { content: text } });
     }
     if (i.type === 5) {
         const fields = Object.fromEntries(i.data.components.flatMap((r) => r.components ?? [r.component]).map((c) => [c.custom_id, c.value]));
