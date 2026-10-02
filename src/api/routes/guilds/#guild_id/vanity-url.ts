@@ -21,7 +21,6 @@ import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
 import { Channel, Guild, Invite } from "@spacebar/database";
 import { ChannelType, VanityUrlSchema } from "@spacebar/schemas";
-import { emitEvent, GuildUpdateEvent } from "@spacebar/util";
 
 const router = Router({ mergeParams: true });
 
@@ -121,7 +120,7 @@ router.patch(
 
         guild.vanity_url_code = code || null;
         await guild.save();
-        await emitEvent({ event: "GUILD_UPDATE", data: guild.toJSON() as unknown as GuildUpdateEvent["data"], guild_id } satisfies GuildUpdateEvent);
+        await Guild.emitUpdate(guild_id);
 
         return res.json({ code: code || null });
     },

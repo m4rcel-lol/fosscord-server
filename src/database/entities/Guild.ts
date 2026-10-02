@@ -18,7 +18,8 @@
 
 import { AfterLoad, Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId } from "typeorm";
 import { arrayRemove } from "@spacebar/extensions";
-import { Config, handleFile, Snowflake } from "@spacebar/util";
+import { Config, emitEvent, handleFile, Snowflake } from "@spacebar/util";
+import { GuildUpdateEvent } from "../../util/interfaces/Event";
 import {
     ChannelType,
     DiscoverableGuild,
@@ -599,6 +600,11 @@ export class Guild extends BaseClass {
         guild.channel_ordering.splice(position, 0, channel_id);
         await Guild.update({ id: guild_id }, { channel_ordering: guild.channel_ordering });
         return position;
+    }
+
+    static async emitUpdate(guild_id: string) {
+        const guild = await Guild.findOneOrFail({ where: { id: guild_id }, relations: { emojis: true, roles: true, stickers: true } });
+        await emitEvent({ event: "GUILD_UPDATE", data: guild.toJSON() as unknown as GuildUpdateEvent["data"], guild_id } satisfies GuildUpdateEvent);
     }
 
     toJSON(): Guild {

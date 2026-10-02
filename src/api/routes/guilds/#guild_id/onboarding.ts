@@ -19,7 +19,6 @@
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { Guild, Member } from "@spacebar/database";
-import { emitEvent, GuildUpdateEvent } from "@spacebar/util";
 import { GuildOnboarding } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
@@ -70,7 +69,7 @@ router.put("/", route({ permission: "MANAGE_GUILD" }), async (req: Request, res:
     guild.features = [...features];
     await guild.save();
 
-    if (featuresChanged) await emitEvent({ event: "GUILD_UPDATE", data: guild.toJSON() as unknown as GuildUpdateEvent["data"], guild_id } satisfies GuildUpdateEvent);
+    if (featuresChanged) await Guild.emitUpdate(guild_id);
 
     res.json(onboarding);
 });
