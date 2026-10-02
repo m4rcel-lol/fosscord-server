@@ -1,0 +1,1025 @@
+[
+ {
+  "screen": "Voice panel / voice channel",
+  "title": "Voice never connects: the RTC socket goes to wss://127.0.0.1:3004 and nothing listens there",
+  "severity": "broken",
+  "steps": "1. Run scripts/dev/worktree-setup.sh 3145 <db>. 2. Log in as tester and open Test Guild. 3. Create a voice channel 'General' (type 2). 4. Click it.",
+  "observed": "The voice panel shows 'Connecting' (yellow), then flips to 'Disconnected' (red), and the client keeps retrying. The console shows: WebSocket connection to 'wss://127.0.0.1:3004/?v=9' failed. VOICE_SERVER_UPDATE carries endpoint \"127.0.0.1:3004\". server.log shows '[WebRTC] Failed to import undefined: No library configured in .env' and '[WebRTC] WEBRTC disabled'. Nothing listens on 3004 or on WRTC_WS_PORT (4145). The client then sends science events voice_connection_socket_failure and voice_disconnect.",
+  "expected": "The panel should reach 'Voice Connected' with a working RTC connection, as in Discord.",
+  "evidence": "Gateway frames: VOICE_SERVER_UPDATE {\"token\":\"42f4102890e79f17\",\"guild_id\":\"1555568719667658893\",\"endpoint\":\"127.0.0.1:3004\"}. The client hardcodes the protocol with `let to=/^https/.test(\"https:\")?\"wss:\":\"ws:\"` (web.ea428454da038edc.js), so it always uses wss://, even on an http dev instance.",
+  "suspected_cause": "There are three separate problems. First, worktree-setup.sh never sets WRTC_LIBRARY, and @spacebarchat/pion-webrtc is not installed in node_modules, so src/webrtc/util/MediaServer.ts disables WebRTC, yet src/gateway/opcodes/VoiceStateUpdate.ts still sends VOICE_SERVER_UPDATE. Second, the default region endpoint in src/util/config/types/RegionConfiguration.ts is hardcoded to 127.0.0.1:3004 and ignores WRTC_WS_PORT (src/bundle/Server.ts). Third, the client always uses wss://, so a plain ws voice server would also fail unless there is TLS or a client patch in assets/client_patches."
+ },
+ {
+  "screen": "Login (QR code)",
+  "title": "QR code on /login never appears: /remote-auth is answered by the normal gateway",
+  "severity": "broken",
+  "steps": "1. Log out. 2. Open /login. 3. Wait on the right-hand 'Log in with QR Code' panel.",
+  "observed": "The QR area shows a spinner forever. The client opens ws://fosscord.localhost:3145/remote-auth/?v=2 and receives the main gateway Hello {\"op\":10,\"d\":{\"heartbeat_interval\":30000}} instead of the remote-auth hello. The client logs 'received unsupported message', the socket closes with code 4002, and the client logs 'Could not complete Remote Auth login, trying to restart with a new Remote Auth session.' This loops for as long as the page is open.",
+  "expected": "The remote-auth protocol should run (hello, init with encoded_public_key, nonce_proof, pending_remote_init with fingerprint) and render a QR code, or the QR panel should be hidden.",
+  "suspected_cause": "src/bundle/TestClient.ts sets REMOTE_AUTH_ENDPOINT to ws(s)://host/remote-auth, but the server has no remote-auth handler. src/gateway/Server.ts accepts any path and speaks the normal gateway protocol."
+ },
+ {
+  "screen": "Reset password",
+  "title": "Password reset cannot succeed: /auth/reset rejects the client's 'source' field",
+  "severity": "broken",
+  "steps": "1. Open /reset#token=<any token>. 2. Enter a new password and click Change Password.",
+  "observed": "POST /api/v9/auth/reset with body {\"token\":\"...\",\"password\":\"...\",\"source\":\"/reset\"} returns 400 {\"code\":50035,\"errors\":{\"\":{\"_errors\":[{\"message\":\"must NOT have additional properties\",\"code\":\"additionalProperties\"}]}}}. The form shows no error and stays on 'Change Your Password'. Schema validation rejects the request before the token is checked, so a valid token fails the same way.",
+  "expected": "The new password should be accepted, the user logged in, and invalid tokens shown as an error under the field.",
+  "evidence": "400 POST /api/v9/auth/reset",
+  "suspected_cause": "src/schemas/uncategorised/PasswordResetSchema.ts only has password and token. It needs an optional source field, and the error shape needs to be one the form displays."
+ },
+ {
+  "screen": "Reset password",
+  "title": "Reset-password email links to /reset-password, but the client route is /reset",
+  "severity": "broken",
+  "steps": "1. Open the link format the server generates: /reset-password#token=x.",
+  "observed": "The client redirects /reset-password#token=... to /login, and the token is lost.",
+  "expected": "The emailed link should open the 'Change Your Password' form. Discord uses /reset#token=...",
+  "suspected_cause": "src/util/util/email/index.ts generateLink builds `${instanceUrl}/${dashedType}#token=`, which gives /reset-password for MailTypes.resetPassword. It also uses api.endpointPublic minus /api as the host."
+ },
+ {
+  "screen": "Login (forgot password)",
+  "title": "'Forgot your password?' shows no confirmation, and an empty email is silently accepted",
+  "severity": "wrong",
+  "steps": "1. On /login, type newbie3@fosscord.test into the email field. 2. Click 'Forgot your password?'. 3. Repeat with the email field empty.",
+  "observed": "Both cases return 204 POST /api/v9/auth/forgot with an empty body (with {\"login\":\"\"} and with a real email). No 'Instructions sent' modal opens and no error shows under an empty email field.",
+  "expected": "With a valid email, Discord opens a modal saying instructions were sent to <email>. With an empty or unknown login, it returns 400 with errors.login and the field shows the error.",
+  "evidence": "The client does `return d.h.dispatch({type:\"FORGOT_PASSWORD_SENT\"}),t.body.method`. With a 204 and no body this throws, the catch dispatches LOGIN_FAILURE, and the success modal never opens.",
+  "suspected_cause": "src/api/routes/auth/forgot.ts always returns sendStatus(204). It should return a JSON body the client can read (e.g. {\"method\": ...}) and validate that login is present."
+ },
+ {
+  "screen": "Logout",
+  "title": "Logging out does not invalidate the token",
+  "severity": "wrong",
+  "steps": "1. POST /api/v9/auth/login as newbie3 to get token T. 2. POST /api/v9/auth/logout with authorization T, body {\"provider\":null,\"voip_provider\":null} (returns 204). 3. GET /api/v9/users/@me with authorization T.",
+  "observed": "Step 3 returns 200 with the full user object. The session row is deleted, but the token keeps working. UI logout (Settings > Log Out > confirm) also only clears localStorage, so anyone holding the old token keeps access.",
+  "expected": "After logout the token should get 401 everywhere, including gateway identify.",
+  "suspected_cause": "src/util/util/Token.ts checkToken loads the Session by decoded.did but never rejects when it is missing (the `session ?? undefined` path), so tokens whose session was removed by src/api/routes/auth/logout.ts still validate."
+ },
+ {
+  "screen": "App load with invalid or expired token",
+  "title": "An invalid token leaves the client on the loading screen forever instead of returning to /login",
+  "severity": "broken",
+  "steps": "1. Set localStorage.token to \"garbage.token.value\" (or any token the server rejects). 2. Open /channels/@me.",
+  "observed": "The 'Did you know' loading screen stays forever. The gateway closes with code 4000 'Failed to decode token', and the client reconnects in a loop. REST GET /api/v9/users/@me returns 400 {\"code\":40001,...} instead of 401.",
+  "expected": "Discord closes the gateway with 4004 Authentication failed and REST returns 401. The client then logs out and shows /login.",
+  "evidence": "Node WebSocket identify with a bad token prints: close 4000 Failed to decode token.",
+  "suspected_cause": "src/gateway/opcodes/Identify.ts awaits checkToken(), which rejects (Token.ts line 148 `rejectAndLog(reject, 500, \"Failed to decode token\")`). The rejection becomes a generic 4000 close instead of CLOSECODES.Authentication_failed. The auth middleware in src/api/middlewares also answers 400 instead of 401 for code 40001."
+ },
+ {
+  "screen": "Voice channel list",
+  "title": "The voice channel timer next to the channel name shows 'NaN:NaN'",
+  "severity": "wrong",
+  "steps": "1. Join voice channel General in Test Guild, with a second user (friend) also connected via the gateway. 2. Look at the channel row in the sidebar.",
+  "observed": "The channel row shows 'NaN:NaN' where the elapsed call time should be.",
+  "expected": "It should show elapsed time since the call started, e.g. 00:42.",
+  "evidence": "The client converts the value with `function c(e){return new Date(e*l.A.Millis.SECOND).getTime()}`, so it expects unix seconds.",
+  "suspected_cause": "src/gateway/opcodes/RequestChannelInfo.ts (op 43, CHANNEL_INFO) sends voice_start_time as new Date().toISOString(). It should be a unix timestamp in seconds, taken from when the first user joined, not the time of the request."
+ },
+ {
+  "screen": "Voice panel (activities)",
+  "title": "'Start An Activity' shows 'Failed to fetch activities'",
+  "severity": "broken",
+  "steps": "1. Join a voice channel. 2. Click the activities (rocket/grid) button in the voice panel, or 'Choose Activity' in the call view.",
+  "observed": "The activity picker opens with only 'Failed to fetch activities'.",
+  "expected": "The activity shelf should list activities, or show a proper empty state.",
+  "evidence": "404 GET /api/v9/activities/shelf?guild_id=1555568719667658893",
+  "suspected_cause": "There is no /activities/shelf route under src/api/routes."
+ },
+ {
+  "screen": "Guild onboarding",
+  "title": "Guild onboarding is not implemented: GET and PUT /guilds/:id/onboarding return 404",
+  "severity": "broken",
+  "steps": "1. Make Test Guild a community server (PATCH features [\"COMMUNITY\"] with rules/public updates channels). 2. Open Server Settings > Onboarding. 3. Have a new account join via invite.",
+  "observed": "Opening server settings fires 404 GET /api/v9/guilds/<id>/onboarding and 404 GET /api/v9/guilds/<id>/new-member-welcome. PUT /api/v9/guilds/<id>/onboarding returns 404, so onboarding cannot be saved. New members joining a community guild never get the onboarding (prompts and default channels) flow.",
+  "expected": "Onboarding settings should load and save, and joining members should go through the onboarding questions as in Discord.",
+  "suspected_cause": "There is no onboarding.ts or new-member-welcome route in src/api/routes/guilds/#guild_id/."
+ },
+ {
+  "screen": "Login (passkey)",
+  "title": "Passkey login endpoints are missing, and every /login load throws an uncaught error",
+  "severity": "wrong",
+  "steps": "1. Open /login. 2. Click 'Or sign in with a passkey'.",
+  "observed": "Every /login load fires 404 POST /api/v9/auth/conditional/start, which surfaces as an uncaught page error 'HTTPResponseError: POST /auth/conditional/start [404]'. The passkey link fires 404 POST /api/v9/auth/passwordless/start and nothing else happens.",
+  "expected": "Either WebAuthn conditional or passwordless login should work, or the server should answer so that the client hides passkey sign-in without errors.",
+  "suspected_cause": "src/api/routes/auth/ has no conditional/ or passwordless/ routes."
+ },
+ {
+  "screen": "Instance root",
+  "title": "Opening the instance root '/' shows a white page with the word 'Online'",
+  "severity": "wrong",
+  "steps": "1. While logged out, open http://fosscord.localhost:3145/.",
+  "observed": "The page is a bare white document containing only 'Online'.",
+  "expected": "The root should open the client, redirecting to /login (or to /channels/@me when logged in), the way discord.com/app does.",
+  "suspected_cause": "src/gateway/Server.ts line 90: `this.app.get(\"/\", (req, res) => res.status(200).send(\"Online\"))` catches '/' because the gateway shares the port."
+ },
+ {
+  "screen": "Post-login (all screens)",
+  "title": "Games and non-games detectables load the SPA HTML and crash GameStore",
+  "severity": "wrong",
+  "steps": "1. Log in and open /channels/@me.",
+  "observed": "The client requests http://localhost:3145/detectables/games-v1.json and /detectables/non-games-v1.json. Both return 200 text/html (the index.html fallback). Two uncaught errors follow: 'TypeError: ... is not iterable at GAMES_DATABASE_UPDATE' and the same at NON_GAMES_DATABASE_UPDATE. There is also 404 GET /api/v9/games/detectable/exclusions and 'Failed to fetch games blocklist'.",
+  "expected": "JSON arrays, even empty ones, so the game stores load without errors.",
+  "suspected_cause": "The client builds `${location.protocol}//${CDN_HOST}/detectables/games-v1.json`, and the CDN/static server has no /detectables route. Separately, /games/detectable/exclusions is missing from src/api/routes."
+ },
+ {
+  "screen": "Post-login (all screens)",
+  "title": "Client still calls Discord's own hosts (status.discord.com, cdn.discordapp.com)",
+  "severity": "wrong",
+  "steps": "1. Log in and open /channels/@me with network logging.",
+  "observed": "The client requests https://status.discord.com/api/v2/scheduled-maintenances/upcoming.json, /scheduled-maintenances/active.json and /incidents/unresolved.json, plus https://cdn.discordapp.com/changelogs/config_0.json?x=N (blocked by CORS: 'Request has been terminated' page error), https://cdn.discordapp.com/bad-domains/current_revision.txt and https://cdn.discordapp.com/bad-domains/updated_hashes.json.",
+  "expected": "These should be served locally, or the endpoints rewritten, so a self-hosted instance makes no requests to discord.com hosts.",
+  "suspected_cause": "The status page and changelog/bad-domains URLs are hardcoded in the client and not overridden by GLOBAL_ENV in src/bundle/TestClient.ts. They need patches in assets/client_patches or local routes."
+ },
+ {
+  "screen": "First-run / home",
+  "title": "Quests and 'download the app' upsells are visible to new accounts",
+  "severity": "upsell",
+  "steps": "1. Register a new account through /register. 2. Look at the home screen. 3. Open Test Guild's #general.",
+  "observed": "The DM sidebar has a 'Quests' entry. The guild rail has a Download Apps button (down-arrow icon). The new-guild welcome checklist includes 'Download the Fosscord App' and 'Unlock perks for everyone with Boosts'. The guild channel list has 'Server Boosts' and the guild menu has 'Server Boost'. The composer shows 'Upgrade your friends! Gift them awesome chat perks with Premium.' The client also polls quests endpoints: 404 /api/v9/quests/@me, /quests/decision, /quests/get-decisions, plus /promotions and /users/@me/referrals/eligibility.",
+  "expected": "No Quests, no download-app prompts, no Nitro or Boost upsells.",
+  "suspected_cause": "assets/client_patches/41-hide-premium-upsells.js does not cover these surfaces, and the quests experiments are still enabled."
+ },
+ {
+  "screen": "Invite / join guild",
+  "title": "Invites are always created with temporary membership",
+  "severity": "wrong",
+  "steps": "1. As tester, POST /api/v9/channels/<general>/invites with {} or {\"temporary\":false}. 2. GET the invite.",
+  "observed": "The invite has \"temporary\": true.",
+  "expected": "temporary should default to false and respect the value the client sends ('Grant temporary membership' toggle).",
+  "suspected_cause": "src/api/routes/channels/#channel_id/invites.ts line 65: `temporary: body.temporary || true` is always true. It should be `body.temporary ?? false`."
+ },
+ {
+  "screen": "Invite / join guild",
+  "title": "Accepting an invite on /invite/<code> leaves a blank page",
+  "severity": "wrong",
+  "steps": "1. Log in as a brand-new user. 2. Open /invite/AnAGXG. 3. Click Accept Invite.",
+  "observed": "POST /api/v9/invites/AnAGXG returns 200 and the membership is created, but the page stays on /invite/AnAGXG with only the background and no card for more than 12 seconds. It never navigates into the guild. The invite card also shows only '2 Members' with no online count.",
+  "expected": "After accepting, Discord moves into the app at /channels/<guild>/<channel>. The card shows 'N Online • M Members'.",
+  "suspected_cause": "I didn't verify the cause. It is likely that the invite accept response is missing fields the client uses to transition (e.g. a guild object or new_member), or that the invite GET is missing approximate_presence_count."
+ },
+ {
+  "screen": "Global / every page load",
+  "title": "Detectable games database endpoints return the SPA HTML, so the client throws on every load",
+  "severity": "broken",
+  "steps": "1. Log in as tester and open /channels/@me.\n2. Watch page errors and network.",
+  "observed": "The client fetches http://localhost:3144/detectables/games-v1.json and /detectables/non-games-v1.json. Both return 200 with the index.html page. The client then throws twice on every load: \"TypeError: (... , t) is not iterable at GAMES_DATABASE_UPDATE\" and the same at NON_GAMES_DATABASE_UPDATE. It also logs \"[GamesActionCreators] Failed to fetch games blocklist\" because GET /api/v9/games/detectable/exclusions returns 404.",
+  "expected": "On Discord these return a JSON array of detectable games (an empty array is enough), with an ETag, and /games/detectable/exclusions returns a JSON list. The client should load without page errors.",
+  "evidence": "curl http://localhost:3144/detectables/games-v1.json prints '<!DOCTYPE html>...<title>Foss...'. Client code builds the URL as `${location.protocol}//${CDN_HOST}/detectables/games-v1.json`.",
+  "suspected_cause": "No /detectables/* route exists. src/bundle/TestClient.ts has a catch-all app.get('/{*splat}') that serves the HTML for any path except api|cdn|attachments|... A detectables route, or an exclusion in that regex plus a JSON handler, is missing. /games/detectable/exclusions has no route under src/api/routes/games/."
+ },
+ {
+  "screen": "Global / guild boost level",
+  "title": "Every guild reports premium_tier 0 and 0 boosts instead of behaving as boost level 3",
+  "severity": "wrong",
+  "steps": "1. Log in as tester.\n2. GET /api/v9/guilds/<Test Guild id>, or look at READY guilds[].properties.premium_tier.\n3. Open Test Guild in the client.",
+  "observed": "REST and READY both return premium_tier 0, premium_subscription_count 0 and features []. Because of this the client shows boost upsells: a 'Server Boosts' row at the top of the channel list, 'Unlock perks for everyone with Boosts' in the new-server checklist, and 'Server Boost' as the first item of the server header dropdown.",
+  "expected": "The project says every guild behaves as boost level 3 for free, so guilds should report premium_tier 3, with a matching boost count and the level-3 features if needed. Boost progress and 'Unlock with Boosting' surfaces should not appear.",
+  "evidence": "READY: [\"1555568684964049037\",...,\"Test Guild\", premium_tier 0]. GET /guilds/:id has \"premium_tier\": 0, \"premium_subscription_count\": 0.",
+  "suspected_cause": "src/database/entities/Guild.ts:399 creates guilds with premium_tier: 0. Lines 538 and 565 fall back to GuildPremiumTier.NONE. src/util/dtos/ReadyGuildDTO.ts:195 passes guild.premium_tier through unchanged."
+ },
+ {
+  "screen": "Discover / Explore servers",
+  "title": "Discover > Servers is stuck on loading skeletons forever on a fresh instance",
+  "severity": "broken",
+  "steps": "1. Fresh DB from worktree-setup.sh.\n2. Click the Discover (compass) button in the server list, or open /discovery/servers.\n3. Wait 10 s or more.",
+  "observed": "The main pane shows 9 grey skeleton cards that never resolve. GET /api/v9/discovery/categories returns []. GET /api/v9/discoverable-guilds returns total 0. After I inserted 5 rows into the categories table, the page rendered at once ('Find your community on Fosscord', category tabs, Featured Servers).",
+  "expected": "The Discover page renders its hero, category tabs and either featured servers or an empty state, as Discord does.",
+  "evidence": "psql: insert into categories (id,name,localizations,is_primary) values (1,'Gaming','{}',true),... made the page render.",
+  "suspected_cause": "src/api/routes/discovery/categories.ts returns Categories.find(), and the categories table has no seed rows on a fresh DB. The default discovery categories should be seeded by a migration or returned as a fallback."
+ },
+ {
+  "screen": "Discover / Explore servers",
+  "title": "Discover search returns 404 and always shows 'No results found'",
+  "severity": "broken",
+  "steps": "1. Make a guild discoverable (I set features {DISCOVERABLE,COMMUNITY} on 'Landing Club').\n2. Open /discovery/servers and confirm Landing Club is listed under Featured Servers.\n3. Type 'landing' in the Search box and press Enter.",
+  "observed": "The client shows 'Search results for \"landing\"', 'All 0', 'No results found'. The request GET /api/v9/discoverable-guilds/search?query=landing&offset=0&limit=12&with_counts=true returns 404 Endpoint not found.",
+  "expected": "Search returns the matching discoverable guilds. Landing Club should appear.",
+  "evidence": "404 GET /api/v9/discoverable-guilds/search?query=landing&offset=0&limit=12&with_counts=true",
+  "suspected_cause": "Only src/api/routes/discoverable-guilds.ts exists. There is no /discoverable-guilds/search route, which the client calls as GUILD_DISCOVERY_SEARCH."
+ },
+ {
+  "screen": "Discover / server preview",
+  "title": "Previewing a server from Discover joins it as a full member, and lurker mode is ignored",
+  "severity": "wrong",
+  "steps": "1. With Landing Club discoverable, open /discovery/servers.\n2. Click the Landing Club card.\n3. Reload and check the server list or GET /users/@me/guilds.",
+  "observed": "The client sends PUT /api/v9/guilds/<id>/members/@me?lurker=true&location=Guild%20Discovery. The server adds tester as a real member. The guild shows up in the server list with a normal composer and the welcome checklist, there is no preview banner or Join button, and it stays joined after reload.",
+  "expected": "Discord opens the guild in preview (lurker) mode with a 'You are currently in preview mode' bar and a Join button, and with the composer disabled. The guild is only added to the user's list when they press Join.",
+  "evidence": "GET /users/@me/guilds after the click includes \"Landing Club\".",
+  "suspected_cause": "src/api/routes/guilds/#guild_id/members/#member_id/index.ts router.put has '// TODO: Lurker mode' and always calls the normal join path. It ignores ?lurker=true."
+ },
+ {
+  "screen": "Create server modal",
+  "title": "Template channels are created in reverse order inside each category",
+  "severity": "wrong",
+  "steps": "1. Click 'Add a Server' > 'Gaming' > 'For me and my friends'.\n2. Name it and click Create.",
+  "observed": "The client POSTs channels in order: Text Channels(00) > general(01), clips-and-highlights(02), and Voice Channels > Lobby, Gaming. The created guild shows 'clips-and-highlights' above 'general', and 'Gaming' above 'Lobby'. The client opens clips-and-highlights as the landing channel.",
+  "expected": "Channel order matches the template: general, clips-and-highlights, then Lobby, Gaming. The server should open on #general.",
+  "evidence": "GET /guilds/<id>/channels returned Text Channels, clips-and-highlights, general, Voice Channels, Gaming, Lobby.",
+  "suspected_cause": "src/database/entities/Guild.ts createGuild calls Guild.insertChannelInOrder(guild.id, saved.id, parent_id ?? ...). With a string insertPoint the channel is spliced at indexOf(parent)+1, so each later child is inserted before the earlier siblings."
+ },
+ {
+  "screen": "Create server modal",
+  "title": "'Create My Own' builds only a bare #general with no categories or voice channel",
+  "severity": "wrong",
+  "steps": "1. Click 'Add a Server' > 'Create My Own' > 'For me and my friends'.\n2. Enter 'Scratch Server' and click Create.",
+  "observed": "The client sends {\"channels\":[],\"guild_template_code\":\"2TffvPucqHkN\"}. The server creates only one uncategorised #general text channel.",
+  "expected": "Discord's default template (2TffvPucqHkN) creates a 'Text Channels' category with #general and a 'Voice Channels' category with a General voice channel.",
+  "evidence": "GET /guilds/<id>/channels returned [[\"general\",0,false]].",
+  "suspected_cause": "src/api/routes/guilds/index.ts ignores guild_template_code. Guild.createGuild falls back to body.channels = [{id:'01',type:0,name:'general'}] when channels is empty."
+ },
+ {
+  "screen": "Global / auth",
+  "title": "An invalid or expired token leaves the client stuck on the loading splash instead of logging out",
+  "severity": "broken",
+  "steps": "1. Put a bad token in localStorage, e.g. token = \"MTU1NTU2ODY3NzA3NDU2MzE2OQ.garbage.token\".\n2. Open /channels/@me and wait 15 s.",
+  "observed": "The client shows the 'DID YOU KNOW' loading splash forever, followed by 'Connection problems? Let us know! Tweet Us / Server Status'. The gateway closes the socket with 4000 'Unsupported token algorithm: undefined', so the client keeps reconnecting. REST GET /api/v9/users/@me with a bad or missing token returns HTTP 400 with code 40001 instead of 401.",
+  "expected": "Discord closes the gateway with 4004 'Authentication failed' and REST returns 401 Unauthorized. The client then clears the token and redirects to /login.",
+  "evidence": "A node WebSocket identify with the bad token got CLOSE 4000 \"Unsupported token algorithm: undefined\". curl /api/v9/users/@me returned 400 {\"code\":40001,...}.",
+  "suspected_cause": "src/gateway/opcodes/Identify.ts awaits checkToken(), which rejects (src/util/util/Token.ts:156, rejectAndLog 400). The exception goes to the generic handler in src/gateway/events/Message.ts and closes with Unknown_error (4000) instead of reaching the CLOSECODES.Authentication_failed branch. DiscordApiErrors.UNAUTHORIZED in src/util/util/Constants.ts:741 uses the ApiError default httpStatus of 400 instead of 401."
+ },
+ {
+  "screen": "Server list badges",
+  "title": "DM unread badge in the server list disappears after reload",
+  "severity": "wrong",
+  "steps": "1. tester has the client open on /channels/@me.\n2. As friend, POST a message 'dm ping' in the tester/friend DM.\n3. The server list shows a DM pill for friend with '1 unread message'. Do not open the DM.\n4. Reload.",
+  "observed": "Before the reload the DM badge for friend shows in the server list. After the reload it is gone, and no ack request was sent. READY read_state has no entry for the DM channel 1555568677074563169, while private_channels[].last_message_id points at the new message.",
+  "expected": "Discord counts every DM message as a mention for the recipient. The DM avatar with a red count stays in the server list across reloads until the DM is read.",
+  "evidence": "READY read_state.entries had only the Test Guild channel and the Friend Club mention entry, with nothing for the DM channel.",
+  "suspected_cause": "src/api/util/handlers/Message.ts mention handling only increments read states for explicit mentions, roles and everyone. DM and group DM messages do not create or increment a read state with mention_count for the other recipients."
+ },
+ {
+  "screen": "App launcher (composer Apps button)",
+  "title": "App launcher opens empty because its backing endpoints are missing",
+  "severity": "wrong",
+  "steps": "1. Open any guild text channel, e.g. Scratch Server #general.\n2. Click the Apps (grid) button at the right of the composer.",
+  "observed": "The popout shows only 'Search Apps & Commands' and 'Go find some things to do in search!'. These requests fail with 404: GET /api/v9/users/@me/application-command-index, GET /api/v9/activities/shelf?guild_id=..., and GET /api/v9/application-directory-static/collections?surface=2&active_state=1&platform=4&locale=en-US&cache=true.",
+  "expected": "The app launcher lists the built-in activities shelf and app directory collections, or at least a correct empty state, without 404s.",
+  "evidence": "404 GET /api/v9/users/@me/application-command-index; 404 GET /api/v9/activities/shelf; 404 GET /api/v9/application-directory-static/collections",
+  "suspected_cause": "There are no routes for users/@me/application-command-index, activities/shelf or application-directory-static/collections under src/api/routes."
+ },
+ {
+  "screen": "What's new changelog modal",
+  "title": "Changelog config is fetched from cdn.discordapp.com and blocked by CORS on every load",
+  "severity": "broken",
+  "steps": "1. Open /channels/@me with the console open.",
+  "observed": "On every load the client requests https://cdn.discordapp.com/changelogs/config_0.json?x=N. CORS blocks it, and that causes a page error 'Request has been terminated ... Origin is not allowed by Access-Control-Allow-Origin'. Because of this the 'What's new' changelog modal can never load.",
+  "expected": "The changelog config and entries should be served locally, or the request should be stubbed so the modal works or stays hidden without errors.",
+  "evidence": "Access to XMLHttpRequest at 'https://cdn.discordapp.com/changelogs/config_0.json?x=3' from origin 'http://fosscord.localhost:3144' has been blocked by CORS policy",
+  "suspected_cause": "The client hardcodes the URL as `https://cdn.discordapp.com/changelogs/config_${e}.json` in fetchChangelogConfig. It needs a client patch in assets/client_patches, similar to 40-premium-settings.js, to point it at a local route."
+ },
+ {
+  "screen": "Global / external requests",
+  "title": "Client calls Discord-owned hosts on every load",
+  "severity": "wrong",
+  "steps": "1. Open /channels/@me and log every request whose origin is not fosscord.localhost:3144.",
+  "observed": "On every session the client requests: https://status.discord.com/api/v2/scheduled-maintenances/upcoming.json, .../scheduled-maintenances/active.json, .../incidents/unresolved.json, https://cdn.discordapp.com/bad-domains/current_revision.txt, https://cdn.discordapp.com/bad-domains/updated_hashes.json, https://cdn.discordapp.com/changelogs/config_0.json, and in guilds https://cdn.discordapp.com/assets/content/bc3217e772906510d881b75ebefea754b9c3ba903ddf6f994e46e5c5a85770a3.svg. The connecting splash also links 'Tweet Us' and 'Server Status' to Discord, and the Help (?) button opens https://support.discord.com/hc/en-us.",
+  "expected": "A self-hosted instance serves these locally or disables them, so the client does not contact Discord.",
+  "evidence": "EXTERNAL list captured in every probe run.",
+  "suspected_cause": "The hardcoded URLs in the client bundle are not rewritten by src/bundle/TestClient.ts or assets/client_patches."
+ },
+ {
+  "screen": "Quests surfaces",
+  "title": "Quests UI is still visible in several places, and the Quests page is a permanent skeleton",
+  "severity": "upsell",
+  "steps": "1. Open /channels/@me and look at the DM sidebar.\n2. Open Discover.\n3. Press Cmd+K and type 'Test'.\n4. Open /quest-home.",
+  "observed": "I found these quest surfaces: (a) a 'Quests' item in the DM sidebar under Friends; (b) a 'Quests' item in the Discover sidebar under Apps and Servers; (c) an 'Orbs Quests / Quests' result in the Cmd+K quick switcher; (d) /quest-home renders a 'Quests' header with grey skeletons that never load. The client also polls on every load: GET /api/v9/quests/@me, /quests/decision?placement=1, and /quests/get-decisions?placement=3, all 404.",
+  "expected": "The project spec says no Quests. All quest entry points should be hidden and the quest polling should stop or return empty.",
+  "evidence": "404 GET /api/v9/quests/@me; 404 GET /api/v9/quests/decision; 404 GET /api/v9/quests/get-decisions",
+  "suspected_cause": "assets/client_patches/41-hide-premium-upsells.js only hides the /store and /shop list items and 'Send a gift'. Nothing hides the quests entries."
+ },
+ {
+  "screen": "Download app surfaces",
+  "title": "Download-app upsells are still shown",
+  "severity": "upsell",
+  "steps": "1. Look at the server list.\n2. Click the download icon at its bottom.\n3. Create a new server and look at the welcome checklist.",
+  "observed": "I found these download surfaces: (a) a 'Download Apps' button (guildsnav___app-download-button) at the bottom of the server list; (b) clicking it opens a 'Download App / Get Fosscord at Home' modal with MacOS, Windows, Linux, Meta Quest, iOS and Android download buttons and a 'Get the public test build' link to https://discord.com/download#ptb-card, where the MacOS and Meta Quest cards have blank icons; (c) a 'Download the Fosscord App' item in every new guild's welcome checklist, seen in Scratch Server, Test Guild and Landing Club.",
+  "expected": "The project spec says no 'download the app' upsells. These should be hidden.",
+  "evidence": "Visible element: <div circleIconButton> aria-label 'Download Apps' at 16,385. Modal links: [\"https://discord.com/download#ptb-card\"]",
+  "suspected_cause": "No client patch hides these entries. assets/client_patches/41-hide-premium-upsells.js covers only store, shop and gift."
+ },
+ {
+  "screen": "Nitro / Boost upsell surfaces",
+  "title": "Nitro and Boost upsell surfaces still visible",
+  "severity": "upsell",
+  "steps": "1. Open Test Guild #general.\n2. Open the server header dropdown.\n3. Open /store and /shop directly.",
+  "observed": "I found these upsell surfaces: (a) a 'Server Boosts' row at the top of every guild's channel list; (b) 'Unlock perks for everyone with Boosts' in the guild welcome checklist; (c) 'Server Boost' as the first item in the server header dropdown; (d) a hidden 'Send a gift' composer button, still present, whose screen-reader text reads 'Upgrade your friends! Gift them awesome chat perks with Premium.'; (e) /store (Premium Home) is reachable by URL, shows 'Premium' and loads skeletons forever; (f) /shop is reachable by URL and renders a blank page titled 'Shop'. The DM sidebar 'nitro' and 'shop' list items are in the DOM but hidden by CSS. Guild pages also call GET /store/published-listings/skus, /guilds/:id/powerups and /guilds/:id/entitlements, which return 404 and throw HTTPResponseError page errors.",
+  "expected": "The project spec says no Nitro or Boost upsells, with users on premium_type 2 and guilds at level 3. These surfaces should not appear, and the store and powerups calls should not error.",
+  "evidence": "PAGEERR HTTPResponseError: GET /store/published-listings/skus [404]; PAGEERR HTTPResponseError: GET /guilds/xxx/powerups [404]",
+  "suspected_cause": "Most of these follow from guilds reporting premium_tier 0 (see that finding). assets/client_patches/41-hide-premium-upsells.js does not cover the boost row, the checklist item, the header menu item or the routes."
+ },
+ {
+  "screen": "Inbox",
+  "title": "Inbox requests content-inventory and gets 404",
+  "severity": "cosmetic",
+  "steps": "1. Click the Inbox icon at the top right.",
+  "observed": "The Inbox opens and the Unreads and Mentions tabs work: the mention 'hey @tester ping' in Friend Club shows. On first open it shows skeletons for several seconds, and GET /api/v9/content-inventory/users/@me?for_game_profile=false&feature=inbox returns 404 on every load.",
+  "expected": "Discord returns an empty content-inventory payload for the For You feed, without a 404.",
+  "evidence": "404 GET /api/v9/content-inventory/users/@me?for_game_profile=false&feature=inbox",
+  "suspected_cause": "No content-inventory route in src/api/routes."
+ },
+ {
+  "screen": "Global / every page load",
+  "title": "Recurring 404s on endpoints the client polls at startup",
+  "severity": "cosmetic",
+  "steps": "1. Open /channels/@me and look at server.log.",
+  "observed": "Every session gets 404 from: GET /api/v9/users/@me/referrals/eligibility, /promotions?locale=en-US&platform=0, /partner-sdk/storefront-config, /users/@me/survey?disable_auto_seen=true, POST /error-reporting-proxy/web, and POST /api/v9/guilds/:id/migrate-command-scope on every guild open. While logged out, the invite page also gets GET /api/v9/apex/experiments?surface=2 404. Quick switcher typing gets GET /api/v9/games/autocomplete?q=... 404.",
+  "expected": "The endpoints should return the empty or neutral payloads Discord returns, such as an empty list or 204.",
+  "evidence": "server.log counts: quests/@me 96, promotions 72, error-reporting-proxy 56, referrals/eligibility 56, partner-sdk/storefront-config 52.",
+  "suspected_cause": "Missing routes in src/api/routes."
+ },
+ {
+  "screen": "Server navigation",
+  "title": "Opening a guild by direct URL sends a lurker join for a guild the user already belongs to",
+  "severity": "cosmetic",
+  "steps": "1. As tester, who owns Scratch Server, open /channels/<Scratch Server id>/<general id> directly.",
+  "observed": "The client sends PUT /api/v9/guilds/<id>/members/@me?lurker=true {} on load, even for guilds the user owns or is a member of. I saw this for Test Guild and Scratch Server.",
+  "expected": "Discord only sends the lurker join for guilds the user is not in. A member opening a channel URL should not send it.",
+  "evidence": "MUTATIONS: \"PUT /api/v9/guilds/1555571628631454962/members/@me?lurker=true {}\"",
+  "suspected_cause": "I didn't verify this in the client. The client probably does not yet treat the user as a member when the route resolves, which may come from the READY guild or merged_members shape. The PUT handler in src/api/routes/guilds/#guild_id/members/#member_id/index.ts accepts it silently."
+ },
+ {
+  "screen": "Guild chat view, message list and member list (live updates)",
+  "title": "Other users' display name and avatar changes are not pushed live to guild members",
+  "severity": "wrong",
+  "steps": "1. tester has Test Guild #general open with the member list visible. 2. As friend, PATCH /api/v9/users/@me {global_name: 'Friendly Display'}. 3. Wait 3 s. 4. As friend, PATCH /api/v9/users/@me {avatar: <data URI of a red PNG>}. 5. Wait 3 s.",
+  "observed": "tester keeps showing 'friend' as the author name on friend's messages and in the member list, with the default avatar. The new name and avatar appear only once some other event carries friend's user object: a guild nick change (PATCH /guilds/:id/members/@me), friend's gateway reconnecting, or a page reload. After friend set nick 'FriendNick' and then cleared it, tester saw 'Friendly Display', but a later global_name change to 'Friendly Two' again stayed stale until friend reconnected.",
+  "expected": "In Discord, everyone who shares a guild with the user, or is friends with them, sees the new display name and avatar right away, both on existing messages and in the member list, because Discord dispatches GUILD_MEMBER_UPDATE with the new user object to each mutual guild and PRESENCE_UPDATE to friends.",
+  "evidence": "tester DOM after the global_name PATCH (200): [message-username] = ['tester','friend','friend']. After the avatar PATCH (200), the message avatars were still the default /assets/*.png. Everything updated only after the nick PATCH.",
+  "suspected_cause": "src/api/routes/users/@me/index.ts (around line 251) emits only USER_UPDATE to the user themself. It never emits GUILD_MEMBER_UPDATE to the user's guilds or PRESENCE_UPDATE carrying the new user to friends. Stale cached user objects could also explain the owner's 'everyone shown as tester' report, though that exact symptom did not reproduce."
+ },
+ {
+  "screen": "Guild chat view, channel header notification bell",
+  "title": "Channel notification override does not save (PATCH /users/@me/guilds/settings returns 404)",
+  "severity": "broken",
+  "steps": "1. In Test Guild #general, click the bell (Notification Settings) in the channel header. 2. Choose 'All Messages'. 3. Reload the page and open the bell menu again.",
+  "observed": "The client sends PATCH /api/v9/users/@me/guilds/settings, which returns 404 {\"message\":\"Endpoint not found\"}. The menu shows 'All Messages' checked until the reload. After the reload it is back to 'Use Server Default / Only @mentions'.",
+  "expected": "The per-channel override saves and survives a reload, as in Discord, where PATCH /users/@me/guilds/settings is the bulk endpoint taking {guilds: {<guild_id>: {channel_overrides: ...}}}.",
+  "evidence": "server.log: \"PATCH /api/v9/users/@me/guilds/settings HTTP/1.1\" 404 63. Only src/api/routes/users/@me/guilds/#guild_id/settings.ts exists.",
+  "suspected_cause": "There is no bulk route at src/api/routes/users/@me/guilds/settings.ts. The client has moved to the bulk endpoint."
+ },
+ {
+  "screen": "Guild chat view, file upload (text file preview)",
+  "title": "Freshly uploaded attachments are fetched before the files exist, and the text preview stays stuck on an error",
+  "severity": "wrong",
+  "steps": "1. In #general, attach red.png (128x128) and note.txt (23 bytes) in one message through the composer's file input. 2. Type 'two files' and press Enter. 3. Look at the message in the sender's own view.",
+  "observed": "The sender's text-file preview shows the raw JSON {\"code\":400,\"message\":\"Error: File not found\",\"request\":\"GET /attachments/.../note.txt?ex=...\"} in place of the file contents, and it stays that way until a reload. The image request also returned 400 at first. In friend's view the same image request failed with net::ERR_BLOCKED_BY_ORB because the 400 JSON body was served for an <img>. A few seconds later the identical signed URL returns 200.",
+  "expected": "The text file preview shows 'hello text file / line 2' right away. Attachment URLs in MESSAGE_CREATE and the POST response point to files that already exist.",
+  "evidence": "server.log: '[CDN] Warning: falling back to first file in dir for path .../files/attachments/<channel>/<att>/note.txt' followed by 'GET /attachments/<channel>/<att>/note.txt?ex=1a1021bcca7&... 400 222', and the same for red.png. The same URL later returns HTTP 200.",
+  "suspected_cause": "The message is created and dispatched while the cloud attachment contents are still being moved into files/attachments ('[Message/<id>/Attachments] Got MessageCreateCloudAttachment contents' is logged just before the 400s). The attachment copy in the message create path (src/api/util/handlers/Message.ts or the cloud attachment handler) needs to finish before the message is dispatched."
+ },
+ {
+  "screen": "Guild chat view, attachment serving",
+  "title": "Text attachments are served as application/octet-stream",
+  "severity": "cosmetic",
+  "steps": "1. Upload note.txt to #general. 2. curl -I the attachment URL from the message.",
+  "observed": "Content-Type: application/octet-stream for note.txt (png files are correctly image/png).",
+  "expected": "text/plain; charset=utf-8, as Discord's CDN serves it, so the browser previews and decodes the file correctly when opened directly.",
+  "evidence": "curl -i .../attachments/<channel>/<att>/note.txt -> Content-Type: application/octet-stream",
+  "suspected_cause": "CDN attachment route in src/cdn (attachments) does not set the type from the stored content_type or the extension for text files."
+ },
+ {
+  "screen": "Guild chat view, Forward modal",
+  "title": "Forward modal lists no destinations and cannot find the DM with friend",
+  "severity": "wrong",
+  "steps": "1. Right-click any message in #general and choose Forward. 2. Look at the list without typing. 3. Type 'fri', then 'Friendly'.",
+  "observed": "With an empty search the modal shows 'We searched far and wide. Unfortunately, no results were found.' Searching 'gen' finds #general, and forwarding to #general works. Searching 'fri' or 'Friendly' finds nothing, even though tester has an open DM with friend that shows as 'Friendly Two' under Direct Messages on the home screen.",
+  "expected": "As in Discord, the modal opens with recent destinations, including DMs and channels, and searching a friend's name or username shows the DM.",
+  "evidence": "GET /users/@me/channels returns the DM with a recipients entry missing global_name, with public_flags as the string \"0\" and an extra badge_ids:null: {\"avatar\":...,\"discriminator\":\"0\",\"id\":\"...\",\"public_flags\":\"0\",\"username\":\"friend\",\"badge_ids\":null}. I didn't verify which data source the modal reads.",
+  "suspected_cause": "The private channel recipient serialization (src/api/routes/users/@me/channels.ts or the Recipient/User public projection) is missing fields. Missing frecency data in user settings could also leave the default list empty."
+ },
+ {
+  "screen": "Guild chat view, GIF picker",
+  "title": "GIF picker opens to a completely blank panel",
+  "severity": "wrong",
+  "steps": "1. In #general, click the GIF button in the composer.",
+  "observed": "The panel shows only the 'Search Klipy' box and an empty area, with no Favorites tile, no trending categories and no message. Searching returns nothing either.",
+  "expected": "Discord shows Favorites plus trending GIF categories. If no provider is available, the picker should at least show its empty or error state, not a blank panel.",
+  "evidence": "GET /api/v9/gifs/trending?provider=klipy -> 200 {\"categories\":[],\"gifs\":[]}. GET /gifs/search?q=cat -> 200 []. Startup log: \"[GifProviderManager] Initialized 0 / 1 GIF providers... Ready with 0 available providers!\" because klipy has available: false.",
+  "suspected_cause": "No GIF provider is configured in this environment (the klipy key is missing), and the gifs routes return empty success responses instead of an error the client could show."
+ },
+ {
+  "screen": "Guild chat view, channel list and welcome header",
+  "title": "Boost and download upsells in the guild chat view, and Server Boosts opens a blank page",
+  "severity": "upsell",
+  "steps": "1. Open Test Guild #general as tester (owner) and scroll to the top of the channel. 2. Look at the channel list. 3. Click 'Server Boosts' in the channel list. 4. Open the same channel as friend (non-owner).",
+  "observed": "The welcome checklist has 'Download the Fosscord App' and 'Unlock perks for everyone with Boosts' cards. The channel list has a 'Server Boosts' entry above the channels, which navigates to /channels/<guild>/boosts and renders an empty dark page. friend also sees the 'Download the Fosscord App' card. The guild rail has a 'Download Apps' button.",
+  "expected": "No boost or download upsells, because every guild is already boost level 3. The 'Server Boosts' entry and the download and boost checklist cards should not appear.",
+  "evidence": "Page errors on every guild load: HTTPResponseError: GET /guilds/xxx/powerups [404], GET /store/published-listings/skus [404], and 404 GET /api/v9/guilds/:id/entitlements.",
+  "suspected_cause": "Guild feature flags or powerups and store endpoints are missing, so the client falls back to showing upsell entries. The client also needs the boosts channel-list entry and the checklist cards hidden."
+ },
+ {
+  "screen": "Guild chat view, user profile popout and full profile",
+  "title": "Nitro badge icon loads from cdn.discordapp.com and links to discord.com",
+  "severity": "cosmetic",
+  "steps": "1. In #general, click friend's name on a message to open the profile popout, then click the avatar to open the full profile.",
+  "observed": "The badge next to the username is requested from https://cdn.discordapp.com/badge-icons/2ba85e8026a8614b640c2837bcdfe21b.png, which is external and not served locally. The profile response's badge link is https://discord.com/settings/premium.",
+  "expected": "Badge icons are served from the local CDN, and the subscriber badge does not link out to Discord's premium settings page, which is a Nitro upsell.",
+  "evidence": "GET /users/:id/profile -> badges: [{\"id\":\"premium\",\"description\":\"Subscriber since Oct 2, 2026\",\"icon\":\"2ba85e8026a8614b640c2837bcdfe21b\",\"link\":\"https://discord.com/settings/premium\"}]. Request log: EXTERNAL GET https://cdn.discordapp.com/badge-icons/2ba85e8026a8614b640c2837bcdfe21b.png",
+  "suspected_cause": "The profile badges built in src/api/routes/users/#id/profile.ts use Discord's link. No local badge-icons route or asset is served, or the client's CDN host is not rewritten for badge-icons."
+ },
+ {
+  "screen": "Guild chat view, slash command autocomplete",
+  "title": "application-command-index endpoint returns 404 on every composer focus",
+  "severity": "cosmetic",
+  "steps": "1. In #general, click the composer and type '/'.",
+  "observed": "Built-in commands (/shrug, /me, /nick, ...) show and /shrug works, but every time the composer opens the client calls GET /api/v9/users/@me/application-command-index, which returns 404, 4 or more times per session. Apps in the guild cannot appear.",
+  "expected": "Discord returns 200 with {applications: [], application_commands: [], version: ...}, so the client caches the index and stops retrying.",
+  "evidence": "404 GET /api/v9/users/@me/application-command-index (repeated). There is also 404 POST /api/v9/guilds/:id/migrate-command-scope on guild load.",
+  "suspected_cause": "src/api/routes/users/@me/ has no application-command-index route."
+ },
+ {
+  "screen": "Guild chat view, gateway",
+  "title": "A transient DB error during a heartbeat drops the whole gateway connection with a misleading close reason",
+  "severity": "cosmetic",
+  "steps": "1. Keep a client connected while the DB is under heavy load. This happened on its own during testing at load average 40 or higher.",
+  "observed": "The server closed friend's gateway with code 4000 and the reason 'Unknown opcode error while handling opcode 40'. Opcode 40, the QoS heartbeat, is implemented. The real cause was a pg 'Connection terminated due to connection timeout' inside onHeartbeat's Session.update. The client then had to reconnect and resume.",
+  "expected": "A heartbeat ACK does not depend on a successful last_seen DB write. A failed write should be logged, not close the socket, and the close reason should not say 'Unknown opcode'.",
+  "evidence": "server.log: \"[Gateway/1555576727541907498] Error: Op 40 Error: Connection terminated due to connection timeout ... [WebSocket] closed 4000 Unknown opcode error while handling opcode 40\"",
+  "suspected_cause": "src/gateway/opcodes/Heartbeat.ts awaits Session.update together with the ACK. src/gateway/events/Message.ts lines 89-97 close the socket with Unknown_error on any handler exception."
+ },
+ {
+  "screen": "Guild chat view, member list presence",
+  "title": "A user whose only client closes stays shown as online or idle for about 40 seconds",
+  "severity": "cosmetic",
+  "steps": "1. friend is online in #general, then sets status idle. 2. Close friend's browser, which closes the gateway with code 1001. 3. Watch the member list in tester's view.",
+  "observed": "friend stayed in the Mods group with the idle moon for at least 6 seconds and was still there shortly after. Only after about 40 seconds did friend move to Offline.",
+  "expected": "In Discord, a user whose last session closes normally (code 1001) goes offline for other users within a few seconds.",
+  "evidence": "Member list at 6 s after close: 'Mods, 1 member | Friendly Two | Online, 1 member | Tester Global'. At about 50 s: 'Offline, 1 member | Friendly Two'.",
+  "suspected_cause": "src/gateway/events/Close.ts presumably waits for the resume window before calling broadcastPresence, even on a normal close."
+ },
+ {
+  "screen": "Server Boosts page (channel list 'Server Boosts' entry, /channels/<guild>/boosts)",
+  "title": "Server Boosts page renders completely empty",
+  "severity": "broken",
+  "steps": "As owner of Test Guild, click 'Server Boosts' at the top of the channel list (URL becomes /channels/1555568681797329037/boosts).",
+  "observed": "The main pane is blank. DOM check: div.page__5e434 has 0 children. The page fires GET /api/v9/guilds/<id>/powerups?country_code=US&...&include_ends_at=true -> 404 and GET /api/v9/store/published-listings/skus?...&application_id=1340102344645283891&guild_id=<id> -> 404. Console: 'HTTPResponseError: GET /guilds/xxx/powerups [404]' and 'GET /store/published-listings/skus [404]'.",
+  "expected": "Discord shows the Server Boosts / perks overview (GuildPowerupsPage). With free level 3 it should show every perk unlocked, with no buy or boost CTAs.",
+  "evidence": "Client GuildPowerupsPage (module 723574 in assets/cache/42f2fe29f1625bf8.js, function tO) builds its list from powerupCatalog, which comes from those two requests. With both returning 404 the catalog is empty and nothing renders.",
+  "suspected_cause": "There is no src/api/routes/guilds/#guild_id/powerups.ts and src/api/routes/store/published-listings has no skus listing for the powerups application id 1340102344645283891."
+ },
+ {
+  "screen": "All Server Settings tabs (Boost Perks, Roles, Server Tag, Emoji, Stickers, Soundboard, Vanity)",
+  "title": "Guild is reported as boost level 0 with no features, so every level-gated setting is locked",
+  "severity": "broken",
+  "steps": "GET /api/v9/guilds/<id> as owner, then open Server Settings > Boost Perks / Roles > Edit role / Server Tag / Stickers / Emoji / Soundboard.",
+  "observed": "The API returns premium_tier 0, premium_subscription_count 0 and features []. Boost Perks shows 'Unlock with Boosting' on Server Banner Background (LVL 2), Server Invite Background (LVL 1) and Custom Invite Link (LVL 3). Roles shows Gradient and Holographic styles disabled with 'Make certain roles magical, Unlock with Boosting' and Role icon marked LVL 2. Server Tag shows 'Unlock with Boosting' and is greyed out. Emoji shows 50 slots, Stickers 5 slots with a level 1/2/3 tracker, Soundboard 8 slots. There is no Custom Invite Link / Vanity URL tab, and PATCH /guilds/<id>/vanity-url returns 400 'Your guild doesn't support vanity urls'.",
+  "expected": "Every guild should behave as boost level 3: premium_tier 3 plus the level 3 feature set (VANITY_URL, BANNER, INVITE_SPLASH, ANIMATED_ICON, ANIMATED_BANNER, ROLE_ICONS, ENHANCED_ROLE_COLORS, GUILD_TAGS and so on), with 250 emoji, 60 stickers and 48 sounds, and no unlock CTAs.",
+  "evidence": "src/database/entities/Guild.ts:399 creates guilds with premium_tier: 0. GuildConfiguration.defaultFeatures is []. The client gates gradients on GuildFeatures.ENHANCED_ROLE_COLORS (module 676608 in web.ea428454da038edc.js).",
+  "suspected_cause": "src/database/entities/Guild.ts (createGuild and toJSON), src/util/dtos/ReadyGuildDTO.ts, src/util/config/types/GuildConfiguration.ts defaultFeatures, src/api/routes/guilds/#guild_id/vanity-url.ts feature check."
+ },
+ {
+  "screen": "Server Settings > Server Profile",
+  "title": "Saving Server Profile fails with 'Endpoint not found', so the server cannot even be renamed",
+  "severity": "broken",
+  "steps": "Open Server Settings > Server Profile, change the Name from 'Test Guild' to 'Test Guild QA' (or pick a banner color), then click Save Changes.",
+  "observed": "The save bar shows 'Endpoint not found'. PATCH /api/v9/guilds/<id>/profile -> 404. After that, GET /guilds/<id> still returns name 'Test Guild'.",
+  "expected": "The name, icon, banner color, traits, description and games save and persist after a reload.",
+  "evidence": "The client sends the whole Server Profile form through Bo.patch({url: GUILD_PROFILE(e)}) = /guilds/${e}/profile (assets/cache/2a966e9c0ed23578.js). The server has GET /guilds/:id/profile and only PATCH /guilds/:id/profile/:member_id.",
+  "suspected_cause": "src/api/routes/guilds/#guild_id/profile.ts has only router.get, and profile/index.ts only has PATCH /:member_id. A PATCH / handler is missing."
+ },
+ {
+  "screen": "Server Settings > Server Profile / Server Tag (GET /guilds/:id/profile)",
+  "title": "Guild profile returns hardcoded placeholder data: magenta brand color, fake 'TEST' tag and 'A Spacebar guild' description",
+  "severity": "wrong",
+  "steps": "Open Server Settings > Server Profile on a guild with no description and look at the preview card, or call GET /api/v9/guilds/<id>/profile.",
+  "observed": "The preview banner is magenta and the description reads 'A Spacebar guild'. The API returns brand_color_primary '#FF00FF', tag 'TEST' (the first 4 letters of the name), badge_color_primary '#FF00FF', badge_color_secondary '#00FFFF', online_count equal to member_count and traits []. Server Tag also previews 'TEST'.",
+  "expected": "Return the real stored values: null description, no tag until one is set, the real online count, and no old project branding.",
+  "suspected_cause": "src/api/routes/guilds/#guild_id/profile.ts lines 38-58 hardcode description ?? 'A Spacebar guild', brand_color_primary '#FF00FF', tag: guild.name.substring(0,4).toUpperCase() and online_count: member_count. Guild.ts:390 also defaults the guild name to 'Spacebar'."
+ },
+ {
+  "screen": "Server Settings > Members (member safety page /channels/<guild>/member-safety)",
+  "title": "Members tab always shows 'No members match these search results'",
+  "severity": "broken",
+  "steps": "Open Server Settings and click Members. The client navigates to the member safety page.",
+  "observed": "The table shows 'There are no actionable members', 'No members match these search results' and 'Showing 0 members' even though tester and friend are members. POST /api/v9/guilds/<id>/members-search -> 404.",
+  "expected": "Lists all guild members with join date, join method and roles, with working search, sort and prune.",
+  "suspected_cause": "There is no members-search route under src/api/routes/guilds/#guild_id/. Also, GET /guilds/<id>/members/search?query=fri returns 500 'invalid input syntax for type bigint: \"search\"' because the #member_id route captures it."
+ },
+ {
+  "screen": "Server members list API used by settings (GET /guilds/:id/members)",
+  "title": "GET /guilds/:id/members without 'after' returns 500, and every member object is missing user and roles",
+  "severity": "broken",
+  "steps": "GET /api/v9/guilds/<id>/members?limit=10 with no 'after' parameter.",
+  "observed": "500 'QueryFailedError: invalid input syntax for type bigint: \"undefined\"'. With after=0 it returns 200, but each object only has avatar, avatar_decoration_data, banner, bio, collectibles, communication_disabled_until, deaf, display_name_styles, flags, guild_id, id, joined_at, mute, nick, pending, premium_since, pronouns and theme_colors. There is no user and no roles.",
+  "expected": "'after' is optional and defaults to 0, and every guild member object includes user and roles.",
+  "suspected_cause": "src/api/routes/guilds/#guild_id/members/index.ts:56 uses const after = `${req.query.after}`, which is the truthy string 'undefined'. The serializer also omits user and roles."
+ },
+ {
+  "screen": "Server Settings > Roles > Manage Members",
+  "title": "GET role member-ids returns 500",
+  "severity": "broken",
+  "steps": "GET /api/v9/guilds/<id>/roles/<role_id>/member-ids, which the client uses to count and list a role's members.",
+  "observed": "500 'QueryFailedError: column distinctAlias.Member_index does not exist'.",
+  "expected": "200 with an array of member user ids.",
+  "suspected_cause": "The TypeORM query in src/api/routes/guilds/#guild_id/roles/#role_id/member-ids (distinct with take/skip on Member) is wrong."
+ },
+ {
+  "screen": "Server Settings > Roles (role API)",
+  "title": "Partial role PATCH resets permissions to 0",
+  "severity": "wrong",
+  "steps": "PATCH /api/v9/guilds/<id>/roles/<role_id> with only {\"name\":\"second2\"}, {\"hoist\":true} or {\"icon\":\"data:...\"}.",
+  "observed": "The role's permissions change from 2248473465835073 to \"0\" on every PATCH that omits permissions. The full role editor sends permissions, so it is unaffected, but other client paths call updateRole with only color, icon or unicodeEmoji (role subscriptions in assets/cache/60a84321f4a2ae99.js), and those wipe permissions.",
+  "expected": "Fields left out of a PATCH stay unchanged.",
+  "suspected_cause": "src/api/routes/guilds/#guild_id/roles/#role_id/index.ts:130 sets permissions: String((req.permission?.bitfield || 0n) & BigInt(body.permissions || \"0\")) unconditionally."
+ },
+ {
+  "screen": "Server Settings > Roles (role list color dot)",
+  "title": "A role colored through 'colors' keeps color 0 and shows as uncolored",
+  "severity": "wrong",
+  "steps": "PATCH a role with {\"colors\":{\"primary_color\":16711680,\"secondary_color\":255}} (a gradient), then open Server Settings > Roles.",
+  "observed": "The role keeps color: 0 while colors.primary_color is 16711680. Its dot in the role list is grey. Editing through the UI swatch works, because the client sends color too.",
+  "expected": "Discord mirrors colors.primary_color into the legacy color field, so the role displays red.",
+  "suspected_cause": "src/api/routes/guilds/#guild_id/roles/#role_id/index.ts does not sync color from colors.primary_color."
+ },
+ {
+  "screen": "Server Settings > Roles (create)",
+  "title": "New roles get duplicate positions",
+  "severity": "cosmetic",
+  "steps": "POST /guilds/<id>/roles twice ('new role' then 'second').",
+  "observed": "Both new roles return position 1, the same as each other.",
+  "expected": "Each new role gets a unique position and the existing roles shift up, as in Discord.",
+  "suspected_cause": "Role creation in src/api/routes/guilds/#guild_id/roles/index.ts does not re-number the other roles."
+ },
+ {
+  "screen": "Server Settings > Roles > Edit role > Links tab",
+  "title": "Role Links tab request 404s",
+  "severity": "wrong",
+  "steps": "Open any role in Server Settings > Roles.",
+  "observed": "GET /api/v9/guilds/<id>/roles/<role_id>/connections/configuration -> 404 every time a role is opened.",
+  "expected": "200 with an empty linked-roles configuration.",
+  "suspected_cause": "The route is missing under src/api/routes/guilds/#guild_id/roles/#role_id/."
+ },
+ {
+  "screen": "Server Settings > Audit Log",
+  "title": "Audit log is always empty and nothing is ever recorded",
+  "severity": "broken",
+  "steps": "Create roles, edit a role, create channels, ban and unban a member, create an AutoMod rule and webhooks, then open Server Settings > Audit Log.",
+  "observed": "'NO LOGS YET'. GET /guilds/<id>/audit-logs returns audit_log_entries: [] after all of these actions.",
+  "expected": "Every moderation and config action appears as an entry (ROLE_CREATE, MEMBER_BAN_ADD and so on).",
+  "suspected_cause": "Nothing in src calls AuditLog.create or save. Only src/api/routes/guilds/#guild_id/audit-logs.ts reads the table, and it has '//TODO: implement audit logs'."
+ },
+ {
+  "screen": "Server Settings > Safety Setup > AutoMod",
+  "title": "AutoMod rules save but are never enforced",
+  "severity": "broken",
+  "steps": "In Safety Setup > AutoMod > Block Custom Words click Create, enter 'badword, otherbad' and save. The rule persists (GET rules shows keyword_filter [badword, otherbad], action type 1 'block message'). Then, as friend, POST /channels/<general>/messages {\"content\":\"this has badword in it\"}.",
+  "observed": "The message is created and shows in the channel.",
+  "expected": "The message is blocked with the AutoMod error, and an alert goes out if one is configured.",
+  "suspected_cause": "No message-send code in src evaluates auto-moderation rules. rg finds no keyword_filter or trigger_metadata usage outside the rules route."
+ },
+ {
+  "screen": "Server Settings > Invites and Channel Settings > Invites",
+  "title": "Invite lists show every invite as never-expiring with 0 uses",
+  "severity": "wrong",
+  "steps": "Create an invite with max_age 86400 (POST /channels/<id>/invites), then open Server Settings > Invites or Channel Settings > Invites.",
+  "observed": "The Expires column shows '∞' and Uses shows 0. The list API returns max_age null, uses null, max_uses null, temporary null, created_at null, and expires_at as a JS Date string ('Sat Oct 03 2026 14:46:12 GMT+0100 (Western European Summer Time)') instead of ISO.",
+  "expected": "The real max_age, uses, max_uses, temporary and created_at, an ISO expires_at, and the remaining time shown in the table.",
+  "suspected_cause": "src/database/entities/Invite.ts toPublicJSON (line 108) omits uses, max_uses, max_age, temporary and created_at, and uses expires_at?.toString()."
+ },
+ {
+  "screen": "Invite to Server / channel invite creation",
+  "title": "Every created invite is stored as temporary",
+  "severity": "wrong",
+  "steps": "POST /channels/<id>/invites {\"max_age\":86400,\"max_uses\":0,\"temporary\":false}.",
+  "observed": "The response has temporary: true. Joining through invite zs2EFN also returns temporary: true.",
+  "expected": "temporary false unless the 'Grant temporary membership' toggle is on.",
+  "suspected_cause": "src/api/routes/channels/#channel_id/invites.ts:65 sets temporary: body.temporary || true."
+ },
+ {
+  "screen": "Server dropdown > Security Actions, Server Settings > Invites > Pause Invites",
+  "title": "Pausing invites or DMs fails because incident-actions returns 404",
+  "severity": "broken",
+  "steps": "Open the server dropdown > Security Actions (or Invites > Pause Invites), toggle Pause Invites and save. Equivalent call: PUT /api/v9/guilds/<id>/incident-actions {\"invites_disabled_until\":\"...\",\"dms_disabled_until\":null}.",
+  "observed": "404 'Endpoint not found'. incidents_data stays null.",
+  "expected": "Invites and DMs pause until the chosen time, and incidents_data is updated and sent in GUILD_UPDATE.",
+  "suspected_cause": "There is no incident-actions route under src/api/routes/guilds/#guild_id/."
+ },
+ {
+  "screen": "Server Settings > Onboarding / Server Guide",
+  "title": "Onboarding and Server Guide cannot load or save",
+  "severity": "broken",
+  "steps": "Enable Community, open Server Settings > Onboarding and click 'Check it out', or open Server Guide.",
+  "observed": "GET /guilds/<id>/onboarding -> 404 on every settings open, and PUT /guilds/<id>/onboarding -> 404, so the wizard cannot be saved. GET /guilds/<id>/new-member-welcome -> 404 (Server Guide). Also 404: GET /guilds/<id>/member-verification?with_guild=false, GET /guilds/<id>/config-gates, GET /guilds/<id>/admin-server-eligibility.",
+  "expected": "Onboarding loads default settings and saves prompts and default channels. Server Guide (new-member-welcome) loads and saves.",
+  "suspected_cause": "The onboarding, new-member-welcome, config-gates and admin-server-eligibility routes are missing under src/api/routes/guilds/#guild_id/."
+ },
+ {
+  "screen": "Server Settings > Access (Discovery)",
+  "title": "Discovery cannot be configured: the category list is empty and discovery-metadata 404s",
+  "severity": "broken",
+  "steps": "With Community enabled, open Community Overview > 'Apply for Discovery' (Access tab, Discoverable option) and open the CATEGORY* picker.",
+  "observed": "GET /discovery/categories returns [], so no category can be chosen and 'List on Discovery' stays blocked behind 'Fill in the required information'. GET /guilds/<id>/discovery-metadata -> 404 on every settings open.",
+  "expected": "Discord's discovery categories are listed, and discovery metadata (primary category, keywords, emoji discoverability) loads and saves.",
+  "suspected_cause": "src/api/routes/discovery categories data is empty, and there is no discovery-metadata route."
+ },
+ {
+  "screen": "Server Settings > Server Insights",
+  "title": "Server Insights has no data endpoints",
+  "severity": "wrong",
+  "steps": "Open Server Settings > Server Insights.",
+  "observed": "It shows the 'isn't quite ready' notice and a 'Go to Server Insights' button pointing to Discord's separate site. GET /guilds/<id>/analytics/overview -> 404.",
+  "expected": "Insights render locally or the tab is hidden. It should not link out to discord.com.",
+  "suspected_cause": "No analytics routes exist in src/api/routes/guilds/#guild_id/."
+ },
+ {
+  "screen": "Server dropdown > Server Boost",
+  "title": "'Server Boost' menu item opens the full boost purchase upsell",
+  "severity": "upsell",
+  "steps": "Click the server name to open the dropdown. The first item is 'Server Boost'. Click it.",
+  "observed": "A full-screen 'BOOST THIS SERVER & UNLOCK PERKS FOR EVERYONE' modal opens with 'Boost This Server' and 'Gift Premium' buttons, 'No Boosts', and Level 1/2/3 cards whose level icons are broken images.",
+  "expected": "No boost upsell. Since every guild is level 3 for free, the menu item should be hidden or open a perks summary.",
+  "suspected_cause": "Client patch only. The upsell entry points are not hidden in assets/client_patches/41-hide-premium-upsells.js."
+ },
+ {
+  "screen": "Server Settings > Stickers, Boost Perks, Roles, Server Tag",
+  "title": "Boost upsell UI inside Server Settings",
+  "severity": "upsell",
+  "steps": "Open Server Settings > Stickers, Boost Perks, Roles > edit role, and Server Tag.",
+  "observed": "Stickers shows 'No Server Boost, No one has bestowed Boosts to this server yet...', a Level 1/2/3 boost tracker (0/2, 0/7, 0/14) and three 'Buy Level' buttons. Boost Perks, Roles and Server Tag show 'Unlock with Boosting' buttons and LVL badges. Engagement has 'Send a message when someone boosts this server'.",
+  "expected": "No Boost or Nitro upsells anywhere in settings.",
+  "suspected_cause": "Mostly fixed by reporting premium_tier 3 and the level 3 features. 'Buy Level' and the tracker also need hiding in the client patches."
+ },
+ {
+  "screen": "Channel list for Test Guild",
+  "title": "Boost and download upsells in the guild sidebar and welcome checklist",
+  "severity": "upsell",
+  "steps": "Open Test Guild.",
+  "observed": "The channel list has a 'Server Boosts' entry, and a 'Boost Goal 0/33 Boosts' progress bar once premium_progress_bar_enabled is on. The welcome checklist has 'Download the Fosscord App' and 'Unlock perks for everyone with Boosts'. The guild rail has a download-app icon. The Discover page (from the App Directory menu item) lists 'Quests' in its sidebar.",
+  "expected": "No boost, download or Quests entry points.",
+  "suspected_cause": "Client patches (assets/client_patches/41-hide-premium-upsells.js) only hide /store, /shop and the gift button."
+ },
+ {
+  "screen": "Server dropdown > App Directory / Server Settings > App Directory",
+  "title": "App Directory stays on loading skeletons forever",
+  "severity": "broken",
+  "steps": "Server dropdown > App Directory (navigates to /discovery/applications).",
+  "observed": "A grid of grey skeleton cards that never fills. GET /api/v9/application-directory-static/categories?locale=en-US -> 404, GET /api/v9/application-directory-static/collections?... -> 404, GET /api/v9/users/@me/guilds/integration-application-ids -> 404. Page error 'HTTPResponseError: GET /application-directory-static/categories [404]'.",
+  "expected": "The directory renders, empty or with local apps, and does not hang on skeletons.",
+  "suspected_cause": "The application-directory-static routes are missing in src/api/routes."
+ },
+ {
+  "screen": "Server Settings > Engagement > Server Widget",
+  "title": "Widget image endpoint crashes and widget.json has a double slash and is cached stale",
+  "severity": "wrong",
+  "steps": "Enable the widget and set Invite Channel to #general, then GET /api/v9/guilds/<id>/widget.png?style=banner2 and GET /api/v9/guilds/<id>/widget.json.",
+  "observed": "widget.png returns 500 \"Error: Cannot find module 'canvas'\". widget.json returns avatar_url 'http://localhost:3141//embed/avatars/0.png' with a double slash. After the invite channel is set, widget.json still has no instant_invite because the old response is cached.",
+  "expected": "widget.png renders, avatar URLs are well formed, and instant_invite appears once a channel is set.",
+  "suspected_cause": "src/api/routes/guilds/#guild_id/widget.png.ts requires the uninstalled 'canvas' package. widget.json.ts builds the URL as `${cdn.endpointPublic}/embed/...` with endpointPublic ending in '/', and jsonDataCache is not invalidated on PATCH /widget."
+ },
+ {
+  "screen": "Server Settings tabs and dropdown (external requests)",
+  "title": "Settings screens load assets from cdn.discordapp.com instead of locally",
+  "severity": "wrong",
+  "steps": "Open Boost Perks, Engagement, Roles > edit role, Onboarding and the Server Boost modal with network logging on.",
+  "observed": "Requests go to https://cdn.discordapp.com/assets/content/bd712b6e0f8e5ee33f7f102f7bb02e40850fe06ccdf425523f3093c838ef6a28.riv ('Rive file load error'), .../b8d65794b7cc0b9eeca2f0842d619d0da7f31312a984da6146429bc1570995fc.png, .../bc3217e772906510d881b75ebefea754b9c3ba903ddf6f994e46e5c5a85770a3.svg, .../2532e8cd0600ccfbc61ff81c21959bde90a6645d0e71644a92f6cde5bfc48439.png, .../aedb1f458fe4c95624bfe88e0486722d0b6ccc8dfcf0e9878f04d8431252be44.webm, and https://cdn.discordapp.com/avatars/302407541994946561/bb3fd59e6c2ea0a86a2bdabf5dff7856.webp (Onboarding example avatar). Every page also calls status.discord.com, cdn.discordapp.com/changelogs and cdn.discordapp.com/bad-domains. The Boost Perks progress-bar preview (/assets/209a4acf5023c4c3.png) shows as a broken image.",
+  "expected": "All assets are served locally, and nothing contacts Discord.",
+  "suspected_cause": "The asset cache (src/bundle/TestClient.ts and assets/cacheMisses) does not rewrite or cache cdn.discordapp.com/assets/content/* and avatar URLs."
+ },
+ {
+  "screen": "Engagement 'welcome sticker' / Wave to say hi",
+  "title": "Default welcome sticker JSON is missing, so 'Wave to say hi!' throws",
+  "severity": "wrong",
+  "steps": "Have a member join (friend joins through invite zs2EFN), then view #general as owner while 'Prompt members to reply to welcome messages with a sticker' is enabled in Engagement.",
+  "observed": "GET /stickers/749054660769218631.json -> 404, page error 'Error fetching sticker at http://fosscord.localhost:3141/stickers/749054660769218631.json'.",
+  "expected": "The Wumpus wave sticker loads locally.",
+  "suspected_cause": "Default Discord sticker pack assets are not served under /stickers/*.json."
+ },
+ {
+  "screen": "Server Settings > Integrations > Webhooks (API)",
+  "title": "Guild webhook list embeds the full guild object in every webhook",
+  "severity": "cosmetic",
+  "steps": "Create a webhook (POST /channels/<id>/webhooks), then GET /guilds/<id>/webhooks.",
+  "observed": "Each webhook includes a 'guild' key holding the complete guild (roles, settings and more), which makes the payload very large.",
+  "expected": "Discord's webhook object has guild_id plus a partial source_guild only.",
+  "suspected_cause": "The serializer in src/api/routes/guilds/#guild_id/webhooks.ts loads the guild relation."
+ },
+ {
+  "screen": "Server Settings > Roles (API PATCH positions)",
+  "title": "Role reorder PATCH returns only the moved roles",
+  "severity": "cosmetic",
+  "steps": "PATCH /guilds/<id>/roles [{id:A,position:4},{id:B,position:2}].",
+  "observed": "The response contains only the two moved roles.",
+  "expected": "Discord returns the full ordered role list for the guild.",
+  "suspected_cause": "src/api/routes/guilds/#guild_id/roles/index.ts PATCH handler."
+ },
+ {
+  "screen": "User Settings > Account > Password & Security > Multi-Factor Authentication",
+  "title": "Can't turn on MFA (authenticator app or security key) from the client",
+  "severity": "broken",
+  "steps": "1. Open User Settings > Account > Password & Security and click 'Set up' next to Multi-Factor Authentication.\n2. Click 'Enable Authenticator App', type a valid TOTP for the shown secret and click Activate.\n3. Separately, click 'Add Security Key'.",
+  "observed": "Activate sends POST /api/v9/users/@me/mfa/totp/enable {\"code\":\"154891\",\"secret\":\"CXEA...\"}. The server answers 400 {\"code\":50035,\"errors\":{\"\":{\"_errors\":[{\"message\":\"must have required property 'password'\"}]}}}. The modal stays open and shows no error. 'Add Security Key' sends POST /api/v9/users/@me/mfa/webauthn/credentials {}, which fails with 400 'must match a schema in anyOf', and the toast reads 'An error occurred. Please try again.' The client's MFA module (assets/cache/b1708446b8f78bda.js) calls totp/enable with body {code, secret} only and calls totp/disable with no body at all, so disabling from the UI would fail the same way.",
+  "expected": "Discord accepts these calls without a password in the body. It uses the MFA/sudo reauth flow: a 401 with code 60003 and an mfa ticket, then the client prompts for the password and retries with an X-Discord-MFA-Authorization header. After that, TOTP turns on, backup codes are shown, and security keys can be registered.",
+  "evidence": "400 POST /api/v9/users/@me/mfa/totp/enable must have required property 'password'; 400 POST /api/v9/users/@me/mfa/webauthn/credentials must match a schema in anyOf",
+  "suspected_cause": "src/api/routes/users/@me/mfa/totp/enable.ts and totp/disable.ts (TotpEnableSchema/TotpDisableSchema require password/code) and the webauthn/credentials schema don't implement the MFA reauth (60003 ticket) flow the Oct 2026 client expects."
+ },
+ {
+  "screen": "Global (seen after a password change in User Settings)",
+  "title": "A revoked or invalid token leaves the client stuck on the loading screen instead of going to login",
+  "severity": "broken",
+  "steps": "1. Log in in the browser.\n2. Change the password from another session, e.g. PATCH /users/@me with password and new_password via the API, so the browser's token is invalidated.\n3. Reload the browser tab.",
+  "observed": "Every REST call returns HTTP 400 {\"code\":40001,\"message\":\"Unauthorized. Provide a valid token and try again\"}. The gateway closes the IDENTIFY with code 4000 'Invalid Token' instead of 4004, so the client re-identifies in a loop and sits on the 'DID YOU KNOW' loading screen forever. A garbage token also gets close 4000 'Invalid Token meow TypeError: \"ES512\" signatures must be \"132\" bytes'.",
+  "expected": "Discord returns HTTP 401 for an invalid token and closes the gateway with 4004 Authentication failed. The client then clears the token and shows the login page.",
+  "evidence": "400 GET /api/v9/users/@me {\"code\":40001,...}; gateway close 4000 Invalid Token",
+  "suspected_cause": "src/util/util/Constants.ts UNAUTHORIZED ApiError has no 401 status, and src/api/middlewares/Route.ts throws it as a 400. In src/gateway/opcodes/Identify.ts, checkToken() rejects and the exception is caught in src/gateway/events/Message.ts, which closes with CLOSECODES.Unknown_error (4000) instead of Authentication_failed (4004)."
+ },
+ {
+  "screen": "User Settings > Account > Password & Security > Logged-in Devices / Log Out",
+  "title": "Logging out a device, or using Log Out, does not revoke that device's token",
+  "severity": "wrong",
+  "steps": "1. Log in once via the API (token A) and once in the browser.\n2. In the browser open Logged-in Devices and click 'Log Out All Known Devices', then confirm. POST /api/v9/auth/sessions/logout is sent.\n3. GET /api/v9/auth/sessions now lists only the browser session.\n4. Call GET /api/v9/users/@me with token A.\n5. Also click Log Out in the settings sidebar, then reuse the browser's previous token.",
+  "observed": "Token A still returns 200 even though its session is gone. After the sidebar Log Out (POST /auth/logout), the old browser token also still returns 200 on /users/@me.",
+  "expected": "In Discord, logging out a device or the current session invalidates that session's token, and later calls return 401.",
+  "evidence": "auth/sessions shows 1 session; GET /users/@me with the logged-out token returns 200",
+  "suspected_cause": "src/util/util/Token.ts checkToken looks up Session by decoded.did but never rejects when the session doesn't exist."
+ },
+ {
+  "screen": "User Settings > Account > Password & Security > Password",
+  "title": "Changing the password doesn't invalidate tokens issued earlier in the same minute",
+  "severity": "wrong",
+  "steps": "1. Log in and get token C.\n2. In the same wall-clock minute, change the password (PATCH /users/@me with password and new_password).\n3. Call GET /users/@me with token C.",
+  "observed": "Token C still works (200). A token issued in the previous minute is rejected. The UI password change itself works and persists.",
+  "expected": "Every token issued before the password change stops working.",
+  "evidence": "tok.mjs: 'token issued same minute, before change: 200', 'old token after change (previous minute): 400'",
+  "suspected_cause": "src/util/util/Token.ts line ~102: `new Date(user.data.valid_tokens_since).setSeconds(0, 0)` rounds down to the minute. It should round to the second (setMilliseconds(0))."
+ },
+ {
+  "screen": "User Settings > Account > Account Info > Email",
+  "title": "Email can be changed without the old-email verification code, and the new address stays verified",
+  "severity": "wrong",
+  "steps": "1. Call PATCH /api/v9/users/@me {\"email\":\"tester@fosscord.test\",\"password\":\"<pw>\"} with no email_token. The UI flow (Send Verification Code > code > reason > new email + password) does work.\n2. Check GET /users/@me.",
+  "observed": "The email is changed with only the password. After the change via the UI, 'verified' stays true even though the modal says 'we sent a verification email to tester2@fosscord.test'.",
+  "expected": "Discord requires the email_token from the old-address code when the old email is verified, and marks the account unverified until the new address is confirmed.",
+  "evidence": "PATCH without email_token returns 200 with the new email; verified:true",
+  "suspected_cause": "src/api/routes/users/@me/index.ts: `if (body.email_token !== undefined && !EmailChange.consumeToken(...))` only checks the token when it is present. Nothing resets user.verified or sends a verify email."
+ },
+ {
+  "screen": "User Settings > Account > Password & Security > Multi-Factor Authentication (with MFA on)",
+  "title": "With TOTP enabled, the MFA page still offers 'Enable Authenticator App' and there's no way to remove it",
+  "severity": "wrong",
+  "steps": "1. Enable TOTP for tester. The UI can't do it (see the MFA finding), so use POST /users/@me/mfa/totp/enable with password.\n2. Reload, open Password & Security, then Multi-Factor Authentication.",
+  "observed": "The row says 'Enabled', but the Authenticator App section still shows 'Enable Authenticator App' and has no 'Remove Authenticator App' button. Backup Codes does appear.",
+  "expected": "Discord shows 'Remove Authenticator App' and 'View Backup Codes' once TOTP is active.",
+  "evidence": "The client tracks authenticator_types from the user object (`void 0!==t.authenticator_types&&(V=t.authenticator_types)` in CURRENT_USER_UPDATE); `rg authenticator_types src` finds nothing.",
+  "suspected_cause": "The server never sends `authenticator_types` (e.g. [2] for TOTP, [1] for webauthn) on the user object in READY or /users/@me."
+ },
+ {
+  "screen": "User Settings > Account > Multi-Factor Authentication > Show Backup Codes",
+  "title": "Viewing backup codes says a key was emailed, but none is sent and any key is accepted",
+  "severity": "wrong",
+  "steps": "1. With MFA on, click 'Show Backup Codes'.\n2. Enter the password and click Next.\n3. In 'Enter Verification Key' type any value (e.g. abcd1234) and click Submit.",
+  "observed": "No email is sent and nothing is logged, even though the server logs email-change codes when no mail provider is set. POST /auth/verify/view-backup-codes-challenge returns nonce 'NoncePlaceholder', and POST /users/@me/mfa/codes-verification {key:'abcd1234'} reveals the codes.",
+  "expected": "A real key is emailed (or logged when no mail provider is configured), and only that key unlocks the codes.",
+  "evidence": "POST /api/v9/users/@me/mfa/codes-verification {\"key\":\"abcd1234\",\"nonce\":\"NoncePlaceholder\",\"regenerate\":false} returns 200",
+  "suspected_cause": "src/api/routes/auth/verify/view-backup-codes-challenge.ts returns placeholder nonces, and src/api/routes/users/@me/mfa/codes-verification.ts doesn't validate the key."
+ },
+ {
+  "screen": "User Settings > Account > Account Info > Phone Number",
+  "title": "Adding a phone number fails with 'Endpoint not found'",
+  "severity": "broken",
+  "steps": "1. Click 'Add' next to Phone Number.\n2. Enter 2025550123 (US) and click Send.",
+  "observed": "POST /api/v9/users/@me/phone {\"phone\":\"+12025550123\",\"change_phone_reason\":\"user_settings_update\"} returns 404, and the modal shows 'Endpoint not found'.",
+  "expected": "An SMS code is sent (or logged in dev) and the next step asks for it. The phone is then saved.",
+  "evidence": "404 POST /api/v9/users/@me/phone",
+  "suspected_cause": "There is no route at src/api/routes/users/@me/phone.ts."
+ },
+ {
+  "screen": "User Settings > Account > Password & Security > Logged-in Devices",
+  "title": "The devices list shows 'Unknown' devices last used '57 years ago' and keeps dead sessions",
+  "severity": "cosmetic",
+  "steps": "1. Log in a few times, via the API and after password changes.\n2. Open Logged-in Devices.",
+  "observed": "About 30 entries appear, many named 'Unknown' and several 'last used 57 years ago'. GET /auth/sessions returns approx_last_used_time '1970-01-01T00:00:00.000Z' and client_info {location:null} with no os or platform. Sessions whose tokens a password change invalidated are still listed.",
+  "expected": "Each session shows its real OS, platform and location and a real last-used time. Sessions killed by a password change disappear.",
+  "evidence": "{\"id_hash\":\"3c3a...\",\"approx_last_used_time\":\"1970-01-01T00:00:00.000Z\",\"client_info\":{\"location\":null}}",
+  "suspected_cause": "The auth/sessions route (src/api/routes/auth/sessions*) and Session entity have a null last_seen that serializes as epoch, and sessions aren't cleaned up when valid_tokens_since changes."
+ },
+ {
+  "screen": "User Settings > Data & Privacy > How Fosscord Uses My Data",
+  "title": "Personalization and sponsored-content (Quests) data toggles are still shown, and the consent toggles don't stick",
+  "severity": "upsell",
+  "steps": "1. Open User Settings > Data & Privacy.\n2. Turn on 'Use data to improve Fosscord' and 'Use data to personalize my Fosscord experience'.\n3. Reload.",
+  "observed": "The page shows 'Use data to personalize my Fosscord experience', 'Use my Fosscord activity to personalize Sponsored Content' ('like Quests ... you may still see Quests') and 'Use third-party data to personalize Sponsored Content' ('data Fosscord receives from advertisers'). Clicking the first two sends POST /users/@me/consent {grant:[...]}. The server returns {consented:false} for both, so the switches flip back immediately. The data request dialog also lists an 'Ads' category.",
+  "expected": "The project spec says no personalization or ads data settings, so these rows (and the Ads data category) should be hidden. The remaining toggles should persist.",
+  "evidence": "POST /api/v9/users/@me/consent {\"grant\":[\"usage_statistics\"]} returns {\"usage_statistics\":{\"consented\":false},...}",
+  "suspected_cause": "src/api/routes/users/@me/consent.ts returns a constant and ignores grant/revoke. No client patch hides the personalization or Sponsored Content rows (assets/client_patches has only 10/40/41)."
+ },
+ {
+  "screen": "User Settings > Data & Privacy > Request my data",
+  "title": "Requesting a data package fails with a 404",
+  "severity": "broken",
+  "steps": "1. Click 'Request Data'.\n2. Tick 'Account' and click 'Request My Data'.",
+  "observed": "POST /api/v9/users/@me/harvest {\"backends\":[\"Account\"]} returns 404, and the dialog shows 'Oops, something went wrong... POST /users/@me/harvest [404]'.",
+  "expected": "The request is accepted and the dialog confirms that the package will be emailed.",
+  "evidence": "404 POST /api/v9/users/@me/harvest",
+  "suspected_cause": "src/api/routes/users/@me/harvest.ts has no POST handler."
+ },
+ {
+  "screen": "User Settings > Notifications > Email",
+  "title": "Email notification toggles revert after reload",
+  "severity": "wrong",
+  "steps": "1. Open Notifications and turn off 'Communication Emails'.\n2. Reload and reopen Notifications.",
+  "observed": "PATCH /api/v9/users/@me/email-settings {\"settings\":{\"categories\":{\"communication\":false}}} returns 404 and the toggle is back on after reload. The other Notifications toggles, which use settings-proto, persist correctly.",
+  "expected": "Email category preferences are saved.",
+  "evidence": "404 PATCH /api/v9/users/@me/email-settings",
+  "suspected_cause": "src/api/routes/users/@me/email-settings.ts has no PATCH handler."
+ },
+ {
+  "screen": "User Settings > Edit Profiles > Profile Widgets",
+  "title": "The widget game picker can't find any games, so game widgets can't be filled",
+  "severity": "broken",
+  "steps": "1. Click Edit Profiles > Add Widgets > Favorite Game.\n2. Click the + slot and type 'Minecraft'.",
+  "observed": "The picker says \"No results for 'Minecraft'\" and 'Suggested for you' is empty. GET /api/v9/games/autocomplete?q=minecraft, GET /api/v9/games?game_ids=... and GET /api/v9/users/@me/widgets/suggested-games all return 404, and the last one also throws an uncaught HTTPResponseError.",
+  "expected": "Suggested games and search results appear, and a picked game is saved to the widget.",
+  "evidence": "404 GET /api/v9/games/autocomplete?q=minecraft; 404 GET /api/v9/users/@me/widgets/suggested-games",
+  "suspected_cause": "Missing routes: src/api/routes/games/autocomplete, src/api/routes/games (index with game_ids) and users/@me/widgets/suggested-games."
+ },
+ {
+  "screen": "User Settings > Connected Apps > Connections",
+  "title": "Most connection providers do nothing when clicked, and Domain gives 'Endpoint not found'",
+  "severity": "broken",
+  "steps": "1. Open Connected Apps.\n2. Click GitHub, then Steam, then Domain. For Domain, enter example.org and click Next.",
+  "observed": "GitHub opens a popup stuck at /connections/github?loading=true while GET /api/v9/connections/github/authorize returns 400 'This connection has been disabled server-side.' Steam returns 400 'This field must be one of (battlenet, discord, epicgames, facebook, github, reddit, spotify, twitch, twitter...'. Neither shows an error in the UI, only an uncaught HTTPResponseError. Domain sends POST /api/v9/users/@me/connections/domain/example.org, which returns 404, and the modal shows 'Endpoint not found'. About 20 providers are listed (Bluesky, PayPal, Steam, PlayStation, Xbox, Crunchyroll, Roblox, Amazon Music and others), but the server doesn't support many of them.",
+  "expected": "Each listed provider either works or is hidden. Domain verification shows the DNS TXT instructions. Errors show up in the UI.",
+  "evidence": "400 GET /api/v9/connections/steam/authorize; 404 POST /api/v9/users/@me/connections/domain/example.org",
+  "suspected_cause": "src/api/routes/connections/#connection_name/authorize.ts provider list doesn't include several listed providers. There's no users/@me/connections/domain route, and no client patch hides unsupported providers."
+ },
+ {
+  "screen": "User Settings > Edit Profiles (decorations, nameplates, effects, frames), Appearance",
+  "title": "Collectibles and other assets load from cdn.discordapp.com instead of the local CDN",
+  "severity": "wrong",
+  "steps": "1. Open Edit Profiles and click Change Decoration, Change Nameplate, Change Effect or Change Frame.\n2. Or open Appearance.",
+  "observed": "Opening the pickers fires about 700 requests to https://cdn.discordapp.com/media/v1/collectibles-shop/<sku>/static|animated|video, several of which are aborted. There are also 32 to https://cdn.discordapp.com/assets/content/<hash>. The .riv animation https://cdn.discordapp.com/assets/content/b02469d4...riv fails with a CORS error, followed by 'Rive file load error' and an uncaught 'Failed to fetch'. Appearance loads https://cdn.discordapp.com/assets/content/568728735ebc...svg. GET /users/@me/collectibles-purchases returns asset URLs that point at https://cdn.discordapp.com/assets/content/...",
+  "expected": "Everything is served by the instance's own CDN, which already has a src/cdn/routes/media/v1/collectibles-shop.ts route, so nothing depends on or leaks to Discord's CDN.",
+  "evidence": "Client module 746002: `let s=\"production\"===window.GLOBAL_ENV.PROJECT_ENV?\"https://cdn.discordapp.com\":...; ... `${s}/media/v1/collectibles-shop/${t}/...`",
+  "suspected_cause": "The client hardcodes the CDN base for collectibles, and there's no client patch to point it at the local CDN. The collectibles API data (collectibles-purchases / shop) contains absolute cdn.discordapp.com/assets/content URLs that aren't rewritten."
+ },
+ {
+  "screen": "User Settings > Edit Profiles (profile preview badges)",
+  "title": "The Premium badge icon redirects to cdn.discordapp.com",
+  "severity": "cosmetic",
+  "steps": "1. Open Edit Profiles or your own profile popout. Every user has Nitro, so the premium badge renders.",
+  "observed": "GET http://localhost:3140/badge-icons/2ba85e8026a8614b640c2837bcdfe21b.png returns a 302 to https://cdn.discordapp.com/badge-icons/2ba85e8026a8614b640c2837bcdfe21b.png.",
+  "expected": "The badge icon is stored and served locally.",
+  "evidence": "curl localhost:3140/badge-icons/2ba85e...png returns 302",
+  "suspected_cause": "src/cdn/routes/badge-icons.ts falls back to a redirect when the file is missing. The premium badge asset (PREMIUM_BADGE_ICON in src/api/routes/users/#user_id/profile.ts) isn't bundled."
+ },
+ {
+  "screen": "User Settings > Appearance",
+  "title": "Appearance shows Premium promo copy and a 'Try it out' banner to users who already have Premium",
+  "severity": "upsell",
+  "steps": "1. As tester (premium_type 2), open Appearance.",
+  "observed": "There's a banner reading 'Make your Fosscord look *juuusst* right. Create your own custom theme... Only with Premium.' with a 'Try it out' button. 'Color Themes' says 'Make Fosscord yours. Only with Premium.' and 'App Icon' says 'Change the Fosscord in-app icon, only with Premium.' The features themselves work: the custom theme editor applies and persists, and the app icon choice persists.",
+  "expected": "Every user has Premium for free, so there should be no 'Only with Premium' promo copy or promo banner. Show the features without the upsell wording.",
+  "evidence": "Strings nla4RG, np0X/u, IgENJo in the client. The IgENJo subtitle is unconditional.",
+  "suspected_cause": "assets/client_patches/41-hide-premium-upsells.js only hides store, shop and gift buttons. It doesn't strip these subtitles or the custom-theme promo card."
+ },
+ {
+  "screen": "User Settings > System",
+  "title": "Keybinds page tells browser users to download the desktop app",
+  "severity": "upsell",
+  "steps": "1. Open User Settings > System.",
+  "observed": "The page reads 'Custom keybinds are not currently supported in the browser. Download the desktop application to use custom keybinds.'",
+  "expected": "No 'download the app' prompts, so this sentence should be removed or reworded.",
+  "suspected_cause": "No client patch covers this string."
+ },
+ {
+  "screen": "User Settings > Account (GET /users/@me)",
+  "title": "/users/@me returns internal fields totp_secret, totp_last_ticket and fingerprints",
+  "severity": "cosmetic",
+  "steps": "1. Call GET /api/v9/users/@me with a user token.",
+  "observed": "The response includes \"totp_secret\":\"\", \"totp_last_ticket\":\"\" and \"fingerprints\":[]. They were empty strings even while MFA was on.",
+  "expected": "Discord's /users/@me never includes these fields.",
+  "evidence": "{...\"totp_secret\":\"\",\"totp_last_ticket\":\"\",...\"fingerprints\":[]...}",
+  "suspected_cause": "PrivateUserProjection or the toJSON of the User entity in src/database/entities/User.ts includes these columns."
+ },
+ {
+  "screen": "DM view, Wave to say hi",
+  "title": "Wave in a DM is saved as a broken reply ('Message could not be loaded') and can reference a random message",
+  "severity": "broken",
+  "steps": "Log in as tester, open the seeded DM with friend (/channels/@me/<dm>), click the 'Wave to friend' button under the messages.",
+  "observed": "The client sends POST /api/v9/channels/<dm>/greet with body {sticker_ids:[id], allowed_mentions, message_reference: undefined}. The server stores a type 19 (REPLY) message with message_reference {type:0} and no message_id, so the wave sticker renders under a reply header 'Message could not be loaded'. GET /channels/<dm>/messages returns {type:19, message_reference:{type:0}} for it. The route also resolves the target with Message.findOneOrFail({where:{id: undefined, channel_id: undefined, guild_id: undefined}}), which TypeORM treats as no filter and returns an arbitrary message from any channel, then sets it as referenced_message.",
+  "expected": "In real Discord a DM wave without a reference is a normal sticker message (type 0, no message_reference). A reply-greet only happens when message_reference is given, and it must point to a message in the same channel.",
+  "evidence": "Screenshot s17_wave.png. Stored message: {\"type\":19,\"ref\":{\"type\":0},\"stickers\":[{\"name\":\"Wave\"}]}",
+  "suspected_cause": "src/api/routes/channels/#channel_id/greet.ts: always sets type REPLY and message_reference {...payload.message_reference, type:0}; findOneOrFail with undefined where-values when message_reference is absent."
+ },
+ {
+  "screen": "DM call",
+  "title": "Starting a DM voice call never rings the other user (no CALL_CREATE)",
+  "severity": "broken",
+  "steps": "As tester open the DM with friend, click 'Start Voice Call' in the header. Watch friend's gateway (or friend's client).",
+  "observed": "The client sends op 4 with channel_id = DM id. friend only receives a VOICE_STATE_UPDATE. No CALL_CREATE or CALL_UPDATE is emitted to either user, so the caller's call view shows only their own avatar (no ringing callee) and the callee gets no incoming-call ring. rg finds no CALL_CREATE anywhere in src/.",
+  "expected": "Discord emits CALL_CREATE (with ringing:[recipient ids]) to all recipients when someone joins voice in a DM or group DM, CALL_UPDATE as ringing changes, and CALL_DELETE when the call ends; the callee sees the incoming call modal.",
+  "evidence": "Screenshot s32_call.png; friend gateway events: [\"VOICE_STATE_UPDATE\"] only.",
+  "suspected_cause": "Gateway voice state handler (src/gateway/opcodes/VoiceStateUpdate.ts) has no private-channel call logic; no /channels/:id/call/ring route exists."
+ },
+ {
+  "screen": "Group DM, Invite to Group DM popout",
+  "title": "Group DM invite links fail with 404 'This channel doesn't exist'",
+  "severity": "broken",
+  "steps": "As tester open a group DM you own, click 'Invite to Group DM' (header button or the button under the welcome text).",
+  "observed": "The popout opens and the client immediately calls POST /api/v9/channels/<groupdm>/invites {max_age:86400}, which returns 404. The 'Or, send an invite link' section cannot produce a link.",
+  "expected": "Real Discord lets group DM owners create invite links (POST /channels/{id}/invites works for type 3 channels, returning an invite with channel and no guild).",
+  "evidence": "server.log: \"POST /api/v9/channels/1555585305782823788/invites HTTP/1.1\" 404",
+  "suspected_cause": "src/api/routes/channels/#channel_id/invites.ts lines ~56-57: `if (!channel.guild_id) throw new HTTPError(\"This channel doesn't exist\", 404)`."
+ },
+ {
+  "screen": "Friends list, accepting a request",
+  "title": "After a friend request is accepted, both users see each other as Offline until reload",
+  "severity": "wrong",
+  "steps": "Open third's client (online) and tester's client (online). tester sends third a request; third accepts it from Pending. Look at tester's All tab and third's friends list.",
+  "observed": "tester's All list shows third as 'Offline', and third gets no Online tab even though tester is connected. After reloading both clients they show each other online.",
+  "expected": "Discord sends the new friend's current presence (PRESENCE_UPDATE) right after RELATIONSHIP_ADD type 1, so the status is live immediately.",
+  "evidence": "s7 output: tester's All list 'third Offline' while third had an open session; s8 after reload shows Online for both.",
+  "suspected_cause": "src/gateway/listener/listener.ts case RELATIONSHIP_ADD (~line 277) subscribes to future presence updates of the new friend but never sends their current presence."
+ },
+ {
+  "screen": "Group DM",
+  "title": "Group DM rename, member add/remove, icon change and leave create no system messages",
+  "severity": "wrong",
+  "steps": "As tester create a group DM with friend and third, set the name 'QA Group' in the create modal, remove third from the member list context menu, re-add third with Invite to Group DM, change the icon via Edit Group, then as third use Leave Group.",
+  "observed": "All actions succeed (PATCH name/icon, DELETE/PUT recipients, DELETE channel) but GET /channels/<group>/messages stays empty. The chat shows only the welcome header.",
+  "expected": "Discord posts system messages in the group: 'tester changed the channel name: QA Group' (type 4), 'tester added third to the group.' (type 1), 'tester removed third from the group.' (type 2), 'tester changed the channel icon.' (type 5), 'third left the group.' (type 2).",
+  "evidence": "a2.mjs on the group returned no messages after all actions.",
+  "suspected_cause": "src/api/routes/channels/#channel_id/index.ts only sends CHANNEL_NAME_CHANGE for threads; src/api/routes/channels/#channel_id/recipients.ts and the channel DELETE path create no RECIPIENT_ADD/RECIPIENT_REMOVE messages."
+ },
+ {
+  "screen": "DMs, stranger messaging",
+  "title": "A user with no mutual server and no friendship can DM anyone",
+  "severity": "wrong",
+  "steps": "Register a third account that shares no guild with tester and is not their friend. As third, POST /users/@me/channels {recipients:[tester]} then POST a message to it.",
+  "observed": "Both calls succeed (200) and the message is delivered to tester as a message request.",
+  "expected": "Real Discord rejects the message with 400 {code:50007, 'Cannot send messages to this user'} unless the users are friends or share a server whose DM setting allows it.",
+  "evidence": "a5.mjs: 'send no-mutual 200' before third joined Test Guild.",
+  "suspected_cause": "src/api/routes/channels/#channel_id/messages/index.ts DM permission check only handles blocks, not the mutual-guild/friend requirement."
+ },
+ {
+  "screen": "Friends, sending a request to someone who blocked you",
+  "title": "Friend request to a user who blocked you reveals the block",
+  "severity": "wrong",
+  "steps": "tester blocks third. As third send a friend request to 'tester' from Add Friend (POST /users/@me/relationships {username:'tester'}).",
+  "observed": "400 {\"code\":400,\"message\":\"Error: The user blocked you\"}",
+  "expected": "Discord does not tell the sender they are blocked; the request fails with a generic error (the client shows the generic 'Hm, didn't work' message), and the error has a real Discord error code without an 'Error: ' prefix.",
+  "evidence": "a5/inline API test output.",
+  "suspected_cause": "src/api/routes/users/@me/relationships.ts error branch for blocked target."
+ },
+ {
+  "screen": "Friends page, Active Now and detectable games",
+  "title": "Detectable games database fails to load (page errors on every load) and Active Now stays empty while a friend is playing",
+  "severity": "wrong",
+  "steps": "Load /channels/@me as any user. Then make friend's presence 'Playing Minecraft' (op 3 activity type 0) and view tester's Friends page.",
+  "observed": "Every load throws 'TypeError: ... t is not iterable at GAMES_DATABASE_UPDATE' and the same at NON_GAMES_DATABASE_UPDATE. The client fetches `//${CDN_HOST}/detectables/games-v1.json` and `/detectables/non-games-v1.json`, and the server answers with the SPA index.html (200 text/html). The friend row shows 'Minecraft' but the Active Now panel still says 'It's quiet for now...'.",
+  "expected": "Those URLs should return the detectable games JSON (the server already has it at /api/v9/games/detectable), no page errors, and Active Now should list the friend playing Minecraft as real Discord does.",
+  "evidence": "curl http://localhost:3143/detectables/games-v1.json -> 200 text/html. Screenshot s36_active.png.",
+  "suspected_cause": "No static route for /detectables/*.json on the CDN host (src/cdn or the client asset fallback in src/bundle); CDN_HOST is set in src/bundle/TestClient.ts."
+ },
+ {
+  "screen": "User settings proto",
+  "title": "Concurrent first PATCH /users/@me/settings-proto/1 returns 500 (duplicate key)",
+  "severity": "wrong",
+  "steps": "With a user that has no user_settings_protos row yet, open a DM in the client (it sends several settings-proto/1 PATCHes at once, e.g. timezoneOffset).",
+  "observed": "4 parallel PATCH requests return 500. server.log: QueryFailedError duplicate key value violates unique constraint on user_settings_protos (user_id) at patchUserSettings (settings-proto/1.ts:164). The error log line also says 400 while the response is 500.",
+  "expected": "The settings write should upsert and return 200 for every request.",
+  "evidence": "server.log '[Error] 400 /api/v9/users/@me/settings-proto/1 QueryFailedError: duplicate key ... Key (user_id)=(...) already exists.' followed by four 500 access log lines.",
+  "suspected_cause": "src/api/routes/users/@me/settings-proto/1.ts patchUserSettings: UserSettingsProtos.getOrDefault then save() inserts without upsert, so concurrent requests race."
+ },
+ {
+  "screen": "DM sidebar",
+  "title": "Quests entry is shown in the DM sidebar and the client polls quest endpoints",
+  "severity": "upsell",
+  "steps": "Log in and look at the DM sidebar on /channels/@me.",
+  "observed": "A 'Quests' nav item (link /quest-home) sits under Friends. The client also calls /api/v9/quests/@me, /quests/decision and /quests/get-decisions (all 404; one produces 'PAGEERR Object').",
+  "expected": "No Quests UI anywhere.",
+  "evidence": "Screenshot s1_home.png; anchors include '/quest-home'.",
+  "suspected_cause": "Client patching or experiment config not hiding the quests home entry."
+ },
+ {
+  "screen": "Server sidebar",
+  "title": "'Download Apps' button is shown in the server list",
+  "severity": "upsell",
+  "steps": "Look at the bottom of the guild bar on any page.",
+  "observed": "guildsnav___app-download-button 'Download Apps' icon is present below Discover.",
+  "expected": "No download-the-app upsell.",
+  "evidence": "s37 output and every screenshot.",
+  "suspected_cause": "Client patching does not remove the app download button."
+ },
+ {
+  "screen": "Every page (Friends, DMs)",
+  "title": "Client requests discord.com / discordapp.com hosts that should be local",
+  "severity": "wrong",
+  "steps": "Load /channels/@me and open a user popout.",
+  "observed": "Requests to https://status.discord.com/api/v2/scheduled-maintenances/upcoming.json, /active.json, /incidents/unresolved.json, https://cdn.discordapp.com/changelogs/config_0.json (CORS failure, throws 'Request has been terminated' page error), https://cdn.discordapp.com/bad-domains/current_revision.txt and updated_hashes.json, and https://cdn.discordapp.com/badge-icons/2ba85e8026a8614b640c2837bcdfe21b.png for the Nitro profile badge. The help icon links to http://support.discord.com.",
+  "expected": "Everything served locally or disabled; no traffic to Discord hosts.",
+  "evidence": "Playwright request log 'EXTERNAL GET ...' entries.",
+  "suspected_cause": "Badge icon: profile badges in src/api/routes/users/#user_id/profile.ts return a Discord icon hash that the client resolves against cdn.discordapp.com. The others are client constants not rewritten by the bundle patches."
+ },
+ {
+  "screen": "Group DM REST shape",
+  "title": "GET /channels/:id for a group DM omits recipients and /users/@me/channels sends public_flags as a string",
+  "severity": "cosmetic",
+  "steps": "GET /api/v9/channels/<groupdm> and GET /api/v9/users/@me/channels as the owner.",
+  "observed": "GET /channels/<id> has no recipients field (and has extra created_at/status/permission_overwrites:null). In /users/@me/channels recipients have public_flags:\"0\" (string) and badge_ids:null, and is_message_request is missing (it is only sent in READY).",
+  "expected": "Discord's channel object for type 1/3 includes recipients (partial users with numeric public_flags) on both endpoints.",
+  "evidence": "{\"id\":\"1555585305782823788\",\"type\":3,...} with no recipients; recipients entry {\"public_flags\":\"0\",\"badge_ids\":null}",
+  "suspected_cause": "Channel toJSON / DmChannelDTO in src/util/entities/Channel.ts and src/util/dtos."
+ }
+]
