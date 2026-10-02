@@ -245,6 +245,7 @@ ${final ? 1 : 0}`);
     const prepareUpload = async (opts) => {
       const upload = uploads.get(opts.url);
       const { "Content-Range": contentRange, ...headers } = opts.headers ?? {};
+      if (contentRange && !/^bytes \d+-/.test(contentRange)) return opts;
       const resumeAt = Number(/^bytes (\d+)-/.exec(contentRange ?? "")?.[1] ?? 0);
       if (!upload.encrypted) {
         if (resumeAt || !(opts.body instanceof Blob)) throw new Error("an upload can only be encrypted from its first byte");
