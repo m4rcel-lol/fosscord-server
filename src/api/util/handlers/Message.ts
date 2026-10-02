@@ -578,6 +578,7 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
         return attachment;
     }
     for (const embed of message.embeds) {
+        embed.type ||= EmbedType.rich;
         const footer = embed.footer;
         const footerAttachment = fetchAttachment(footer?.icon_url);
         if (footerAttachment !== undefined) {

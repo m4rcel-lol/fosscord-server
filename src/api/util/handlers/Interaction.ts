@@ -23,6 +23,7 @@ import {
     ApplicationCommandOptionType,
     ApplicationCommandType,
     BaseMessageComponents,
+    EmbedType,
     InteractionCallbacksSchema,
     InteractionCallbackType,
     InteractionFailureReason,
@@ -298,7 +299,7 @@ export async function editInteractionMessage(interaction: PendingInteraction, me
     const wasLoading = (message.flags & LOADING) !== 0;
 
     if (data.content !== undefined) message.content = data.content ?? "";
-    if (data.embeds !== undefined) message.embeds = data.embeds ?? [];
+    if (data.embeds !== undefined) message.embeds = (data.embeds ?? []).map((embed) => ({ ...embed, type: embed.type || EmbedType.rich }));
     if (data.components !== undefined) {
         const flags = data.flags ?? message.flags;
         if (data.components) handleComps(data.components, flags);
