@@ -68,10 +68,27 @@ const link = createLink(engine, api, {
     onDismiss: (requestId) => ui.dismissApproval(requestId),
 });
 
+const apiBase = () => {
+    const env = (window as unknown as { GLOBAL_ENV?: { API_ENDPOINT?: string; API_VERSION?: number } }).GLOBAL_ENV;
+    return `${env?.API_ENDPOINT ?? "/api"}/v${env?.API_VERSION ?? 9}`;
+};
+
+const tokenApi = (token: string): Api => ({
+    async request<T>(method: "get" | "post" | "put" | "patch" | "del", url: string, body?: unknown) {
+        const res = await fetch(`${apiBase()}${url}`, {
+            method: method === "del" ? "DELETE" : method.toUpperCase(),
+            headers: { "content-type": "application/json", authorization: token },
+            body: body === undefined ? undefined : JSON.stringify(body),
+        });
+        const parsed = await res.json().catch(() => null);
+        if (!res.ok) throw { ok: false, status: res.status, body: parsed };
+        return parsed as T;
+    },
+});
+
 const verifyPassword = async (password: string) => {
     const me = await api.request<{ email?: string | null }>("get", "/users/@me");
-    const env = (window as unknown as { GLOBAL_ENV?: { API_ENDPOINT?: string; API_VERSION?: number } }).GLOBAL_ENV;
-    const base = `${env?.API_ENDPOINT ?? "/api"}/v${env?.API_VERSION ?? 9}`;
+    const base = apiBase();
     const res = await fetch(`${base}/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ login: me.email, password }) });
     const body = (await res.json().catch(() => null)) as { token?: string; ticket?: string } | null;
     if (body?.token) await fetch(`${base}/auth/logout`, { method: "POST", headers: { "content-type": "application/json", authorization: body.token }, body: "{}" }).catch(() => {});
@@ -109,11 +126,13 @@ const hooks = createHooks({
     states,
     failClosed: () => failure !== null,
     isReady: () => readyNow,
-    onCredentials: (path, body) => {
+    onCredentials: (path, body, response) => {
         const password = typeof body.password === "string" ? body.password : undefined;
         const next = typeof body.new_password === "string" ? body.new_password : undefined;
         if (path !== "/users/@me") return password && engine.rememberPassword(password);
-        if (next) engine.passwordChanged(password, next).catch((error) => console.error("[e2ee] couldn't rewrap the backup", error));
+        if (!next) return;
+        const token = (response as { token?: unknown } | null)?.token;
+        engine.passwordChanged(password, next, typeof token === "string" ? tokenApi(token) : undefined).catch((error) => console.error("[e2ee] couldn't rewrap the backup", error));
     },
     onState: () => ui.refresh(),
     onError: (error, channelId) => ui.showError(error, channelId),

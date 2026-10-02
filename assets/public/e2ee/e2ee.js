@@ -2592,6 +2592,7 @@ ${sig}`;
     deviceStatus = "unregistered";
     identity = null;
     trustedKey = null;
+    serverKey = null;
     device = null;
     devices = [];
     prekeys = [];
@@ -2636,10 +2637,10 @@ ${sig}`;
       this.password = { value, at: Date.now() };
       if (this.userId) this.refresh().catch((error) => console.error("[e2ee] password refresh failed", error));
     }
-    async passwordChanged(previous, next) {
+    async passwordChanged(previous, next, api2 = this.api) {
       if (!this.userId) return this.rememberPassword(next);
       await this.serialized(async () => {
-        const backup = this.backup = await this.fetchBackup();
+        const backup = this.backup = await this.fetchBackup(api2);
         if (!backup || backup.mode !== "password") return;
         let secret = this.secret;
         if (!secret && previous && backup.wrapped_secret) secret = await unwrapSecret(this.userId, backup, previous).catch(() => null);
@@ -2647,7 +2648,10 @@ ${sig}`;
           this.password = { value: next, at: Date.now() };
           return;
         }
-        this.backup = await this.api.request("patch", "/users/@me/e2ee/backup", { version: backup.version, ...await wrapSecret(this.userId, "password", next, secret) });
+        this.backup = await api2.request("patch", "/users/@me/e2ee/backup", {
+          version: backup.version,
+          ...await wrapSecret(this.userId, "password", next, secret)
+        });
         this.password = null;
       });
       this.emit();
@@ -2688,9 +2692,9 @@ ${sig}`;
     currentPrekey() {
       return this.prekeys.reduce((a, b) => b.id > a.id ? b : a);
     }
-    async fetchBackup() {
+    async fetchBackup(api2 = this.api) {
       try {
-        return await this.api.request("get", "/users/@me/e2ee/backup");
+        return await api2.request("get", "/users/@me/e2ee/backup");
       } catch (error) {
         if (error?.status === 404) return null;
         throw error;
@@ -2768,7 +2772,10 @@ ${sig}`;
       }
       const current = backup.wrapped_secret ? await unwrapSecret(this.userId, backup, password).catch(() => null) : null;
       if (!current || !sameBytes(current, this.secret))
-        this.backup = await this.api.request("patch", "/users/@me/e2ee/backup", { version: backup.version, ...await wrapSecret(this.userId, "password", password, this.secret) });
+        this.backup = await this.api.request("patch", "/users/@me/e2ee/backup", {
+          version: backup.version,
+          ...await wrapSecret(this.userId, "password", password, this.secret)
+        });
       this.password = null;
     }
     async ensureKeys() {
@@ -2791,6 +2798,7 @@ ${sig}`;
         this.backupKeyPair = null;
       }
       const serverKey = state.identity_key;
+      this.serverKey = serverKey;
       if (this.identity && this.identity.publicKey !== serverKey) {
         const previous = state.previous_identity;
         const rotated = previous?.public_key === this.identity.publicKey && await verify(previous.public_key, rotationMessage(userId, previous.public_key, serverKey), previous.signature);
@@ -2891,7 +2899,10 @@ ${sig}`;
       await this.serialized(async () => {
         const backup = this.backup = await this.fetchBackup();
         if (!backup) throw new E2eeError("LOCKED", "There's no backup yet");
-        this.backup = await this.api.request("patch", "/users/@me/e2ee/backup", { version: backup.version, ...await wrapSecret(this.userId, mode, input, this.secret) });
+        this.backup = await this.api.request("patch", "/users/@me/e2ee/backup", {
+          version: backup.version,
+          ...await wrapSecret(this.userId, mode, input, this.secret)
+        });
       });
       this.emit();
     }
@@ -3126,7 +3137,11 @@ backup:${this.userId}`).catch(() => null);
       }
       const payload = JSON.parse(fromUtf8(await aesDecrypt(contentKey, fromB64u(env.iv), fromB64u(env.ct), aad)));
       const content = typeof payload.content === "string" ? payload.content : "";
-      if (mine && prekey && !backupEntry && backupKey) await this.queueBackup(message.id, sig, contentKey);
+      if (mine && prekey && backupKey) {
+        const covered = !!backupEntry && !!await hpkeOpen(backupKey.keyPair, backupEntry.enc, backupEntry.wrapped, BACKUP_INFO, `${aad}
+backup:${this.userId}`).catch(() => null);
+        if (!covered) await this.queueBackup(message.id, sig, contentKey);
+      }
       if (remember) this.plaintext.set(`${message.id}:${env.sig}`, content);
       return content;
     }
@@ -3227,7 +3242,7 @@ backup:${this.userId}`).catch(() => null);
 
   // client/e2ee/src/hooks.ts
   var DECRYPTING_CONTENT = "Decrypting…";
-  var MISSING_CONTENT = "🔒 Sent before this browser was set up";
+  var MISSING_CONTENT = "Sent before this browser was set up";
   var AUTH_URL = /^\/auth\/(login|register)$/;
   var MESSAGE_URL = /^\/channels\/(\d+)\/messages(?:\/(\d+))?$/;
   var isEncryptedMessage = (value) => {
@@ -3352,7 +3367,7 @@ backup:${this.userId}`).catch(() => null);
             const body = opts.body ?? {};
             const result = original(input, callback);
             result.then(
-              (res) => res?.ok && ctx.onCredentials(path, body),
+              (res) => res?.ok && ctx.onCredentials(path, body, res.body),
               () => {
               }
             );
@@ -3477,9 +3492,17 @@ ${approver}`;
       if (!engine2.device || engine2.linked) return;
       const pair = await generateAgreementKey();
       const publicKey = await exportPublic(pair.publicKey);
-      outgoing = { requestId: toB64u(randomBytes(16)), state: "waiting", sas: null, approverName: null, pair, publicKey, approver: null, approverKey: null };
+      const current = { requestId: toB64u(randomBytes(16)), state: "waiting", sas: null, approverName: null, pair, publicKey, approver: null, approverKey: null };
+      outgoing = current;
       hooks2.onChange();
-      await post({ request_id: outgoing.requestId, stage: "request", name: deviceName(), commit: toB64u(await sha256(fromB64u(publicKey))) });
+      const body = { request_id: current.requestId, stage: "request", name: deviceName(), commit: toB64u(await sha256(fromB64u(publicKey))) };
+      await post(body);
+      let attempts = 0;
+      const timer = setInterval(() => {
+        if (outgoing !== current || current.state !== "waiting" || engine2.linked || ++attempts > 30) return clearInterval(timer);
+        post(body).catch(() => {
+        });
+      }, 1e4);
     };
     const cancel = async () => {
       const current = outgoing;
@@ -3619,7 +3642,7 @@ ${approver}`;
 .fe2ee-input{flex:1;min-width:0;font:inherit;font-size:15px;line-height:20px;padding:8px 10px;border-radius:6px;border:0;color:var(--text-default,#dbdee1);background:var(--input-background,var(--background-base-lowest,#1e1f22));box-shadow:inset 0 0 0 1px var(--border-subtle,rgb(255 255 255 / .06))}
 .fe2ee-input:focus-visible{outline:2px solid var(--focus-primary,#00a8fc);outline-offset:0}
 .fe2ee-input[aria-invalid="true"]{box-shadow:inset 0 0 0 1px var(--status-danger,#f23f43)}
-.fe2ee-error{margin:0;font-size:14px;color:var(--text-danger,#f23f43)}
+.fe2ee-error{margin:0;font-size:14px;color:var(--status-danger,#f23f43)}
 .fe2ee-code{font-size:28px;line-height:36px;font-weight:600;letter-spacing:.08em;font-variant-numeric:tabular-nums;color:var(--header-primary,#f2f3f5)}
 .fe2ee-recovery{font-size:18px;line-height:28px;font-weight:600;letter-spacing:.06em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;user-select:all;padding:12px;border-radius:8px;color:var(--header-primary,#f2f3f5);background:var(--background-base-lowest,#1e1f22)}
 .fe2ee-device{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:32px}
@@ -3824,7 +3847,7 @@ ${approver}`;
         const intro = document.createElement("p");
         intro.textContent = "This browser can't read your encrypted messages yet. Bring your keys over with one of these.";
         body.append(intro);
-        if (backup?.wrapped_secret && backup.identity_key === engine2.trustedKey) {
+        if (backup?.wrapped_secret && backup.identity_key === engine2.serverKey) {
           const own = section(
             backup.mode === "recovery" ? "Enter your recovery code" : "Enter your password",
             backup.mode === "recovery" ? "Use the code you saved when you switched to a recovery code." : void 0
@@ -4032,7 +4055,11 @@ ${approver}`;
         else if (error.code === "IDENTITY_CHANGED") text = `${who ? memberName(who) : "Someone"}'s safety number changed. Review it before sending more messages.`;
         else if (error.code === "UNSUPPORTED") text = error.message;
         else if (error.code === "NOT_LINKED") {
-          transient = { text: "This browser can't send encrypted messages until you unlock it, so your message wasn't sent.", until: Date.now() + 8e3, action: { label: "Unlock", run: showUnlock } };
+          transient = {
+            text: "This browser can't send encrypted messages until you unlock it, so your message wasn't sent.",
+            until: Date.now() + 8e3,
+            action: { label: "Unlock", run: showUnlock }
+          };
           refresh();
           setTimeout(refresh, 8100);
           return;
@@ -4247,10 +4274,25 @@ ${approver}`;
     onChange: () => ui.renderUnlock(),
     onDismiss: (requestId) => ui.dismissApproval(requestId)
   });
+  var apiBase = () => {
+    const env = window.GLOBAL_ENV;
+    return `${env?.API_ENDPOINT ?? "/api"}/v${env?.API_VERSION ?? 9}`;
+  };
+  var tokenApi = (token) => ({
+    async request(method, url, body) {
+      const res = await fetch(`${apiBase()}${url}`, {
+        method: method === "del" ? "DELETE" : method.toUpperCase(),
+        headers: { "content-type": "application/json", authorization: token },
+        body: body === void 0 ? void 0 : JSON.stringify(body)
+      });
+      const parsed = await res.json().catch(() => null);
+      if (!res.ok) throw { ok: false, status: res.status, body: parsed };
+      return parsed;
+    }
+  });
   var verifyPassword = async (password) => {
     const me = await api.request("get", "/users/@me");
-    const env = window.GLOBAL_ENV;
-    const base = `${env?.API_ENDPOINT ?? "/api"}/v${env?.API_VERSION ?? 9}`;
+    const base = apiBase();
     const res = await fetch(`${base}/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ login: me.email, password }) });
     const body = await res.json().catch(() => null);
     if (body?.token) await fetch(`${base}/auth/logout`, { method: "POST", headers: { "content-type": "application/json", authorization: body.token }, body: "{}" }).catch(() => {
@@ -4285,11 +4327,13 @@ ${approver}`;
     states,
     failClosed: () => failure !== null,
     isReady: () => readyNow,
-    onCredentials: (path, body) => {
+    onCredentials: (path, body, response) => {
       const password = typeof body.password === "string" ? body.password : void 0;
       const next = typeof body.new_password === "string" ? body.new_password : void 0;
       if (path !== "/users/@me") return password && engine.rememberPassword(password);
-      if (next) engine.passwordChanged(password, next).catch((error) => console.error("[e2ee] couldn't rewrap the backup", error));
+      if (!next) return;
+      const token = response?.token;
+      engine.passwordChanged(password, next, typeof token === "string" ? tokenApi(token) : void 0).catch((error) => console.error("[e2ee] couldn't rewrap the backup", error));
     },
     onState: () => ui.refresh(),
     onError: (error, channelId) => ui.showError(error, channelId)

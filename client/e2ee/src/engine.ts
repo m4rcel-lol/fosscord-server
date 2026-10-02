@@ -202,6 +202,7 @@ export class Engine {
     deviceStatus: ServerDevice["status"] | "unregistered" = "unregistered";
     identity: StoredIdentity | null = null;
     trustedKey: string | null = null;
+    serverKey: string | null = null;
     device: StoredDevice | null = null;
     devices: ServerDevice[] = [];
     prekeys: StoredPrekey[] = [];
@@ -255,10 +256,10 @@ export class Engine {
         if (this.userId) this.refresh().catch((error) => console.error("[e2ee] password refresh failed", error));
     }
 
-    async passwordChanged(previous: string | undefined, next: string) {
+    async passwordChanged(previous: string | undefined, next: string, api: Api = this.api) {
         if (!this.userId) return this.rememberPassword(next);
         await this.serialized(async () => {
-            const backup = (this.backup = await this.fetchBackup());
+            const backup = (this.backup = await this.fetchBackup(api));
             if (!backup || backup.mode !== "password") return;
             let secret = this.secret;
             if (!secret && previous && backup.wrapped_secret) secret = await unwrapSecret(this.userId, backup, previous).catch(() => null);
@@ -266,7 +267,7 @@ export class Engine {
                 this.password = { value: next, at: Date.now() };
                 return;
             }
-            this.backup = await this.api.request<BackupRecord>("patch", "/users/@me/e2ee/backup", {
+            this.backup = await api.request<BackupRecord>("patch", "/users/@me/e2ee/backup", {
                 version: backup.version,
                 ...(await wrapSecret(this.userId, "password", next, secret)),
             });
@@ -315,9 +316,9 @@ export class Engine {
         return this.prekeys.reduce((a, b) => (b.id > a.id ? b : a));
     }
 
-    private async fetchBackup() {
+    private async fetchBackup(api: Api = this.api) {
         try {
-            return await this.api.request<BackupRecord>("get", "/users/@me/e2ee/backup");
+            return await api.request<BackupRecord>("get", "/users/@me/e2ee/backup");
         } catch (error) {
             if ((error as { status?: number })?.status === 404) return null;
             throw error;
@@ -431,6 +432,7 @@ export class Engine {
             this.backupKeyPair = null;
         }
         const serverKey = state.identity_key!;
+        this.serverKey = serverKey;
 
         if (this.identity && this.identity.publicKey !== serverKey) {
             const previous = state.previous_identity;
@@ -801,7 +803,11 @@ export class Engine {
         }
         const payload = JSON.parse(fromUtf8(await aesDecrypt(contentKey, fromB64u(env.iv), fromB64u(env.ct), aad))) as { content?: unknown };
         const content = typeof payload.content === "string" ? payload.content : "";
-        if (mine && prekey && !backupEntry && backupKey) await this.queueBackup(message.id, sig, contentKey);
+        if (mine && prekey && backupKey) {
+            const covered =
+                !!backupEntry && !!(await hpkeOpen(backupKey.keyPair, backupEntry.enc, backupEntry.wrapped, BACKUP_INFO, `${aad}\nbackup:${this.userId}`).catch(() => null));
+            if (!covered) await this.queueBackup(message.id, sig, contentKey);
+        }
         if (remember) this.plaintext.set(`${message.id}:${env.sig}`, content);
         return content;
     }

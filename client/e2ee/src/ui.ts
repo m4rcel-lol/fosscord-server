@@ -75,7 +75,7 @@ const css = `
 .fe2ee-input{flex:1;min-width:0;font:inherit;font-size:15px;line-height:20px;padding:8px 10px;border-radius:6px;border:0;color:var(--text-default,#dbdee1);background:var(--input-background,var(--background-base-lowest,#1e1f22));box-shadow:inset 0 0 0 1px var(--border-subtle,rgb(255 255 255 / .06))}
 .fe2ee-input:focus-visible{outline:2px solid var(--focus-primary,#00a8fc);outline-offset:0}
 .fe2ee-input[aria-invalid="true"]{box-shadow:inset 0 0 0 1px var(--status-danger,#f23f43)}
-.fe2ee-error{margin:0;font-size:14px;color:var(--text-danger,#f23f43)}
+.fe2ee-error{margin:0;font-size:14px;color:var(--status-danger,#f23f43)}
 .fe2ee-code{font-size:28px;line-height:36px;font-weight:600;letter-spacing:.08em;font-variant-numeric:tabular-nums;color:var(--header-primary,#f2f3f5)}
 .fe2ee-recovery{font-size:18px;line-height:28px;font-weight:600;letter-spacing:.06em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;user-select:all;padding:12px;border-radius:8px;color:var(--header-primary,#f2f3f5);background:var(--background-base-lowest,#1e1f22)}
 .fe2ee-device{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:32px}
@@ -309,7 +309,7 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword }
             const intro = document.createElement("p");
             intro.textContent = "This browser can't read your encrypted messages yet. Bring your keys over with one of these.";
             body.append(intro);
-            if (backup?.wrapped_secret && backup.identity_key === engine.trustedKey) {
+            if (backup?.wrapped_secret && backup.identity_key === engine.serverKey) {
                 const own = section(
                     backup.mode === "recovery" ? "Enter your recovery code" : "Enter your password",
                     backup.mode === "recovery" ? "Use the code you saved when you switched to a recovery code." : undefined,

@@ -22,7 +22,7 @@ import { DispatchHandler, Dispatcher, FluxAction, GatewayStore, HttpCall, HttpCl
 export type MessageState = "decrypted" | "pending" | "missing" | "failed";
 
 export const DECRYPTING_CONTENT = "Decrypting…";
-export const MISSING_CONTENT = "🔒 Sent before this browser was set up";
+export const MISSING_CONTENT = "Sent before this browser was set up";
 
 export interface HookContext {
     engine: Engine;
@@ -31,7 +31,7 @@ export interface HookContext {
     failClosed: () => boolean;
     isReady: () => boolean;
     onState: () => void;
-    onCredentials: (path: string, body: { password?: unknown; new_password?: unknown }) => void;
+    onCredentials: (path: string, body: { password?: unknown; new_password?: unknown }, response: unknown) => void;
     onError: (error: unknown, channelId: string) => void;
 }
 
@@ -169,7 +169,7 @@ export const createHooks = (ctx: HookContext) => {
                     const body = (opts.body ?? {}) as { password?: unknown; new_password?: unknown };
                     const result = original(input, callback);
                     result.then(
-                        (res) => res?.ok && ctx.onCredentials(path, body),
+                        (res) => res?.ok && ctx.onCredentials(path, body, res.body),
                         () => {},
                     );
                     return result;

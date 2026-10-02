@@ -85,9 +85,25 @@ export const createLink = (engine: Engine, api: Api, hooks: { onPrompt: (prompt:
         if (!engine.device || engine.linked) return;
         const pair = await generateAgreementKey();
         const publicKey = await exportPublic(pair.publicKey);
-        outgoing = { requestId: toB64u(randomBytes(16)), state: "waiting", sas: null, approverName: null, pair, publicKey, approver: null, approverKey: null };
+        const current: OutgoingInternal = {
+            requestId: toB64u(randomBytes(16)),
+            state: "waiting",
+            sas: null,
+            approverName: null,
+            pair,
+            publicKey,
+            approver: null,
+            approverKey: null,
+        };
+        outgoing = current;
         hooks.onChange();
-        await post({ request_id: outgoing.requestId, stage: "request", name: deviceName(), commit: toB64u(await sha256(fromB64u(publicKey))) });
+        const body = { request_id: current.requestId, stage: "request", name: deviceName(), commit: toB64u(await sha256(fromB64u(publicKey))) };
+        await post(body);
+        let attempts = 0;
+        const timer = setInterval(() => {
+            if (outgoing !== current || current.state !== "waiting" || engine.linked || ++attempts > 30) return clearInterval(timer);
+            post(body).catch(() => {});
+        }, 10000);
     };
 
     const cancel = async () => {
