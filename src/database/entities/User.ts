@@ -81,8 +81,8 @@ export class User extends BaseClass {
     @Column({ nullable: true })
     pronouns?: string;
 
-    @Column({ nullable: true, select: false })
-    phone?: string; // phone number of the user
+    @Column({ nullable: true, select: false, type: String })
+    phone?: string | null; // phone number of the user
 
     @Column({ select: false })
     desktop: boolean = false; // if the user has desktop app installed
