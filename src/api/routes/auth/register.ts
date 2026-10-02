@@ -262,24 +262,9 @@ router.post(
 
         logTrace("Email checks");
 
-        if (register.dateOfBirth.required && !body.date_of_birth) {
-            throw FieldErrors({
-                date_of_birth: {
-                    code: "BASE_TYPE_REQUIRED",
-                    message: req.t("common:field.BASE_TYPE_REQUIRED"),
-                },
-            });
-        } else if (register.dateOfBirth.required && register.dateOfBirth.minimum) {
-            const minimum = new Date();
-            minimum.setFullYear(minimum.getFullYear() - register.dateOfBirth.minimum);
-
-            let parsedDob;
-            try {
-                parsedDob = new Date(body.date_of_birth as Date);
-                if (isNaN(parsedDob.getTime())) {
-                    throw new Error("Invalid date");
-                }
-            } catch (e) {
+        if (body.date_of_birth) {
+            const parsedDob = new Date(body.date_of_birth);
+            if (Number.isNaN(parsedDob.getTime())) {
                 throw FieldErrors({
                     date_of_birth: {
                         code: "DATE_OF_BIRTH_INVALID",
@@ -288,7 +273,8 @@ router.post(
                 });
             }
 
-            // higher is younger
+            const minimum = new Date();
+            minimum.setFullYear(minimum.getFullYear() - register.dateOfBirth.minimum);
             if (parsedDob > minimum) {
                 throw FieldErrors({
                     date_of_birth: {

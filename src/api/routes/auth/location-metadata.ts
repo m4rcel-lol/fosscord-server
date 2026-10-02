@@ -38,7 +38,7 @@ router.get(
         res.json({
             consent_required: false,
             country_code: country_code ?? "US",
-            promotional_email_opt_in: { required: true, pre_checked: false },
+            promotional_email_opt_in: { required: false, pre_checked: false },
         });
     },
 );
