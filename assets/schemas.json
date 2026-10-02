@@ -3960,6 +3960,37 @@
             "discovery_excluded": {
                 "type": "boolean"
             },
+            "premium_features": {
+                "type": "object",
+                "properties": {
+                    "features": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "additional_emoji_slots": {
+                        "type": "integer"
+                    },
+                    "additional_sticker_slots": {
+                        "type": "integer"
+                    },
+                    "additional_sound_slots": {
+                        "type": "integer"
+                    }
+                },
+                "additionalProperties": false,
+                "required": [
+                    "additional_emoji_slots",
+                    "additional_sound_slots",
+                    "additional_sticker_slots",
+                    "features"
+                ]
+            },
+            "applyBoostPerks": {
+                "type": "object",
+                "additionalProperties": false
+            },
             "toDiscoverableGuild": {
                 "type": "object",
                 "additionalProperties": false
@@ -3987,6 +4018,7 @@
         },
         "additionalProperties": false,
         "required": [
+            "applyBoostPerks",
             "bans",
             "channel_ordering",
             "channels",
@@ -11544,6 +11576,33 @@
             "discovery_excluded": {
                 "type": "boolean",
                 "default": false
+            },
+            "premium_features": {
+                "type": "object",
+                "properties": {
+                    "features": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "additional_emoji_slots": {
+                        "type": "integer"
+                    },
+                    "additional_sticker_slots": {
+                        "type": "integer"
+                    },
+                    "additional_sound_slots": {
+                        "type": "integer"
+                    }
+                },
+                "additionalProperties": false,
+                "required": [
+                    "additional_emoji_slots",
+                    "additional_sound_slots",
+                    "additional_sticker_slots",
+                    "features"
+                ]
             },
             "id": {
                 "type": "string"
