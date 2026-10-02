@@ -19,7 +19,7 @@
 import { Router, Response, Request } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { fileTypeFromBuffer } from "file-type";
-import { storage, setCacheControl, multer, validateServerAuth } from "../../../util";
+import { storage, setCacheControl, setCacheControlNotFound, multer, validateServerAuth, fetchUpstreamAsset, sendAsset } from "../../../util";
 import { Config } from "@spacebar/util";
 import crypto from "node:crypto";
 
@@ -37,7 +37,7 @@ router.get("/:sku_id/static", setCacheControl, async (req: Request, res: Respons
         file = await storage.get(basePath + "/static");
     } else if (await storage.exists(basePath + "/animated")) {
         file = await storage.get(basePath + "/animated");
-    } else throw new HTTPError("not found", 404);
+    } else return sendUpstream(req, res, `${sku_id}/static`);
 
     const type = await fileTypeFromBuffer(file!);
 
@@ -55,7 +55,7 @@ router.get("/:sku_id/animated", setCacheControl, async (req: Request, res: Respo
         file = await storage.get(basePath + "/animated");
     } else if (await storage.exists(basePath + "/static")) {
         file = await storage.get(basePath + "/static");
-    } else throw new HTTPError("not found", 404);
+    } else return sendUpstream(req, res, `${sku_id}/animated`);
 
     const type = await fileTypeFromBuffer(file!);
 
@@ -63,6 +63,17 @@ router.get("/:sku_id/animated", setCacheControl, async (req: Request, res: Respo
 
     return res.send(file);
 });
+
+router.get("/*path", setCacheControl, async (req: Request, res: Response) => sendUpstream(req, res, ([req.params.path].flat() as string[]).join("/")));
+
+async function sendUpstream(req: Request, res: Response, asset: string) {
+    const segments = asset.split("/");
+    if (segments.length > 4 || !segments.every((x) => /^[a-z0-9_-]{1,64}$/i.test(x))) return setCacheControlNotFound(req, res);
+    const path = `collectibles-shop-upstream/${asset}`;
+    const file = (await storage.get(path)) ?? (await fetchUpstreamAsset(path, `https://cdn.discordapp.com/media/v1/collectibles-shop/${asset}`));
+    if (!file) return setCacheControlNotFound(req, res);
+    return sendAsset(res, file, asset);
+}
 
 router.post("/:sku_id/animated", validateServerAuth, multer.single("file"), async (req: Request, res: Response) => {
     if (!req.file) throw new HTTPError("Missing file");
