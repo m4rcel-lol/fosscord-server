@@ -4287,6 +4287,10 @@
                 "type": "object",
                 "additionalProperties": false
             },
+            "withPresenceCount": {
+                "type": "object",
+                "additionalProperties": false
+            },
             "toGuildProfile": {
                 "type": "object",
                 "additionalProperties": false
@@ -4330,7 +4334,8 @@
             "voice_states",
             "webhooks",
             "welcome_screen",
-            "widget_enabled"
+            "widget_enabled",
+            "withPresenceCount"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -12691,7 +12696,10 @@
                 "type": "string"
             },
             "phone": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "desktop": {
                 "type": "boolean",
@@ -12871,6 +12879,29 @@
                         "type": "array",
                         "items": {
                             "$ref": "#/definitions/RecentAvatar"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "account_preferences": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/AccountPreferences"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "profile_widgets": {
+                "anyOf": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/definitions/ProfileWidget"
                         }
                     },
                     {
@@ -13545,6 +13576,151 @@
             "description",
             "id",
             "storage_hash"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AccountPreferences": {
+        "type": "object",
+        "properties": {
+            "consents": {
+                "$ref": "#/definitions/Record%3Cstring%2Cboolean%3E"
+            },
+            "email_categories": {
+                "$ref": "#/definitions/Record%3Cstring%2Cboolean%3E"
+            },
+            "email_settings_initialized": {
+                "type": "boolean"
+            },
+            "harvest": {
+                "$ref": "#/definitions/HarvestRecord"
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "HarvestRecord": {
+        "type": "object",
+        "properties": {
+            "harvest_id": {
+                "type": "string"
+            },
+            "user_id": {
+                "type": "string"
+            },
+            "email": {
+                "type": "string"
+            },
+            "state": {
+                "type": "string"
+            },
+            "status": {
+                "type": "integer"
+            },
+            "created_at": {
+                "type": "string"
+            },
+            "completed_at": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "polled_at": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "updated_at": {
+                "type": "string"
+            },
+            "backends": {
+                "$ref": "#/definitions/Record%3Cstring%2Cstring%3E"
+            },
+            "shadow_run": {
+                "type": "boolean"
+            },
+            "harvest_metadata": {
+                "type": "object",
+                "properties": {
+                    "user_is_staff": {
+                        "type": "boolean"
+                    },
+                    "sla_email_sent": {
+                        "type": "boolean"
+                    },
+                    "bypass_cooldown": {
+                        "type": "boolean"
+                    },
+                    "is_provisional": {
+                        "type": "boolean"
+                    }
+                },
+                "additionalProperties": false,
+                "required": [
+                    "bypass_cooldown",
+                    "is_provisional",
+                    "sla_email_sent",
+                    "user_is_staff"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "backends",
+            "completed_at",
+            "created_at",
+            "email",
+            "harvest_id",
+            "harvest_metadata",
+            "polled_at",
+            "shadow_run",
+            "state",
+            "status",
+            "updated_at",
+            "user_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "ProfileWidget": {
+        "type": "object",
+        "properties": {
+            "id": {
+                "type": "string"
+            },
+            "data": {
+                "type": "object",
+                "additionalProperties": {
+                    "anyOf": [
+                        {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": true
+                        },
+                        {
+                            "type": [
+                                "null",
+                                "string",
+                                "integer",
+                                "boolean"
+                            ]
+                        }
+                    ]
+                },
+                "properties": {
+                    "type": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "type"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "data",
+            "id"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -20140,6 +20316,9 @@
     "DmChannelDTO": {
         "type": "object",
         "properties": {
+            "flags": {
+                "type": "integer"
+            },
             "icon": {
                 "type": [
                     "null",
@@ -20173,7 +20352,7 @@
             "recipients": {
                 "type": "array",
                 "items": {
-                    "$ref": "#/definitions/MinimalPublicUserDTO"
+                    "$ref": "#/definitions/PublicUser"
                 }
             },
             "type": {
@@ -20182,6 +20361,7 @@
         },
         "additionalProperties": false,
         "required": [
+            "flags",
             "icon",
             "id",
             "last_message_id",
@@ -20189,50 +20369,6 @@
             "origin_channel_id",
             "recipients",
             "type"
-        ],
-        "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "MinimalPublicUserDTO": {
-        "type": "object",
-        "properties": {
-            "avatar": {
-                "type": [
-                    "null",
-                    "string"
-                ]
-            },
-            "discriminator": {
-                "type": "string"
-            },
-            "id": {
-                "type": "string"
-            },
-            "public_flags": {
-                "type": "integer"
-            },
-            "username": {
-                "type": "string"
-            },
-            "badge_ids": {
-                "anyOf": [
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "type": "null"
-                    }
-                ]
-            }
-        },
-        "additionalProperties": false,
-        "required": [
-            "discriminator",
-            "id",
-            "public_flags",
-            "username"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
