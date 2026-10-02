@@ -8,7 +8,6 @@
     "plugins": {
         "BetterFolders": true,
         "BetterGifAltText": true,
-        "ClearURLs": true,
         "CopyEmojiMarkdown": true,
         "CopyUserURLs": true,
         "FavoriteEmojiFirst": true,
