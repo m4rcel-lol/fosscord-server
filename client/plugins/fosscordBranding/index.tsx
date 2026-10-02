@@ -264,6 +264,13 @@ export default definePlugin({
             },
         },
         {
+            find: "UOtD32,{guideURL:",
+            replacement: {
+                match: /(\i\.length>0)(\?\i\.intl\.format\(\i\.t\.UOtD32,\{guideURL:(\i)\}\))/,
+                replace: "$1&&$self.helpHref($3)!==false$2",
+            },
+        },
+        {
             find: "isFake:!0",
             replacement: {
                 match: /,\(0,\i\.jsx\)\(\i,\{text:\i,isFake:!0\}\)/,
