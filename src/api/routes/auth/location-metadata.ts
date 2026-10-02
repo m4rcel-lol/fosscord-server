@@ -37,7 +37,7 @@ router.get(
         const country_code = (await IpDataClient.getIpInfo(req.ip!))?.country_code;
         res.json({
             consent_required: false,
-            country_code: country_code,
+            country_code: country_code ?? "US",
             promotional_email_opt_in: { required: true, pre_checked: false },
         });
     },
