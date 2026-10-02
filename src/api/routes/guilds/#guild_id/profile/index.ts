@@ -18,6 +18,7 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
+import { profileMetadata, resolveProfileCollectibles } from "@spacebar/api/util";
 import { Guild, Member } from "@spacebar/database";
 import { Config, emitEvent, FieldErrors, getPermission, getRights, GuildMemberUpdateEvent, handleFile, Permissions } from "@spacebar/util";
 import { GuildProfileResponse, GuildVisibilityLevel, MemberChangeProfileSchema } from "@spacebar/schemas";
@@ -115,6 +116,9 @@ router.patch(
         if (body.theme_colors !== undefined) Object.assign(member, { theme_colors: body.theme_colors });
         if (body.banner !== undefined) Object.assign(member, { banner: body.banner ? await handleFile(`/guilds/${guild_id}/users/${member_id}/banners`, body.banner) : null });
 
+        if (body.collectibles_sku_ids !== undefined || body.profile_effect_id !== undefined)
+            member.profile_collectibles = await resolveProfileCollectibles(member.profile_collectibles, body.collectibles_sku_ids, body.profile_effect_id);
+
         await member.save();
 
         await emitEvent({
@@ -123,17 +127,7 @@ router.patch(
             data: { ...member.toPublicMember(), user: member.user.toPublicUser(), roles: member.roles.map((x) => x.id) },
         } satisfies GuildMemberUpdateEvent);
 
-        res.json({
-            guild_id,
-            bio: member.bio ?? "",
-            pronouns: member.pronouns ?? "",
-            banner: member.banner ?? null,
-            accent_color: null,
-            theme_colors: member.theme_colors?.length ? member.theme_colors.map(Number) : null,
-            popout_animation_particle_type: null,
-            emoji: null,
-            profile_effect: null,
-        });
+        res.json(profileMetadata(member));
     },
 );
 

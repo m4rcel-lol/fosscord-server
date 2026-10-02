@@ -37,7 +37,7 @@ import {
     PartialUser,
     PrimaryGuild,
     PrivateUserProjection,
-    ProfileEffectData,
+    ProfileCollectible,
     PublicUser,
     PublicUserProjection,
     UserPrivate,
@@ -203,7 +203,7 @@ export class User extends BaseClass {
     primary_guild?: PrimaryGuild;
 
     @Column({ type: "jsonb", nullable: true })
-    profile_effect?: ProfileEffectData | null;
+    profile_collectibles?: ProfileCollectible[] | null;
 
     @JoinColumn({ name: "avatar_decoration_id", foreignKeyConstraintName: "FK_user_avatar_decoration_id" })
     @OneToOne(() => AvatarDecoration, { onDelete: "SET NULL", nullable: true })

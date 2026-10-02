@@ -19,24 +19,14 @@
 import { Request, Response, Router } from "express";
 import { In } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
+import { profileMetadata, resolveProfileCollectibles } from "@spacebar/api/util";
 import { Application, Badge, Member, Relationship, User } from "@spacebar/database";
-import { CollectibleItemType, Collectibles, Config, emitEvent, FieldErrors, handleFile, UserUpdateEvent } from "@spacebar/util";
+import { Config, emitEvent, FieldErrors, handleFile, UserUpdateEvent } from "@spacebar/util";
 import { PartialConnectedAccountResponse, PrivateUserProjection, PublicUserProjection, RelationshipType, UserProfileModifySchema } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
 
 const PREMIUM_BADGE_ICON = "2ba85e8026a8614b640c2837bcdfe21b";
-
-const profileMetadata = (source: User | Member) => ({
-    bio: source.bio ?? "",
-    accent_color: ("accent_color" in source ? source.accent_color : null) ?? null,
-    banner: source.banner ?? null,
-    pronouns: source.pronouns ?? "",
-    theme_colors: source.theme_colors?.length ? source.theme_colors.map(Number) : null,
-    popout_animation_particle_type: null,
-    emoji: null,
-    profile_effect: ("profile_effect" in source ? source.profile_effect : null) ?? null,
-});
 
 router.get("/", route({ responses: { 200: { body: "UserProfileResponse" } } }), async (req: Request, res: Response) => {
     if (req.params.user_id === "@me") req.params.user_id = req.user_id;
@@ -140,7 +130,7 @@ router.get("/", route({ responses: { 200: { body: "UserProfileResponse" } } }), 
         ...(guild_member
             ? {
                   guild_member: { ...guild_member.toPublicMember(), roles: guild_member.roles.filter((x) => x.id !== guild_id).map((x) => x.id), user: user.toPartialUser() },
-                  guild_member_profile: { guild_id, ...profileMetadata(guild_member), accent_color: null },
+                  guild_member_profile: profileMetadata(guild_member),
               }
             : {}),
     });
@@ -151,7 +141,7 @@ router.patch("/", route({ requestBody: "UserProfileModifySchema" }), async (req:
 
     const user = await User.findOneOrFail({
         where: { id: req.user_id },
-        select: Object.fromEntries([...PrivateUserProjection, "profile_effect"].map((i) => [i, true])),
+        select: Object.fromEntries([...PrivateUserProjection, "profile_collectibles"].map((i) => [i, true])),
     });
 
     const { maxBio, maxPronouns } = Config.get().limits.user;
@@ -176,14 +166,8 @@ router.patch("/", route({ requestBody: "UserProfileModifySchema" }), async (req:
     if (body.theme_colors !== undefined) Object.assign(user, { theme_colors: body.theme_colors });
     if (body.banner !== undefined) Object.assign(user, { banner: body.banner ? await handleFile(`/banners/${req.user_id}`, body.banner) : null });
 
-    if (body.profile_effect_id !== undefined) {
-        if (!body.profile_effect_id) user.profile_effect = null;
-        else {
-            const effect = await Collectibles.item(body.profile_effect_id, CollectibleItemType.PROFILE_EFFECT);
-            if (!effect) throw FieldErrors({ profile_effect_id: { code: "50057", message: "Invalid SKU" } });
-            user.profile_effect = { id: effect.sku_id, expires_at: null };
-        }
-    }
+    if (body.collectibles_sku_ids !== undefined || body.profile_effect_id !== undefined)
+        user.profile_collectibles = await resolveProfileCollectibles(user.profile_collectibles, body.collectibles_sku_ids, body.profile_effect_id);
 
     await user.save();
 

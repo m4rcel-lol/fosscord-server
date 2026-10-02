@@ -64,7 +64,7 @@ interface UserEntityPleaseRewriteThankYou {
     display_name_styles?: DisplayNameStyle;
     collectibles?: Collectibles;
     primary_guild?: PrimaryGuild;
-    profile_effect?: ProfileEffectData | null;
+    profile_collectibles?: ProfileCollectible[] | null;
 }
 
 export interface PartialUser {
@@ -90,9 +90,10 @@ export interface AvatarDecorationData {
     expires_at: string | null;
 }
 
-export interface ProfileEffectData {
-    id: Snowflake;
-    expires_at: number | null;
+export interface ProfileCollectible {
+    sku_id: Snowflake;
+    type: number;
+    expires_at: string | null;
 }
 
 export interface Collectibles {
@@ -237,5 +238,5 @@ export class UserProfileModifySchema {
     //@deprecated - what even was this
     emoji_id?: Snowflake | null;
     profile_effect_id?: Snowflake | null;
-    profile_frame_id?: Snowflake | null;
+    collectibles_sku_ids?: Snowflake[] | null;
 }

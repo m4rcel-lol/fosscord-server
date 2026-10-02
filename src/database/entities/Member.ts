@@ -20,7 +20,7 @@ import { HTTPError } from "lambert-server/HTTPError";
 import { BeforeInsert, BeforeUpdate, Column, Entity, Index, JoinColumn, JoinTable, ManyToMany, ManyToOne, Not, PrimaryGeneratedColumn, RelationId } from "typeorm";
 import { Stopwatch } from "@spacebar/extensions";
 import { Config, emitEvent, DiscordApiErrors } from "@spacebar/util/util";
-import { AvatarDecorationData, Collectibles, DisplayNameStyle, PublicMember, PublicMemberProjection, UserGuildSettings } from "@spacebar/schemas";
+import { AvatarDecorationData, Collectibles, DisplayNameStyle, ProfileCollectible, PublicMember, PublicMemberProjection, UserGuildSettings } from "@spacebar/schemas";
 import { ReadyGuildDTO } from "../../util/dtos/ReadyGuildDTO";
 import { GuildCreateEvent, GuildDeleteEvent, GuildMemberAddEvent, GuildMemberRemoveEvent, GuildMemberUpdateEvent, MessageCreateEvent } from "../../util/interfaces/Event";
 import { BaseClassWithoutId } from "./BaseClass";
@@ -161,6 +161,9 @@ export class Member extends BaseClassWithoutId {
 
     @Column({ type: "jsonb", nullable: true })
     collectibles?: Collectibles;
+
+    @Column({ type: "jsonb", nullable: true })
+    profile_collectibles?: ProfileCollectible[] | null;
 
     @Column({ type: "int", default: 0 })
     flags: number = 0;
