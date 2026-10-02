@@ -26,12 +26,16 @@ import { SettingsProtoJsonResponse, SettingsProtoResponse, SettingsProtoUpdateJs
 
 const router: Router = Router({ mergeParams: true });
 
-const parseSettings = <T>(parse: () => T) => {
+const parseSettings = (parse: () => PreloadedUserSettings) => {
+    let settings: PreloadedUserSettings;
     try {
-        return parse();
+        settings = parse();
     } catch {
         throw FieldErrors({ settings: { code: "BASE_TYPE_INVALID", message: "Invalid settings payload." } });
     }
+    const text = settings.status?.customStatus?.text;
+    if (text && [...text].length > 128) throw FieldErrors({ "status.custom_status.text": { code: "BASE_TYPE_MAX_LENGTH", message: "Must be 128 or fewer in length." } });
+    return settings;
 };
 
 //#region Protobuf
