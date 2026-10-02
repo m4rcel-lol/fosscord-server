@@ -21,16 +21,8 @@ import { join } from "node:path";
 import { Request, Response, Router } from "express";
 import { fileTypeFromBuffer } from "file-type";
 import { HTTPError } from "lambert-server/HTTPError";
+import { DEFAULT_AVATAR_COLORS, DEFAULT_AVATARS_FOLDER, defaultAvatarSvg } from "@spacebar/util";
 import { setCacheControl } from "../util";
-
-const defaultAvatarHashMap = new Map([
-    ["0", "4a8562cf00887030c416d3ec2d46385a"],
-    ["1", "9b0bb198936784c45c72833cc426cc55"],
-    ["2", "22341bdb500c7b63a93bbce957d1601e"],
-    ["3", "d9977836b82058bf2f74eebd50edc095"],
-    ["4", "9d6ddb4e4d899a533a8cc617011351c9"],
-    ["5", "7213ab6677377974697dfdfbaf5f6a6f"],
-]);
 
 const defaultGroupDMAvatarHashMap = new Map([
     ["0", "3b70bb66089c60f8be5e214bf8574c9d"],
@@ -60,19 +52,11 @@ async function getFile(path: string) {
 }
 
 router.get("/avatars/:id", setCacheControl, async (req: Request, res: Response) => {
-    let { id } = req.params as { [key: string]: string };
-    id = id.split(".")[0]; // remove .file extension
-    const hash = defaultAvatarHashMap.get(id);
-    if (!hash) throw new HTTPError("not found", 404);
-    const path = join(__dirname, "..", "..", "..", "assets", "public", `${hash}.png`);
-
-    const file = await getFile(path);
-    if (!file) throw new HTTPError("not found", 404);
-    const type = await fileTypeFromBuffer(file);
-
-    res.set("Content-Type", type?.mime);
-
-    return res.send(file);
+    const id = String(req.params.id).split(".")[0];
+    if (!/^\d+$/.test(id) || Number(id) >= DEFAULT_AVATAR_COLORS.length) throw new HTTPError("not found", 404);
+    const file = join(DEFAULT_AVATARS_FOLDER, `${id}.png`);
+    if (await fs.stat(file).catch(() => null)) return res.type("png").sendFile(file, { cacheControl: false, dotfiles: "allow" });
+    return res.type("image/svg+xml").send(defaultAvatarSvg(Number(id)));
 });
 
 router.get("/group-avatars/:id", setCacheControl, async (req: Request, res: Response) => {

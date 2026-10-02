@@ -11,7 +11,7 @@
         "start:gateway": "node --enable-source-maps dist/gateway/start.js",
         "start:webrtc": "node --enable-source-maps dist/webrtc/start.js",
         "build": "npm run build:src && npm run generate:schema && npm run generate:openapi",
-        "build:src": "tsc -b -v",
+        "build:src": "tsc -b -v && node scripts/default-avatars.js",
         "build:e2ee": "tsc -p client/e2ee && esbuild client/e2ee/src/index.ts --bundle --format=iife --target=chrome120,firefox128,safari17 --charset=utf8 --legal-comments=none --outfile=assets/public/e2ee/e2ee.js",
         "watch": "tsc -w -b .",
         "test": "node -r dotenv/config -r module-alias/register --enable-source-maps scripts/test.js",
@@ -80,6 +80,7 @@
         "patch-package": "^8.0.1",
         "prettier": "^3.9.6",
         "pretty-quick": "^4.2.2",
+        "sharp": "^0.35.5",
         "ts-node": "^10.9.2",
         "typescript": "^6.0.3",
         "typescript-json-schema": "^0.68.0"

@@ -18,7 +18,7 @@
 
 import { Router, Response, Request } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { DEFAULT_ICON_FILE, instanceIcon, sendBrandImage } from "@spacebar/util";
+import { instanceIconDataUri, instanceLogo, sendBrandImage, wordmarkSvg } from "@spacebar/util";
 
 const router = Router({ mergeParams: true });
 
@@ -28,7 +28,13 @@ router.get(
         spacebarOnly: true,
         authentication: "never",
     }),
-    (req: Request, res: Response) => sendBrandImage(res, instanceIcon() ?? { file: DEFAULT_ICON_FILE }),
+    async (req: Request, res: Response) => {
+        const logo = instanceLogo();
+        if (logo) return sendBrandImage(res, logo);
+        res.set("Cache-Control", "public, max-age=21600")
+            .type("image/svg+xml")
+            .send(wordmarkSvg(undefined, await instanceIconDataUri()));
+    },
 );
 
 export default router;
