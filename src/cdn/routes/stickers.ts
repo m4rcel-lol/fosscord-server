@@ -23,6 +23,7 @@ import { HTTPError } from "lambert-server/HTTPError";
 import { Config } from "@spacebar/util";
 import { Sticker } from "@spacebar/database";
 import { StickerFormatType, StickerType } from "@spacebar/schemas";
+import { ensureStandardStickerPacks } from "@spacebar/api/util";
 import { storage, multer, setCacheControl, setCacheControlNotFound, fetchUpstreamAsset } from "../util";
 
 const ANIMATED_MIME_TYPES = ["image/apng", "image/gif", "image/gifv"];
@@ -83,7 +84,12 @@ function isLottie(buffer: Buffer) {
 
 async function fetchStandardSticker(sticker_id: string, path: string) {
     if (!/^\d+$/.test(sticker_id)) return null;
-    const sticker = await Sticker.findOne({ where: { id: sticker_id, type: StickerType.STANDARD }, select: { id: true, format_type: true } });
+    const find = () => Sticker.findOne({ where: { id: sticker_id, type: StickerType.STANDARD }, select: { id: true, format_type: true } });
+    let sticker = await find();
+    if (!sticker && !(await Sticker.exists({ where: { id: sticker_id } }))) {
+        await ensureStandardStickerPacks().catch(() => null);
+        sticker = await find();
+    }
     if (!sticker) return null;
     const url =
         sticker.format_type === StickerFormatType.LOTTIE
