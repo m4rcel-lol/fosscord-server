@@ -23,6 +23,7 @@ import { Guild } from "./Guild";
 import { Member } from "./Member";
 import { User } from "./User";
 import { InviteType, PublicInvite } from "@spacebar/schemas/api/guilds/Invite";
+import { DiscordApiErrors } from "@spacebar/util/util";
 
 export const PublicInviteRelation = ["inviter", "guild", "channel"];
 
@@ -115,7 +116,7 @@ export class Invite extends BaseClassWithoutId {
             profile: this.guild.toGuildProfile(),
             inviter: this.inviter.toPartialUser(),
             flags: this.flags,
-            expires_at: this.expires_at?.toString() ?? null,
+            expires_at: this.expires_at ? new Date(this.expires_at).toISOString() : null,
             approximate_member_count: this.guild.member_count,
             approximate_presence_count: this.guild.presence_count,
             is_nickname_changeable: true, // TODO
@@ -128,16 +129,29 @@ export class Invite extends BaseClassWithoutId {
         };
     }
 
+    toMetadataJSON(): PublicInvite & { uses: number; max_uses: number; max_age: number; temporary: boolean; created_at: string } {
+        return {
+            ...this.toPublicJSON(),
+            uses: this.uses,
+            max_uses: this.max_uses,
+            max_age: this.max_age,
+            temporary: this.temporary,
+            created_at: new Date(this.created_at).toISOString(),
+        };
+    }
+
     static async joinGuild(user_id: string, code: string) {
         const invite = await Invite.findOneOrFail({ where: { code } });
         if (invite.isExpired()) {
             await Invite.delete({ code });
-            throw new Error("Invite is expired");
+            throw DiscordApiErrors.UNKNOWN_INVITE;
         }
+        if (await Member.exists({ where: { id: user_id, guild_id: invite.guild_id } })) return { invite, new_member: false };
+
+        await Member.addToGuild(user_id, invite.guild_id);
         if (invite.uses++ >= invite.max_uses && invite.max_uses !== 0) await Invite.delete({ code });
         else await invite.save();
 
-        await Member.addToGuild(user_id, invite.guild_id);
-        return invite;
+        return { invite, new_member: true };
     }
 }

@@ -49,7 +49,7 @@ router.get(
                 }),
         );
 
-        return res.json(invites.filter((i) => !i.isExpired()).map((x) => x.toPublicJSON()) satisfies InviteListResponse);
+        return res.json(invites.filter((i) => !i.isExpired()).map((x) => x.toMetadataJSON()) satisfies InviteListResponse);
     },
 );
 
