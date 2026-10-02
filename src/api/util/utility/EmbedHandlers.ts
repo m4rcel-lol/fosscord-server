@@ -18,13 +18,13 @@
 
 import * as cheerio from "cheerio";
 import crypto from "node:crypto";
-import { yellow } from "picocolors";
 import probe from "probe-image-size";
 import { FindOptionsWhere, In } from "typeorm";
 import { EmbedCache, Message } from "@spacebar/database";
 import { sleep, arrayDistinctBy, arrayGroupBy, normalizeUrl } from "@spacebar/extensions";
 import { Config, emitEvent, MessageFlags, MessageUpdateEvent, OrmUtils } from "@spacebar/util";
 import { Embed, EmbedImage, EmbedType } from "@spacebar/schemas";
+import { externalProxyUrl } from "../../middlewares/ExternalProxy";
 
 export function getDefaultFetchOptions(): RequestInit {
     return {
@@ -38,7 +38,7 @@ export function getDefaultFetchOptions(): RequestInit {
     };
 }
 
-const makeEmbedImage = (url: string | undefined, width: number | undefined, height: number | undefined): Required<EmbedImage> | undefined => {
+const makeEmbedImage = (url: string | undefined, width: number | undefined, height: number | undefined): Required<Omit<EmbedImage, "content_type">> | undefined => {
     if (!url || !width || !height) return undefined;
     return {
         url,
@@ -47,8 +47,6 @@ const makeEmbedImage = (url: string | undefined, width: number | undefined, heig
         proxy_url: getProxyUrl(new URL(url), width, height),
     };
 };
-
-let hasWarnedAboutImagor = false;
 
 export const getProxyUrl = (url: URL, width: number, height: number): string => {
     const { resizeWidthMax, resizeHeightMax, imagorServerUrl } = Config.get().cdn;
@@ -65,12 +63,7 @@ export const getProxyUrl = (url: URL, width: number, height: number): string => 
         return `${imagorServerUrl}/${hash}/${path}`;
     }
 
-    if (!hasWarnedAboutImagor) {
-        hasWarnedAboutImagor = true;
-        console.log("[Embeds]", yellow("Imagor has not been set up correctly. https://docs.spacebar.chat/setup/server/configuration/imagor/"));
-    }
-
-    return url.toString();
+    return externalProxyUrl(url);
 };
 
 const getMeta = ($: cheerio.CheerioAPI, name: string): string | undefined => {
@@ -106,6 +99,8 @@ export const getMetaDescriptions = (text: string) => {
         url: getMeta($, "og:url"),
         youtube_embed: getMeta($, "og:video:secure_url"),
         site_name: getMeta($, "og:site_name"),
+        card: getMeta($, "twitter:card"),
+        theme_color: getMeta($, "theme-color"),
 
         $,
     };
@@ -126,6 +121,82 @@ const doFetch = async (url: URL, opts?: RequestInit) => {
     }
 };
 
+const readVideoDimensions = (buf: Buffer): { width: number; height: number } | undefined => {
+    for (let i = buf.indexOf("tkhd"); i !== -1; i = buf.indexOf("tkhd", i + 4)) {
+        const start = i - 4;
+        const size = start >= 0 ? buf.readUInt32BE(start) : 0;
+        if (size < 84 || start + size > buf.length) continue;
+        const width = buf.readUInt32BE(start + size - 8) >>> 16;
+        const height = buf.readUInt32BE(start + size - 4) >>> 16;
+        if (width && height) return { width, height };
+    }
+    const readVint = (at: number) => {
+        const first = buf[at];
+        const length = Math.clz32(first) - 23;
+        if (length < 1 || length > 8) return undefined;
+        let value = first & ((1 << (8 - length)) - 1);
+        for (let j = 1; j < length; j++) value = value * 256 + buf[at + j];
+        return { length, value };
+    };
+    for (let i = buf.indexOf(0xe0); i !== -1; i = buf.indexOf(0xe0, i + 1)) {
+        const size = readVint(i + 1);
+        if (!size || size.value > 256) continue;
+        const end = i + 1 + size.length + size.value;
+        const dims: Record<number, number> = {};
+        for (let at = i + 1 + size.length; at < end && at < buf.length;) {
+            const id = buf[at];
+            const len = readVint(at + 1);
+            if (!len) break;
+            const valueAt = at + 1 + len.length;
+            if ((id === 0xb0 || id === 0xba) && len.value <= 4) dims[id] = buf.readUIntBE(valueAt, len.value);
+            at = valueAt + len.value;
+        }
+        if (dims[0xb0] && dims[0xba]) return { width: dims[0xb0], height: dims[0xba] };
+    }
+};
+
+const probeVideo = async (url: URL, contentLength: number) => {
+    const chunk = 1024 * 1024;
+    const read = async (range: string) => {
+        const res = await fetch(url, { ...getDefaultFetchOptions(), headers: { ...getDefaultFetchOptions().headers, range } }).catch(() => null);
+        if (!res?.ok) return undefined;
+        const reader = res.body?.getReader();
+        if (!reader) return undefined;
+        const parts: Buffer[] = [];
+        const limit = res.status === 206 ? chunk : 16 * chunk;
+        let total = 0;
+        while (total < limit) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            parts.push(Buffer.from(value));
+            total += value.length;
+        }
+        await reader.cancel().catch(() => {});
+        return Buffer.concat(parts);
+    };
+    const head = await read(`bytes=0-${chunk - 1}`);
+    const dims = head && readVideoDimensions(head);
+    if (dims || contentLength <= chunk) return dims;
+    const tail = await read(`bytes=-${chunk}`);
+    return tail && readVideoDimensions(tail);
+};
+
+const genericVideoHandler = async (url: URL, head: Response): Promise<Embed | null> => {
+    const dims = await probeVideo(url, Number(head.headers.get("content-length") ?? 0));
+    if (!dims) return null;
+    return {
+        url: url.href,
+        type: EmbedType.video,
+        video: {
+            url: url.href,
+            proxy_url: getProxyUrl(url, dims.width, dims.height),
+            width: dims.width,
+            height: dims.height,
+            content_type: head.headers.get("content-type") ?? undefined,
+        },
+    };
+};
+
 const genericImageHandler = async (url: URL): Promise<Embed | null> => {
     const type = await fetch(url, {
         ...getDefaultFetchOptions(),
@@ -137,9 +208,8 @@ const genericImageHandler = async (url: URL): Promise<Embed | null> => {
     if (type.headers.get("content-type")?.indexOf("image") !== -1) {
         const result = await probe(url.href);
         image = makeEmbedImage(url.href, result.width, result.height);
-    } else if (type.headers.get("content-type")?.indexOf("video") !== -1) {
-        // TODO
-        return null;
+    } else if (type.headers.get("content-type")?.startsWith("video/")) {
+        return genericVideoHandler(url, type);
     } else {
         // have to download the page, unfortunately
         const response = await doFetch(url);
@@ -167,6 +237,7 @@ export const EmbedHandlers: {
             method: "HEAD",
         });
         if (type.headers.get("content-type")?.indexOf("image") !== -1) return await genericImageHandler(url);
+        if (type.headers.get("content-type")?.startsWith("video/")) return await genericVideoHandler(url, type);
 
         const response = await doFetch(url);
         if (!response) return null;
@@ -195,11 +266,14 @@ export const EmbedHandlers: {
         if (metas.type == "object") embedType = EmbedType.article; // github
         if (metas.type == "rich") embedType = EmbedType.rich;
 
+        const image = makeEmbedImage(metas.image, metas.width, metas.height);
+        const color = /^#[0-9a-f]{6}$/i.test(metas.theme_color ?? "") ? parseInt(metas.theme_color!.slice(1), 16) : undefined;
         return {
             url: url.href,
             type: embedType,
             title: metas.title,
-            thumbnail: makeEmbedImage(metas.image, metas.width, metas.height),
+            ...(metas.card === "summary_large_image" ? { image } : { thumbnail: image }),
+            color,
             description: metas.description,
             provider: metas.site_name
                 ? {

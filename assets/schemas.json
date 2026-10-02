@@ -13244,6 +13244,9 @@
             },
             "width": {
                 "type": "integer"
+            },
+            "content_type": {
+                "type": "string"
             }
         },
         "additionalProperties": false,

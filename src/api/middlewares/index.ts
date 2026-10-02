@@ -20,6 +20,7 @@ export * from "./Authentication";
 export * from "./BodyParser";
 export * from "./CORS";
 export * from "./ErrorHandler";
+export * from "./ExternalProxy";
 export * from "./ImageProxy";
 export * from "./RateLimit";
 export * from "./Route";
