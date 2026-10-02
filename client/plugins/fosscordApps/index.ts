@@ -39,5 +39,12 @@ export default definePlugin({
                 replace: "$self.useMemberVersion();",
             },
         },
+        {
+            find: "#{intl::RL7Ncg::raw}",
+            replacement: {
+                match: /(\.TEXT\?\i\.intl\.string\(\i\.t#{intl::iKZctW::raw}\):\i\.intl\.string\(\i\.t)#{intl::RL7Ncg::raw}/,
+                replace: "$1.MlQm3T",
+            },
+        },
     ],
 });
