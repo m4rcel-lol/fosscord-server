@@ -21,7 +21,8 @@ import { VoiceOPCodes, VoicePayload, WebRtcWebSocket, Send } from "../util";
 
 export async function onHeartbeat(this: WebRtcWebSocket, data: VoicePayload) {
     setHeartbeat(this);
-    if (isNaN(data.d)) return this.close(CLOSECODES.Decode_error);
+    const nonce = typeof data.d === "object" && data.d !== null ? data.d.t : data.d;
+    if (typeof nonce !== "number" || Number.isNaN(nonce)) return this.close(CLOSECODES.Decode_error);
 
-    await Send(this, { op: VoiceOPCodes.HEARTBEAT_ACK, d: data.d });
+    await Send(this, { op: VoiceOPCodes.HEARTBEAT_ACK, d: this.version >= 8 ? { t: nonce } : nonce });
 }

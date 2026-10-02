@@ -23,6 +23,9 @@ import { onIdentify } from "./Identify";
 import { onSelectProtocol } from "./SelectProtocol";
 import { onSpeaking } from "./Speaking";
 import { onVideo } from "./Video";
+import { onDaveInvalidCommitWelcome, onDaveReadyForTransition, onMlsCommitWelcome, onMlsKeyPackage } from "./Dave";
+
+const ignore: OPCodeHandler = async () => {};
 
 export type OPCodeHandler = (this: WebRtcWebSocket, data: VoicePayload) => Promise<void>;
 
@@ -33,4 +36,14 @@ export default {
     [VoiceOPCodes.VIDEO]: onVideo,
     [VoiceOPCodes.SPEAKING]: onSpeaking,
     [VoiceOPCodes.SELECT_PROTOCOL]: onSelectProtocol,
+    [VoiceOPCodes.RESUME]: async function (this: WebRtcWebSocket) {
+        this.close(4006, "Session no longer valid");
+    },
+    [VoiceOPCodes.SESSION_UPDATE]: ignore,
+    [VoiceOPCodes.MEDIA_SINK_WANTS]: ignore,
+    [VoiceOPCodes.NO_ROUTE]: ignore,
+    [VoiceOPCodes.DAVE_PROTOCOL_TRANSITION_READY]: onDaveReadyForTransition,
+    [VoiceOPCodes.MLS_KEY_PACKAGE]: onMlsKeyPackage,
+    [VoiceOPCodes.MLS_COMMIT_WELCOME]: onMlsCommitWelcome,
+    [VoiceOPCodes.MLS_INVALID_COMMIT_WELCOME]: onDaveInvalidCommitWelcome,
 } as { [key: number]: OPCodeHandler };

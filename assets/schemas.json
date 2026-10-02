@@ -5787,12 +5787,6 @@
                     "type": "object",
                     "properties": {
                         "name": {
-                            "enum": [
-                                "H264",
-                                "VP8",
-                                "VP9",
-                                "opus"
-                            ],
                             "type": "string"
                         },
                         "type": {
@@ -5823,6 +5817,12 @@
             },
             "rtc_connection_id": {
                 "type": "string"
+            },
+            "experiments": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
             }
         },
         "additionalProperties": false,

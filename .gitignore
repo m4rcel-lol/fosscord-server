@@ -41,3 +41,5 @@ scripts/dev/.test-account
 assets/client_patches/0*-dev*.js
 assets/client_patches/00-debug.js
 server.log
+
+extra/pion-sfu/pion-sfu

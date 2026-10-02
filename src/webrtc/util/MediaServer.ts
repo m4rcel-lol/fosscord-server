@@ -18,6 +18,7 @@
 
 import type { SignalingDelegate } from "@spacebarchat/spacebar-webrtc-types";
 import { green, red } from "picocolors";
+import { PionMediaServer } from "../pion/PionMediaServer";
 
 export let mediaServer: SignalingDelegate;
 
@@ -42,7 +43,11 @@ class NoConfiguredLibraryError implements Error {
 
 export const loadWebRtcLibrary = async () => {
     try {
-        //mediaServer = require('medooze-spacebar-wrtc');
+        if ((!selectedWrtcLibrary || selectedWrtcLibrary === "pion") && (process.env.PION_SFU_BIN || process.env.PION_SFU_IPC)) {
+            mediaServer = new PionMediaServer();
+            console.log(`[WebRTC] ${green("Using built-in pion SFU bridge")}`);
+            return;
+        }
         if (!selectedWrtcLibrary) throw new NoConfiguredLibraryError("No library configured in .env");
 
         // eslint-disable-next-line @typescript-eslint/ban-ts-comment
