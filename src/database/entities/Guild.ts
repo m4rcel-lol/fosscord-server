@@ -16,12 +16,17 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId } from "typeorm";
+import { AfterLoad, Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId } from "typeorm";
 import { arrayRemove } from "@spacebar/extensions";
 import { Config, handleFile, Snowflake } from "@spacebar/util";
 import {
     ChannelType,
     DiscoverableGuild,
+    GuildDiscoveryMetadata,
+    GuildHomeSettings,
+    GuildMemberVerification,
+    GuildOnboarding,
+    GuildProfileSettings,
     GuildNsfwLevel,
     GuildPremiumTier,
     GuildProfileResponse,
@@ -61,6 +66,20 @@ import { InviteGuild } from "@spacebar/schemas/api/guilds/Invite";
 // 		"miHoYo",
 // 		"Gacha"
 // 	],
+
+export const GuildPowerupFeatures = [
+    "ENHANCED_ROLE_COLORS",
+    "GUILD_TAGS",
+    "GUILD_TAGS_BADGE_PACK_PETS",
+    "GUILD_TAGS_BADGE_PACK_FLEX",
+    "GUILD_TAGS_BADGE_PACK_PLANT",
+    "GUILD_TAGS_BADGE_PACK_CREEPY_CRAWLIES",
+    "GUILD_THEME",
+];
+
+export const GuildBoostFeatures = ["ANIMATED_BANNER", "ANIMATED_ICON", "BANNER", "INVITE_SPLASH", "ROLE_ICONS", "VANITY_URL", ...GuildPowerupFeatures];
+
+export const GuildBoostCount = 33;
 
 export const PublicGuildRelations = [
     "channels",
@@ -317,6 +336,39 @@ export class Guild extends BaseClass {
     @Column({ default: false })
     discovery_excluded: boolean = false;
 
+    @Column({ type: String, nullable: true })
+    vanity_url_code?: string | null;
+
+    @Column({ type: "jsonb", nullable: true })
+    profile?: GuildProfileSettings | null;
+
+    @Column({ type: "jsonb", nullable: true })
+    home_settings?: GuildHomeSettings | null;
+
+    @Column({ type: "jsonb", nullable: true })
+    onboarding?: GuildOnboarding | null;
+
+    @Column({ type: "jsonb", nullable: true })
+    member_verification?: GuildMemberVerification | null;
+
+    @Column({ type: "jsonb", nullable: true })
+    discovery_metadata?: GuildDiscoveryMetadata | null;
+
+    premium_features?: {
+        features: string[];
+        additional_emoji_slots: number;
+        additional_sticker_slots: number;
+        additional_sound_slots: number;
+    };
+
+    @AfterLoad()
+    applyBoostPerks() {
+        this.premium_tier = GuildPremiumTier.TIER_3;
+        this.premium_subscription_count = Math.max(this.premium_subscription_count ?? 0, GuildBoostCount);
+        this.features = [...new Set([...(this.features ?? []), ...GuildBoostFeatures])];
+        this.premium_features = { features: GuildPowerupFeatures, additional_emoji_slots: 0, additional_sticker_slots: 0, additional_sound_slots: 0 };
+    }
+
     async toDiscoverableGuild(): Promise<DiscoverableGuild | null> {
         if (!this.features.includes("DISCOVERABLE")) {
             return null;
@@ -331,7 +383,7 @@ export class Guild extends BaseClass {
             splash: this.splash ?? null,
             discovery_splash: this.discovery_splash ?? null,
             features: this.features,
-            vanity_url_code: null,
+            vanity_url_code: this.vanity_url_code ?? null,
             preferred_locale: this.preferred_locale || "en",
             premium_subscription_count: this.premium_subscription_count ?? 0,
             approximate_member_count: this.member_count ?? 1,
@@ -397,8 +449,8 @@ export class Guild extends BaseClass {
             member_count: 0, // will automatically be increased by addMember()
             mfa_level: 0,
             preferred_locale: "en-US",
-            premium_subscription_count: 0,
-            premium_tier: 0,
+            premium_subscription_count: GuildBoostCount,
+            premium_tier: GuildPremiumTier.TIER_3,
             system_channel_flags: 4, // defaults effect: suppress the setup tips to save performance
             nsfw_level: 0,
             verification_level: 0,
@@ -411,7 +463,7 @@ export class Guild extends BaseClass {
             afk_timeout: Config.get().defaults.guild.afkTimeout,
             default_message_notifications: Config.get().defaults.guild.defaultMessageNotifications,
             explicit_content_filter: Config.get().defaults.guild.explicitContentFilter,
-            features: Config.get().guild.defaultFeatures,
+            features: [...new Set([...Config.get().guild.defaultFeatures, ...GuildBoostFeatures])],
             max_members: Config.get().limits.guild.maxMembers,
             max_presences: Config.get().defaults.guild.maxPresences,
             max_video_channel_users: Config.get().defaults.guild.maxVideoChannelUsers,
@@ -436,55 +488,68 @@ export class Guild extends BaseClass {
             flags: 0, // TODO?
         }).save();
 
-        // create custom roles if provided
-        if (body.roles && body.roles.length) {
-            await Promise.all(
-                body.roles?.map(
-                    (role) =>
-                        new Promise((resolve) => {
-                            Role.create({
-                                ...role,
-                                guild_id,
-                                id:
-                                    // role.id === body.template_guild_id indicates that this is the @everyone role
-                                    role.id === body.source_guild_id || role.id == "0" ? guild_id : Snowflake.generate(),
-                            })
-                                .save()
-                                .then(resolve);
-                        }),
-                ),
-            );
+        const roleIds = new Map<string, string>([["0", guild_id]]);
+        for (const [index, role] of (body.roles ?? []).entries()) {
+            const id = role.id === body.source_guild_id || `${role.id}` === "0" ? guild_id : Snowflake.generate();
+            roleIds.set(`${role.id}`, id);
+            await Role.create({
+                color: 0,
+                hoist: false,
+                managed: false,
+                mentionable: false,
+                permissions: "0",
+                flags: 0,
+                position: index,
+                ...role,
+                colors: role.colors ?? { primary_color: role.color ?? 0 },
+                guild_id,
+                id,
+            }).save();
         }
 
         if (!body.channels || !body.channels.length) {
-            body.channels = [{ id: "01", type: 0, name: "general", nsfw: false }];
+            body.channels = [
+                { id: "00", type: 4, name: "Text Channels" },
+                { id: "01", type: 0, name: "general", nsfw: false, parent_id: "00" },
+                { id: "10", type: 4, name: "Voice Channels" },
+                { id: "11", type: 2, name: "General", parent_id: "10" },
+            ];
         }
 
         const ids = new Map();
-        let systemChannelId: string | undefined;
 
         body.channels.forEach((x) => {
-            if (x.id) {
+            if (x.id != null) {
                 ids.set(x.id, Snowflake.generate());
             }
         });
 
-        for (const channel of body.channels.sort((a) => (a.parent_id ? 1 : -1))) {
-            const id = ids.get(channel.id) || Snowflake.generate();
-
-            const parent_id = ids.get(channel.parent_id);
-
-            const saved = await Channel.createChannel({ ...channel, guild_id, id, parent_id }, body.owner_id, {
-                keepId: true,
-                skipExistsCheck: true,
-                skipPermissionCheck: true,
-                skipEventEmit: true,
-            });
-
-            await Guild.insertChannelInOrder(guild.id, saved.id, parent_id ?? channel.position ?? 0, guild);
-            if (!systemChannelId && saved.type === ChannelType.GUILD_TEXT && (!body.system_channel_id || channel.id === body.system_channel_id)) systemChannelId = saved.id;
+        const ordered = body.channels.map((channel) => ({ ...channel, id: ids.get(channel.id) || Snowflake.generate(), parent_id: ids.get(channel.parent_id) }));
+        for (const channel of [...ordered.filter((c) => !c.parent_id), ...ordered.filter((c) => c.parent_id)]) {
+            await Channel.createChannel(
+                {
+                    ...channel,
+                    guild_id,
+                    permission_overwrites: (channel.permission_overwrites ?? [])
+                        .filter((o) => o.type !== 0 || roleIds.has(`${o.id}`))
+                        .map((o) => ({ ...o, id: o.type === 0 ? roleIds.get(`${o.id}`)! : o.id })),
+                },
+                body.owner_id,
+                {
+                    keepId: true,
+                    skipExistsCheck: true,
+                    skipPermissionCheck: true,
+                    skipEventEmit: true,
+                },
+            );
         }
+        guild.channel_ordering = ordered.map((c) => c.id);
+        await Guild.update({ id: guild_id }, { channel_ordering: guild.channel_ordering });
 
+        const textChannels = ordered.filter((channel) => channel.type === ChannelType.GUILD_TEXT);
+        const systemChannelId = (
+            textChannels.find((channel) => body.system_channel_id != null && body.channels![ordered.indexOf(channel)].id == body.system_channel_id) ?? textChannels[0]
+        )?.id;
         if (systemChannelId) {
             guild.system_channel_id = systemChannelId;
             await Guild.update({ id: guild.id }, { system_channel_id: systemChannelId });
@@ -524,6 +589,12 @@ export class Guild extends BaseClass {
             channel_ordering: undefined,
             discovery_weight: undefined,
             discovery_excluded: undefined,
+            vanity_url_code: this.vanity_url_code ?? null,
+            profile: this.profile?.tag ? ({ tag: this.profile.tag, badge: this.profile.badge_hash ?? null } as GuildProfileSettings) : null,
+            home_settings: undefined,
+            onboarding: undefined,
+            member_verification: undefined,
+            discovery_metadata: undefined,
             parent: undefined,
             primary_category_id: undefined,
             nsfw: undefined,
@@ -542,7 +613,7 @@ export class Guild extends BaseClass {
             splash: this.splash ?? null,
             verification_level: this.verification_level ?? GuildVerificationLevel.NONE,
             features: this.features,
-            vanity_url_code: null, //this.vanity_url_code, // TODO: store this in db?
+            vanity_url_code: this.vanity_url_code ?? null,
             premium_subscription_count: this.premium_subscription_count,
             premium_tier: this.premium_tier ?? GuildPremiumTier.NONE,
             nsfw: this.nsfw,
@@ -551,6 +622,7 @@ export class Guild extends BaseClass {
     }
 
     toGuildProfile(): GuildProfileResponse {
+        const profile = this.profile ?? {};
         return {
             id: this.id,
             name: this.name,
@@ -558,21 +630,26 @@ export class Guild extends BaseClass {
             member_count: this.member_count ?? 0,
             online_count: this.presence_count ?? 0,
             description: this.description ?? "",
-            brand_color_primary: undefined, // TODO
-            game_application_ids: [], // TODO
-            game_activity: {}, // TODO
-            tag: null, // TODO
-            badge: null, // TODO
-            badge_color_primary: "", // TODO
-            badge_color_secondary: "", // TODO
-            badge_hash: "", // TODO
-            traits: [], // TODO
-            features: this.features, // TODO: should we filter this?
-            visibility: GuildVisibilityLevel.PUBLIC, // TODO
-            custom_banner_hash: this.discovery_splash ?? null,
+            brand_color_primary: profile.brand_color_primary ?? undefined,
+            game_application_ids: profile.game_application_ids ?? [],
+            game_activity: {},
+            tag: profile.tag ?? null,
+            badge: profile.badge ?? null,
+            badge_color_primary: profile.badge_color_primary ?? "",
+            badge_color_secondary: profile.badge_color_secondary ?? "",
+            badge_hash: profile.badge_hash ?? "",
+            traits: (profile.traits ?? []).map((trait) => ({
+                ...trait,
+                emoji_id: trait.emoji_id ?? null,
+                emoji_name: trait.emoji_name ?? null,
+                emoji_animated: trait.emoji_animated ?? false,
+            })),
+            features: this.features,
+            visibility: profile.visibility ?? GuildVisibilityLevel.PUBLIC,
+            custom_banner_hash: profile.custom_banner_hash ?? null,
             premium_subscription_count: this.premium_subscription_count ?? 0,
             premium_tier: this.premium_tier ?? GuildPremiumTier.NONE,
-            banner_hash: null, // Deprecated, TODO: clan banner hash
+            banner_hash: null,
         } satisfies GuildProfileResponse;
     }
 }

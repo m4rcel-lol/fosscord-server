@@ -19,8 +19,7 @@
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { Channel, Member } from "@spacebar/database";
-import { OrmUtils } from "@spacebar/util";
-import { UserGuildSettingsSchema } from "@spacebar/schemas";
+import { UserGuildSettings, UserGuildSettingsSchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
 
@@ -58,22 +57,15 @@ router.patch(
     }),
     async (req: Request, res: Response) => {
         const body = req.body as UserGuildSettingsSchema;
+        const guild_id = req.params.guild_id as string;
 
         if (body.channel_overrides) {
-            // TODO: rewrite to a single query?
             for (const channel in body.channel_overrides) {
-                await Channel.findOneOrFail({ where: { id: channel } });
+                await Channel.findOneOrFail({ where: { id: channel, guild_id } });
             }
         }
 
-        const user = await Member.findOneOrFail({
-            where: { id: req.user_id, guild_id: req.params.guild_id as string },
-            select: { settings: true, index: true },
-        });
-        OrmUtils.mergeDeep(user.settings || {}, body);
-        await user.save();
-
-        res.json(user.settings);
+        res.json(await Member.updateGuildSettings(req.user_id, guild_id, body as Partial<UserGuildSettings>));
     },
 );
 

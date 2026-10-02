@@ -535,13 +535,13 @@ export const DiscordApiErrors = {
         return new ApiError("Unknown channel", 10003);
     },
     get UNKNOWN_GUILD() {
-        return new ApiError("Unknown guild", 10004);
+        return new ApiError("Unknown guild", 10004, 404);
     },
     get UNKNOWN_INTEGRATION() {
         return new ApiError("Unknown integration", 10005);
     },
     get UNKNOWN_INVITE() {
-        return new ApiError("Unknown invite", 10006);
+        return new ApiError("Unknown invite", 10006, 404);
     },
     get UNKNOWN_MEMBER() {
         return new ApiError("Unknown member", 10007);
@@ -616,7 +616,7 @@ export const DiscordApiErrors = {
         return new ApiError("Unknown premium server subscribe cooldown", 10050);
     },
     get UNKNOWN_GUILD_TEMPLATE() {
-        return new ApiError("Unknown guild template", 10057);
+        return new ApiError("Unknown guild template", 10057, 404);
     },
     get UNKNOWN_DISCOVERABLE_SERVER_CATEGORY() {
         return new ApiError("Unknown discoverable server category", 10059);

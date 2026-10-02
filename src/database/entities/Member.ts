@@ -20,7 +20,17 @@ import { HTTPError } from "lambert-server/HTTPError";
 import { BeforeInsert, BeforeUpdate, Column, Entity, Index, JoinColumn, JoinTable, ManyToMany, ManyToOne, Not, PrimaryGeneratedColumn, RelationId } from "typeorm";
 import { Stopwatch } from "@spacebar/extensions";
 import { Config, emitEvent, DiscordApiErrors } from "@spacebar/util/util";
-import { AvatarDecorationData, Collectibles, DisplayNameStyle, ProfileCollectible, PublicMember, PublicMemberProjection, UserGuildSettings } from "@spacebar/schemas";
+import {
+    AvatarDecorationData,
+    ChannelOverride,
+    Collectibles,
+    DefaultUserGuildSettings,
+    DisplayNameStyle,
+    ProfileCollectible,
+    PublicMember,
+    PublicMemberProjection,
+    UserGuildSettings,
+} from "@spacebar/schemas";
 import { ReadyGuildDTO } from "../../util/dtos/ReadyGuildDTO";
 import { GuildCreateEvent, GuildDeleteEvent, GuildMemberAddEvent, GuildMemberRemoveEvent, GuildMemberUpdateEvent, MessageCreateEvent } from "../../util/interfaces/Event";
 import { BaseClassWithoutId } from "./BaseClass";
@@ -115,6 +125,22 @@ export class Member extends BaseClassWithoutId {
 
     @Column()
     pending: boolean;
+
+    @Column({ type: String, nullable: true })
+    source_invite_code?: string | null;
+
+    @Column({ type: Number, nullable: true })
+    join_source_type?: number | null;
+
+    @Column({ type: "bigint", nullable: true })
+    inviter_id?: string | null;
+
+    @Column({ type: "jsonb", nullable: true, select: false })
+    onboarding_responses?: {
+        onboarding_responses: string[];
+        onboarding_prompts_seen: Record<string, number>;
+        onboarding_responses_seen: Record<string, number>;
+    } | null;
 
     @Column({ type: "jsonb", select: false })
     settings: UserGuildSettings;
@@ -227,29 +253,24 @@ export class Member extends BaseClassWithoutId {
         const [member] = await Promise.all([
             Member.findOneOrFail({
                 where: { id: user_id, guild_id },
-                relations: { user: true, roles: true }, // we don't want to load  the role objects just the ids
-                select: {
-                    index: true,
-                    roles: {
-                        id: true,
-                    },
-                },
+                relations: { user: true, roles: true },
             }),
             Role.findOneOrFail({
                 where: { id: role_id, guild_id },
                 select: { id: true },
             }),
         ]);
-        member.roles.push(Role.create({ id: role_id }));
+        if (!member.roles.some((x) => x.id === role_id)) member.roles.push(Role.create({ id: role_id }));
 
         await Promise.all([
             member.save(),
             emitEvent({
                 event: "GUILD_MEMBER_UPDATE",
                 data: {
+                    ...member.toPublicMember(),
                     guild_id,
-                    user: member.user,
-                    roles: member.roles.map((x) => x.id),
+                    user: member.user.toPublicUser(),
+                    roles: member.roles.map((x) => x.id).filter((id) => id !== guild_id),
                 },
                 guild_id,
             } satisfies GuildMemberUpdateEvent),
@@ -260,13 +281,7 @@ export class Member extends BaseClassWithoutId {
         const [member] = await Promise.all([
             Member.findOneOrFail({
                 where: { id: user_id, guild_id },
-                relations: { user: true, roles: true }, // we don't want to load  the role objects just the ids
-                select: {
-                    index: true,
-                    roles: {
-                        id: true,
-                    },
-                },
+                relations: { user: true, roles: true },
             }),
             Role.findOneOrFail({ where: { id: role_id, guild_id } }),
         ]);
@@ -277,9 +292,10 @@ export class Member extends BaseClassWithoutId {
             emitEvent({
                 event: "GUILD_MEMBER_UPDATE",
                 data: {
+                    ...member.toPublicMember(),
                     guild_id,
-                    user: member.user,
-                    roles: member.roles.map((x) => x.id),
+                    user: member.user.toPublicUser(),
+                    roles: member.roles.map((x) => x.id).filter((id) => id !== guild_id),
                 },
                 guild_id,
             } satisfies GuildMemberUpdateEvent),
@@ -314,7 +330,12 @@ export class Member extends BaseClassWithoutId {
         ]);
     }
 
-    static async addToGuild(user_id: string, guild_id: string, isRegistration: boolean = false) {
+    static async addToGuild(
+        user_id: string,
+        guild_id: string,
+        isRegistration: boolean = false,
+        source?: { source_invite_code?: string | null; join_source_type?: number; inviter_id?: string | null },
+    ) {
         const totalSw = Stopwatch.startNew();
         const incSw = Stopwatch.startNew();
         const logTrace = (...data: unknown[]) => {
@@ -360,8 +381,11 @@ export class Member extends BaseClassWithoutId {
             joined_at: new Date(),
             deaf: false,
             mute: false,
-            pending: false,
+            pending: !!guild.features.includes("MEMBER_VERIFICATION_GATE_ENABLED") && !!guild.member_verification?.form_fields?.length && guild.owner_id !== user_id,
             bio: "",
+            source_invite_code: source?.source_invite_code ?? null,
+            join_source_type: source?.join_source_type ?? null,
+            inviter_id: source?.inviter_id ?? null,
             roles: [Role.create({ id: guild_id })], // @everyone role
             // read_state: {},
             settings: {
@@ -494,5 +518,41 @@ export class Member extends BaseClassWithoutId {
         if (this.user) member.user = this.user.toPublicUser();
 
         return member as PublicMember;
+    }
+
+    static async updateGuildSettings(user_id: string, guild_id: string, body: Partial<UserGuildSettings>) {
+        const member = await Member.findOneOrFail({
+            where: { id: user_id, guild_id },
+            select: { settings: true, index: true, id: true, guild_id: true },
+        });
+        const settings = { ...DefaultUserGuildSettings, ...(member.settings ?? {}) };
+        const { channel_overrides, ...rest } = body;
+        Object.assign(settings, rest);
+        if (channel_overrides) {
+            settings.channel_overrides = { ...(settings.channel_overrides ?? {}) };
+            for (const [channel_id, override] of Object.entries(channel_overrides))
+                settings.channel_overrides[channel_id] = { ...(settings.channel_overrides[channel_id] ?? {}), ...override, channel_id } as ChannelOverride;
+        }
+        settings.version = (settings.version ?? 0) + 1;
+        settings.guild_id = guild_id;
+        member.settings = settings;
+        await member.save();
+
+        const entry = {
+            ...settings,
+            channel_overrides: Object.entries(settings.channel_overrides ?? {}).map(([channel_id, override]) => ({ ...override, channel_id })),
+        };
+        await emitEvent({ event: "USER_GUILD_SETTINGS_UPDATE", user_id, data: entry });
+        return entry;
+    }
+
+    toSupplementalMember() {
+        return {
+            member: { ...this.toPublicMember(), roles: (this.roles ?? []).map((r) => r.id).filter((id) => id !== this.guild_id) },
+            source_invite_code: this.source_invite_code ?? null,
+            join_source_type: this.join_source_type ?? 0,
+            inviter_id: this.inviter_id ?? null,
+            integration_type: null,
+        };
     }
 }

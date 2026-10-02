@@ -19,9 +19,9 @@
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
-import { Channel, Guild, Invite, PublicInviteRelation, User } from "@spacebar/database";
+import { AuditLog, Channel, Invite, PublicInviteRelation } from "@spacebar/database";
 import { DiscordApiErrors, InviteCreateEvent, emitEvent } from "@spacebar/util";
-import { ChannelType, InviteCreateSchema } from "@spacebar/schemas";
+import { AuditLogEvents, ChannelType, InviteCreateSchema } from "@spacebar/schemas";
 import { Random } from "@spacebar/extensions";
 import { InviteListResponse } from "@spacebar/schemas/api/guilds/Invite";
 
@@ -58,14 +58,15 @@ router.post(
         }
         const { guild_id } = channel;
 
-        const expires_at = body.max_age == 0 || body.max_age == undefined ? undefined : new Date(body.max_age * 1000 + Date.now());
+        const max_age = Math.max(0, body.max_age ?? 86400);
+        const expires_at = max_age == 0 ? undefined : new Date(max_age * 1000 + Date.now());
 
         const invite = await Invite.create({
             code: Random.getString("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789", 6),
-            temporary: body.temporary || true,
+            temporary: body.temporary ?? false,
             uses: 0,
             max_uses: body.max_uses ? Math.max(0, body.max_uses) : 0,
-            max_age: body.max_age ? Math.max(0, body.max_age) : 0,
+            max_age,
             expires_at,
             created_at: new Date(),
             guild_id,
@@ -74,14 +75,24 @@ router.post(
             flags: body.flags ?? 0,
         }).save();
 
-        const data = invite.toJSON();
-        data.inviter = await User.getPublicUser(req.user_id);
-        data.guild = await Guild.findOne({ where: { id: guild_id } });
-        data.channel = channel;
+        const data = (
+            await Invite.findOneOrFail({
+                where: { code: invite.code },
+                relations: Object.fromEntries(PublicInviteRelation.map((i) => [i, true])),
+            })
+        ).toMetadataJSON();
 
+        await AuditLog.log({
+            guild_id,
+            user_id,
+            action_type: AuditLogEvents.INVITE_CREATE,
+            target_id: null,
+            changes: AuditLog.diff({}, { ...data, inviter_id: user_id, channel_id }, ["code", "channel_id", "inviter_id", "uses", "max_uses", "max_age", "temporary", "flags"]),
+            reason: req.headers["x-audit-log-reason"],
+        });
         await emitEvent({
             event: "INVITE_CREATE",
-            data,
+            data: { ...data, channel_id } as unknown as InviteCreateEvent["data"],
             guild_id,
         } satisfies InviteCreateEvent);
 
@@ -116,7 +127,7 @@ router.get(
                 where: { guild_id, channel_id },
                 relations: Object.fromEntries(PublicInviteRelation.map((i) => [i, true])), //TODO: cleanup
             })
-        ).map((x) => x.toPublicJSON());
+        ).map((x) => x.toMetadataJSON());
 
         res.status(200).send(invites satisfies InviteListResponse);
     },

@@ -18,6 +18,7 @@
 export * from "./AuditLog";
 export * from "./Automod";
 export * from "./Emoji";
+export * from "./GuildManagement";
 export * from "./GuildProfileResponse";
 export * from "./GuildSchema";
 export * from "./Role";

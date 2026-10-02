@@ -21,6 +21,7 @@ import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
 import { Channel, Guild, Invite } from "@spacebar/database";
 import { ChannelType, VanityUrlSchema } from "@spacebar/schemas";
+import { emitEvent, GuildUpdateEvent } from "@spacebar/util";
 
 const router = Router({ mergeParams: true });
 
@@ -89,33 +90,40 @@ router.patch(
         const guild = await Guild.findOneOrFail({ where: { id: guild_id } });
         if (!guild.features.includes("VANITY_URL")) throw new HTTPError("Your guild doesn't support vanity urls");
 
-        if (!code || code.length === 0) throw new HTTPError("Code cannot be null or empty");
+        if (!guild.features.includes("ALIASABLE_NAMES")) await Invite.delete({ guild_id, vanity_url: true });
 
-        const invite = await Invite.findOne({ where: { code } });
-        if (invite) throw new HTTPError("Invite already exists");
+        if (code) {
+            if (code.length < 2 || code.length > 32) throw new HTTPError("Vanity URL must be between 2 and 32 characters", 400);
+            if (await Invite.exists({ where: { code } })) throw new HTTPError("Vanity URL is already taken", 400);
 
-        const { id } = await Channel.findOneOrFail({
-            where: { guild_id, type: ChannelType.GUILD_TEXT },
-        });
+            const channel_id =
+                guild.rules_channel_id ??
+                guild.system_channel_id ??
+                (
+                    await Channel.findOneOrFail({
+                        where: { guild_id, type: ChannelType.GUILD_TEXT },
+                    })
+                ).id;
 
-        if (!guild.features.includes("ALIASABLE_NAMES")) {
-            await Invite.delete({ guild_id, vanity_url: true });
+            await Invite.create({
+                vanity_url: true,
+                code,
+                temporary: false,
+                uses: 0,
+                max_uses: 0,
+                max_age: 0,
+                created_at: new Date(),
+                guild_id: guild_id,
+                channel_id,
+                flags: 0,
+            }).save();
         }
 
-        await Invite.create({
-            vanity_url: true,
-            code,
-            temporary: false,
-            uses: 0,
-            max_uses: 0,
-            max_age: 0,
-            created_at: new Date(),
-            guild_id: guild_id,
-            channel_id: id,
-            flags: 0,
-        }).save();
+        guild.vanity_url_code = code || null;
+        await guild.save();
+        await emitEvent({ event: "GUILD_UPDATE", data: guild.toJSON() as unknown as GuildUpdateEvent["data"], guild_id } satisfies GuildUpdateEvent);
 
-        return res.json({ code });
+        return res.json({ code: code || null });
     },
 );
 

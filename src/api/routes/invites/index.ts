@@ -17,11 +17,11 @@
 */
 
 import { route } from "@spacebar/api/middlewares";
-import { Ban, Guild, Invite, PublicInviteRelation } from "@spacebar/database";
+import { AuditLog, Ban, Guild, Invite, PublicInviteRelation } from "@spacebar/database";
 import { Config, DiscordApiErrors, emitEvent, getPermission, InviteDeleteEvent } from "@spacebar/util";
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
-import { UserFlags } from "@spacebar/schemas";
+import { AuditLogEvents, UserFlags } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
 
@@ -41,10 +41,15 @@ router.get(
     async (req: Request, res: Response) => {
         const { invite_code } = req.params as { [key: string]: string };
 
-        const invite = await Invite.findOneOrFail({
+        const invite = await Invite.findOne({
             where: { code: invite_code },
             relations: Object.fromEntries(PublicInviteRelation.map((i) => [i, true])), //TODO: clean up
         });
+        if (!invite?.guild || !invite.channel) throw DiscordApiErrors.UNKNOWN_INVITE;
+        if (invite.isExpired()) {
+            await Invite.delete({ code: invite_code });
+            throw DiscordApiErrors.UNKNOWN_INVITE;
+        }
 
         res.status(200).send(invite.toPublicJSON());
     },
@@ -74,9 +79,11 @@ router.post(
 
         const { invite_code } = req.params as { [key: string]: string };
         const { public_flags } = req.user;
-        const { guild_id } = await Invite.findOneOrFail({
+        const found = await Invite.findOne({
             where: { code: invite_code },
         });
+        if (!found) throw DiscordApiErrors.UNKNOWN_INVITE;
+        const { guild_id } = found;
         const { features } = await Guild.findOneOrFail({
             where: { id: guild_id },
         });
@@ -107,9 +114,14 @@ router.post(
             throw new HTTPError("Sorry, this guild has joins closed.", 403);
         }
 
-        const invite = await Invite.joinGuild(req.user_id, invite_code);
+        const { new_member } = await Invite.joinGuild(req.user_id, invite_code);
+        const invite = await Invite.findOneOrFail({
+            where: { code: invite_code },
+            relations: Object.fromEntries(PublicInviteRelation.map((i) => [i, true])),
+        }).catch(() => null);
+        if (!invite) return res.json({ code: invite_code, guild_id, new_member });
 
-        res.json(invite);
+        res.json({ ...invite.toPublicJSON(), new_member });
     },
 );
 
@@ -131,7 +143,11 @@ router.delete(
     }),
     async (req: Request, res: Response) => {
         const { invite_code } = req.params as { [key: string]: string };
-        const invite = await Invite.findOneOrFail({ where: { code: invite_code } });
+        const invite = await Invite.findOne({
+            where: { code: invite_code },
+            relations: Object.fromEntries(PublicInviteRelation.map((i) => [i, true])),
+        });
+        if (!invite) throw DiscordApiErrors.UNKNOWN_INVITE;
         const { guild_id, channel_id } = invite;
 
         const permission = await getPermission(req.user_id, guild_id, channel_id);
@@ -140,6 +156,13 @@ router.delete(
 
         await Promise.all([
             Invite.delete({ code: invite_code }),
+            AuditLog.log({
+                guild_id,
+                user_id: req.user_id,
+                action_type: AuditLogEvents.INVITE_DELETE,
+                changes: AuditLog.diff({ ...invite, inviter_id: invite.inviter_id }, {}, ["code", "channel_id", "inviter_id", "uses", "max_uses", "max_age", "temporary", "flags"]),
+                reason: req.headers["x-audit-log-reason"],
+            }),
             emitEvent({
                 event: "INVITE_DELETE",
                 guild_id: guild_id,
@@ -151,7 +174,7 @@ router.delete(
             } satisfies InviteDeleteEvent),
         ]);
 
-        res.json({ invite: invite });
+        res.json(invite.toMetadataJSON());
     },
 );
 

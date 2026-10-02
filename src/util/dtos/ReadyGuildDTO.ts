@@ -85,6 +85,8 @@ export interface IReadyGuildDTO {
         max_stage_video_channel_users: 50; // TODO
         nsfw: boolean;
         id: string;
+        premium_features?: Guild["premium_features"];
+        profile?: { tag: string; badge: string | null } | null;
     };
     roles: Role[];
     stage_instances: unknown[];
@@ -142,6 +144,8 @@ export class ReadyGuildDTO implements IReadyGuildDTO {
         max_stage_video_channel_users: 50; // TODO
         nsfw: boolean;
         id: string;
+        premium_features?: Guild["premium_features"];
+        profile?: { tag: string; badge: string | null } | null;
     };
     roles: Role[];
     stage_instances: unknown[];
@@ -191,7 +195,7 @@ export class ReadyGuildDTO implements IReadyGuildDTO {
             explicit_content_filter: guild.explicit_content_filter,
             default_message_notifications: guild.default_message_notifications,
             mfa_level: guild.mfa_level,
-            vanity_url_code: null, // ?????
+            vanity_url_code: guild.vanity_url_code ?? null,
             premium_tier: guild.premium_tier,
             premium_progress_bar_enabled: guild.premium_progress_bar_enabled,
             system_channel_flags: guild.system_channel_flags,
@@ -209,6 +213,8 @@ export class ReadyGuildDTO implements IReadyGuildDTO {
             max_stage_video_channel_users: 50, // TODO
             nsfw: guild.nsfw,
             safety_alerts_channel_id: null,
+            premium_features: guild.premium_features,
+            profile: guild.profile?.tag ? { tag: guild.profile.tag, badge: guild.profile.badge_hash ?? null } : null,
         };
         this.roles = guild.roles.map((x) => x.toJSON());
         this.stage_instances = (guild as { stage_instances?: unknown[] }).stage_instances ?? [];

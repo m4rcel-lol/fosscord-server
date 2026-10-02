@@ -18,9 +18,9 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { Emoji, Guild, Member, Role, Sticker } from "@spacebar/database";
+import { AuditLog, Emoji, Guild, Member, Role, Sticker } from "@spacebar/database";
 import { CollectibleItemType, Collectibles, Config, DiscordApiErrors, emitEvent, FieldErrors, getPermission, getRights, GuildMemberUpdateEvent, handleFile } from "@spacebar/util";
-import { MemberChangeSchema, PublicMemberProjection, PublicUserProjection } from "@spacebar/schemas";
+import { AuditLogEvents, MemberChangeSchema, PublicMemberProjection, PublicUserProjection } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
 
@@ -61,7 +61,7 @@ router.get(
         return res.json({
             ...member.toPublicMember(),
             user: member.user.toPublicUser(),
-            roles: member.roles.map((x) => x.id),
+            roles: member.roles.map((x) => x.id).filter((id) => id !== guild_id),
         });
     },
 );
@@ -94,6 +94,8 @@ router.patch(
             where: { id: member_id, guild_id },
             relations: { roles: true, user: true },
         });
+        const before = { nick: member.nick, mute: member.mute, deaf: member.deaf, communication_disabled_until: member.communication_disabled_until?.toISOString() ?? null };
+        const rolesBefore = member.roles.map((role) => role.id);
         const permission = await getPermission(req.user_id, guild_id);
 
         if ("nick" in body) {
@@ -169,8 +171,7 @@ router.patch(
         await member.save();
 
         member.roles = member.roles.filter((x) => x.id !== guild_id);
-
-        const data = { ...member.toPublicMember(), user: member.user.toPublicUser(), roles: member.roles.map((x) => x.id) };
+        const data = { ...member.toPublicMember(), guild_id, user: member.user.toPublicUser(), roles: member.roles.map((x) => x.id) };
 
         // do not use promise.all as we have to first write to db before emitting the event to catch errors
         await emitEvent({
@@ -178,6 +179,28 @@ router.patch(
             guild_id,
             data,
         } satisfies GuildMemberUpdateEvent);
+
+        const reason = req.headers["x-audit-log-reason"];
+        const after = { nick: member.nick, mute: member.mute, deaf: member.deaf, communication_disabled_until: member.communication_disabled_until?.toISOString() ?? null };
+        const auditChanges = AuditLog.diff(before, after, ["nick", "mute", "deaf", "communication_disabled_until"]);
+        if (auditChanges.length)
+            await AuditLog.log({ guild_id, user_id: req.user_id, action_type: AuditLogEvents.MEMBER_UPDATE, target_id: member_id, changes: auditChanges, reason });
+        const added = data.roles.filter((id) => !rolesBefore.includes(id));
+        const removed = rolesBefore.filter((id) => id !== guild_id && !data.roles.includes(id));
+        if ("roles" in body && (added.length || removed.length)) {
+            const names = new Map((await Role.find({ where: { guild_id }, select: { id: true, name: true } })).map((role) => [role.id, role.name]));
+            await AuditLog.log({
+                guild_id,
+                user_id: req.user_id,
+                action_type: AuditLogEvents.MEMBER_ROLE_UPDATE,
+                target_id: member_id,
+                changes: [
+                    ...(added.length ? [{ key: "$add", new_value: added.map((id) => ({ id, name: names.get(id) })) }] : []),
+                    ...(removed.length ? [{ key: "$remove", new_value: removed.map((id) => ({ id, name: names.get(id) })) }] : []),
+                ] as unknown as AuditLog["changes"],
+                reason,
+            });
+        }
 
         res.json(data);
     },
@@ -215,9 +238,10 @@ router.put(
             throw DiscordApiErrors.MISSING_REQUIRED_OAUTH2_SCOPE;
         }
 
-        const guild = await Guild.findOneOrFail({
+        const guild = await Guild.findOne({
             where: { id: guild_id },
         });
+        if (!guild) throw DiscordApiErrors.UNKNOWN_GUILD;
 
         const alreadyMember = await Member.existsBy({ id: member_id, guild_id });
         if (!alreadyMember && !guild.features.includes("DISCOVERABLE")) {
@@ -263,7 +287,10 @@ router.delete(
             permission.hasThrow("KICK_MEMBERS");
         }
 
-        await Member.removeFromGuild(member_id, guild_id);
+        const target = member_id === "@me" ? req.user_id : member_id;
+        await Member.removeFromGuild(target, guild_id);
+        if (target !== req.user_id)
+            await AuditLog.log({ guild_id, user_id: req.user_id, action_type: AuditLogEvents.MEMBER_KICK, target_id: target, reason: req.headers["x-audit-log-reason"] });
         res.sendStatus(204);
     },
 );

@@ -19,9 +19,10 @@
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
-import { Ban, Member, User } from "@spacebar/database";
-import { DiscordApiErrors, GuildBanAddEvent, GuildBanRemoveEvent, emitEvent } from "@spacebar/util";
-import { BanCreateSchema, BanRegistrySchema, GuildBanResponse, GuildBansResponse, PublicUser } from "@spacebar/schemas";
+import { AuditLog, Ban, Member, Message, User } from "@spacebar/database";
+import { DiscordApiErrors, GuildBanAddEvent, GuildBanRemoveEvent, MessageDeleteBulkEvent, emitEvent } from "@spacebar/util";
+import { AuditLogEvents, BanCreateSchema, BanRegistrySchema, GuildBanResponse, GuildBansResponse, PublicUser } from "@spacebar/schemas";
+import { MoreThan } from "typeorm";
 
 const router: Router = Router({ mergeParams: true });
 
@@ -222,17 +223,40 @@ router.put(
         if (existingBan) return res.status(204).send();
 
         const banned_user = await User.getPublicUser(banned_user_id);
+        const headerReason = req.headers["x-audit-log-reason"];
+        const reason = (Array.isArray(headerReason) ? headerReason[0] : headerReason) ?? req.body.reason;
 
         const ban = Ban.create({
             user_id: banned_user_id,
             guild_id: guild_id,
             executor_id: req.user_id,
-            reason: req.body.reason, // || otherwise empty
+            reason: reason ? decodeURIComponent(reason) : undefined,
         });
 
+        if (deleteMessagesMs > 0) {
+            const messages = await Message.find({
+                where: { guild_id, author_id: banned_user_id, timestamp: MoreThan(new Date(Date.now() - deleteMessagesMs)) },
+                select: { id: true, channel_id: true },
+            });
+            const byChannel = Map.groupBy(messages, (message) => message.channel_id!);
+            if (messages.length) await Message.delete(messages.map((message) => message.id));
+            for (const [channel_id, list] of byChannel)
+                await emitEvent({ event: "MESSAGE_DELETE_BULK", channel_id, data: { ids: list.map((m) => m.id), channel_id, guild_id } } satisfies MessageDeleteBulkEvent);
+        }
+
         await Promise.all([
-            Member.removeFromGuild(banned_user_id, guild_id),
+            Member.exists({ where: { id: banned_user_id, guild_id } }).then(async (isMember) => {
+                if (isMember) await Member.removeFromGuild(banned_user_id, guild_id);
+            }),
             ban.save(),
+            AuditLog.log({
+                guild_id,
+                user_id: req.user_id,
+                action_type: AuditLogEvents.MEMBER_BAN_ADD,
+                target_id: banned_user_id,
+                reason,
+                options: deleteMessagesMs ? { delete_member_days: String(Math.round(deleteMessagesMs / 86400000)) } : undefined,
+            }),
             emitEvent({
                 event: "GUILD_BAN_ADD",
                 data: {
@@ -276,6 +300,7 @@ router.delete(
                 user_id: user_id,
                 guild_id,
             }),
+            AuditLog.log({ guild_id, user_id: req.user_id, action_type: AuditLogEvents.MEMBER_BAN_REMOVE, target_id: user_id, reason: req.headers["x-audit-log-reason"] }),
 
             emitEvent({
                 event: "GUILD_BAN_REMOVE",
