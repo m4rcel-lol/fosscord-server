@@ -67,9 +67,9 @@ export class CDNServer extends Server {
 
         this.app.disable("x-powered-by");
 
+        this.app.use(CORS);
         this.app.use(Authentication);
         this.app.use(ErrorHandler);
-        this.app.use(CORS);
         this.app.use(BodyParser({ inflate: true, limit: "10mb" }));
 
         await registerRoutes(this, path.join(__dirname, "routes/"));

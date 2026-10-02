@@ -21,6 +21,10 @@ import { route } from "@spacebar/api/middlewares";
 
 const router: Router = Router({ mergeParams: true });
 
+router.get("/", route({}), (req: Request, res: Response) => {
+    res.json([]);
+});
+
 router.get("/:sku_id", route({}), (req: Request, res: Response) => {
     //TODO
     // const id = req.params.id;

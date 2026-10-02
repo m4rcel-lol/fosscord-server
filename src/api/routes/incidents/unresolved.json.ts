@@ -29,7 +29,7 @@ router.get(
     (req: Request, res: Response) => {
         res.json({
             page: {},
-            scheduled_maintenances: [],
+            incidents: [],
         });
     },
 );
