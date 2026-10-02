@@ -98,6 +98,10 @@ export class DaveSession {
         await SendBinary(socket, VoiceOPCodes.MLS_EXTERNAL_SENDER_PACKAGE, externalSender.package);
     }
 
+    rebind(userId: string, from: WebRtcWebSocket, to: WebRtcWebSocket) {
+        if (this.sockets.get(userId) === from) this.sockets.set(userId, to);
+    }
+
     async leave(userId: string, socket?: WebRtcWebSocket) {
         if (socket && this.sockets.get(userId) !== socket) return;
         this.sockets.delete(userId);

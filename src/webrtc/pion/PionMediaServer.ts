@@ -46,7 +46,7 @@ class PionClient implements WebRtcClient<unknown> {
     constructor(
         readonly user_id: string,
         readonly voiceRoomId: string,
-        readonly websocket: unknown,
+        public websocket: unknown,
         readonly server: PionMediaServer,
     ) {}
 

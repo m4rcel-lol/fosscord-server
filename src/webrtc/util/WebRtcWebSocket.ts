@@ -12,4 +12,11 @@ export interface WebRtcWebSocket extends WebSocket {
     maxDaveVersion: number;
     daveVersion: number;
     clientPlatform?: number;
+    sentMessages?: { seq: number; data: string | Buffer }[];
+    sessionCleanups?: (() => Promise<unknown>)[];
+    resumedBy?: WebRtcWebSocket;
+    sessionEnded?: boolean;
+    resumeTimer?: NodeJS.Timeout;
+    lastActivity?: number;
+    speaking?: boolean;
 }
