@@ -184,7 +184,7 @@ router.get(
                 x.author = {
                     id: "4",
                     discriminator: "0000",
-                    username: "Spacebar Ghost",
+                    username: "Deleted User",
                     public_flags: 0,
                     avatar: null,
                 } as PartialUser;

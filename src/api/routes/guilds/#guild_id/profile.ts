@@ -41,7 +41,7 @@ router.get(
             icon_hash: guild.icon ?? null,
             member_count: guild.member_count!,
             online_count: guild.member_count!,
-            description: guild.description ?? "A Spacebar guild",
+            description: guild.description ?? "",
             brand_color_primary: "#FF00FF",
             banner_hash: null,
             game_application_ids: [], // We don't track this
