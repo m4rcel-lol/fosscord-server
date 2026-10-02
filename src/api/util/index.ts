@@ -38,3 +38,4 @@ export * from "./utility/statusPage";
 export * from "./utility/phoneVerification";
 export * from "./utility/harvest";
 export * from "./utility/games";
+export * from "./utility/domainConnection";
