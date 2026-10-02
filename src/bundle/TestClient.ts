@@ -212,6 +212,7 @@ const buildHtml = () => {
     return source
         .replace(envMatch[0], `${env}\n${vencord}\n${patches}`)
         .replace(/<script[^>]*>[^<]*__CF\$cv\$params[\s\S]*?<\/script>/, "")
+        .replace(/<script[^>]*src="\/assets\/sentry\.[0-9a-f]+\.js"[^>]*><\/script>\s*/g, "")
         .replace(/ nonce="[^"]*"/g, "")
         .replace(/<link rel="preconnect"[^>]*>\s*/g, "")
         .replace(/<!-- section:seometa -->[\s\S]*?<!-- endsection -->/, "")

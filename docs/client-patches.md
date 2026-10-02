@@ -16,7 +16,7 @@ The test client is Discord's own web client, cached in `assets/cache` by `npm ru
 - installs dependencies with Vencord's own pnpm (falling back to `corepack pnpm` or `npx pnpm`),
 - builds the web target and writes `assets/vencord/vencord.js`, `vencord.css` and the Monaco files for the QuickCSS editor.
 
-`npm run generate:client` runs it after downloading the client. Both `.vencord/` and `assets/vencord/` are gitignored. `src/bundle/TestClient.ts` serves `assets/vencord` and adds the script right after `GLOBAL_ENV`, so it runs before any Discord code. If the file is missing the client still loads, just without the plugins, and the server logs a warning.
+`npm run generate:client` runs it after downloading the client. Both `.vencord/` and `assets/vencord/` are gitignored. `src/bundle/TestClient.ts` serves `assets/vencord` and adds the script right after `GLOBAL_ENV`, so it runs before any Discord code. If the file is missing the client still loads, just without the plugins, and the server logs a warning. The page also leaves out Discord's Sentry bundle. Vencord's NoTrack plugin would stop it anyway, but only by throwing an uncaught error on every load.
 
 The default set leaves out every plugin that talks to a third-party service on load or on use (ReviewDB, Decor, Translate, USRBG, ClearURLs, Dearrow and similar), so with the defaults the client only ever contacts this instance. `client/vencord-patches/no-donor-badges.patch` removes the one request core Vencord makes on its own, the donor badge list from `badges.vencord.dev`. `client/vencord-patches/no-donate-card.patch` removes the donation and contributor cards from the Vencord settings tab, along with the sticker and emoji images they loaded from Discord's CDN.
 
