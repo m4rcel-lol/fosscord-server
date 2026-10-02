@@ -65,7 +65,7 @@ export async function Send(socket: WebSocket, data: Payload) {
     } else if (socket.compress === "zstd-stream") {
         if (typeof buffer === "string") buffer = Buffer.from(buffer as string);
 
-        buffer = (await socket.zstdEncoder!.encode(buffer as Buffer)) as Buffer;
+        buffer = socket.zstdEncoder!.encodeSync(buffer as Buffer);
     }
 
     return new Promise((res, rej) => {
