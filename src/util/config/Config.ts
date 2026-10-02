@@ -67,4 +67,5 @@ export class ConfigValue {
     components = new ComponentConfiguration();
     embeds = new EmbedConfiguration();
     integrations = new IntegrationConfiguration();
+    defaultsRevision: number = 0;
 }

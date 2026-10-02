@@ -123,12 +123,13 @@ const StaleDefaults: [string, JsonValue, JsonValue][] = [
 ];
 
 function replaceStaleDefaults(config: ConfigValue) {
-    for (const [path, previous, next] of StaleDefaults) {
+    for (const [path, previous, next] of StaleDefaults.slice(config.defaultsRevision ?? 0)) {
         const keys = path.split(".");
         const last = keys.pop()!;
         const parent = keys.reduce<Record<string, JsonValue> | undefined>((obj, key) => obj?.[key] as Record<string, JsonValue> | undefined, config as never);
         if (parent && JSON.stringify(parent[last]) === JSON.stringify(previous)) parent[last] = next;
     }
+    config.defaultsRevision = StaleDefaults.length;
 }
 
 // TODO: better types
