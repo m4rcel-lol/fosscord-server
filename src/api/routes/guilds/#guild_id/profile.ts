@@ -18,7 +18,8 @@
 
 import crypto from "node:crypto";
 import { route } from "@spacebar/api/middlewares";
-import { Guild } from "@spacebar/database";
+import { Guild, User } from "@spacebar/database";
+import { Raw } from "typeorm";
 import { DiscordApiErrors, emitEvent, GuildUpdateEvent, handleFile } from "@spacebar/util";
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
@@ -82,6 +83,16 @@ router.patch(
 
         guild.profile = profile;
         await guild.save();
+
+        if (body.tag !== undefined || body.badge !== undefined || body.badge_color_primary !== undefined || body.badge_color_secondary !== undefined) {
+            const adopters = await User.find({ where: { primary_guild: Raw((alias) => `${alias} ->> 'identity_guild_id' = :guild_id`, { guild_id }) } });
+            for (const user of adopters) {
+                user.primary_guild = profile.tag
+                    ? { identity_guild_id: guild_id, identity_enabled: user.primary_guild?.identity_enabled ?? true, tag: profile.tag, badge: profile.badge_hash ?? null }
+                    : { identity_guild_id: guild_id, identity_enabled: false, tag: null, badge: null };
+                await user.save();
+            }
+        }
 
         await emitEvent({
             event: "GUILD_UPDATE",
