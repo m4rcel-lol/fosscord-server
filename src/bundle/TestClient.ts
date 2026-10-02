@@ -29,6 +29,8 @@ const ASSET_FOLDER_PATH = path.join(__dirname, "..", "..", "assets");
 const CACHE_PATH = path.join(ASSET_FOLDER_PATH, "cache");
 const COMPRESSED_PATH = process.env.CLIENT_COMPRESSED_PATH ? path.resolve(process.env.CLIENT_COMPRESSED_PATH) : path.join(ASSET_FOLDER_PATH, "cache_compressed");
 const PATCH_PATH = path.join(ASSET_FOLDER_PATH, "client_patches");
+const VENCORD_PATH = path.join(ASSET_FOLDER_PATH, "vencord");
+const VENCORD_SCRIPT = path.join(VENCORD_PATH, "vencord.js");
 const UPSTREAM = "https://discord.com";
 const DEVELOPMENT = process.env.NODE_ENV === "development";
 const HASHED = /(?:^|[.-])[0-9a-f]{8,32}\.\w+$/;
@@ -54,21 +56,21 @@ const compressor = (encoding: string) => {
 
 const stat = (file: string) => fs.promises.stat(file).catch(() => null);
 
-const serveAsset = async (req: Request, res: Response, next: NextFunction) => {
+const serveAsset = async (req: Request, res: Response, next: NextFunction, root: string, precompressed: boolean) => {
     const file = req.params.file as string;
     if (!/^\w[\w.-]*$/.test(file)) return next();
-    const source = path.join(CACHE_PATH, file);
+    const source = path.join(root, file);
     const sourceStat = await stat(source);
     if (!sourceStat?.isFile()) return next();
 
-    res.set("Cache-Control", DEVELOPMENT || !HASHED.test(file) ? "no-cache" : "public, max-age=31536000, immutable");
+    res.set("Cache-Control", DEVELOPMENT || !precompressed || !HASHED.test(file) ? "no-cache" : "public, max-age=31536000, immutable");
     res.set("Access-Control-Allow-Origin", "*");
     if (!COMPRESSIBLE.test(file)) return res.sendFile(source, { cacheControl: false, dotfiles: "allow" });
 
     res.vary("Accept-Encoding");
     res.type(path.extname(file));
     const encodings = acceptedEncodings(req.headers["accept-encoding"]);
-    for (const encoding of encodings) {
+    for (const encoding of precompressed ? encodings : []) {
         if (!PRECOMPRESSED[encoding]) continue;
         const compressed = path.join(COMPRESSED_PATH, `${file}.${PRECOMPRESSED[encoding]}`);
         const compressedStat = await stat(compressed);
@@ -87,8 +89,12 @@ const serveAsset = async (req: Request, res: Response, next: NextFunction) => {
 };
 
 export function TestClientAssets(app: Application) {
+    const noCache = { setHeaders: (res: Response) => res.set("Cache-Control", "no-cache") };
     app.use("/assets", express.static(path.join(ASSET_FOLDER_PATH, "public")));
-    app.get("/assets/:file", (req, res, next) => void serveAsset(req, res, next).catch(next));
+    app.get("/assets/vencord/:file", (req, res, next) => void serveAsset(req, res, next, VENCORD_PATH, false).catch(next));
+    app.use("/assets/vencord", express.static(VENCORD_PATH, noCache));
+    app.use("/vendor/monaco", express.static(path.join(VENCORD_PATH, "vendor", "monaco"), noCache));
+    app.get("/assets/:file", (req, res, next) => void serveAsset(req, res, next, CACHE_PATH, true).catch(next));
 }
 
 const ENDPOINT_KEYS = [
@@ -158,6 +164,7 @@ const buildHtml = () => {
         RTC_LATENCY_ENDPOINT: \`//\${host}/rtc\`,
         MIGRATION_SOURCE_ORIGIN: location.origin,
         MIGRATION_DESTINATION_ORIGIN: location.origin,
+        INSTANCE_NAME: ${JSON.stringify(client.instanceName).replace(/</g, "\\u003c")},
     });
 })();
 </script>`;
@@ -171,8 +178,13 @@ const buildHtml = () => {
               .join("\n")
         : "";
 
+    const vencord = fs.existsSync(VENCORD_SCRIPT)
+        ? `<script src="/assets/vencord/vencord.js?v=${createHash("sha256").update(fs.readFileSync(VENCORD_SCRIPT)).digest("hex").slice(0, 12)}"></script>`
+        : "";
+    if (!vencord) console.warn("[TestClient] assets/vencord/vencord.js is missing, run `npm run build:vencord` to build the client mods");
+
     return source
-        .replace(envMatch[0], `${env}\n${patches}`)
+        .replace(envMatch[0], `${env}\n${vencord}\n${patches}`)
         .replace(/<script[^>]*>[^<]*__CF\$cv\$params[\s\S]*?<\/script>/, "")
         .replace(/ nonce="[^"]*"/g, "")
         .replace(/<link rel="preconnect"[^>]*>\s*/g, "")
@@ -213,7 +225,7 @@ export default function TestClient(app: Application) {
     });
 
     const sourceStamp = () =>
-        [path.join(CACHE_PATH, "index.html"), PATCH_PATH, ...(fs.existsSync(PATCH_PATH) ? fs.readdirSync(PATCH_PATH).map((x) => path.join(PATCH_PATH, x)) : [])]
+        [path.join(CACHE_PATH, "index.html"), PATCH_PATH, VENCORD_SCRIPT, ...(fs.existsSync(PATCH_PATH) ? fs.readdirSync(PATCH_PATH).map((x) => path.join(PATCH_PATH, x)) : [])]
             .map((x) => fs.statSync(x, { throwIfNoEntry: false })?.mtimeMs ?? 0)
             .join();
     let stamp = DEVELOPMENT ? sourceStamp() : "";

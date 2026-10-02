@@ -1,0 +1,39 @@
+{
+    "repository": "https://github.com/Vendicated/Vencord",
+    "commit": "7f0c10cc29fd789f2f4828ae3dc947623e837920",
+    "settings": {
+        "autoUpdate": false,
+        "autoUpdateNotification": false
+    },
+    "plugins": {
+        "BetterFolders": true,
+        "BetterGifAltText": true,
+        "CopyEmojiMarkdown": true,
+        "CopyUserURLs": true,
+        "FavoriteEmojiFirst": true,
+        "FixImagesQuality": true,
+        "ForceOwnerCrown": true,
+        "FullSearchContext": true,
+        "MessageLinkEmbeds": true,
+        "NoDevtoolsWarning": true,
+        "NoUnblockToJump": true,
+        "PermissionsViewer": true,
+        "PictureInPicture": true,
+        "ReverseImageSearch": true,
+        "ServerInfo": true,
+        "SilentTyping": true,
+        "TypingTweaks": true,
+        "Unindent": true,
+        "ValidReply": true,
+        "ValidUser": true,
+        "ViewIcons": true,
+        "ViewRaw": true,
+        "VoiceMessages": true,
+        "VolumeBooster": true,
+        "WhoReacted": true,
+        "FakeNitro": false,
+        "MessageLogger": false,
+        "ShowHiddenChannels": false,
+        "WebPWA": false
+    }
+}

@@ -47,3 +47,5 @@ assets/collectibles.json
 assets/detectable.json
 scripts/dev/.test-bot
 extra/pion-sfu/pion-sfu
+.vencord/
+assets/vencord/
