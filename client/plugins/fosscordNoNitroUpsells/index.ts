@@ -75,6 +75,13 @@ export default definePlugin({
             },
         },
         {
+            find: /showPremiumIcon:\i=!1\}=\i;/,
+            replacement: {
+                match: /showPremiumIcon:(\i)=!1\}=(\i);/,
+                replace: "$&$1=!1;",
+            },
+        },
+        {
             find: '"sticker")',
             replacement: {
                 match: /\i\.gifts\?\.button!=null(?=&&)/,

@@ -18,7 +18,7 @@
 
 import definePlugin from "@utils/types";
 
-import { FosscordAuthor } from "../fosscordCore/shared";
+import { FosscordAuthor, redirectTo } from "../fosscordCore/shared";
 
 const INCLUDED_IN_BOOSTING = "#{intl::hUgjyP::raw}";
 const SHOW_BOOST_PROGRESS_BAR = "#{intl::Dl4mJS::raw}";
@@ -28,6 +28,8 @@ export default definePlugin({
     description: "Every server is already boost level 3 here, so this removes Server Boost adverts and shows boost perks as unlocked.",
     authors: [FosscordAuthor],
     required: true,
+
+    redirectTo,
 
     patches: [
         {
@@ -83,6 +85,27 @@ export default definePlugin({
                     replace: "null",
                 },
             ],
+        },
+        {
+            find: /isBannerVisible:\i,disableBoostClick:\i\}=\i/,
+            replacement: {
+                match: /if\(0===\i&&\i===\i\.\i\.NONE\)return null;(?=let \i=\i===\i\.\i\.NONE\?)/,
+                replace: "return null;",
+            },
+        },
+        {
+            find: /\.SUPPRESS_PREMIUM_SUBSCRIPTIONS\),onChange:/,
+            replacement: {
+                match: /\(0,\i\.jsx\)\(\i\.\i,\{label:[^{}]{0,80},checked:!\(0,\i\.\i\)\(\i\.systemChannelFlags,\i\.\i\.SUPPRESS_PREMIUM_SUBSCRIPTIONS\)/,
+                replace: "null&&$&",
+            },
+        },
+        {
+            find: /case \i\.\i\.GUILD_BOOSTS:return\(0,\i\.jsx\)\(\i,\{guildId:\i,powerupListingId:/,
+            replacement: {
+                match: /(case \i\.\i\.GUILD_BOOSTS:return)\(0,\i\.jsx\)\(\i,\{guildId:(\i),powerupListingId:[^}]+\}\)/,
+                replace: '$1 $self.redirectTo("/channels/"+$2)',
+            },
         },
     ],
 });

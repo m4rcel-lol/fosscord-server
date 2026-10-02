@@ -28,12 +28,14 @@ const Router = mapMangledModuleLazy("transitionTo - Transitioning to", {
     replaceWith: filters.byCode("Replacing route with"),
 });
 
-function RedirectHome() {
-    useEffect(() => Router.replaceWith(HOME_ROUTE), []);
+function Redirect({ to }: { to: string; }) {
+    useEffect(() => Router.replaceWith(to), [to]);
     return null;
 }
 
-export const redirectHome = () => <RedirectHome />;
+export const redirectTo = (to: string) => <Redirect to={to} />;
+
+export const redirectHome = () => redirectTo(HOME_ROUTE);
 
 export const hideSetting = (key: string, { replacesPredicate = false } = {}): PatchReplacement =>
     replacesPredicate
