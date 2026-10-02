@@ -22,7 +22,7 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
 import { storage } from "@spacebar/cdn/util/Storage";
-import { Guild, Member } from "@spacebar/database";
+import { Guild } from "@spacebar/database";
 import { DiscordApiErrors } from "@spacebar/util";
 
 const router: Router = Router({ mergeParams: true });
@@ -69,7 +69,7 @@ router.get(
         }
         const { Jimp, measureText } = jimp;
 
-        const online = guild.presence_count || (await Member.count({ where: { guild_id } }));
+        const online = await Guild.countPresences(guild_id);
         const presence = `${online} Online`;
         const [small, medium, large] = await Promise.all([font("SANS_8_WHITE"), font("SANS_16_WHITE"), font("SANS_32_WHITE")]);
         const fit = (text: string, f: any, width: number) => {

@@ -633,6 +633,19 @@ export class Guild extends BaseClass {
         } satisfies InviteGuild;
     }
 
+    static async countPresences(guild_id: string) {
+        const [{ count }] = await Member.query(
+            `SELECT COUNT(DISTINCT s.user_id) AS count FROM sessions s INNER JOIN members m ON m.id = s.user_id WHERE m.guild_id = $1 AND s.status NOT IN ('offline', 'invisible')`,
+            [guild_id],
+        );
+        return Number(count) || 0;
+    }
+
+    async withPresenceCount() {
+        this.presence_count = await Guild.countPresences(this.id);
+        return this;
+    }
+
     toGuildProfile(): GuildProfileResponse {
         const profile = this.profile ?? {};
         return {

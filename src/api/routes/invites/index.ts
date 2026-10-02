@@ -51,6 +51,7 @@ router.get(
             throw DiscordApiErrors.UNKNOWN_INVITE;
         }
 
+        await invite.guild.withPresenceCount();
         res.status(200).send(invite.toPublicJSON());
     },
 );
