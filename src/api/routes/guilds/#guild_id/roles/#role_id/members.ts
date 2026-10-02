@@ -18,31 +18,36 @@
 
 import { Router, Request, Response } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { Member } from "@spacebar/database";
-import { arrayPartition } from "@spacebar/extensions";
+import { Member, Role } from "@spacebar/database";
+import { In } from "typeorm";
 import { DiscordApiErrors } from "@spacebar/util";
 
 const router = Router({ mergeParams: true });
 
 router.patch("/", route({ permission: "MANAGE_ROLES" }), async (req: Request, res: Response) => {
-    // Payload is JSON containing a list of member_ids, the new list of members to have the role
     const { guild_id, role_id } = req.params as { [key: string]: string };
-    const { member_ids } = req.body;
+    const member_ids = ((req.body?.member_ids as string[]) ?? []).slice(0, 30);
 
-    // don't mess with @everyone
     if (role_id == guild_id) throw DiscordApiErrors.INVALID_ROLE;
+    await Role.findOneOrFail({ where: { id: role_id, guild_id } });
 
-    const members = await Member.find({
-        where: { guild_id },
-        relations: { roles: true },
-    });
+    const members = member_ids.length ? await Member.find({ where: { guild_id, id: In(member_ids) }, relations: { roles: true } }) : [];
+    const add = members.filter((member) => !member.roles.some((role) => role.id === role_id));
+    for (const member of add) await Member.addRole(member.id, guild_id, role_id);
 
-    const [add, remove] = arrayPartition(members, (member) => member_ids.includes(member.id) && !member.roles.map((role) => role.id).includes(role_id));
-
-    // TODO (erkin): have a bulk add/remove function that adds the roles in a single txn
-    await Promise.all([...add.map((member) => Member.addRole(member.id, guild_id, role_id)), ...remove.map((member) => Member.removeRole(member.id, guild_id, role_id))]);
-
-    res.sendStatus(204);
+    const updated = members.length ? await Member.find({ where: { guild_id, id: In(members.map((m) => m.id)) }, relations: { roles: true, user: true } }) : [];
+    res.json(
+        Object.fromEntries(
+            updated.map((m) => [
+                m.id,
+                {
+                    ...m.toPublicMember(),
+                    user: m.user.toPublicUser(),
+                    roles: m.roles.map((x) => x.id).filter((id) => id !== guild_id),
+                },
+            ]),
+        ),
+    );
 });
 
 export default router;
