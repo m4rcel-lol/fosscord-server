@@ -1,0 +1,77 @@
+/*
+	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
+	Copyright (C) 2026 Spacebar and Spacebar Contributors
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+const fs = require("node:fs");
+const path = require("node:path");
+
+const env = (name) => process.env[name]?.trim() || undefined;
+const file = env("CONFIG_PATH");
+const domain = env("DOMAIN")
+    ?.replace(/^https?:\/\//, "")
+    .replace(/\/+$/, "");
+
+if (!file) throw new Error("[configure] CONFIG_PATH is not set");
+if (!domain) {
+    console.error("[configure] DOMAIN is not set, put the public host name of the instance in .env");
+    process.exit(1);
+}
+
+const config = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {};
+const section = (...keys) => keys.reduce((parent, key) => (parent[key] ??= {}), config);
+const origin = `https://${domain}`;
+const port = env("PORT") ?? "3001";
+
+section("general").serverName = origin;
+section("api").endpointPublic = `${origin}/api/v9`;
+Object.assign(section("cdn"), { endpointPublic: `${origin}/`, endpointPrivate: `http://127.0.0.1:${port}/` });
+section("gateway").endpointPublic = `wss://${domain}/`;
+Object.assign(section("security"), { trustedProxies: env("TRUSTED_PROXIES") ?? "uniquelocal", forwardedFor: "X-Forwarded-For" });
+
+const regions = section("regions");
+regions.default ??= "spacebar";
+regions.available = regions.available?.length ? regions.available : [{ id: regions.default, name: regions.default, vip: false, custom: false, deprecated: false }];
+for (const region of regions.available) if (region.id === regions.default) region.endpoint = `${domain}/voice`;
+
+const instanceName = env("INSTANCE_NAME");
+if (instanceName) {
+    section("general").instanceName = instanceName;
+    section("client").instanceName = instanceName;
+}
+
+const cap = { instance: env("CAP_INSTANCE_URL"), sitekey: env("CAP_SITE_KEY"), secret: env("CAP_SECRET_KEY") };
+if (cap.instance && cap.sitekey && cap.secret) Object.assign(section("security", "captcha"), { enabled: true, service: "cap", ...cap });
+else if (cap.instance || cap.sitekey || cap.secret)
+    console.warn("[configure] Cap needs CAP_INSTANCE_URL, CAP_SITE_KEY and CAP_SECRET_KEY together, leaving the captcha settings alone");
+
+const smtpHost = env("SMTP_HOST");
+if (smtpHost) {
+    const secure = env("SMTP_SECURE") === "true";
+    Object.assign(section("email"), { provider: "smtp", senderAddress: env("EMAIL_FROM") ?? `noreply@${domain}` });
+    Object.assign(section("email", "smtp"), {
+        host: smtpHost,
+        port: Number(env("SMTP_PORT") ?? (secure ? 465 : 587)),
+        secure,
+        starttls: !secure && env("SMTP_STARTTLS") !== "false",
+        username: env("SMTP_USERNAME") ?? null,
+        password: env("SMTP_PASSWORD") ?? null,
+    });
+}
+
+fs.mkdirSync(path.dirname(file), { recursive: true });
+fs.writeFileSync(file, JSON.stringify(config, null, 4), { mode: 0o600 });
+console.log(`[configure] ${file} points at ${origin}`);
