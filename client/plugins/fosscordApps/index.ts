@@ -23,7 +23,7 @@ import { FosscordAuthor } from "../fosscordCore/shared";
 
 export default definePlugin({
     name: "FosscordApps",
-    description: "Keeps app components and the app launcher in step with an instance that has no embedded activities.",
+    description: "Keeps app components, the app launcher and the activity shelf in step with the instance.",
     authors: [FosscordAuthor],
     required: true,
 
