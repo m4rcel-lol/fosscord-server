@@ -217,6 +217,21 @@ try {
         }
     });
 
+    await phase("friend logs in through the login form and gets a password backup", async () => {
+        const b = await launch(friend, { login: true });
+        try {
+            await waitReady(b);
+            const sb = await status(b);
+            assert.equal(sb.linked, true, "friend device linked");
+            assert.deepEqual(sb.backup && { mode: sb.backup.mode, hasSecret: sb.backup.hasSecret }, { mode: "password", hasSecret: true }, "login created a password backup");
+        } catch (error) {
+            await diagnose(b);
+            throw error;
+        } finally {
+            await close(b);
+        }
+    });
+
     await phase("both browsers register devices, tester turns encryption on and sends", async () => {
         const [a, b] = await launchAll([tester], [friend]);
         try {
