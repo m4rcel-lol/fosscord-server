@@ -109,6 +109,9 @@ router.patch(
             }
         }
 
+        if (body.self_video === false) voiceState.self_video = false;
+        if (body.self_stream === false) voiceState.self_stream = false;
+
         await voiceState.save();
         await VoiceChannels.publish(voiceState);
         await StageInstances.speakersChanged(channel.id);
