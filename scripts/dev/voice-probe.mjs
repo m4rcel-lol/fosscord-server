@@ -34,7 +34,9 @@ const call = async (token, method, path, body) =>
     fetch(`${api}${path}`, { method, headers: { "content-type": "application/json", authorization: token }, body: body && JSON.stringify(body) }).then((r) => r.json());
 const tokens = Object.fromEntries(await Promise.all(Object.entries(users).map(async ([name, body]) => [name, (await call(undefined, "POST", "/auth/login", body)).token])));
 
-const [guild] = await call(tokens.tester, "GET", "/users/@me/guilds");
+const friendGuilds = new Set((await call(tokens.friend, "GET", "/users/@me/guilds")).map((g) => g.id));
+const guild = (await call(tokens.tester, "GET", "/users/@me/guilds")).find((g) => friendGuilds.has(g.id));
+if (!guild) throw new Error("tester and friend share no guild");
 const channels = await call(tokens.tester, "GET", `/guilds/${guild.id}/channels`);
 const voice = channels.find((c) => c.type === 2) ?? (await call(tokens.tester, "POST", `/guilds/${guild.id}/channels`, { name: "General", type: 2 }));
 
