@@ -20,6 +20,7 @@ import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { ReadState } from "@spacebar/database";
 import { emitEvent, getPermission, MessageAckEvent } from "@spacebar/util";
+import { MessageAcknowledgeSchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
 
@@ -42,13 +43,14 @@ router.post(
         const permission = await getPermission(req.user_id, undefined, channel_id);
         permission.hasThrow("VIEW_CHANNEL");
 
+        const body = req.body as MessageAcknowledgeSchema;
         let read_state = await ReadState.findOne({
             where: { user_id: req.user_id, channel_id },
         });
         if (!read_state) read_state = ReadState.create({ user_id: req.user_id, channel_id });
         read_state.last_message_id = message_id;
-        //It's a little more complicated but this'll do :P
-        read_state.mention_count = 0;
+        read_state.mention_count = body.manual ? Math.max(0, body.mention_count ?? 0) : 0;
+        if (body.flags !== undefined) read_state.flags = body.flags as typeof read_state.flags;
 
         await read_state.save();
 
@@ -58,7 +60,8 @@ router.post(
             data: {
                 channel_id,
                 message_id,
-                version: 3763, // what is this number?
+                version: Date.now(),
+                ...(body.manual && { manual: true, mention_count: read_state.mention_count }),
             },
         } satisfies MessageAckEvent);
 

@@ -17,7 +17,7 @@
 */
 
 import { Request, Response, Router } from "express";
-import { IsNull, Not } from "typeorm";
+import { IsNull, LessThan, Not } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
 import { Message, User } from "@spacebar/database";
 import { ChannelPinsUpdateEvent, Config, DiscordApiErrors, emitEvent, MessageCreateEvent, MessageUpdateEvent } from "@spacebar/util";
@@ -41,12 +41,13 @@ router.put(
         const { channel_id, message_id } = req.params as { [key: string]: string };
 
         const message = await Message.findOneOrFail({
-            where: { id: message_id },
+            where: { id: message_id, channel_id },
             relations: { author: true },
         });
 
         // * in dm channels anyone can pin messages -> only check for guilds
         if (message.guild_id) req.permission?.hasThrow("MANAGE_MESSAGES");
+        if (message.pinned_at) return res.sendStatus(204);
 
         const pinned_count = await Message.count({
             where: { channel: { id: channel_id }, pinned_at: Not(IsNull()) },
@@ -96,7 +97,7 @@ router.put(
                 data: {
                     channel_id,
                     guild_id: message.guild_id,
-                    last_pin_timestamp: undefined,
+                    last_pin_timestamp: message.pinned_at.toISOString(),
                 },
             } satisfies ChannelPinsUpdateEvent),
             systemPinMessage.save(),
@@ -128,11 +129,12 @@ router.delete(
         const { channel_id, message_id } = req.params as { [key: string]: string };
 
         const message = await Message.findOneOrFail({
-            where: { id: message_id },
+            where: { id: message_id, channel_id },
             relations: { author: true },
         });
 
         if (message.guild_id) req.permission?.hasThrow("MANAGE_MESSAGES");
+        if (!message.pinned_at) return res.sendStatus(204);
 
         message.pinned_at = null;
 
@@ -150,7 +152,7 @@ router.delete(
                 data: {
                     channel_id,
                     guild_id: message.guild_id,
-                    last_pin_timestamp: undefined,
+                    last_pin_timestamp: (await Message.findOne({ where: { channel_id, pinned_at: Not(IsNull()) }, order: { pinned_at: "DESC" } }))?.pinned_at?.toISOString(),
                 },
             } satisfies ChannelPinsUpdateEvent),
         ]);
@@ -163,6 +165,10 @@ router.get(
     "/",
     route({
         permission: ["READ_MESSAGE_HISTORY"],
+        query: {
+            before: { type: "string" },
+            limit: { type: "number" },
+        },
         responses: {
             200: {
                 body: "PublicMessageListResponse",
@@ -175,8 +181,11 @@ router.get(
     async (req: Request, res: Response) => {
         const { channel_id } = req.params as { [key: string]: string };
 
+        const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 50);
+        const before = req.query.before ? new Date(`${req.query.before}`) : undefined;
         const pins = await Message.find({
-            where: { channel_id: channel_id, pinned_at: Not(IsNull()) },
+            where: { channel_id: channel_id, pinned_at: before && !isNaN(before.getTime()) ? LessThan(before) : Not(IsNull()) },
+            take: limit + 1,
             relations: {
                 author: true,
                 webhook: true,
@@ -194,6 +203,8 @@ router.get(
             },
             order: { pinned_at: "DESC" },
         });
+        const has_more = pins.length > limit;
+        pins.splice(limit);
         await Message.fillReplies(pins);
 
         const items = pins.map((message: Message) => ({
@@ -203,7 +214,7 @@ router.get(
 
         res.send({
             items,
-            has_more: false,
+            has_more,
         });
     },
 );

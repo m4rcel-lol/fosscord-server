@@ -20,9 +20,27 @@ import { Request, Response, Router } from "express";
 import { IsNull, Not } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
 import { ChannelPinsUpdateEvent, Config, DiscordApiErrors, emitEvent, MessageCreateEvent, MessageUpdateEvent } from "@spacebar/util";
-import { Message, User } from "@spacebar/database";
+import { Message, ReadState, User } from "@spacebar/database";
 
 const router: Router = Router({ mergeParams: true });
+
+router.post(
+    "/ack",
+    route({
+        permission: "VIEW_CHANNEL",
+        responses: {
+            204: {},
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const { channel_id } = req.params as { [key: string]: string };
+        const latest = await Message.findOne({ where: { channel_id, pinned_at: Not(IsNull()) }, order: { pinned_at: "DESC" }, select: { id: true, pinned_at: true } });
+        const readState = (await ReadState.findOne({ where: { user_id: req.user_id, channel_id } })) ?? ReadState.create({ user_id: req.user_id, channel_id });
+        readState.last_pin_timestamp = latest?.pinned_at ?? new Date();
+        await readState.save();
+        res.sendStatus(204);
+    },
+);
 
 // This is the old endpoint
 router.put(
