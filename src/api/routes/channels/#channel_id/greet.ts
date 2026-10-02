@@ -19,7 +19,7 @@
 import { Request, Response, Router } from "express";
 import { In } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
-import { Channel, Message, Sticker } from "@spacebar/database";
+import { Channel, Message, Sticker, User } from "@spacebar/database";
 import { emitEvent, MessageCreateEvent, Permissions } from "@spacebar/util";
 import { GreetRequestSchema, MessageType } from "@spacebar/schemas";
 
@@ -87,8 +87,17 @@ router.post(
             message_reference: { ...payload.message_reference, type: 0 },
             referenced_message: targetMessage,
             sticker_items: randomSticker ? [{ id: randomSticker.id, name: randomSticker.name, format_type: randomSticker.format_type }] : [],
+            timestamp: new Date(),
+            embeds: [],
+            reactions: [],
+            attachments: [],
+            mentions: [],
+            mention_roles: [],
+            mention_channels: [],
         });
 
+        message.author = await User.findOneOrFail({ where: { id: req.user_id } });
+        message.author.clean_data();
         channel.last_message_id = message.id;
 
         await message.save();
