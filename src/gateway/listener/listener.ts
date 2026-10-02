@@ -331,11 +331,13 @@ async function consume(this: WebSocket, opts: EventOpts): Promise<void> {
             break;
         case "PRESENCE_UPDATE": {
             const presenceUser = data?.user?.id;
-            if (presenceUser === this.user_id && !data.guild_id) return;
+            if (presenceUser === this.user_id) {
+                if (data?.guild_id && this.member_lists?.[data.guild_id]) markMemberListsStale(data.guild_id, "presence");
+                return;
+            }
             if (
                 data?.guild_id &&
                 !this.isBot &&
-                presenceUser !== this.user_id &&
                 !this.affinityUsers?.has(presenceUser) &&
                 !this.member_lists?.[data.guild_id] &&
                 !this.presenceSubscriptions?.[data.guild_id]?.has(presenceUser)

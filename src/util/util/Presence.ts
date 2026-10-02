@@ -205,15 +205,14 @@ export async function emitSessionsReplace(userId: string) {
 }
 
 export async function broadcastPresence(userId: string, user?: PublicUser) {
-    const [presence, publicUser, friends, guilds, recipients] = await Promise.all([
+    const [presence, friends, guilds, recipients] = await Promise.all([
         getUserPresence(userId),
-        user ? Promise.resolve(user) : User.getPublicUser(userId),
         Relationship.find({ where: { from_id: userId, type: RelationshipType.FRIEND }, select: { to_id: true } }),
         Member.find({ where: { id: userId }, select: { guild_id: true } }),
         Recipient.find({ where: { user_id: userId, closed: false }, select: { channel_id: true } }),
     ]);
 
-    const data: Presence = { user: publicUser, ...presence };
+    const data: Presence = { user: user ?? { id: userId }, ...presence };
     await emitEvent({ event: "PRESENCE_UPDATE", user_id: userId, data } satisfies PresenceUpdateEvent);
     await Promise.all(guilds.map(({ guild_id }) => emitEvent({ event: "PRESENCE_UPDATE", guild_id, data: { ...data, guild_id } } satisfies PresenceUpdateEvent)));
 

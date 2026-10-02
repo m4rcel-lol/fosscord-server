@@ -20,7 +20,7 @@ import { ClientStatus, Status, PublicUser } from "@spacebar/schemas";
 import { Activity } from "./Activity";
 
 export interface Presence {
-    user: PublicUser;
+    user: PublicUser | { id: string };
     guild_id?: string;
     status: Status;
     activities: Activity[];
