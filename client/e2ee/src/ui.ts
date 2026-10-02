@@ -1115,7 +1115,7 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
         mountSettings,
         beforeSend,
         renderUnlock: () => unlockOpen?.render(),
-        fail: (text: string) => {
+        fail: (text: string | null) => {
             failure = text;
             refresh();
         },

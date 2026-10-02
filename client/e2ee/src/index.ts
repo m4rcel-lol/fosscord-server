@@ -55,6 +55,7 @@ const ready = new Promise<boolean>((resolve) => {
     settle = resolve;
 });
 let started = false;
+let throttled = false;
 let initialized = false;
 let lastProbe = 0;
 
@@ -225,10 +226,31 @@ const start = async (userId: string) => {
                 link.unlocked();
             }
         });
+        if (throttled) ui.fail(null);
+        throttled = false;
         ui.refresh();
-        if (engine.locked && !ui.unlockSnoozed()) ui.showUnlock();
+        if (engine.locked && engine.encryptedChannels.size && !ui.unlockSnoozed()) ui.showUnlock();
     } catch (error) {
-        fail(`Self-test failed: ${error instanceof Error ? error.message : String(error)}`);
+        const response = error as { status?: number; body?: { message?: string; retry_after?: number } } | null;
+        if (response?.status === 429) {
+            started = false;
+            throttled = true;
+            const wait = Math.max(Number(response.body?.retry_after) || 60, 5);
+            const minutes = Math.ceil(wait / 60);
+            console.warn(`[e2ee] rate limited while setting up this browser, retrying in ${Math.round(wait)} s`);
+            ui.fail(
+                `Too many new browsers signed in to this account in the last hour, so encryption can't start here yet. It turns on by itself in about ${minutes} minute${minutes === 1 ? "" : "s"}.`,
+            );
+            setTimeout(() => start(userId), wait * 1000);
+            return;
+        }
+        const reason =
+            error instanceof Error
+                ? error.message
+                : response?.status
+                  ? `HTTP ${response.status}${response.body?.message ? ` ${response.body.message}` : ""}`
+                  : (JSON.stringify(error) ?? String(error));
+        fail(`Self-test failed: ${reason}`);
     }
 };
 
