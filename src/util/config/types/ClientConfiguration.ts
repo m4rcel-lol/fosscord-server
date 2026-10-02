@@ -16,21 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { RateLimitOptions, RouteRateLimit } from "./ratelimits/index";
-
-export class RateLimits {
-    enabled: boolean = false;
-    ip: RateLimitOptions = {
-        count: 500,
-        window: 5,
-    };
-    global: RateLimitOptions = {
-        count: 250,
-        window: 5,
-    };
-    error: RateLimitOptions = {
-        count: 10,
-        window: 5,
-    };
-    routes: RouteRateLimit = new RouteRateLimit();
+export class ClientConfiguration {
+    useTestClient: boolean = true;
+    instanceName: string = "Fosscord";
 }
