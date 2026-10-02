@@ -52,23 +52,33 @@ Users from before the backup existed have an identity key that WebCrypto created
 
 ### Recovery-code mode
 
-In the encryption settings panel the backup can switch to a recovery code: 32 characters from Crockford's base32 alphabet, about 160 bits, shown once in groups of four. The secret is then sealed under HKDF-SHA256 of the code, and the password no longer opens it. A new browser shows the unlock dialog after login and asks for the code. Switching back to the password asks for it and checks it with a throwaway login before resealing.
+In the encryption settings the backup can switch to a recovery code: 32 characters from Crockford's base32 alphabet, about 160 bits, shown once as a grid of four-character groups. The code only replaces the password lock after the user clicks "I saved it", and the dialog can't be closed with Escape or a backdrop click while the code is on screen. The secret is then sealed under HKDF-SHA256 of the code, and the password no longer opens it. A new browser shows the unlock dialog after login and asks for the code. Switching back to the password asks for it and checks it with `POST /users/@me/e2ee/password` before resealing, which works for accounts without an email.
+
+### Resetting encryption
+
+When the recovery code is lost and no other browser can approve a new one, the unlock dialog and the settings page offer "Reset encryption". After a warning and the account password, the browser generates a new identity key and calls `POST /users/@me/e2ee/reset` with the password and the new public key. The server checks the password, revokes every device, deletes the backup and the stored message keys and stores the new identity in one request, so another online device can't race it with an identity of its own. The browser wipes its local keys, signs a new device and creates a new password-mode backup. Old messages stay unreadable everywhere, other browsers of the user need approval again, and contacts see a safety number change.
 
 ### Approving from another device
 
 A locked device sends `E2EE_LINK_REQUEST` through `POST /users/@me/e2ee/link`, which the server relays to the user's own sessions only. The exchange commits to the new device's ephemeral key before the approver reveals its own, so the server can't grind a matching code:
 
 1. The new device sends a request with its name and the SHA-256 of an ephemeral X25519 public key.
-2. Each online device that holds the backup secret answers with its own ephemeral public key.
+2. Each online device that holds the backup secret answers with its own ephemeral public key. Tabs of one browser share the device, so only one of them answers: the tabs elect a leader with the Web Locks API and talk over a `BroadcastChannel`. The leader does the key exchange and the other tabs show the same prompt and code, forwarding Approve and Deny to it.
 3. The new device takes the first answer and reveals its public key. The approver checks it against the commitment.
 4. Both sides show a six-digit code computed from the request id and both public keys. The approver shows "New login on Chrome on macOS" with Approve and Deny.
-5. Approve seals the backup secret with AES-GCM under HKDF of the X25519 shared secret. The new device unseals it and continues as if it had entered the password.
+5. Approve seals the backup secret with AES-GCM under HKDF of the X25519 shared secret. The new device unseals it and continues as if it had entered the password. Deny revokes the pending device on the server.
 
-The new device repeats its request every 10 seconds for 5 minutes, so a device that comes online later still gets the prompt.
+The new device repeats its request every 10 seconds for 5 minutes, so a device that comes online later still gets the prompt. It sends one request per browser, from the leader tab. When it unlocks another way, the user clicks "Not now" or the tab closes, it sends a `cancel` stage, a keepalive `fetch` on `pagehide` in the last case, and the prompt disappears on every other device.
+
+### Devices
+
+Every device row remembers the session that registered it, and `GET /users/@me/e2ee?device_id=` updates it when the same browser signs in again. The state endpoint adds the session's last activity and location to the user's own devices. Removing a device in the settings asks for confirmation, revokes it and logs its session out. A browser that finds its own device revoked deletes its identity key, backup secret, device key and prekeys, so it has to go through the password, the recovery code or an approval again. Pending devices are revoked once their session is gone or after 7 days.
+
+The settings are in User Settings, under Encryption, next to Data & Privacy, and also open from the safety numbers dialog.
 
 ### What the user sees
 
-Messages that are waiting for keys show "Decrypting…" and fill in on their own through a local `MESSAGE_UPDATE` once the keys arrive. A message this browser can't decrypt shows "Sent before this browser was set up" with an Unlock button that opens the unlock dialog: the password or recovery code field, plus the approval status and code. A locked browser still never sends plaintext into an encrypted conversation. The send fails with a banner that has the same Unlock button.
+Messages that are waiting for keys show "Decrypting…" and fill in on their own through a local `MESSAGE_UPDATE` once the keys arrive. On a locked browser a message shows "Unlock this browser to read this message", and on an unlocked browser that lacks the key it shows "Sent before this browser was set up". Both have a button that opens the unlock dialog: the password or recovery code field, the approval status and code, and the reset link. A locked browser never sends plaintext into an encrypted conversation. Pressing Enter keeps the text in the composer, opens the unlock dialog and shows a notice above the composer. Notices sit in one bar above the composer, the way Discord shows slowmode, and only one shows at a time.
 
 ## Message format
 
@@ -91,7 +101,11 @@ Encrypted messages carry a new `encrypted` field. `content` holds a fallback str
 }
 ```
 
-The AEAD additional data binds the channel id, the sender, the sender device and the nonce, so a ciphertext can't be moved to another channel or replayed. Attachments get their own keys and upload as opaque `.bin` files. A service worker serves the decrypted bytes on a virtual path, because Discord's image components append query strings that break `blob:` URLs. Encrypted messages never get link embeds. Reactions, pins, typing, read states and reply structure stay in plaintext.
+The AEAD additional data binds the channel id, the sender, the sender device and the nonce, so a ciphertext can't be moved to another channel or replayed. Encrypted messages never get link embeds. Reactions, pins, typing, read states and reply structure stay in plaintext.
+
+Attachments, stickers and polls aren't encrypted yet, so the server rejects them in encrypted channels. In an encrypted DM the client hides the sticker button, disables "Upload a File" and "Create Poll" in the attach menu, and refuses a send that still has staged files with a notice, keeping the files and the text in the composer. The plan is still to give each attachment its own key and upload it as an opaque `.bin` file, with a service worker serving the decrypted bytes on a virtual path, because Discord's image components append query strings that break `blob:` URLs.
+
+Search in an encrypted DM never reaches the server. The client answers `GET /channels/:id/messages/search` and `POST /channels/:id/messages/search/tabs` itself from the decrypted copies of the last 1000 messages, matching every word of the query and the author filter.
 
 ## Client integration
 
@@ -102,9 +116,9 @@ A small loader in `assets/client_patches/10-e2ee-loader.js` pushes a fake chunk 
 - the HTTP client object with `get`, `post`, `put`, `patch` and `del`, to decrypt REST responses,
 - the message queue's `drain`, to encrypt sends and edits.
 
-The heavy code is bundled with esbuild into `assets/public/e2ee/e2ee.js`. When the loader can't find a hook it shows an "E2EE unavailable in this client build" banner and refuses to send in encrypted channels. It never falls back to plaintext. `scripts/e2ee-anchors.js` checks the anchor strings after every `npm run generate:client`.
+The heavy code is bundled with esbuild into `assets/public/e2ee/e2ee.js`. The `fosscordE2ee` Vencord plugin connects it to Discord's own UI: a pre-send hook that keeps a refused message in the composer, the sticker and attach menu changes, and the Encryption page in User Settings. When the loader can't find a hook it shows an "E2EE unavailable in this client build" banner and refuses to send in encrypted channels. It never falls back to plaintext. `scripts/e2ee-anchors.js` checks the anchor strings after every `npm run generate:client`.
 
-The UI adds a lock on decrypted messages, a lock button in the DM header that turns encryption on (one way, so it can't be downgraded), safety numbers with a verify button, key-change banners and a device settings panel.
+The UI adds a lock after each decrypted message, a lock button in the DM header that turns encryption on (one way, so it can't be downgraded) and shows a check once every member is verified, safety numbers with a QR code and a verify button, key-change notices and the device settings.
 
 ## Server work
 
@@ -112,7 +126,8 @@ The UI adds a lock on decrypted messages, a lock button in the DM header that tu
 - Routes under `users/@me/e2ee` for the identity, devices and prekeys, `POST /e2ee/keys/query` limited to users who share a channel or relationship, and `PUT /channels/:id/e2ee`.
 - `handleMessage` validates envelopes. It checks the shape, a 64 KiB size limit, that the sender device belongs to the sender and isn't revoked, and that no recipient device is missing. Then it forces the fallback content, empty embeds and the suppress-embeds flag. It also rejects plaintext sends into encrypted channels, and rejects forwards, polls, stickers and components there.
 - Gateway events `E2EE_DEVICES_UPDATE`, `E2EE_IDENTITY_UPDATE`, `CHANNEL_E2EE_UPDATE` and `E2EE_LINK_REQUEST`/`E2EE_LINK_RESPONSE`.
-- Rate limits for key queries, device registration and prekey rotation.
+- `POST /users/@me/e2ee/password` to check the account password and `POST /users/@me/e2ee/reset` to start over with a new identity. `PUT /channels/:id/e2ee` answers `E2EE_RECIPIENT_NO_DEVICES` with the `user_ids` that have no active device, so the client can name them.
+- Rate limits for key queries, device registration, prekey rotation, password checks and resets.
 - `E2eeKeyBackup` and `E2eeBackupKey`, with `GET`, `PUT` and `PATCH /users/@me/e2ee/backup`, `POST /users/@me/e2ee/backup/keys` and `POST /users/@me/e2ee/backup/keys/query`. All of them only touch the caller's own rows. Uploads are capped at 100 keys a request and only accepted for encrypted messages in the caller's channels. `PUT /users/@me/e2ee/identity` accepts a rotation when it's signed by the current identity key.
 
 ## What it doesn't protect
@@ -125,7 +140,7 @@ Password mode trades some of that protection for convenience. Whoever holds a co
 
 0. Spikes: hook proof of concept with armored content, and a WebCrypto/HPKE proof of concept across Chrome, Firefox and Safari.
 1. MVP for DMs and group DMs: server data, server API, message pipeline, client crypto core, client hooks, client UI.
-2. Encrypted attachments and device linking.
+2. Device linking. Done. Encrypted attachments aren't built yet.
 3. Key backup with password and recovery-code modes, device approval and history on new devices. Done.
 4. Hardening: React-level UI patches, bundle hash pinning, analytics audit, fuzzing, a cross-browser test matrix.
 5. MLS for group DMs, then opt-in encrypted guild channels.
