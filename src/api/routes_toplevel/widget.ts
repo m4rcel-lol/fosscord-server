@@ -16,10 +16,11 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+import fs from "node:fs/promises";
 import path from "node:path";
 import { Router, Response, Request } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { PUBLIC_ASSETS_FOLDER } from "@spacebar/util";
+import { PUBLIC_ASSETS_FOLDER, instanceName } from "@spacebar/util";
 
 const router = Router({ mergeParams: true });
 
@@ -29,9 +30,10 @@ router.get(
         spacebarOnly: true,
         authentication: "never",
     }),
-    (req: Request, res: Response) => {
-        res.set("Cache-Control", "public, max-age=21600");
-        return res.sendFile(path.join(PUBLIC_ASSETS_FOLDER, "widget.html"), { dotfiles: "allow" });
+    async (req: Request, res: Response) => {
+        const page = await fs.readFile(path.join(PUBLIC_ASSETS_FOLDER, "widget.html"), "utf8");
+        const name = instanceName().replace(/[<>&"']/g, (c) => `&#${c.charCodeAt(0)};`);
+        res.set("Cache-Control", "public, max-age=300").type("html").send(page.replaceAll("__INSTANCE_NAME__", name));
     },
 );
 

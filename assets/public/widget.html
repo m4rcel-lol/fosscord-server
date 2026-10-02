@@ -1,175 +1,368 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
-<head>
-  <meta charset="UTF-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Spacebar Widget</title>
-
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat&display=swap" rel="stylesheet">
-
-  <style>
-    body {
-      font-family: 'Montserrat', sans-serif;
-      background-color: rgb(10, 10, 10);
-      color: white;
-      font-size: 1.1rem;
-      height: 100vh;
-    }
-
-    * {
-      padding: 0;
-      margin: 0;
-    }
-
-    p {
-      margin-top: 10px;
-    }
-
-    .container {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-    }
-
-    #wordmark {
-      width: min(250px, 50%);
-    }
-
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 20px;
-      border-bottom: 1px solid #222;
-    }
-
-    .content {
-      padding: 8px;
-    }
-
-    #online-count {
-      font-size: 1.2rem;
-      font-weight: 999;
-    }
-
-    a, a:visited {
-      color: #0185ff;
-    }
-  </style>
-
-  <script>
-    const guildId = new URLSearchParams(window.location.search).get("id");
-
-    document.addEventListener("DOMContentLoaded", function() {
-      const vcList = document.getElementById("vc-list");
-      const memberList = document.getElementById("member-list");
-      const onlineCount = document.getElementById("online-count");
-
-      function fetchData() {
-        const refreshInterval = 1000;
-        fetch(`/api/guilds/${guildId}/widget.json`)
-          .then(response => {
-            if (response.ok) {
-              const cacheDuration = response.headers.get("Cache-Control")?.match(/max-age=(\d+)/);
-              if (cacheDuration && cacheDuration[1]) {
-                const interval = parseInt(cacheDuration[1], 10) * 1000;
-                if (interval > refreshInterval) {
-                  setTimeout(fetchData, interval);
-                }
-              }
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>__INSTANCE_NAME__</title>
+        <link rel="icon" href="/static/logo.png" />
+        <style>
+            @font-face {
+                font-display: swap;
+                font-family: "gg sans";
+                font-weight: 400;
+                src: url(/assets/66d715454104d24e.woff2) format("woff2");
             }
-            return response.json();
-          })
-          .then(data => {
-            if (!data) return;
-            // Update online count
-            onlineCount.textContent = data.presence_count + "/" + data.member_count;
+            @font-face {
+                font-display: swap;
+                font-family: "gg sans";
+                font-weight: 500;
+                src: url(/assets/b272b33815319bae.woff2) format("woff2");
+            }
+            @font-face {
+                font-display: swap;
+                font-family: "gg sans";
+                font-weight: 600;
+                src: url(/assets/2df2c3ff74408972.woff2) format("woff2");
+            }
+            @font-face {
+                font-display: swap;
+                font-family: "gg sans";
+                font-weight: 700;
+                src: url(/assets/189422196a4f8b53.woff2) format("woff2");
+            }
+            :root {
+                color-scheme: dark;
+                --color-bg: #313338;
+                --color-header: #5865f2;
+                --color-header-text: #ffffff;
+                --color-text: #dbdee1;
+                --color-text-strong: #f2f3f5;
+                --color-text-muted: #949ba4;
+                --color-divider: #3f4147;
+                --color-hover: #393c41;
+                --color-footer: #2b2d31;
+                --color-button: #4e5058;
+                --color-button-hover: #6d6f78;
+                --color-online: #23a55a;
+                --color-idle: #f0b232;
+                --color-dnd: #f23f43;
+                --color-image-outline: rgb(255 255 255 / 8%);
+            }
+            :root[data-theme="light"] {
+                color-scheme: light;
+                --color-bg: #ffffff;
+                --color-text: #313338;
+                --color-text-strong: #060607;
+                --color-text-muted: #5c5e66;
+                --color-divider: #e3e5e8;
+                --color-hover: #f2f3f5;
+                --color-footer: #f2f3f5;
+                --color-button: #e3e5e8;
+                --color-button-hover: #d4d7dc;
+                --color-image-outline: rgb(0 0 0 / 8%);
+            }
+            * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+            html,
+            body {
+                height: 100%;
+            }
+            body {
+                background: var(--color-bg);
+                color: var(--color-text);
+                font-family: "gg sans", "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+                font-size: 14px;
+                line-height: 1.2857;
+                -webkit-font-smoothing: antialiased;
+                -moz-osx-font-smoothing: grayscale;
+            }
+            .widget {
+                display: flex;
+                flex-direction: column;
+                height: 100%;
+                min-height: 0;
+                border-radius: 5px;
+                overflow: hidden;
+            }
+            .header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                flex: none;
+                height: 60px;
+                padding: 0 16px 0 20px;
+                background: var(--color-header);
+                color: var(--color-header-text);
+            }
+            .wordmark {
+                display: block;
+                height: 24px;
+                max-width: 60%;
+                object-fit: contain;
+                object-position: left center;
+            }
+            .online {
+                font-size: 14px;
+                white-space: nowrap;
+                font-variant-numeric: tabular-nums;
+            }
+            .online strong {
+                font-weight: 700;
+            }
+            .body {
+                flex: 1;
+                min-height: 0;
+                overflow-y: auto;
+                padding: 16px 8px 8px 12px;
+            }
+            .guild-name {
+                padding: 0 8px 12px;
+                color: var(--color-text-strong);
+                font-size: 16px;
+                font-weight: 600;
+                overflow-wrap: break-word;
+            }
+            .section + .section {
+                margin-top: 16px;
+            }
+            .section-title {
+                padding: 0 8px 6px;
+                color: var(--color-text-muted);
+                font-size: 12px;
+                font-weight: 600;
+                letter-spacing: 0.02em;
+                text-transform: uppercase;
+            }
+            .channel {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                padding: 6px 8px;
+                color: var(--color-text-muted);
+                font-weight: 500;
+            }
+            .channel svg {
+                flex: none;
+            }
+            .row {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                min-height: 32px;
+                padding: 4px 8px;
+                border-radius: 4px;
+            }
+            .channel-users .row {
+                padding-left: 30px;
+            }
+            .avatar {
+                position: relative;
+                flex: none;
+                width: 24px;
+                height: 24px;
+            }
+            .avatar img {
+                display: block;
+                width: 24px;
+                height: 24px;
+                border-radius: 50%;
+                outline: 1px solid var(--color-image-outline);
+                outline-offset: -1px;
+            }
+            .status {
+                position: absolute;
+                right: -2px;
+                bottom: -2px;
+                width: 10px;
+                height: 10px;
+                border: 2px solid var(--color-bg);
+                border-radius: 50%;
+                background: var(--color-online);
+                box-sizing: content-box;
+            }
+            .status[data-status="idle"] {
+                background: var(--color-idle);
+            }
+            .status[data-status="dnd"] {
+                background: var(--color-dnd);
+            }
+            .name {
+                min-width: 0;
+                overflow: hidden;
+                color: var(--color-text);
+                font-weight: 500;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .activity {
+                display: block;
+                overflow: hidden;
+                color: var(--color-text-muted);
+                font-size: 12px;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .empty {
+                padding: 4px 8px;
+                color: var(--color-text-muted);
+            }
+            .footer {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                flex: none;
+                min-height: 56px;
+                padding: 12px 12px 12px 20px;
+                background: var(--color-footer);
+                color: var(--color-text-muted);
+                font-size: 14px;
+            }
+            .join {
+                flex: none;
+                padding: 8px 16px;
+                border-radius: 4px;
+                background: var(--color-button);
+                color: var(--color-text-strong);
+                font-weight: 500;
+                text-decoration: none;
+                white-space: nowrap;
+                transition:
+                    background-color 150ms ease-out,
+                    scale 200ms ease-out;
+            }
+            .join:active {
+                scale: 0.97;
+            }
+            .join:focus-visible {
+                outline: 2px solid #00a8fc;
+                outline-offset: 2px;
+            }
+            @media (hover: hover) {
+                .join:hover {
+                    background: var(--color-button-hover);
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="widget">
+            <header class="header">
+                <img class="wordmark" src="/static/wordmark" alt="__INSTANCE_NAME__" />
+                <span class="online" role="status"><strong id="online-count">0</strong> Members Online</span>
+            </header>
+            <main class="body">
+                <h1 class="guild-name" id="guild-name"></h1>
+                <section class="section" id="voice" hidden>
+                    <h2 class="section-title">Voice Channels</h2>
+                    <div id="channels"></div>
+                </section>
+                <section class="section">
+                    <h2 class="section-title">Members Online</h2>
+                    <div id="members"></div>
+                </section>
+            </main>
+            <footer class="footer">
+                <span>Hang out with people who get it</span>
+                <a class="join" id="join" href="/" target="_blank" rel="noopener" hidden>Join __INSTANCE_NAME__</a>
+            </footer>
+        </div>
+        <script>
+            const params = new URLSearchParams(location.search);
+            const guildId = params.get("id");
+            if (params.get("theme") === "light") document.documentElement.dataset.theme = "light";
 
-            // Update voice channels
-            vcList.innerHTML = "";
-            data.channels.forEach(channel => {
-              const channelDiv = document.createElement("div");
-              const channelName = document.createElement("h3");
-              channelName.textContent = "🔊 " + channel.name;
-              channelDiv.appendChild(channelName);
+            const speaker =
+                '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3a1 1 0 0 0-1-1h-.06a1 1 0 0 0-.74.32L5.92 7H3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h2.92l4.28 4.68a1 1 0 0 0 .74.32H11a1 1 0 0 0 1-1V3ZM15.1 20.75c-.58.14-1.1-.33-1.1-.92v-.03c0-.5.37-.92.85-1.05a7 7 0 0 0 0-13.5A1.11 1.11 0 0 1 14 4.2v-.03c0-.6.52-1.06 1.1-.92a9 9 0 0 1 0 17.5Z"/><path fill="currentColor" d="M15.16 16.51c-.57.28-1.16-.2-1.16-.83v-.14c0-.43.28-.8.63-1.02a3 3 0 0 0 0-5.04c-.35-.23-.63-.6-.63-1.02v-.14c0-.63.59-1.1 1.16-.83a5 5 0 0 1 0 9.02Z"/></svg>';
 
-              const userList = document.createElement("ul");
-              channel.users?.forEach(user => {
-                const userItem = document.createElement("li");
-                userItem.textContent = user.username;
-                userList.appendChild(userItem);
-              });
-              channelDiv.appendChild(userList);
-              vcList.appendChild(channelDiv);
-            });
+            const memberRow = (member) => {
+                const row = document.createElement("div");
+                row.className = "row";
+                const avatar = document.createElement("span");
+                avatar.className = "avatar";
+                const img = document.createElement("img");
+                img.alt = "";
+                img.loading = "lazy";
+                img.decoding = "async";
+                const fallback = `/embed/avatars/${Number(BigInt(member.id ?? 0) % 6n)}.png`;
+                img.src = member.avatar_url || fallback;
+                img.addEventListener("error", () => img.src !== new URL(fallback, location.href).href && (img.src = fallback), { once: true });
+                const status = document.createElement("span");
+                status.className = "status";
+                status.dataset.status = member.status ?? "online";
+                avatar.append(img, status);
+                const text = document.createElement("span");
+                text.style.minWidth = "0";
+                const name = document.createElement("span");
+                name.className = "name";
+                name.textContent = member.username;
+                name.title = member.username;
+                text.append(name);
+                if (member.activity?.name) {
+                    const activity = document.createElement("span");
+                    activity.className = "activity";
+                    activity.textContent = `Playing ${member.activity.name}`;
+                    text.append(activity);
+                }
+                row.append(avatar, text);
+                return row;
+            };
 
-            // Update online members
-            memberList.innerHTML = "";
-            data.members.forEach(member => {
-              const memberItem = document.createElement("div");
+            const render = (data) => {
+                document.getElementById("online-count").textContent = String(data.presence_count ?? data.members?.length ?? 0);
+                document.getElementById("guild-name").textContent = data.name ?? "";
+                const members = data.members ?? [];
+                const byChannel = new Map();
+                for (const member of members) {
+                    if (!member.channel_id) continue;
+                    byChannel.set(member.channel_id, [...(byChannel.get(member.channel_id) ?? []), member]);
+                }
+                const channels = document.getElementById("channels");
+                channels.replaceChildren(
+                    ...(data.channels ?? []).map((channel) => {
+                        const wrapper = document.createElement("div");
+                        const head = document.createElement("div");
+                        head.className = "channel";
+                        head.innerHTML = speaker;
+                        head.append(channel.name);
+                        const users = document.createElement("div");
+                        users.className = "channel-users";
+                        users.append(...(byChannel.get(channel.id) ?? []).map(memberRow));
+                        wrapper.append(head, users);
+                        return wrapper;
+                    }),
+                );
+                document.getElementById("voice").hidden = !data.channels?.length;
+                const list = document.getElementById("members");
+                if (members.length) list.replaceChildren(...members.map(memberRow));
+                else {
+                    const empty = document.createElement("p");
+                    empty.className = "empty";
+                    empty.textContent = "Nobody is online right now.";
+                    list.replaceChildren(empty);
+                }
+                const join = document.getElementById("join");
+                join.hidden = !data.instant_invite;
+                if (data.instant_invite) join.href = data.instant_invite.includes("/") ? data.instant_invite : `/invite/${data.instant_invite}`;
+            };
 
-              const img = document.createElement("img");
-              img.src = member.avatar_url;
-              img.alt = "";
-              img.ariaHidden = "true";
-              img.width = 32;
-              img.height = 32;
-              img.style.borderRadius = "50%";
-              img.style.marginRight = "8px";
-              img.style.contentVisibility = "auto";
-              img.loading = "lazy";
-              img.decoding = "async";
-              img.onerror = function() {
-                console.log("Failed to load avatar for user " + member.username + ", using default.");
-                const domain = new URL(window.location.href).origin;
-                // noinspection JSUnresolvedReference - BigInt is a valid global
-                img.src = `${domain}/embed/avatar/${BigInt(member.id) % 6n}.png`;
-              };
-              memberItem.appendChild(img);
-
-              const nameSpan = document.createElement("span");
-              nameSpan.textContent = member.username;
-              memberItem.appendChild(nameSpan);
-              memberItem.style.display = "flex";
-              memberItem.style.alignItems = "center";
-              memberItem.style.marginBottom = "6px";
-              memberList.appendChild(memberItem);
-            });
-            setTimeout(fetchData, 300000); // schedule next fetch in 5 minutes
-          })
-          .catch(error => {
-            console.error("Error fetching widget data:", error);
-            setTimeout(fetchData, Math.floor(Math.random() * 4000) + 1000);
-          });
-      }
-
-      // Initial fetch
-      fetchData();
-    });
-  </script>
-</head>
-
-<body>
-<div class="container">
-  <div class="header">
-    <img alt="Spacebar Logo"
-         id="wordmark"
-         src="https://raw.githubusercontent.com/spacebarchat/spacebarchat/master/branding/svg/Spacebar__Logo-Blue.svg" />
-    <span>
-      <b id="online-count">Unknown</b>
-      users online
-    </span>
-  </div>
-  <div class="content">
-    <div id="vc-list"></div>
-    <p>Online users</p>
-    <div id="member-list"></div>
-  </div>
-</div>
-</body>
-
+            const load = async () => {
+                if (!guildId) return;
+                try {
+                    const res = await fetch(`/api/v9/guilds/${encodeURIComponent(guildId)}/widget.json`);
+                    const data = await res.json();
+                    if (res.ok) render(data);
+                    else document.getElementById("guild-name").textContent = data.message ?? "This widget is disabled.";
+                    setTimeout(load, 300_000);
+                } catch {
+                    setTimeout(load, 5000 + Math.floor(Math.random() * 5000));
+                }
+            };
+            load();
+        </script>
+    </body>
 </html>
