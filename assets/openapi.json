@@ -1461,6 +1461,7 @@
                 "type": "object",
                 "properties": {
                     "messages": {
+                        "minItems": 2,
                         "type": "array",
                         "items": {
                             "type": "string"
@@ -4925,6 +4926,7 @@
                         }
                     },
                     "nick": {
+                        "maxLength": 32,
                         "type": "string",
                         "nullable": true
                     },
@@ -5036,6 +5038,7 @@
                 "type": "object",
                 "properties": {
                     "nick": {
+                        "maxLength": 32,
                         "type": "string"
                     }
                 },
@@ -5809,6 +5812,7 @@
                 "type": "object",
                 "properties": {
                     "name": {
+                        "maxLength": 100,
                         "type": "string"
                     },
                     "permissions": {
@@ -6362,6 +6366,7 @@
                 "type": "object",
                 "properties": {
                     "note": {
+                        "maxLength": 256,
                         "type": "string"
                     }
                 },
@@ -10959,6 +10964,7 @@
                         "type": "integer"
                     },
                     "text": {
+                        "maxLength": 128,
                         "type": "string"
                     }
                 }
@@ -19052,7 +19058,7 @@
                 "properties": {
                     "maxCharacters": {
                         "type": "integer",
-                        "default": 1048576
+                        "default": 4000
                     },
                     "maxTTSCharacters": {
                         "type": "integer",
@@ -19071,7 +19077,7 @@
                     },
                     "maxBulkDelete": {
                         "type": "integer",
-                        "default": 1000
+                        "default": 100
                     },
                     "maxEmbedDownloadSize": {
                         "type": "integer"
@@ -19082,7 +19088,11 @@
                     },
                     "maxEmbeds": {
                         "type": "integer",
-                        "default": 20
+                        "default": 10
+                    },
+                    "maxEmbedCharacters": {
+                        "type": "integer",
+                        "default": 6000
                     }
                 },
                 "required": [
@@ -19090,6 +19100,7 @@
                     "maxAttachments",
                     "maxBulkDelete",
                     "maxCharacters",
+                    "maxEmbedCharacters",
                     "maxEmbedDownloadSize",
                     "maxEmbeds",
                     "maxPreloadCount",
@@ -19114,7 +19125,7 @@
                     },
                     "maxName": {
                         "type": "integer",
-                        "default": 32
+                        "default": 100
                     }
                 },
                 "required": [
@@ -19129,7 +19140,7 @@
                 "properties": {
                     "enabled": {
                         "type": "boolean",
-                        "default": false
+                        "default": true
                     },
                     "ip": {
                         "$ref": "#/components/schemas/RateLimitOptions"
@@ -19185,6 +19196,15 @@
                     "channel": {
                         "$ref": "#/components/schemas/RateLimitOptions"
                     },
+                    "user": {
+                        "$ref": "#/components/schemas/RateLimitOptions"
+                    },
+                    "userProfile": {
+                        "$ref": "#/components/schemas/RateLimitOptions"
+                    },
+                    "invite": {
+                        "$ref": "#/components/schemas/RateLimitOptions"
+                    },
                     "auth": {
                         "$ref": "#/components/schemas/AuthRateLimit"
                     }
@@ -19193,6 +19213,9 @@
                     "auth",
                     "channel",
                     "guild",
+                    "invite",
+                    "user",
+                    "userProfile",
                     "webhook"
                 ]
             },

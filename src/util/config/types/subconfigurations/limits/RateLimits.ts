@@ -19,7 +19,7 @@
 import { RateLimitOptions, RouteRateLimit } from "./ratelimits/index";
 
 export class RateLimits {
-    enabled: boolean = false;
+    enabled: boolean = true;
     ip: RateLimitOptions = {
         count: 500,
         window: 5,
@@ -29,8 +29,8 @@ export class RateLimits {
         window: 5,
     };
     error: RateLimitOptions = {
-        count: 10,
-        window: 5,
+        count: 10000,
+        window: 600,
     };
     routes: RouteRateLimit = new RouteRateLimit();
 }

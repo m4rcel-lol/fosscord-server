@@ -149,6 +149,11 @@ export async function onLazyRequest(this: WebSocket, { d }: Payload) {
         if (await handleOffloadedGatewayRequest(this, Config.get().offload.gateway.lazyRequestUrl!, d)) return;
     }
 
+    if (members) {
+        this.presenceSubscriptions ??= {};
+        this.presenceSubscriptions[guild_id] = new Set(members.filter((x) => typeof x === "string").slice(0, 100));
+    }
+
     if (members?.length) {
         const ids = members.filter((x) => typeof x === "string");
         const [presences, users] = await Promise.all([getUserPresences(ids), User.find({ where: { id: In(ids) } })]);

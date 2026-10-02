@@ -21,10 +21,18 @@ import { PreloadedUserSettings } from "discord-protos";
 import { JsonValue } from "@protobuf-ts/runtime";
 import { route } from "@spacebar/api/middlewares";
 import { UserSettingsProtos } from "@spacebar/database";
-import { emitEvent, OrmUtils } from "@spacebar/util";
+import { emitEvent, FieldErrors, OrmUtils } from "@spacebar/util";
 import { SettingsProtoJsonResponse, SettingsProtoResponse, SettingsProtoUpdateJsonSchema, SettingsProtoUpdateSchema } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
+
+const parseSettings = <T>(parse: () => T) => {
+    try {
+        return parse();
+    } catch {
+        throw FieldErrors({ settings: { code: "BASE_TYPE_INVALID", message: "Invalid settings payload." } });
+    }
+};
 
 //#region Protobuf
 router.get(
@@ -66,7 +74,7 @@ router.patch(
     async (req: Request, res: Response) => {
         const { settings, required_data_version } = req.body as SettingsProtoUpdateSchema;
         const { atomic } = req.query;
-        const updatedSettings = PreloadedUserSettings.fromBase64(settings);
+        const updatedSettings = parseSettings(() => PreloadedUserSettings.fromBase64(settings));
 
         const resultObj = await UserSettingsProtos.withLock(req.user_id, () => patchUserSettings(req.user_id, updatedSettings, required_data_version, atomic == "true"));
 
@@ -118,7 +126,7 @@ router.patch(
     async (req: Request, res: Response) => {
         const { settings, required_data_version } = req.body as SettingsProtoUpdateJsonSchema;
         const { atomic } = req.query;
-        const updatedSettings = PreloadedUserSettings.fromJson(settings);
+        const updatedSettings = parseSettings(() => PreloadedUserSettings.fromJson(settings));
 
         const resultObj = await UserSettingsProtos.withLock(req.user_id, () => patchUserSettings(req.user_id, updatedSettings, required_data_version, atomic == "true"));
 

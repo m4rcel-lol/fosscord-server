@@ -125,8 +125,6 @@ router.patch(
         const { role_id, guild_id } = req.params as { [key: string]: string };
         const body = req.body as RoleModifySchema;
 
-        if (body.name && body.name.length > 255) throw new Error("Role name must not exceed 255 characters");
-
         const role = await Role.findOneOrFail({
             where: { id: role_id, guild: { id: guild_id } },
         });

@@ -23,6 +23,8 @@ import { PublicUser, RequestGuildMembersSchema } from "@spacebar/schemas";
 import { Config, getPermission, getUserPresences, GuildMembersChunkEvent, Presence } from "@spacebar/util";
 import { check } from "./instanceOf";
 
+const FullMemberRequestWindow = 30_000;
+
 export async function onRequestGuildMembers(this: WebSocket, { d }: Payload) {
     const startTime = Date.now();
     // Schema validation can only accept either string or array, so transforming it here to support both
@@ -62,6 +64,21 @@ export async function onRequestGuildMembers(this: WebSocket, { d }: Payload) {
 
     const permissions = await getPermission(this.user_id, guild_id);
     permissions.hasThrow("VIEW_CHANNEL");
+
+    if (!query && !user_ids?.length && !limit && !this.isBot) {
+        if (!permissions.has("MANAGE_ROLES") && !permissions.has("KICK_MEMBERS") && !permissions.has("BAN_MEMBERS")) return;
+        const now = Date.now();
+        this.fullMemberRequests ??= {};
+        const last = this.fullMemberRequests[guild_id] ?? 0;
+        if (now - last < FullMemberRequestWindow)
+            return Send(this, {
+                op: OPCODES.Dispatch,
+                s: this.sequence++,
+                t: "RATE_LIMITED",
+                d: { opcode: OPCODES.Request_Guild_Members, retry_after: (FullMemberRequestWindow - (now - last)) / 1000, meta: { guild_id, nonce } },
+            });
+        this.fullMemberRequests[guild_id] = now;
+    }
 
     const memberCount = await Member.count({
         where: {

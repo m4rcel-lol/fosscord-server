@@ -32,6 +32,17 @@ export class RouteRateLimit {
         count: 10,
         window: 5,
     };
+    user: RateLimitOptions = {
+        count: 10,
+        window: 10,
+    };
+    userProfile: RateLimitOptions = {
+        count: 5,
+        window: 60,
+    };
+    invite: RateLimitOptions = {
+        count: 5,
+        window: 10,
+    };
     auth: AuthRateLimit = new AuthRateLimit();
-    // TODO: rate limit configuration for all routes
 }

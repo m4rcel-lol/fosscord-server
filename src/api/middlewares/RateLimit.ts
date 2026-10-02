@@ -16,26 +16,13 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Config, getRights, listenEvent, RabbitMQ } from "@spacebar/util";
+import { Config, listenEvent, RabbitMQ } from "@spacebar/util";
 import { NextFunction, Request, Response, Router } from "express";
 
 export const API_PREFIX_TRAILING_SLASH = /^\/api(\/v\d+)?\//;
 
-// Docs: https://discord.com/developers/docs/topics/rate-limits
-
-// TODO: use better caching (e.g. redis) as else it creates to much pressure on the database
-
-/*
-? bucket limit? Max actions/sec per bucket?
-(ANSWER: a small spacebar instance might not need a complex rate limiting system)
-TODO: delay database requests to include multiple queries
-TODO: different for methods (GET/POST)
-> IP addresses that make too many invalid HTTP requests are automatically and temporarily restricted from accessing the Discord API. Currently, this limit is 10,000 per 10 minutes. An invalid request is one that results in 401, 403, or 429 statuses.
-> All bots can make up to 50 requests per second to our API. This is independent of any individual rate limit on a route. If your bot gets big enough, based on its functionality, it may be impossible to stay below 50 requests per second during normal operations.
-*/
-
 type RateLimit = {
-    id: "global" | "error" | string;
+    id: string;
     executor_id: string;
     hits: number;
     blocked: boolean;
@@ -44,6 +31,24 @@ type RateLimit = {
 
 const Cache = new Map<string, RateLimit>();
 const EventRateLimit = "RATELIMIT";
+const InvalidRequestStatuses = new Set([401, 403, 429]);
+const MajorParameters = new Set(["channels", "guilds", "webhooks"]);
+const Snowflake = /^\d{15,20}$/;
+let limiterCount = 0;
+
+export function routeBucket(req: Request) {
+    const segments = req.originalUrl.split("?")[0].replace(API_PREFIX_TRAILING_SLASH, "").split("/");
+    const path = segments
+        .map((segment, i) => {
+            const previous = segments[i - 1];
+            if (previous === "reactions") return ":emoji";
+            if (i === 2 && segments[0] === "webhooks") return ":token";
+            if (Snowflake.test(segment) && !(i === 1 && MajorParameters.has(previous))) return ":id";
+            return segment;
+        })
+        .join("/");
+    return `${req.method} ${path}`;
+}
 
 export default function rateLimit(opts: {
     bucket?: string;
@@ -57,97 +62,70 @@ export default function rateLimit(opts: {
     error?: boolean;
     success?: boolean;
     onlyIp?: boolean;
+    onlyUsers?: boolean;
+    onlyAnonymous?: boolean;
+    onlyWrites?: boolean;
+    global?: boolean;
 }) {
-    return async (req: Request, res: Response, next: NextFunction) => {
-        // exempt user? if so, immediately short circuit
-        if (req.user_id) {
-            const rights = await getRights(req.user_id);
-            if (rights.has("BYPASS_RATE_LIMITS")) return next();
-        }
+    const limiterId = opts.bucket ?? `route${++limiterCount}`;
+    return (req: Request, res: Response, next: NextFunction) => {
+        if (req.method === "OPTIONS") return next();
+        if (opts.onlyWrites && ["GET", "HEAD"].includes(req.method)) return next();
+        if (opts.onlyUsers && !req.user_id) return next();
+        if (opts.onlyAnonymous && req.user_id) return next();
+        if (req.rights?.has("BYPASS_RATE_LIMITS")) return next();
 
-        const bucket_id = opts.bucket || req.originalUrl.replace(API_PREFIX_TRAILING_SLASH, "");
-        let executor_id = req.ip || "127.0.0.1";
-        if (!opts.onlyIp && req.user_id) executor_id = req.user_id;
+        const bucket_id = opts.bucket || routeBucket(req);
+        const executor_id = !opts.onlyIp && req.user_id ? req.user_id : req.ip || "127.0.0.1";
+        const key = `${executor_id}:${limiterId}:${bucket_id}`;
 
         let max_hits = opts.count;
         if (opts.bot && req.user_bot) max_hits = opts.bot;
-        if (opts.GET && ["GET", "OPTIONS", "HEAD"].includes(req.method)) max_hits = opts.GET;
+        if (opts.GET && ["GET", "HEAD"].includes(req.method)) max_hits = opts.GET;
         else if (opts.MODIFY && ["POST", "DELETE", "PATCH", "PUT"].includes(req.method)) max_hits = opts.MODIFY;
 
-        const offender = Cache.get(executor_id + bucket_id);
-
-        res.set("X-RateLimit-Limit", `${max_hits}`)
-            .set("X-RateLimit-Remaining", `${max_hits - (offender?.hits || 0)}`)
-            .set("X-RateLimit-Bucket", `${bucket_id}`)
-            // assuming we aren't blocked, a new window will start after this request
-            .set("X-RateLimit-Reset", `${Date.now() + opts.window}`)
-            .set("X-RateLimit-Reset-After", `${opts.window}`);
-
-        if (offender) {
-            let reset = offender.expires_at.getTime();
-            let resetAfterMs = reset - Date.now();
-            let resetAfterSec = Math.ceil(resetAfterMs / 1000);
-
-            if (resetAfterMs <= 0) {
-                offender.hits = 0;
-                offender.expires_at = new Date(Date.now() + opts.window * 1000);
-                offender.blocked = false;
-
-                Cache.delete(executor_id + bucket_id);
-            }
-
-            res.set("X-RateLimit-Reset", `${reset}`);
-            res.set("X-RateLimit-Reset-After", `${Math.max(0, Math.ceil(resetAfterSec))}`);
-
-            if (offender.blocked) {
-                const global = bucket_id === "global";
-                // each block violation pushes the expiry one full window further
-                reset += opts.window * 1000;
-                offender.expires_at = new Date(offender.expires_at.getTime() + opts.window * 1000);
-                resetAfterMs = reset - Date.now();
-                resetAfterSec = Math.ceil(resetAfterMs / 1000);
-
-                console.log(`blocked bucket: ${bucket_id} ${executor_id}`, {
-                    resetAfterMs,
-                });
-
-                if (global) res.set("X-RateLimit-Global", "true");
-
-                return (
-                    res
-                        .status(429)
-                        .set("X-RateLimit-Remaining", "0")
-                        .set("Retry-After", `${Math.max(0, Math.ceil(resetAfterSec))}`)
-                        // TODO: error rate limit message translation
-                        .send({
-                            message: "You are being rate limited.",
-                            retry_after: resetAfterSec,
-                            global,
-                        })
-                );
-            }
+        const now = Date.now();
+        let entry = Cache.get(key);
+        if (entry && entry.expires_at.getTime() <= now) {
+            Cache.delete(key);
+            entry = undefined;
         }
 
-        next();
-        const hitRouteOpts = {
-            bucket_id,
-            executor_id,
-            max_hits,
-            window: opts.window,
+        const setHeaders = (limit: RateLimit | undefined) => {
+            const reset = limit?.expires_at.getTime() ?? now + opts.window * 1000;
+            res.set("X-RateLimit-Limit", `${max_hits}`)
+                .set("X-RateLimit-Remaining", `${Math.max(0, max_hits - (limit?.hits ?? 0))}`)
+                .set("X-RateLimit-Bucket", bucket_id)
+                .set("X-RateLimit-Reset", `${(reset / 1000).toFixed(3)}`)
+                .set("X-RateLimit-Reset-After", `${(Math.max(0, reset - now) / 1000).toFixed(3)}`);
         };
 
-        if (opts.error || opts.success) {
-            res.once("finish", () => {
-                // check if error and increment error rate limit
-                if (res.statusCode >= 400 && opts.error) {
-                    return hitRoute(hitRouteOpts);
-                } else if (res.statusCode >= 200 && res.statusCode < 300 && opts.success) {
-                    return hitRoute(hitRouteOpts);
-                }
-            });
-        } else {
-            return hitRoute(hitRouteOpts);
+        if (entry?.blocked) {
+            const retryAfter = Math.max(0, entry.expires_at.getTime() - now) / 1000;
+            setHeaders(entry);
+            if (opts.global) res.set("X-RateLimit-Global", "true");
+            return res
+                .status(429)
+                .set("X-RateLimit-Remaining", "0")
+                .set("Retry-After", `${Math.ceil(retryAfter)}`)
+                .set("X-RateLimit-Scope", opts.global ? "global" : "user")
+                .send({
+                    message: "You are being rate limited.",
+                    retry_after: Number(retryAfter.toFixed(3)),
+                    global: !!opts.global,
+                });
         }
+
+        const hitOpts = { key, bucket_id, executor_id, max_hits, window: opts.window };
+        if (opts.error || opts.success) {
+            setHeaders(entry);
+            res.once("finish", () => {
+                if (opts.error && InvalidRequestStatuses.has(res.statusCode)) hitRoute(hitOpts);
+                else if (opts.success && res.statusCode >= 200 && res.statusCode < 300) hitRoute(hitOpts);
+            });
+        } else setHeaders(hitRoute(hitOpts));
+
+        next();
     };
 }
 
@@ -156,7 +134,6 @@ export async function initRateLimits(app: Router) {
     if (!enabled) return;
     console.log("Enabling rate limits...");
 
-    // Set up rate limit event listener
     const setupRateLimitListener = async () => {
         await listenEvent(EventRateLimit, (event) => {
             Cache.set(event.channel_id as string, event.data);
@@ -166,54 +143,35 @@ export async function initRateLimits(app: Router) {
 
     await setupRateLimitListener();
 
-    // Re-establish listener on RabbitMQ reconnection
     RabbitMQ.on("reconnected", async () => {
         console.log("[RateLimit] RabbitMQ reconnected, re-establishing rate limit listener");
         await setupRateLimitListener();
     });
-    // await RateLimit.delete({ expires_at: LessThan(new Date().toISOString()) }); // cleans up if not already deleted, morethan -> older date
-    // const limits = await RateLimit.find({ blocked: true });
-    // limits.forEach((limit) => {
-    // 	Cache.set(limit.executor_id, limit);
-    // });
 
     setInterval(() => {
+        const now = Date.now();
         Cache.forEach((x, key) => {
-            if (new Date() > x.expires_at) {
-                Cache.delete(key);
-                // RateLimit.delete({ executor_id: key });
-            }
+            if (x.expires_at.getTime() <= now) Cache.delete(key);
         });
-    }, 1000 * 60);
+    }, 1000 * 60).unref();
 
-    app.use(
-        rateLimit({
-            bucket: "global",
-            onlyIp: true,
-            ...ip,
-        }),
-    );
-    app.use(rateLimit({ bucket: "global", ...global }));
-    app.use(
-        rateLimit({
-            bucket: "error",
-            error: true,
-            onlyIp: true,
-            ...error,
-        }),
-    );
+    app.use(rateLimit({ bucket: "ip", onlyIp: true, onlyAnonymous: true, global: true, ...ip }));
+    app.use(rateLimit({ bucket: "global", onlyUsers: true, global: true, ...global }));
+    app.use(rateLimit({ bucket: "error", error: true, onlyIp: true, global: true, ...error }));
     app.use("/guilds/:guild_id", rateLimit(routes.guild));
     app.use("/webhooks/:webhook_id", rateLimit(routes.webhook));
     app.use("/channels/:channel_id", rateLimit(routes.channel));
+    app.patch("/users/@me", rateLimit(routes.userProfile));
+    app.use("/users/@me", rateLimit({ onlyWrites: true, ...routes.user }));
+    app.use("/invites/:code", rateLimit({ onlyWrites: true, ...routes.invite }));
     app.use("/auth/login", rateLimit(routes.auth.login));
     app.use(["/auth/mfa", "/mfa/finish", "/auth/conditional", "/auth/passwordless", "/auth/forgot", "/auth/reset", "/auth/verify"], rateLimit(routes.auth.login));
     app.use("/auth/register", rateLimit({ onlyIp: true, success: true, ...routes.auth.register }));
 }
 
-async function hitRoute(opts: { executor_id: string; bucket_id: string; max_hits: number; window: number }) {
-    const id = opts.executor_id + opts.bucket_id;
-    let limit = Cache.get(id);
-    if (!limit) {
+function hitRoute(opts: { key: string; executor_id: string; bucket_id: string; max_hits: number; window: number }) {
+    let limit = Cache.get(opts.key);
+    if (!limit || limit.expires_at.getTime() <= Date.now()) {
         limit = {
             id: opts.bucket_id,
             executor_id: opts.executor_id,
@@ -221,38 +179,10 @@ async function hitRoute(opts: { executor_id: string; bucket_id: string; max_hits
             hits: 0,
             blocked: false,
         };
-        Cache.set(id, limit);
+        Cache.set(opts.key, limit);
     }
 
     limit.hits++;
-    if (limit.hits >= opts.max_hits) {
-        limit.blocked = true;
-    }
-
-    /*
-	let ratelimit = await RateLimit.findOne({ where: { id: opts.bucket_id, executor_id: opts.executor_id } });
-	if (!ratelimit) {
-		ratelimit = new RateLimit({
-			id: opts.bucket_id,
-			executor_id: opts.executor_id,
-			expires_at: new Date(Date.now() + opts.window * 1000),
-			hits: 0,
-			blocked: false
-		});
-	}
-	ratelimit.hits++;
-	const updateBlock = !ratelimit.blocked && ratelimit.hits >= opts.max_hits;
-	if (updateBlock) {
-		ratelimit.blocked = true;
-		Cache.set(opts.executor_id + opts.bucket_id, ratelimit);
-		await emitEvent({
-			channel_id: EventRateLimit,
-			event: EventRateLimit,
-			data: ratelimit
-		});
-	} else {
-		Cache.delete(opts.executor_id);
-	}
-	await ratelimit.save();
-	*/
+    if (limit.hits >= opts.max_hits) limit.blocked = true;
+    return limit;
 }

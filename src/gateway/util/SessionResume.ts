@@ -32,7 +32,7 @@ export function resolveSocket(socket: WebSocket) {
 }
 
 export function rememberDispatch(socket: WebSocket, payload: Payload) {
-    if (payload.op !== 0 || payload.s === undefined) return;
+    if (payload.op !== 0 || payload.s === undefined || payload.t === "READY") return;
     socket.replayBuffer ??= [];
     socket.replayBuffer.push(payload);
     if (socket.replayBuffer.length > REPLAY_BUFFER_SIZE) socket.replayBuffer.shift();

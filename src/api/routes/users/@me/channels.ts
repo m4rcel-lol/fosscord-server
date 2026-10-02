@@ -20,7 +20,7 @@ import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { HTTPError } from "lambert-server/HTTPError";
 import { Channel, Guild, Recipient, Relationship } from "@spacebar/database";
-import { DmChannelDTO, getPermission } from "@spacebar/util";
+import { DmChannelDTO, FieldErrors, getPermission } from "@spacebar/util";
 import { ChannelType, DmChannelCreateSchema, RelationshipType } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
@@ -39,10 +39,12 @@ router.get(
             where: { user_id: req.user_id, closed: false },
             relations: { channel: { recipients: true } },
         });
+        const userIds = [...new Set(recipients.flatMap((r) => r.channel.recipients?.map((x) => x.user_id) ?? []))].filter((id) => id !== req.user_id);
+        const users = new Map((userIds.length ? await DmChannelDTO.users(userIds) : []).map((u) => [u.id, u]));
         res.json(
             await Promise.all(
                 recipients.map(async (r) => ({
-                    ...(await DmChannelDTO.from(r.channel, [req.user_id])),
+                    ...(await DmChannelDTO.from(r.channel, [req.user_id], undefined, users)),
                     is_spam: false,
                     is_message_request: !!r.message_request_timestamp,
                     is_message_request_timestamp: r.message_request_timestamp?.toISOString() ?? null,
@@ -65,6 +67,8 @@ router.post(
     async (req: Request, res: Response) => {
         const body = req.body as DmChannelCreateSchema;
         const targets = body.recipients || (body.recipient_id ? [body.recipient_id] : []);
+        if (new Set(targets.filter((id) => id !== req.user_id)).size > 9)
+            throw FieldErrors({ recipients: { code: "BASE_TYPE_MAX_LENGTH", message: "Must be 9 or fewer in length." } });
         const other = targets.length === 1 && targets[0] !== req.user_id ? targets[0] : null;
         if (other && !req.user_bot) {
             const [friends, existing, paused] = await Promise.all([

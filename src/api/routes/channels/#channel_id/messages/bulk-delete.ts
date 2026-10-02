@@ -20,7 +20,7 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
 import { Channel, Message } from "@spacebar/database";
-import { Config, emitEvent, getPermission, getRights, MessageDeleteBulkEvent } from "@spacebar/util";
+import { Config, emitEvent, FieldErrors, getPermission, getRights, MessageDeleteBulkEvent } from "@spacebar/util";
 import { In } from "typeorm";
 
 const router: Router = Router({ mergeParams: true });
@@ -59,11 +59,8 @@ router.post(
         const { maxBulkDelete } = Config.get().limits.message;
 
         const { messages } = req.body as { messages: string[] };
-        if (messages.length === 0) throw new HTTPError("You must specify messages to bulk delete");
-        if (!superuser) {
-            permission.hasThrow("MANAGE_MESSAGES");
-            if (messages.length > maxBulkDelete) throw new HTTPError(`You cannot delete more than ${maxBulkDelete} messages`);
-        }
+        if (messages.length > maxBulkDelete) throw FieldErrors({ messages: { code: "BASE_TYPE_MAX_LENGTH", message: `Must be ${maxBulkDelete} or fewer in length.` } });
+        if (!superuser) permission.hasThrow("MANAGE_MESSAGES");
 
         const messageIdsInChannel = (await Message.find({ where: { id: In(messages), channel_id: channel_id }, select: { id: true } })).map((x) => x.id);
 

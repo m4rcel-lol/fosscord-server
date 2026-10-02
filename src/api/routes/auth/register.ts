@@ -315,7 +315,7 @@ router.post(
         ) {
             console.log(`Global register ratelimit exceeded for ${req.ip}, ${req.body.username}, ${req.body.invite || "No invite given"}`);
             throw FieldErrors({
-                email: {
+                username: {
                     code: "TOO_MANY_REGISTRATIONS",
                     message: req.t("auth:register.TOO_MANY_REGISTRATIONS"),
                 },

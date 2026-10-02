@@ -18,6 +18,9 @@
 
 export interface MemberChangeSchema {
     roles?: string[];
+    /**
+     * @maxLength 32
+     */
     nick?: string | null;
     avatar?: string | null;
     bio?: string;

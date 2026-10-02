@@ -61,6 +61,7 @@ export class Config {
         if (Object.keys(config).length == 0) config = new ConfigValue();
 
         config = OrmUtils.mergeDeep({}, { ...new ConfigValue() }, config);
+        replaceStaleDefaults(config);
 
         // TODO: factor this out someday
         if (process.env.CDN_SIGNATURE_PATH) config.security.cdnSignatureKey = await Config.readSecret("CDN_SIGNATURE_PATH");
@@ -109,6 +110,26 @@ export class Config {
 
         return applyConfig(config);
     }
+}
+
+const StaleDefaults: [string, JsonValue, JsonValue][] = [
+    ["limits.absoluteRate.register.enabled", true, false],
+    ["limits.rate.enabled", false, true],
+    ["limits.rate.error", { count: 10, window: 5 }, { count: 10000, window: 600 }],
+    ["limits.message.maxCharacters", 1048576, 4000],
+    ["limits.message.maxBulkDelete", 1000, 100],
+    ["limits.message.maxEmbeds", 20, 10],
+    ["limits.channel.maxName", 32, 100],
+];
+
+function replaceStaleDefaults(config: ConfigValue) {
+    for (const [path, previous, next] of StaleDefaults.slice(config.defaultsRevision ?? 0)) {
+        const keys = path.split(".");
+        const last = keys.pop()!;
+        const parent = keys.reduce<Record<string, JsonValue> | undefined>((obj, key) => obj?.[key] as Record<string, JsonValue> | undefined, config as never);
+        if (parent && JSON.stringify(parent[last]) === JSON.stringify(previous)) parent[last] = next;
+    }
+    config.defaultsRevision = StaleDefaults.length;
 }
 
 // TODO: better types
