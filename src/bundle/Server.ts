@@ -33,6 +33,7 @@ import { WebrtcServer } from "@spacebar/webrtc";
 import { ProcessLifecycle } from "../util/util/ProcessLifecycle";
 import { Monitoring } from "../util/monitoring/Monitoring";
 import TestClient, { TestClientAssets } from "./TestClient";
+import { ActivityHost } from "@spacebar/api/activities/ActivityHost";
 
 const app = express();
 const server = http.createServer();
@@ -64,6 +65,7 @@ ProcessLifecycle.eventEmitter.on("stopping", async () => {
 async function main() {
     await Monitoring.init();
     Monitoring.attach(app);
+    app.use(ActivityHost);
     TestClientAssets(app);
     await initDatabase();
     await Config.init();

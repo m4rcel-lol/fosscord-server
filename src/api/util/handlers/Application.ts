@@ -18,7 +18,7 @@
 
 import { createPrivateKey, generateKeyPairSync, randomBytes, sign } from "node:crypto";
 import { ILike, In, Not, IsNull } from "typeorm";
-import { Application, ApplicationCommand, Member } from "@spacebar/database";
+import { Application, ApplicationCommand, EmbeddedActivity, Member } from "@spacebar/database";
 import { serializeCommand } from "./ApplicationCommands";
 import { Snowflake } from "@spacebar/util";
 
@@ -93,10 +93,38 @@ export function toPublicApplication(app: Application) {
     };
 }
 
+const activityPlatformConfig = { label_type: 0, label_from: null, label_until: null, release_phase: "global_launch", omit_badge_from_surfaces: [] };
+
+export function activityConfig(activity: EmbeddedActivity) {
+    return {
+        application_id: activity.application_id,
+        activity_preview_video_asset_id: null,
+        supported_platforms: ["web"],
+        default_orientation_lock_state: 1,
+        tablet_default_orientation_lock_state: 1,
+        requires_age_gate: false,
+        legacy_responsive_aspect_ratio: false,
+        premium_tier_requirement: null,
+        free_period_starts_at: null,
+        free_period_ends_at: null,
+        client_platform_config: { web: activityPlatformConfig, android: activityPlatformConfig, ios: activityPlatformConfig },
+        shelf_rank: activity.shelf_rank,
+        has_csp_exception: false,
+        displays_advertisements: false,
+        blocked_locales: [],
+        supported_locales: [],
+        ...activity.config,
+    };
+}
+
 export async function findPublicApplications(ids: string[]) {
     if (!ids.length) return [];
     const apps = await Application.find({ where: { id: In(ids) }, relations: { bot: true } });
-    return apps.map(toPublicApplication);
+    const activities = await EmbeddedActivity.find({ where: { application_id: In(apps.map((a) => a.id)) } });
+    return apps.map((app) => {
+        const activity = activities.find((a) => a.application_id === app.id);
+        return { ...toPublicApplication(app), ...(activity && { embedded_activity_config: activityConfig(activity) }) };
+    });
 }
 
 export async function toDirectoryApplication(app: Application) {

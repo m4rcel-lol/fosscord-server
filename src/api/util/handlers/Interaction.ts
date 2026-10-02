@@ -49,6 +49,7 @@ import {
     uploadFile,
 } from "@spacebar/util";
 import { handleComps, handleMessage, postHandleMessage } from "./Message";
+import { launchActivity } from "@spacebar/api/activities";
 
 const SETTABLE_FLAGS =
     Number(MessageFlags.FLAGS.SUPPRESS_EMBEDS) |
@@ -339,6 +340,7 @@ export async function processInteractionCallback(interaction: PendingInteraction
         [InteractionCallbackType.UPDATE_MESSAGE]: [InteractionType.MessageComponent, InteractionType.ModalSubmit],
         [InteractionCallbackType.APPLICATION_COMMAND_AUTOCOMPLETE_RESULT]: [InteractionType.ApplicationCommandAutocomplete],
         [InteractionCallbackType.MODAL]: [InteractionType.ApplicationCommand, InteractionType.MessageComponent],
+        [InteractionCallbackType.LAUNCH_ACTIVITY]: [InteractionType.ApplicationCommand, InteractionType.MessageComponent, InteractionType.ModalSubmit],
     };
     if (!allowed[body.type]?.includes(interaction.type)) throw new ApiError("Interaction callback type is not valid for this interaction", 50035, 400);
     if ((body.type === InteractionCallbackType.UPDATE_MESSAGE || body.type === InteractionCallbackType.DEFERRED_UPDATE_MESSAGE) && !interaction.messageId)
@@ -408,6 +410,15 @@ export async function processInteractionCallback(interaction: PendingInteraction
                 } satisfies InteractionModalCreateEvent);
                 break;
             }
+            case InteractionCallbackType.LAUNCH_ACTIVITY:
+                await launchActivity({
+                    userId: interaction.userId,
+                    applicationId: interaction.applicationId,
+                    channelId: interaction.channelId,
+                    sessionId: interaction.sessionId,
+                    nonce: interaction.nonce,
+                });
+                break;
             default:
                 break;
         }

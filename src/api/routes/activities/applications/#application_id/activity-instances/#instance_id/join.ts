@@ -1,6 +1,6 @@
 /*
 	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
-	Copyright (C) 2023 Spacebar and Spacebar Contributors
+	Copyright (C) 2026 Spacebar and Spacebar Contributors
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU Affero General Public License as published
@@ -18,12 +18,23 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { activityShelf } from "@spacebar/api/activities";
+import { ActivityInstances } from "@spacebar/database";
+import { DiscordApiErrors } from "@spacebar/util";
+import { launchActivity } from "@spacebar/api/activities";
 
 const router = Router({ mergeParams: true });
 
-router.get("/", route({}), async (_req: Request, res: Response) => {
-    res.json(await activityShelf());
+router.post("/", route({}), async (req: Request, res: Response) => {
+    const instance = await ActivityInstances.find(req.params.application_id as string, req.params.instance_id as string);
+    if (!instance) throw DiscordApiErrors.UNKNOWN_APPLICATION;
+    const { session_id } = (req.body ?? {}) as { session_id?: string };
+    const { data } = await launchActivity({
+        userId: req.user_id,
+        applicationId: instance.application_id,
+        channelId: instance.channel_id,
+        sessionId: typeof session_id === "string" ? session_id : undefined,
+    });
+    res.json(data);
 });
 
 export default router;
