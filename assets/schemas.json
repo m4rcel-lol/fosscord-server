@@ -4807,15 +4807,10 @@
             },
             "instanceId": {
                 "type": "string"
-            },
-            "autoCreateBotUsers": {
-                "type": "boolean",
-                "default": false
             }
         },
         "additionalProperties": false,
         "required": [
-            "autoCreateBotUsers",
             "correspondenceEmail",
             "correspondenceUserID",
             "frontPage",
@@ -8011,7 +8006,10 @@
                 "type": "integer"
             },
             "custom_install_url": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "guild_id": {
                 "type": "string"
@@ -8022,6 +8020,18 @@
                 "items": {
                     "type": "string"
                 }
+            },
+            "integration_types_config": {
+                "type": "object",
+                "properties": {
+                    "0": {
+                        "$ref": "#/definitions/ApplicationIntegrationTypeConfig"
+                    },
+                    "1": {
+                        "$ref": "#/definitions/ApplicationIntegrationTypeConfig"
+                    }
+                },
+                "additionalProperties": false
             }
         },
         "additionalProperties": false,
@@ -15078,6 +15088,16 @@
                     "scopes"
                 ]
             },
+            "integration_types_config": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/Partial%3CRecord%3C%220%22%7C%221%22%2C%7Boauth2_install_params%3F%3A%7Bscopes%3Astring%5B%5D%3Bpermissions%3Astring%3B%7D%7Cundefined%3B%7D%3E%3E"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
             "terms_of_service_url": {
                 "type": "string"
             },
@@ -21689,6 +21709,39 @@
             "id",
             "locale"
         ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "ApplicationIntegrationTypeConfig": {
+        "type": "object",
+        "properties": {
+            "oauth2_install_params": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "scopes": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "permissions": {
+                                "type": "string"
+                            }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                            "permissions",
+                            "scopes"
+                        ]
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            }
+        },
+        "additionalProperties": false,
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "IntegrationGuild": {

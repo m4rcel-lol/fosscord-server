@@ -30,14 +30,25 @@ export interface ApplicationModifySchema {
     bot_public?: boolean;
     bot_require_code_grant?: boolean;
     flags?: number;
-    custom_install_url?: string;
+    custom_install_url?: string | null;
     guild_id?: string;
     /**
      * @maxItems 10
      */
     redirect_uris?: string[];
+    integration_types_config?: {
+        "0"?: ApplicationIntegrationTypeConfig;
+        "1"?: ApplicationIntegrationTypeConfig;
+    };
     /*install_params?: { TODO: Validation
 		scopes: string[];
 		permissions: string;
 	};*/
+}
+
+export interface ApplicationIntegrationTypeConfig {
+    oauth2_install_params?: {
+        scopes: string[];
+        permissions: string;
+    } | null;
 }

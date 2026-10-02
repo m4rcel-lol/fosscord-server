@@ -47,9 +47,19 @@ const requestedScopes = (scope: unknown, fallback: string[] = []) => {
     return [...new Set(scopes.length ? scopes : fallback)];
 };
 
-const integrationTypeOf = (req: Request, body?: ApplicationAuthorizeSchema) => {
-    if (body?.integration_type !== undefined && body.integration_type !== null) return Number(body.integration_type);
-    return req.query.integration_type === undefined ? 0 : Number(req.query.integration_type);
+const integrationTypeOf = (app: Application, req: Request, body?: ApplicationAuthorizeSchema) => {
+    const config = app.integration_types_config;
+    const requested =
+        body?.integration_type !== undefined && body.integration_type !== null
+            ? Number(body.integration_type)
+            : req.query.integration_type !== undefined
+              ? Number(req.query.integration_type)
+              : config && !("0" in config) && "1" in config
+                ? 1
+                : 0;
+    if (config && !(String(requested) in config))
+        throw FieldErrors({ integration_type: { code: "APPLICATION_INTEGRATION_TYPE_NOT_SUPPORTED", message: "This application does not support this installation type." } });
+    return requested;
 };
 
 const pkceOf = (req: Request) => {
@@ -114,7 +124,7 @@ router.get(
         // TODO: use DiscordApiErrors
         // findOneOrFail throws code 404
         if (!app) throw DiscordApiErrors.UNKNOWN_APPLICATION;
-        const integrationType = integrationTypeOf(req);
+        const integrationType = integrationTypeOf(app, req);
         const scopes = requestedScopes(req.query.scope, integrationType === 1 ? ["applications.commands"] : ["bot"]);
         if (!app.bot && scopes.includes("bot") && integrationType !== 1) throw DiscordApiErrors.OAUTH2_APPLICATION_BOT_ABSENT;
         if (req.query.response_type === "code" || req.query.response_type === "token") redirectFor(app, req.query.redirect_uri);
@@ -256,7 +266,7 @@ router.post(
             relations: { bot: true },
         });
         if (!app) throw DiscordApiErrors.UNKNOWN_APPLICATION;
-        const integrationType = integrationTypeOf(req, body);
+        const integrationType = integrationTypeOf(app, req, body);
         const scopes = requestedScopes(req.query.scope, integrationType === 1 ? ["applications.commands"] : ["bot"]);
         const code_challenge = pkceOf(req);
         const authorizeUser = async (type: number) => {

@@ -82,8 +82,10 @@ export function toPublicApplication(app: Application) {
         terms_of_service_url: app.terms_of_service_url ?? undefined,
         privacy_policy_url: app.privacy_policy_url ?? undefined,
         custom_install_url: app.custom_install_url ?? undefined,
-        install_params: app.install_params ?? { scopes: ["bot", "applications.commands"], permissions: "0" },
-        integration_types_config: {
+        install_params: app.integration_types_config
+            ? app.integration_types_config["0"]?.oauth2_install_params
+            : (app.install_params ?? { scopes: ["bot", "applications.commands"], permissions: "0" }),
+        integration_types_config: app.integration_types_config ?? {
             "0": { oauth2_install_params: app.install_params ?? { scopes: ["bot", "applications.commands"], permissions: "0" } },
             "1": { oauth2_install_params: { scopes: ["applications.commands"], permissions: "0" } },
         },
