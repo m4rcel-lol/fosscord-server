@@ -3823,6 +3823,10 @@
                     "discriminator": {
                         "type": "string"
                     },
+                    "global_name": {
+                        "type": "string",
+                        "nullable": true
+                    },
                     "public_flags": {
                         "type": "integer"
                     },
@@ -5665,6 +5669,11 @@
                     "username": {
                         "minLength": 2,
                         "type": "string"
+                    },
+                    "global_name": {
+                        "maxLength": 32,
+                        "type": "string",
+                        "nullable": true
                     },
                     "avatar": {
                         "type": "string",
@@ -8630,6 +8639,10 @@
                     "discriminator": {
                         "type": "string"
                     },
+                    "global_name": {
+                        "type": "string",
+                        "nullable": true
+                    },
                     "public_flags": {
                         "type": "integer"
                     },
@@ -9770,6 +9783,10 @@
                     },
                     "discriminator": {
                         "type": "string"
+                    },
+                    "global_name": {
+                        "type": "string",
+                        "nullable": true
                     },
                     "avatar": {
                         "type": "string"

@@ -150,6 +150,21 @@ router.patch(
                     },
                 });
             }
+
+            if (
+                user.discriminator === "0" &&
+                (await User.createQueryBuilder("u")
+                    .where("LOWER(u.username) = LOWER(:username)", { username: body.username })
+                    .andWhere("u.id != :id", { id: user.id })
+                    .andWhere("u.bot = false")
+                    .getCount()) > 0
+            )
+                throw FieldErrors({
+                    username: {
+                        code: "USERNAME_ALREADY_TAKEN",
+                        message: "Username is unavailable. Try adding numbers, letters, underscores _ , or periods.",
+                    },
+                });
         }
 
         if (body.discriminator) {

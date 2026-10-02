@@ -4076,6 +4076,12 @@
             "discriminator": {
                 "type": "string"
             },
+            "global_name": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
             "public_flags": {
                 "type": "integer"
             },
@@ -6071,6 +6077,13 @@
             "username": {
                 "minLength": 2,
                 "type": "string"
+            },
+            "global_name": {
+                "maxLength": 32,
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "avatar": {
                 "type": [
@@ -9223,6 +9236,12 @@
             "discriminator": {
                 "type": "string"
             },
+            "global_name": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
             "public_flags": {
                 "type": "integer"
             },
@@ -10470,6 +10489,12 @@
             },
             "discriminator": {
                 "type": "string"
+            },
+            "global_name": {
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "avatar": {
                 "type": "string"
