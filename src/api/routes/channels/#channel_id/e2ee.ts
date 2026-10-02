@@ -68,7 +68,8 @@ router.put(
 
         const members = channel.recipients?.map((r) => r.user_id) ?? [];
         const devices = await E2eeDevice.find({ where: { user_id: In(members), status: "active" }, select: { user_id: true } });
-        if (members.some((id) => !devices.some((d) => d.user_id === id))) throw E2eeErrors.RECIPIENT_NO_DEVICES;
+        const missing = members.filter((id) => !devices.some((d) => d.user_id === id));
+        if (missing.length) return res.status(400).json({ code: E2eeErrors.RECIPIENT_NO_DEVICES.code, message: E2eeErrors.RECIPIENT_NO_DEVICES.message, user_ids: missing });
 
         channel.e2ee_enabled_at = new Date();
         await Channel.update({ id: channel.id }, { e2ee_enabled_at: channel.e2ee_enabled_at });

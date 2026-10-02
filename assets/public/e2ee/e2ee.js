@@ -52,7 +52,7 @@
   var randomBytes = (length) => crypto.getRandomValues(new Uint8Array(length));
   var sha256 = async (data) => new Uint8Array(await crypto.subtle.digest("SHA-256", data));
 
-  // ../../../node_modules/@hpke/common/esm/src/errors.js
+  // node_modules/@hpke/common/esm/src/errors.js
   var HpkeError = class extends Error {
     constructor(e) {
       let message;
@@ -90,7 +90,7 @@
   var NotSupportedError = class extends HpkeError {
   };
 
-  // ../../../node_modules/@hpke/common/esm/_dnt.shims.js
+  // node_modules/@hpke/common/esm/_dnt.shims.js
   var dntGlobals = {};
   var dntGlobalThis = createMergeProxy(globalThis, dntGlobals);
   function createMergeProxy(baseObj, extObj) {
@@ -147,7 +147,7 @@
     });
   }
 
-  // ../../../node_modules/@hpke/common/esm/src/algorithm.js
+  // node_modules/@hpke/common/esm/src/algorithm.js
   async function loadSubtleCrypto() {
     if (dntGlobalThis !== void 0 && globalThis.crypto !== void 0) {
       return globalThis.crypto.subtle;
@@ -176,7 +176,7 @@
     }
   };
 
-  // ../../../node_modules/@hpke/common/esm/src/identifiers.js
+  // node_modules/@hpke/common/esm/src/identifiers.js
   var Mode = {
     Base: 0,
     Psk: 1,
@@ -216,13 +216,13 @@
     ExportOnly: 65535
   };
 
-  // ../../../node_modules/@hpke/common/esm/src/consts.js
+  // node_modules/@hpke/common/esm/src/consts.js
   var INPUT_LENGTH_LIMIT = 8192;
   var INFO_LENGTH_LIMIT = 268435456;
   var MINIMUM_PSK_LENGTH = 32;
   var EMPTY = /* @__PURE__ */ new Uint8Array(0);
 
-  // ../../../node_modules/@hpke/common/esm/src/interfaces/kemInterface.js
+  // node_modules/@hpke/common/esm/src/interfaces/kemInterface.js
   var SUITE_ID_HEADER_KEM = /* @__PURE__ */ new Uint8Array([
     75,
     69,
@@ -231,7 +231,7 @@
     0
   ]);
 
-  // ../../../node_modules/@hpke/common/esm/src/kdfs/hkdf.js
+  // node_modules/@hpke/common/esm/src/kdfs/hkdf.js
   var HPKE_VERSION = /* @__PURE__ */ new Uint8Array([
     72,
     80,
@@ -401,7 +401,7 @@
     }
   };
 
-  // ../../../node_modules/@hpke/common/esm/src/utils/misc.js
+  // node_modules/@hpke/common/esm/src/utils/misc.js
   var isCryptoKeyPair = (x) => typeof x === "object" && x !== null && typeof x.privateKey === "object" && typeof x.publicKey === "object";
   function i2Osp(n, w) {
     if (w <= 0) {
@@ -443,7 +443,7 @@
     return buf;
   }
 
-  // ../../../node_modules/@hpke/common/esm/src/kems/dhkem.js
+  // node_modules/@hpke/common/esm/src/kems/dhkem.js
   var LABEL_EAE_PRK = /* @__PURE__ */ new Uint8Array([
     101,
     97,
@@ -626,7 +626,7 @@
     }
   };
 
-  // ../../../node_modules/@hpke/common/esm/src/interfaces/dhkemPrimitives.js
+  // node_modules/@hpke/common/esm/src/interfaces/dhkemPrimitives.js
   var KEM_USAGES = ["deriveBits"];
   var LABEL_DKP_PRK = /* @__PURE__ */ new Uint8Array([
     100,
@@ -639,7 +639,7 @@
   ]);
   var LABEL_SK = /* @__PURE__ */ new Uint8Array([115, 107]);
 
-  // ../../../node_modules/@hpke/common/esm/src/kems/dhkemPrimitives/ec.js
+  // node_modules/@hpke/common/esm/src/kems/dhkemPrimitives/ec.js
   var EC_P_521_PARAMS = {
     p: (1n << 521n) - 1n,
     b: 0x0051953eb9618e1c9a1f929a21a0b68540eea2da725b99b315f3b8b489918ef109e156193951ec7e937b1652c0bd3bb1bf073573df883d2c34f1ef451fd46b503f00n,
@@ -648,10 +648,10 @@
     coordinateSize: 66
   };
 
-  // ../../../node_modules/@hpke/common/esm/src/interfaces/aeadEncryptionContext.js
+  // node_modules/@hpke/common/esm/src/interfaces/aeadEncryptionContext.js
   var AEAD_USAGES = ["encrypt", "decrypt"];
 
-  // ../../../node_modules/@hpke/common/esm/src/utils/noble.js
+  // node_modules/@hpke/common/esm/src/utils/noble.js
   function isBytes(a) {
     return a instanceof Uint8Array || ArrayBuffer.isView(a) && a.constructor.name === "Uint8Array";
   }
@@ -689,7 +689,7 @@
   var _endianTestBytes = /* @__PURE__ */ new Uint8Array(_endianTestBuffer.buffer);
   var isLE = _endianTestBytes[0] === 68;
 
-  // ../../../node_modules/@hpke/common/esm/src/hash/hash.js
+  // node_modules/@hpke/common/esm/src/hash/hash.js
   function ahash(h) {
     if (typeof h !== "function" || typeof h.create !== "function") {
       throw new Error("Hash must wrapped by utils.createHasher");
@@ -698,7 +698,7 @@
     anumber(h.blockLen);
   }
 
-  // ../../../node_modules/@hpke/common/esm/src/hash/hmac.js
+  // node_modules/@hpke/common/esm/src/hash/hmac.js
   var _HMAC = class {
     constructor(hash, key) {
       Object.defineProperty(this, "oHash", {
@@ -800,7 +800,7 @@
   var hmac = (hash, key, message) => new _HMAC(hash, key).update(message).digest();
   hmac.create = (hash, key) => new _HMAC(hash, key);
 
-  // ../../../node_modules/@hpke/common/esm/src/hash/u64.js
+  // node_modules/@hpke/common/esm/src/hash/u64.js
   var U32_MASK64 = 0xffffffffn;
   var _32n = 32n;
   function fromBig(n, le = false) {
@@ -823,7 +823,7 @@
     return [Ah, Al];
   }
 
-  // ../../../node_modules/@hpke/common/esm/src/hash/sha3.js
+  // node_modules/@hpke/common/esm/src/hash/sha3.js
   var _0n = 0n;
   var _1n = 1n;
   var _2n = 2n;
@@ -849,7 +849,7 @@
   var SHA3_IOTA_H = IOTAS[0];
   var SHA3_IOTA_L = IOTAS[1];
 
-  // ../../../node_modules/@hpke/core/esm/src/aeads/aesGcm.js
+  // node_modules/@hpke/core/esm/src/aeads/aesGcm.js
   var AesGcmContext = class extends NativeAlgorithm {
     constructor(key) {
       super();
@@ -962,14 +962,14 @@
     }
   };
 
-  // ../../../node_modules/@hpke/core/esm/src/utils/emitNotSupported.js
+  // node_modules/@hpke/core/esm/src/utils/emitNotSupported.js
   function emitNotSupported() {
     return new Promise((_resolve, reject) => {
       reject(new NotSupportedError("Not supported"));
     });
   }
 
-  // ../../../node_modules/@hpke/core/esm/src/exporterContext.js
+  // node_modules/@hpke/core/esm/src/exporterContext.js
   var LABEL_SEC = new Uint8Array([115, 101, 99]);
   var ExporterContextImpl = class {
     constructor(api2, kdf, exporterSecret) {
@@ -1029,7 +1029,7 @@
     }
   };
 
-  // ../../../node_modules/@hpke/core/esm/src/encryptionContext.js
+  // node_modules/@hpke/core/esm/src/encryptionContext.js
   var EncryptionContextImpl = class extends ExporterContextImpl {
     constructor(api2, kdf, params) {
       super(api2, kdf, params.exporterSecret);
@@ -1090,7 +1090,7 @@
     }
   };
 
-  // ../../../node_modules/@hpke/core/esm/src/mutex.js
+  // node_modules/@hpke/core/esm/src/mutex.js
   var __classPrivateFieldGet = function(receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
@@ -1120,7 +1120,7 @@
   };
   _Mutex_locked = /* @__PURE__ */ new WeakMap();
 
-  // ../../../node_modules/@hpke/core/esm/src/recipientContext.js
+  // node_modules/@hpke/core/esm/src/recipientContext.js
   var __classPrivateFieldGet2 = function(receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
@@ -1155,7 +1155,7 @@
   };
   _RecipientContextImpl_mutex = /* @__PURE__ */ new WeakMap();
 
-  // ../../../node_modules/@hpke/core/esm/src/senderContext.js
+  // node_modules/@hpke/core/esm/src/senderContext.js
   var __classPrivateFieldGet3 = function(receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
@@ -1197,7 +1197,7 @@
   };
   _SenderContextImpl_mutex = /* @__PURE__ */ new WeakMap();
 
-  // ../../../node_modules/@hpke/core/esm/src/cipherSuiteNative.js
+  // node_modules/@hpke/core/esm/src/cipherSuiteNative.js
   var LABEL_BASE_NONCE = new Uint8Array([
     98,
     97,
@@ -1470,13 +1470,13 @@
     }
   };
 
-  // ../../../node_modules/@hpke/core/esm/src/native.js
+  // node_modules/@hpke/core/esm/src/native.js
   var CipherSuite = class extends CipherSuiteNative {
   };
   var HkdfSha256 = class extends HkdfSha256Native {
   };
 
-  // ../../../node_modules/@hpke/core/esm/src/kems/dhkemPrimitives/x25519.js
+  // node_modules/@hpke/core/esm/src/kems/dhkemPrimitives/x25519.js
   var ALG_NAME = "X25519";
   var PKCS8_ALG_ID_X25519 = new Uint8Array([
     48,
@@ -1692,7 +1692,7 @@
     }
   };
 
-  // ../../../node_modules/@hpke/core/esm/src/kems/dhkemX25519.js
+  // node_modules/@hpke/core/esm/src/kems/dhkemX25519.js
   var DhkemX25519HkdfSha256 = class extends Dhkem {
     constructor() {
       const kdf = new HkdfSha256Native();
@@ -1730,7 +1730,7 @@
     }
   };
 
-  // ../../../node_modules/@hpke/core/esm/src/kems/dhkemPrimitives/x448.js
+  // node_modules/@hpke/core/esm/src/kems/dhkemPrimitives/x448.js
   var PKCS8_ALG_ID_X448 = new Uint8Array([
     48,
     70,
@@ -1827,7 +1827,7 @@ ${deviceId}
 ${prekeyId}
 ${publicKey}`;
 
-  // ../../../node_modules/hash-wasm/dist/index.esm.js
+  // node_modules/hash-wasm/dist/index.esm.js
   function __awaiter(thisArg, _arguments, P, generator) {
     function adopt(value) {
       return value instanceof P ? value : new P(function(resolve) {
@@ -2578,7 +2578,8 @@ ${sig}`;
   };
   var deviceName = () => {
     const ua = navigator.userAgent;
-    const browser = /Edg\//.test(ua) ? "Edge" : /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "a browser";
+    const brave = !!navigator.brave;
+    const browser = brave ? "Brave" : /Edg\//.test(ua) ? "Edge" : /OPR\//.test(ua) ? "Opera" : /Vivaldi\//.test(ua) ? "Vivaldi" : /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "a browser";
     const os = /Windows/.test(ua) ? "Windows" : /Mac OS X|Macintosh/.test(ua) ? "macOS" : /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iOS" : /Linux/.test(ua) ? "Linux" : "";
     return os ? `${browser} on ${os}` : browser;
   };
@@ -2616,6 +2617,7 @@ ${sig}`;
     lookupTimer = null;
     storedKeys = /* @__PURE__ */ new Map();
     backfilling = false;
+    freshIdentity = null;
     onChange(listener) {
       this.listeners.add(listener);
       return () => this.listeners.delete(listener);
@@ -2778,10 +2780,24 @@ ${sig}`;
         });
       this.password = null;
     }
+    async wipeLocal(keepTrust) {
+      const store = this.store;
+      for (const name of ["identity", "device", "prekeys", "backup-secret", ...keepTrust ? [] : ["trusted-identity"]]) await store.del(name);
+      this.identity = null;
+      this.device = null;
+      this.prekeys = [];
+      this.secret = null;
+      this.backupKeyPair = null;
+      this.linked = false;
+      if (!keepTrust) this.trustedKey = null;
+    }
     async ensureKeys() {
       const store = this.store;
       const userId = this.userId;
-      let state = await this.api.request("get", "/users/@me/e2ee");
+      this.device = await store.get("device") ?? null;
+      let state = await this.api.request("get", `/users/@me/e2ee${this.device ? `?device_id=${encodeURIComponent(this.device.deviceId)}` : ""}`);
+      const revoked = this.device && state.devices.find((d) => d.device_id === this.device.deviceId)?.status === "revoked" ? this.device.deviceId : null;
+      if (revoked && (await store.get("device"))?.deviceId === revoked) await this.wipeLocal(true);
       this.encryptedChannels = new Set(state.channels);
       this.identity = await store.get("identity") ?? null;
       this.trustedKey = await store.get("trusted-identity") ?? null;
@@ -2789,7 +2805,8 @@ ${sig}`;
       this.prekeys = await store.get("prekeys") ?? [];
       this.secret = await store.get("backup-secret") ?? null;
       this.backup = await this.fetchBackup();
-      let identityJwk = null;
+      let identityJwk = this.freshIdentity;
+      this.freshIdentity = null;
       if (!state.identity_key) {
         identityJwk = await generateExportable("Ed25519");
         await this.adoptIdentity(identityJwk);
@@ -2905,6 +2922,19 @@ ${sig}`;
         });
       });
       this.emit();
+    }
+    async reset(password) {
+      await this.serialized(async () => {
+        const identityJwk = await generateExportable("Ed25519");
+        await this.api.request("post", "/users/@me/e2ee/reset", { password, public_key: identityJwk.x });
+        await this.wipeLocal(false);
+        await this.adoptIdentity(identityJwk);
+        this.freshIdentity = identityJwk;
+        this.backup = null;
+        this.password = { value: password, at: Date.now() };
+        this.directory.clear();
+      });
+      await this.refresh();
     }
     async removeDevice(deviceId) {
       await this.api.request("del", `/users/@me/e2ee/devices/${deviceId}`);
@@ -3243,6 +3273,9 @@ backup:${this.userId}`).catch(() => null);
   // client/e2ee/src/hooks.ts
   var DECRYPTING_CONTENT = "Decrypting…";
   var MISSING_CONTENT = "Sent before this browser was set up";
+  var LOCKED_CONTENT = "Unlock this browser to read this message";
+  var SEARCH_URL = /^\/channels\/(\d+)\/messages\/search(\/tabs)?$/;
+  var SEARCH_PAGES = 10;
   var AUTH_URL = /^\/auth\/(login|register)$/;
   var MESSAGE_URL = /^\/channels\/(\d+)\/messages(?:\/(\d+))?$/;
   var isEncryptedMessage = (value) => {
@@ -3266,8 +3299,15 @@ backup:${this.userId}`).catch(() => null);
     const { engine: engine2, states: states2 } = ctx;
     const inflight = /* @__PURE__ */ new Map();
     const retry = /* @__PURE__ */ new Map();
+    const readable = /* @__PURE__ */ new Map();
+    const searched = /* @__PURE__ */ new Map();
     let dispatcher = null;
     const clone = (message) => JSON.parse(JSON.stringify(message));
+    const remember = (message) => {
+      let channel = readable.get(message.channel_id);
+      if (!channel) readable.set(message.channel_id, channel = /* @__PURE__ */ new Map());
+      channel.set(message.id, clone(message));
+    };
     const decryptOne = (message) => {
       const key = `${message.id}:${message.encrypted?.sig}`;
       const sync = engine2.cached(message);
@@ -3275,6 +3315,7 @@ backup:${this.userId}`).catch(() => null);
         message.content = sync;
         states2.set(message.id, { state: "decrypted" });
         retry.delete(message.id);
+        remember(message);
         return Promise.resolve();
       }
       if (!ctx.isReady()) {
@@ -3297,12 +3338,14 @@ backup:${this.userId}`).catch(() => null);
             states2.set(message.id, { state: "decrypted" });
             retry.delete(message.id);
             message.content = content;
+            remember(message);
           } catch (error) {
             const code = error instanceof E2eeError ? error.code : null;
             if (code === "LOCKED" || code === "NO_KEY") {
-              states2.set(message.id, { state: "missing", reason: error instanceof Error ? error.message : String(error) });
+              const locked = code === "LOCKED";
+              states2.set(message.id, { state: locked ? "locked" : "missing", reason: error instanceof Error ? error.message : String(error) });
               retry.set(message.id, original);
-              message.content = MISSING_CONTENT;
+              message.content = locked ? LOCKED_CONTENT : MISSING_CONTENT;
             } else {
               states2.set(message.id, { state: "failed", reason: error instanceof Error ? error.message : String(error) });
               message.content = FALLBACK_CONTENT;
@@ -3315,7 +3358,7 @@ backup:${this.userId}`).catch(() => null);
       return pending.then(() => {
         const again = engine2.cached(message);
         const state = states2.get(message.id)?.state;
-        message.content = again ?? (state === "missing" ? MISSING_CONTENT : state === "failed" ? FALLBACK_CONTENT : message.content);
+        message.content = again ?? (state === "missing" ? MISSING_CONTENT : state === "locked" ? LOCKED_CONTENT : state === "failed" ? FALLBACK_CONTENT : message.content);
         ctx.onState();
       });
     };
@@ -3355,6 +3398,39 @@ backup:${this.userId}`).catch(() => null);
       body.content = FALLBACK_CONTENT;
       return { ...opts, body };
     };
+    const searchLocally = async (originals, channelId, queries) => {
+      if (Date.now() - (searched.get(channelId) ?? 0) > 6e4) {
+        let before = "";
+        for (let page = 0; page < SEARCH_PAGES; page++) {
+          const res = await originals.get({ url: `/channels/${channelId}/messages`, query: { limit: 100, ...before && { before } }, rejectWithError: false }).catch(() => null);
+          const batch = res?.ok ? res.body : [];
+          await decryptAll(batch);
+          if (batch.length < 100) break;
+          before = batch[batch.length - 1].id;
+        }
+        searched.set(channelId, Date.now());
+      }
+      const all = [...readable.get(channelId)?.values() ?? []].filter((m) => states2.get(m.id)?.state === "decrypted").sort((a, b) => BigInt(b.id) > BigInt(a.id) ? 1 : -1);
+      return queries.map((query) => {
+        const words = String(query.content ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+        const authors = [query.author_id ?? []].flat().map(String);
+        const hits = all.filter((m) => {
+          const text = String(m.content ?? "").toLowerCase();
+          return words.every((w) => text.includes(w)) && (!authors.length || authors.includes(String(m.author?.id)));
+        });
+        if (query.sort_order === "asc") hits.reverse();
+        const offset = Number(query.offset ?? 0) || 0;
+        const limit = Number(query.limit ?? 25) || 25;
+        return {
+          analytics_id: null,
+          doing_deep_historical_index: false,
+          total_results: hits.length,
+          messages: hits.slice(offset, offset + limit).map((m) => [{ ...m, hit: true }]),
+          threads: [],
+          members: []
+        };
+      });
+    };
     const wrapHttp = (http2) => {
       const originals = { ...http2 };
       for (const method of ["get", "post", "put", "patch", "del"]) {
@@ -3375,7 +3451,35 @@ backup:${this.userId}`).catch(() => null);
           }
           const relevant = url.startsWith("/channels/") || url.startsWith("/users/@me/mentions") || url.includes("/messages");
           if (!relevant) return original(input, callback);
-          return (async () => {
+          const search = SEARCH_URL.exec(path);
+          if (search && engine2.isEncrypted(search[1]) && (method === "get" || method === "post" && search[2])) {
+            const [, channelId, tabs] = search;
+            return (async () => {
+              const params = new URLSearchParams(url.split("?")[1] ?? "");
+              const extra = opts.query;
+              if (typeof extra === "string") new URLSearchParams(extra).forEach((value, name) => params.append(name, value));
+              else if (extra && typeof extra === "object")
+                Object.entries(extra).forEach(([name, value]) => [value].flat().forEach((v) => v != null && params.append(name, String(v))));
+              const query = {
+                content: params.get("content") ?? void 0,
+                author_id: params.getAll("author_id"),
+                offset: params.get("offset") ?? void 0,
+                limit: params.get("limit") ?? void 0,
+                sort_order: params.get("sort_order") ?? void 0
+              };
+              const named = tabs ? Object.entries((opts.body ?? {}).tabs ?? {}) : [];
+              const results = await searchLocally(originals, channelId, tabs ? named.map(([, q]) => q) : [query]);
+              const body = tabs ? {
+                tabs: Object.fromEntries(named.map(([name], i) => [name, { ...results[i], cursor: null }])),
+                analytics_id: null,
+                doing_deep_historical_index: false
+              } : results[0];
+              const response = { ok: true, status: 200, body, headers: {} };
+              callback?.({ ...response, hasErr: false });
+              return response;
+            })();
+          }
+          const pending = (async () => {
             let prepared;
             try {
               prepared = await encryptBody(method, opts);
@@ -3406,6 +3510,9 @@ backup:${this.userId}`).catch(() => null);
               }
             }
           })();
+          pending.catch(() => {
+          });
+          return pending;
         };
         http2[method] = wrapped;
       }
@@ -3486,12 +3593,31 @@ ${requester}
 ${approver}`;
   var createLink = (engine2, api2, hooks2) => {
     let outgoing = null;
+    let remote = null;
+    let requesting = null;
+    let leader = false;
+    let wanted = false;
+    let channel = null;
     const incoming = /* @__PURE__ */ new Map();
+    const prompts = /* @__PURE__ */ new Map();
+    const remotePrompts = /* @__PURE__ */ new Set();
+    const responders = /* @__PURE__ */ new Map();
+    const send = (message) => channel?.postMessage(message);
+    const snapshot = () => outgoing ? { requestId: outgoing.requestId, state: outgoing.state, sas: outgoing.sas, approverName: outgoing.approverName } : null;
+    const changed = () => {
+      if (leader) send({ type: "outgoing", value: snapshot() });
+      hooks2.onChange();
+    };
     const post = (body) => api2.request("post", "/users/@me/e2ee/link", { ...body, device_id: engine2.device.deviceId });
-    const request = async () => {
-      if (!engine2.device || engine2.linked) return;
+    const dismiss = (requestId, error) => {
+      prompts.delete(requestId);
+      hooks2.onDismiss(requestId);
+      send({ type: "dismiss", requestId, error });
+    };
+    const begin = async () => {
       const pair = await generateAgreementKey();
       const publicKey = await exportPublic(pair.publicKey);
+      if (!engine2.device || engine2.linked) return;
       const current = {
         requestId: toB64u(randomBytes(16)),
         state: "waiting",
@@ -3500,10 +3626,11 @@ ${approver}`;
         pair,
         publicKey,
         approver: null,
-        approverKey: null
+        approverKey: null,
+        approved: false
       };
       outgoing = current;
-      hooks2.onChange();
+      changed();
       const body = { request_id: current.requestId, stage: "request", name: deviceName(), commit: toB64u(await sha256(fromB64u(publicKey))) };
       await post(body);
       let attempts = 0;
@@ -3513,11 +3640,28 @@ ${approver}`;
         });
       }, 1e4);
     };
+    const request = () => {
+      wanted = true;
+      if (!leader) {
+        send({ type: "request" });
+        return Promise.resolve();
+      }
+      if (!engine2.device || engine2.linked) return Promise.resolve();
+      if (requesting) return requesting;
+      if (outgoing && (outgoing.state === "waiting" || outgoing.state === "comparing")) return Promise.resolve();
+      requesting = begin().finally(() => {
+        requesting = null;
+      });
+      return requesting;
+    };
     const cancel = async () => {
+      wanted = false;
+      if (!leader) return void send({ type: "cancel" });
       const current = outgoing;
+      if (!current) return;
       outgoing = null;
-      hooks2.onChange();
-      if (current && current.state !== "done") await post({ request_id: current.requestId, stage: "cancel" }).catch(() => {
+      changed();
+      if (current.state !== "done" && !current.approved && engine2.device) await post({ request_id: current.requestId, stage: "cancel" }).catch(() => {
       });
     };
     const onRequest = async (event) => {
@@ -3525,16 +3669,38 @@ ${approver}`;
       if (incoming.has(event.request_id) || incoming.size > 8) return;
       const pair = await generateAgreementKey();
       const publicKey = await exportPublic(pair.publicKey);
-      incoming.set(event.request_id, { deviceId: event.device_id, name: event.name ?? "a new browser", commit: event.commit, pair, publicKey });
-      setTimeout(() => incoming.delete(event.request_id), 10 * 60 * 1e3);
+      if (incoming.has(event.request_id)) return;
+      incoming.set(event.request_id, { deviceId: event.device_id, name: event.name ?? "a new browser", commit: event.commit, pair, publicKey, requester: null });
+      setTimeout(
+        () => {
+          if (incoming.delete(event.request_id) && prompts.has(event.request_id)) dismiss(event.request_id);
+        },
+        10 * 60 * 1e3
+      );
       await post({ request_id: event.request_id, stage: "offer", to_device: event.device_id, public_key: publicKey });
+    };
+    const respond = async (requestId, stage) => {
+      const pending = incoming.get(requestId);
+      if (!pending?.requester || !incoming.delete(requestId)) return;
+      const requester = pending.requester;
+      try {
+        if (stage === "deny") await post({ request_id: requestId, stage, to_device: pending.deviceId });
+        else {
+          const secret = engine2.exportSecret();
+          if (!secret) throw new Error("This browser can't approve logins");
+          const key = await channelKey(pending.pair, requester, requestId);
+          const iv = randomBytes(12);
+          const ct = await aesEncrypt(key, iv, secret, channelAad(requestId, requester, pending.publicKey));
+          await post({ request_id: requestId, stage, to_device: pending.deviceId, iv: toB64u(iv), ct: toB64u(ct) });
+        }
+        dismiss(requestId);
+      } catch (error) {
+        dismiss(requestId, error instanceof Error ? error.message : String(error));
+        throw error;
+      }
     };
     const onResponse = async (event) => {
       const mine = engine2.device?.deviceId;
-      if (event.stage === "cancel") {
-        if (incoming.delete(event.request_id)) hooks2.onDismiss(event.request_id);
-        return;
-      }
       if (!mine || event.to_device !== mine) return;
       const current = outgoing?.requestId === event.request_id ? outgoing : null;
       if (event.stage === "offer" && current && !current.approver && event.public_key) {
@@ -3543,183 +3709,475 @@ ${approver}`;
         current.approverName = engine2.devices.find((d) => d.device_id === event.device_id)?.name ?? null;
         current.sas = await sasFor(current.requestId, current.publicKey, event.public_key);
         current.state = "comparing";
-        hooks2.onChange();
+        changed();
         await post({ request_id: current.requestId, stage: "reveal", to_device: event.device_id, public_key: current.publicKey });
         return;
       }
       if (event.stage === "reveal" && event.public_key) {
         const pending = incoming.get(event.request_id);
-        if (!pending || pending.deviceId !== event.device_id) return;
+        if (!pending || pending.deviceId !== event.device_id || pending.requester) return;
         if (toB64u(await sha256(fromB64u(event.public_key))) !== pending.commit) {
           incoming.delete(event.request_id);
           return;
         }
-        const requester = event.public_key;
-        const sas = await sasFor(event.request_id, requester, pending.publicKey);
-        const respond = async (stage) => {
-          if (!incoming.delete(event.request_id)) return;
-          if (stage === "deny") return void await post({ request_id: event.request_id, stage, to_device: pending.deviceId });
-          const secret = engine2.exportSecret();
-          if (!secret) throw new Error("This browser can't approve logins");
-          const key = await channelKey(pending.pair, requester, event.request_id);
-          const iv = randomBytes(12);
-          const ct = await aesEncrypt(key, iv, secret, channelAad(event.request_id, requester, pending.publicKey));
-          await post({ request_id: event.request_id, stage, to_device: pending.deviceId, iv: toB64u(iv), ct: toB64u(ct) });
-        };
-        hooks2.onPrompt({ requestId: event.request_id, name: pending.name, sas, approve: () => respond("approve"), deny: () => respond("deny") });
+        pending.requester = event.public_key;
+        const info = { requestId: event.request_id, name: pending.name, sas: await sasFor(event.request_id, event.public_key, pending.publicKey) };
+        prompts.set(info.requestId, info);
+        send({ type: "prompt", prompt: info });
+        hooks2.onPrompt({ ...info, approve: () => respond(info.requestId, "approve"), deny: () => respond(info.requestId, "deny") });
         return;
       }
       if (!current || event.device_id !== current.approver) return;
       if (event.stage === "deny") {
         current.state = "denied";
-        hooks2.onChange();
+        changed();
         return;
       }
       if (event.stage === "approve" && event.iv && event.ct && current.approverKey) {
         try {
           const key = await channelKey(current.pair, current.approverKey, current.requestId);
           const secret = await aesDecrypt(key, fromB64u(event.iv), fromB64u(event.ct), channelAad(current.requestId, current.publicKey, current.approverKey));
+          current.approved = true;
           await engine2.unlockWithSecret(secret);
           current.state = "done";
         } catch (error) {
           console.error("[e2ee] approval didn't unlock this browser", error);
           current.state = "failed";
         }
-        hooks2.onChange();
+        changed();
       }
     };
+    const remoteRespond = (requestId, stage) => new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        responders.delete(requestId);
+        reject(new Error("The other tab didn't answer"));
+      }, 15e3);
+      responders.set(requestId, {
+        resolve: () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        }
+      });
+      send({ type: "respond", requestId, stage });
+    });
+    const onTab = (message) => {
+      if (message.type === "dismiss") {
+        remotePrompts.delete(message.requestId);
+        hooks2.onDismiss(message.requestId);
+        const responder = responders.get(message.requestId);
+        responders.delete(message.requestId);
+        if (message.error) responder?.reject(new Error(message.error));
+        else responder?.resolve();
+        return;
+      }
+      if (message.type === "unlocked") return hooks2.onPeerUnlock();
+      if (!leader) {
+        if (message.type === "outgoing") {
+          remote = message.value;
+          hooks2.onChange();
+        } else if (message.type === "prompt" && !remotePrompts.has(message.prompt.requestId)) {
+          const { requestId } = message.prompt;
+          remotePrompts.add(requestId);
+          hooks2.onPrompt({ ...message.prompt, approve: () => remoteRespond(requestId, "approve"), deny: () => remoteRespond(requestId, "deny") });
+        }
+        return;
+      }
+      if (message.type === "hello") {
+        send({ type: "outgoing", value: snapshot() });
+        prompts.forEach((prompt) => send({ type: "prompt", prompt }));
+      } else if (message.type === "request") request().catch((error) => console.error("[e2ee] link request failed", error));
+      else if (message.type === "cancel") cancel();
+      else if (message.type === "respond") respond(message.requestId, message.stage).catch((error) => console.error("[e2ee] link", error));
+    };
+    const becomeLeader = () => {
+      leader = true;
+      remotePrompts.forEach((id) => hooks2.onDismiss(id));
+      remotePrompts.clear();
+      const inherited = remote;
+      remote = null;
+      if (engine2.locked && (wanted || inherited?.state === "waiting" || inherited?.state === "comparing"))
+        request().catch((error) => console.error("[e2ee] link request failed", error));
+      changed();
+    };
+    const start2 = (userId) => {
+      if (channel || leader) return;
+      if (typeof BroadcastChannel === "function") {
+        channel = new BroadcastChannel(`fosscord-e2ee-link:${userId}`);
+        channel.addEventListener("message", (event) => onTab(event.data));
+      }
+      addEventListener("pagehide", () => {
+        const current = outgoing;
+        if (!leader || !current || current.approved || !engine2.device || current.state !== "waiting" && current.state !== "comparing") return;
+        hooks2.beacon({ request_id: current.requestId, stage: "cancel", device_id: engine2.device.deviceId });
+      });
+      if (!navigator.locks || !channel) return becomeLeader();
+      navigator.locks.request(`fosscord-e2ee-link:${userId}`, () => {
+        becomeLeader();
+        return new Promise(() => {
+        });
+      });
+      send({ type: "hello" });
+    };
     return {
+      start: start2,
       request,
       cancel,
-      onEvent: (type, event) => (type === "E2EE_LINK_REQUEST" ? onRequest(event) : onResponse(event)).catch((error) => console.error("[e2ee] link", error)),
-      outgoing: () => outgoing ? { requestId: outgoing.requestId, state: outgoing.state, sas: outgoing.sas, approverName: outgoing.approverName } : null
+      unlocked: () => send({ type: "unlocked" }),
+      onEvent: (type, event) => {
+        if (type === "E2EE_LINK_RESPONSE" && event.stage === "cancel") {
+          incoming.delete(event.request_id);
+          if (prompts.has(event.request_id)) dismiss(event.request_id);
+          if (remotePrompts.delete(event.request_id)) hooks2.onDismiss(event.request_id);
+          return;
+        }
+        if (!leader) return;
+        (type === "E2EE_LINK_REQUEST" ? onRequest(event) : onResponse(event)).catch((error) => console.error("[e2ee] link", error));
+      },
+      outgoing: () => leader ? snapshot() : remote
     };
+  };
+
+  // client/e2ee/src/qr.ts
+  var EC_PER_BLOCK = [0, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26];
+  var BLOCKS = [0, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5];
+  var multiply = (x, y) => {
+    let z = 0;
+    for (let i = 7; i >= 0; i--) {
+      z = z << 1 ^ (z >>> 7) * 285;
+      z ^= (y >>> i & 1) * x;
+    }
+    return z & 255;
+  };
+  var divisor = (degree) => {
+    const result = new Array(degree).fill(0);
+    result[degree - 1] = 1;
+    let root = 1;
+    for (let i = 0; i < degree; i++) {
+      for (let j = 0; j < degree; j++) {
+        result[j] = multiply(result[j], root);
+        if (j + 1 < degree) result[j] ^= result[j + 1];
+      }
+      root = multiply(root, 2);
+    }
+    return result;
+  };
+  var remainder = (data, div) => {
+    const result = new Array(div.length).fill(0);
+    for (const b of data) {
+      const factor = b ^ result.shift();
+      result.push(0);
+      div.forEach((coef, i) => result[i] ^= multiply(coef, factor));
+    }
+    return result;
+  };
+  var rawModules = (ver) => {
+    let result = (16 * ver + 128) * ver + 64;
+    if (ver >= 2) {
+      const align = Math.floor(ver / 7) + 2;
+      result -= (25 * align - 10) * align - 55;
+      if (ver >= 7) result -= 36;
+    }
+    return result;
+  };
+  var dataCodewords = (ver) => Math.floor(rawModules(ver) / 8) - EC_PER_BLOCK[ver] * BLOCKS[ver];
+  var alignmentPositions = (ver, size) => {
+    if (ver === 1) return [];
+    const count2 = Math.floor(ver / 7) + 2;
+    const step = Math.ceil((ver * 4 + 4) / (count2 * 2 - 2)) * 2;
+    const result = [6];
+    for (let pos = size - 7; result.length < count2; pos -= step) result.splice(1, 0, pos);
+    return result;
+  };
+  var qrMatrix = (text) => {
+    const bytes = [...new TextEncoder().encode(text)];
+    let ver = 1;
+    while (ver <= 10 && 4 + (ver < 10 ? 8 : 16) + bytes.length * 8 > dataCodewords(ver) * 8) ver++;
+    if (ver > 10) throw new Error("Text too long for a QR code");
+    const capacity = dataCodewords(ver) * 8;
+    const bits = [];
+    const push = (value, length) => {
+      for (let i = length - 1; i >= 0; i--) bits.push(value >>> i & 1);
+    };
+    push(4, 4);
+    push(bytes.length, ver < 10 ? 8 : 16);
+    bytes.forEach((b) => push(b, 8));
+    push(0, Math.min(4, capacity - bits.length));
+    push(0, (8 - bits.length % 8) % 8);
+    for (let pad = 236; bits.length < capacity; pad ^= 236 ^ 17) push(pad, 8);
+    const data = [];
+    for (let i = 0; i < bits.length; i += 8) data.push(bits.slice(i, i + 8).reduce((acc, bit2) => acc << 1 | bit2, 0));
+    const blockCount = BLOCKS[ver];
+    const ecLength = EC_PER_BLOCK[ver];
+    const raw = Math.floor(rawModules(ver) / 8);
+    const short = blockCount - raw % blockCount;
+    const shortLength = Math.floor(raw / blockCount);
+    const div = divisor(ecLength);
+    const blocks = [];
+    for (let i = 0, k = 0; i < blockCount; i++) {
+      const chunk = data.slice(k, k + shortLength - ecLength + (i < short ? 0 : 1));
+      k += chunk.length;
+      const ec = remainder(chunk, div);
+      if (i < short) chunk.push(0);
+      blocks.push([...chunk, ...ec]);
+    }
+    const codewords = [];
+    for (let i = 0; i < blocks[0].length; i++)
+      blocks.forEach((block, j) => {
+        if (i !== shortLength - ecLength || j >= short) codewords.push(block[i]);
+      });
+    const size = ver * 4 + 17;
+    const modules = Array.from({ length: size }, () => new Array(size).fill(false));
+    const reserved = Array.from({ length: size }, () => new Array(size).fill(false));
+    const set = (x, y, dark) => {
+      modules[y][x] = dark;
+      reserved[y][x] = true;
+    };
+    for (let i = 0; i < size; i++) {
+      set(6, i, i % 2 === 0);
+      set(i, 6, i % 2 === 0);
+    }
+    const finder = (cx, cy) => {
+      for (let dy = -4; dy <= 4; dy++)
+        for (let dx = -4; dx <= 4; dx++) {
+          const x = cx + dx;
+          const y = cy + dy;
+          if (x < 0 || x >= size || y < 0 || y >= size) continue;
+          const dist = Math.max(Math.abs(dx), Math.abs(dy));
+          set(x, y, dist !== 2 && dist !== 4);
+        }
+    };
+    finder(3, 3);
+    finder(size - 4, 3);
+    finder(3, size - 4);
+    const align = alignmentPositions(ver, size);
+    align.forEach(
+      (ax, i) => align.forEach((ay, j) => {
+        if (i === 0 && j === 0 || i === 0 && j === align.length - 1 || i === align.length - 1 && j === 0) return;
+        for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) set(ax + dx, ay + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
+      })
+    );
+    const mask = 0;
+    const formatData = mask;
+    let rem = formatData;
+    for (let i = 0; i < 10; i++) rem = rem << 1 ^ (rem >>> 9) * 1335;
+    const format = (formatData << 10 | rem) ^ 21522;
+    const bit = (value, i) => (value >>> i & 1) !== 0;
+    for (let i = 0; i <= 5; i++) set(8, i, bit(format, i));
+    set(8, 7, bit(format, 6));
+    set(8, 8, bit(format, 7));
+    set(7, 8, bit(format, 8));
+    for (let i = 9; i < 15; i++) set(14 - i, 8, bit(format, i));
+    for (let i = 0; i < 8; i++) set(size - 1 - i, 8, bit(format, i));
+    for (let i = 8; i < 15; i++) set(8, size - 15 + i, bit(format, i));
+    set(8, size - 8, true);
+    if (ver >= 7) {
+      let vrem = ver;
+      for (let i = 0; i < 12; i++) vrem = vrem << 1 ^ (vrem >>> 11) * 7973;
+      const info = ver << 12 | vrem;
+      for (let i = 0; i < 18; i++) {
+        const a = size - 11 + i % 3;
+        const b = Math.floor(i / 3);
+        set(a, b, bit(info, i));
+        set(b, a, bit(info, i));
+      }
+    }
+    let index = 0;
+    for (let right = size - 1; right >= 1; right -= 2) {
+      if (right === 6) right = 5;
+      for (let vert = 0; vert < size; vert++)
+        for (let j = 0; j < 2; j++) {
+          const x = right - j;
+          const upward = (right + 1 & 2) === 0;
+          const y = upward ? size - 1 - vert : vert;
+          if (reserved[y][x]) continue;
+          const dark = index < codewords.length * 8 && bit(codewords[index >>> 3], 7 - (index & 7));
+          index++;
+          modules[y][x] = dark !== ((x + y) % 2 === 0);
+        }
+    }
+    return modules;
+  };
+  var qrSvg = (text, label) => {
+    const modules = qrMatrix(text);
+    const size = modules.length + 8;
+    let path = "";
+    modules.forEach(
+      (row, y) => row.forEach((dark, x) => {
+        if (dark) path += `M${x + 4} ${y + 4}h1v1h-1z`;
+      })
+    );
+    return `<svg viewBox="0 0 ${size} ${size}" role="img" aria-label="${label}" shape-rendering="crispEdges"><rect width="${size}" height="${size}" fill="#fff"/><path d="${path}" fill="#000"/></svg>`;
   };
 
   // client/e2ee/src/ui.ts
   var LOCK_PATH = "M7 10V7a5 5 0 0 1 10 0v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1Zm2 0h6V7a3 3 0 0 0-6 0v3Z";
   var OPEN_LOCK_PATH = "M9 10h9a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1V7a5 5 0 0 1 9.58-2 1 1 0 1 1-1.83.8A3 3 0 0 0 9 7v3Z";
+  var VERIFIED_PATH = `${LOCK_PATH}M8.1 15.6l1.4-1.4 1.9 1.9 4.5-4.5 1.4 1.4-5.9 5.9Z`;
+  var CLOSE_PATH = "M17.3 18.7a1 1 0 0 0 1.4-1.4L13.42 12l5.3-5.3a1 1 0 0 0-1.42-1.4L12 10.58l-5.3-5.3a1 1 0 0 0-1.4 1.42L10.58 12l-5.3 5.3a1 1 0 1 0 1.42 1.4L12 13.42l5.3 5.3Z";
+  var SCREEN_PATH = "M4 3a3 3 0 0 0-3 3v9a3 3 0 0 0 3 3h7v2H8a1 1 0 1 0 0 2h8a1 1 0 1 0 0-2h-3v-2h7a3 3 0 0 0 3-3V6a3 3 0 0 0-3-3H4Zm0 2h16a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z";
   var css = `
-.fe2ee-lock{display:inline-flex;vertical-align:-2px;margin-inline-start:6px;color:var(--text-muted,#949ba4)}
+.fe2ee-lock{display:inline-flex;vertical-align:-2px;margin-inline-start:4px;color:var(--text-muted,#949ba4)}
 .fe2ee-lock svg{width:14px;height:14px}
 .fe2ee-lock[data-state="failed"]{color:var(--status-danger,#f23f43)}
-.fe2ee-failed{color:var(--text-muted,#949ba4)}
-.fe2ee-toggle{background:none;border:0;padding:0;margin:0;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--interactive-normal,#b5bac1);transition:color 120ms ease-out,scale 200ms ease-out}
+.fe2ee-toggle{background:none;border:0;padding:0;margin:0 8px;width:24px;height:24px;flex:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--interactive-icon-default,var(--interactive-normal,#b5bac1));transition:color 120ms ease-out,scale 200ms ease-out}
+.fe2ee-toggle svg{width:24px;height:24px}
 .fe2ee-toggle[aria-pressed="true"]{color:var(--status-positive,#23a55a)}
-.fe2ee-toggle:active{scale:.96}
+.fe2ee-toggle:active{scale:.94}
 .fe2ee-toggle:focus-visible{outline:2px solid var(--focus-primary,#00a8fc);outline-offset:2px;border-radius:4px}
-@media (hover:hover){.fe2ee-toggle:hover{color:var(--interactive-hover,#dbdee1)}.fe2ee-toggle[aria-pressed="true"]:hover{color:var(--status-positive,#23a55a)}}
-.fe2ee-banners{position:fixed;inset-inline:0;top:0;z-index:10000;display:flex;flex-direction:column;align-items:center;gap:8px;padding-top:8px;pointer-events:none}
-.fe2ee-banner{pointer-events:auto;display:flex;align-items:center;gap:12px;max-width:min(640px,calc(100vw - 32px));padding:10px 12px 10px 14px;border-radius:8px;font-size:14px;line-height:20px;text-wrap:pretty;color:var(--text-default,#dbdee1);background:var(--modal-background,var(--background-base-low,#313338));box-shadow:0 0 0 1px rgb(0 0 0 / .08),0 2px 4px rgb(0 0 0 / .16),0 8px 24px rgb(0 0 0 / .24)}
-.fe2ee-banner[data-tone="danger"]{box-shadow:inset 3px 0 0 var(--status-danger,#f23f43),0 0 0 1px rgb(0 0 0 / .08),0 2px 4px rgb(0 0 0 / .16),0 8px 24px rgb(0 0 0 / .24)}
-.fe2ee-banner[data-tone="warning"]{box-shadow:inset 3px 0 0 var(--status-warning,#f0b232),0 0 0 1px rgb(0 0 0 / .08),0 2px 4px rgb(0 0 0 / .16),0 8px 24px rgb(0 0 0 / .24)}
-.fe2ee-banner svg{flex:none;width:18px;height:18px}
-.fe2ee-banner p{margin:0;flex:1}
-.fe2ee-button{font:inherit;font-size:14px;font-weight:500;line-height:20px;border:0;border-radius:6px;padding:6px 14px;cursor:pointer;color:#fff;background:var(--button-filled-brand-background,#5865f2);transition:background-color 120ms ease-out,scale 200ms ease-out;white-space:nowrap}
-.fe2ee-button[data-variant="secondary"]{color:var(--text-default,#dbdee1);background:var(--button-secondary-background,#4e5058)}
-.fe2ee-button:active{scale:.97}
+@media (hover:hover){.fe2ee-toggle:hover{color:var(--interactive-icon-hover,var(--interactive-hover,#dbdee1))}.fe2ee-toggle[aria-pressed="true"]:hover{color:var(--status-positive,#23a55a)}}
+.fe2ee-tooltip{position:fixed;z-index:10002;pointer-events:none;max-width:220px;padding:8px 12px;border-radius:8px;font-size:14px;line-height:18px;font-weight:500;text-align:center;text-wrap:balance;color:var(--text-strong,#f2f3f5);background:var(--background-surface-highest,#111214);box-shadow:0 0 0 1px var(--border-subtle,rgb(255 255 255 / .06)),0 2px 4px rgb(0 0 0 / .16),0 8px 16px rgb(0 0 0 / .24)}
+.fe2ee-tooltip::before{content:"";position:absolute;left:calc(50% - 5px);width:10px;height:10px;rotate:45deg;background:inherit}
+.fe2ee-tooltip[data-side="bottom"]::before{top:-4px}
+.fe2ee-tooltip[data-side="top"]::before{bottom:-4px}
+.fe2ee-notice{display:flex;align-items:center;gap:12px;margin:0 0 8px;padding:8px 8px 8px 12px;min-height:40px;box-sizing:border-box;border-radius:8px;font-size:14px;line-height:18px;color:var(--text-default,#dbdee1);background:var(--background-base-lower,#2b2d31);box-shadow:inset 0 0 0 1px var(--border-subtle,rgb(255 255 255 / .06))}
+.fe2ee-notice svg{flex:none;width:16px;height:16px;color:var(--icon-default,#b5bac1)}
+.fe2ee-notice[data-tone="danger"] svg{color:var(--status-danger,#f23f43)}
+.fe2ee-notice[data-tone="warning"] svg{color:var(--status-warning,#f0b232)}
+.fe2ee-notice p{margin:0;flex:1;min-width:0;text-wrap:pretty}
+.fe2ee-notice .fe2ee-button{padding:4px 12px;min-height:28px}
+.fe2ee-button{font:inherit;font-size:14px;font-weight:500;line-height:18px;border:0;border-radius:8px;padding:8px 16px;min-height:38px;cursor:pointer;color:#fff;background:var(--control-primary-background-default,var(--button-filled-brand-background,#5865f2));transition:background-color 120ms ease-out,scale 200ms ease-out;white-space:nowrap}
+.fe2ee-button[data-variant="secondary"]{color:var(--text-default,#dbdee1);background:var(--control-secondary-background-default,var(--button-secondary-background,#4e5058))}
+.fe2ee-button[data-variant="danger"]{color:#fff;background:var(--control-critical-primary-background-default,#da373c)}
+.fe2ee-button[data-variant="link"]{padding:0;min-height:0;background:none;color:var(--text-link,#00a8fc);font-weight:400}
+.fe2ee-button:disabled{opacity:.5;cursor:not-allowed}
+.fe2ee-button:active:not(:disabled){scale:.97}
 .fe2ee-button:focus-visible{outline:2px solid var(--focus-primary,#00a8fc);outline-offset:2px}
-@media (hover:hover){.fe2ee-button:hover{background:var(--button-filled-brand-background-hover,#4752c4)}.fe2ee-button[data-variant="secondary"]:hover{background:var(--button-secondary-background-hover,#6d6f78)}}
-.fe2ee-dialog{border:0;padding:0;border-radius:12px;width:min(480px,calc(100vw - 32px));color:var(--text-default,#dbdee1);background:var(--modal-background,var(--background-base-low,#313338));box-shadow:0 0 0 1px rgb(0 0 0 / .08),0 4px 8px rgb(0 0 0 / .16),0 16px 48px rgb(0 0 0 / .32)}
+@media (hover:hover){.fe2ee-button:hover:not(:disabled){background:var(--control-primary-background-hover,#4752c4)}.fe2ee-button[data-variant="secondary"]:hover:not(:disabled){background:var(--control-secondary-background-hover,#6d6f78)}.fe2ee-button[data-variant="danger"]:hover:not(:disabled){background:var(--control-critical-primary-background-hover,#a12829)}.fe2ee-button[data-variant="link"]:hover:not(:disabled){background:none;text-decoration:underline}}
+.fe2ee-dialog{border:0;padding:0;border-radius:12px;width:min(480px,calc(100vw - 32px));max-height:min(720px,calc(100dvh - 64px));overflow:hidden;color:var(--text-default,#dbdee1);background:var(--modal-background,var(--background-base-low,#313338));box-shadow:0 0 0 1px var(--border-subtle,rgb(255 255 255 / .06)),0 4px 8px rgb(0 0 0 / .16),0 16px 48px rgb(0 0 0 / .32)}
+.fe2ee-dialog[open]{display:flex;flex-direction:column}
 .fe2ee-dialog::backdrop{background:rgb(0 0 0 / .7)}
-.fe2ee-dialog-body{padding:20px 20px 16px;display:flex;flex-direction:column;gap:12px;font-size:15px;line-height:22px}
-.fe2ee-dialog h2{margin:0;font-size:20px;line-height:24px;font-weight:600;text-wrap:balance;color:var(--header-primary,#f2f3f5)}
-.fe2ee-dialog p{margin:0;text-wrap:pretty;color:var(--text-muted,#b5bac1)}
-.fe2ee-dialog-actions{display:flex;justify-content:flex-end;gap:8px;padding:16px 20px;background:var(--modal-footer-background,var(--background-base-lower,#2b2d31));border-radius:0 0 12px 12px}
+.fe2ee-dialog-head{flex:none;display:flex;align-items:flex-start;gap:16px;padding:20px 16px 4px 20px}
+.fe2ee-dialog h2{flex:1;margin:0;font-size:20px;line-height:24px;font-weight:600;text-wrap:balance;color:var(--text-strong,#f2f3f5)}
+.fe2ee-close{flex:none;width:32px;height:32px;margin:-4px 0 0;padding:0;display:grid;place-items:center;border:0;border-radius:8px;background:none;color:var(--interactive-icon-default,#b5bac1);cursor:pointer;transition:color 120ms ease-out,background-color 120ms ease-out}
+.fe2ee-close svg{width:24px;height:24px}
+.fe2ee-close[hidden]{display:none}
+.fe2ee-close:focus-visible{outline:2px solid var(--focus-primary,#00a8fc)}
+@media (hover:hover){.fe2ee-close:hover{color:var(--interactive-icon-hover,#dbdee1);background:var(--background-mod-subtle,rgb(255 255 255 / .06))}}
+.fe2ee-dialog-body{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:8px 20px 20px;display:flex;flex-direction:column;gap:12px;font-size:15px;line-height:22px}
+.fe2ee-dialog p,.fe2ee-page p{margin:0;text-wrap:pretty;color:var(--text-muted,#b5bac1)}
+.fe2ee-dialog-actions{flex:none;display:flex;justify-content:flex-end;gap:8px;padding:16px 20px;background:var(--modal-footer-background,var(--background-base-lower,#2b2d31));box-shadow:0 -1px 0 var(--border-subtle,rgb(255 255 255 / .06))}
+@media (prefers-reduced-motion:no-preference){.fe2ee-dialog[open]{animation:fe2ee-modal-in 260ms cubic-bezier(.2,.9,.3,1.05)}.fe2ee-dialog[open]::backdrop{animation:fe2ee-fade 200ms ease-out}.fe2ee-dialog[data-closing]{animation:fe2ee-modal-out 150ms ease-in forwards}.fe2ee-dialog[data-closing]::backdrop{animation:fe2ee-fade 150ms ease-in reverse forwards}.fe2ee-tooltip{animation:fe2ee-fade 120ms ease-out}}
+@keyframes fe2ee-modal-in{from{opacity:0;scale:.9}}
+@keyframes fe2ee-modal-out{to{opacity:0;scale:.9}}
+@keyframes fe2ee-fade{from{opacity:0}}
 .fe2ee-member{display:flex;flex-direction:column;gap:8px;padding-top:8px}
 .fe2ee-member + .fe2ee-member{border-top:1px solid var(--border-subtle,rgb(255 255 255 / .06));padding-top:16px}
 .fe2ee-member-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.fe2ee-member-name{font-weight:600;color:var(--header-primary,#f2f3f5);overflow-wrap:anywhere}
+.fe2ee-member-name{font-weight:600;color:var(--text-strong,#f2f3f5);overflow-wrap:anywhere}
 .fe2ee-status{display:inline-flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap;color:var(--text-muted,#b5bac1)}
 .fe2ee-status[data-verified="true"]{color:var(--status-positive,#23a55a)}
 .fe2ee-status svg{width:14px;height:14px}
-.fe2ee-digits{display:grid;grid-template-columns:repeat(4,auto);justify-content:start;gap:4px 16px;font-size:17px;line-height:24px;font-variant-numeric:tabular-nums;letter-spacing:.04em;color:var(--header-primary,#f2f3f5)}
+.fe2ee-safety{display:flex;gap:16px;align-items:center}
+.fe2ee-digits{flex:1;display:grid;grid-template-columns:repeat(4,auto);justify-content:start;gap:4px 16px;font-size:17px;line-height:24px;font-variant-numeric:tabular-nums;letter-spacing:.04em;color:var(--text-strong,#f2f3f5)}
+.fe2ee-qr{flex:none;width:112px;height:112px;border-radius:8px;overflow:hidden;background:#fff}
+.fe2ee-qr svg{display:block;width:100%;height:100%}
+@media (max-width:480px){.fe2ee-safety{flex-direction:column;align-items:flex-start}}
 .fe2ee-member-actions{display:flex;gap:8px;flex-wrap:wrap}
-@media (prefers-reduced-motion:no-preference){.fe2ee-banner{animation:fe2ee-in 180ms ease-out}}
-@keyframes fe2ee-in{from{opacity:0;translate:0 -6px}}
-.fe2ee-lock[data-state="pending"],.fe2ee-lock[data-state="missing"]{color:var(--text-muted,#949ba4)}
-.fe2ee-unlock{font:inherit;font-size:13px;font-weight:500;line-height:18px;margin-inline-start:8px;padding:2px 8px;border:0;border-radius:4px;cursor:pointer;color:var(--text-default,#dbdee1);background:var(--button-secondary-background,#4e5058);transition:background-color 120ms ease-out,scale 200ms ease-out}
+.fe2ee-unlock{font:inherit;font-size:13px;font-weight:500;line-height:18px;margin-inline-start:8px;padding:2px 8px;border:0;border-radius:4px;cursor:pointer;color:var(--text-default,#dbdee1);background:var(--control-secondary-background-default,#4e5058);transition:background-color 120ms ease-out,scale 200ms ease-out}
 .fe2ee-unlock:active{scale:.97}
 .fe2ee-unlock:focus-visible{outline:2px solid var(--focus-primary,#00a8fc);outline-offset:2px}
-@media (hover:hover){.fe2ee-unlock:hover{background:var(--button-secondary-background-hover,#6d6f78)}}
+@media (hover:hover){.fe2ee-unlock:hover{background:var(--control-secondary-background-hover,#6d6f78)}}
 .fe2ee-section{display:flex;flex-direction:column;gap:8px;padding-top:16px;border-top:1px solid var(--border-subtle,rgb(255 255 255 / .06))}
-.fe2ee-section h3{margin:0;font-size:16px;line-height:20px;font-weight:600;color:var(--header-primary,#f2f3f5)}
+.fe2ee-section h3{margin:0;font-size:16px;line-height:20px;font-weight:600;color:var(--text-strong,#f2f3f5)}
 .fe2ee-section > .fe2ee-button{align-self:flex-start}
-.fe2ee-field{display:flex;flex-direction:column;gap:6px}
+.fe2ee-field{display:flex;flex-direction:column;gap:8px}
 .fe2ee-field label{font-size:14px;font-weight:500;color:var(--text-default,#dbdee1)}
 .fe2ee-row{display:flex;gap:8px;align-items:center}
-.fe2ee-input{flex:1;min-width:0;font:inherit;font-size:15px;line-height:20px;padding:8px 10px;border-radius:6px;border:0;color:var(--text-default,#dbdee1);background:var(--input-background,var(--background-base-lowest,#1e1f22));box-shadow:inset 0 0 0 1px var(--border-subtle,rgb(255 255 255 / .06))}
-.fe2ee-input:focus-visible{outline:2px solid var(--focus-primary,#00a8fc);outline-offset:0}
+.fe2ee-input{flex:1;min-width:0;font:inherit;font-size:16px;line-height:20px;padding:9px 12px;border-radius:8px;border:0;color:var(--text-default,#dbdee1);background:var(--input-background-default,var(--background-base-lowest,#1e1f22));box-shadow:inset 0 0 0 1px var(--border-subtle,rgb(255 255 255 / .06))}
+.fe2ee-input:focus-visible{outline:2px solid var(--focus-primary,#00a8fc);outline-offset:-1px}
 .fe2ee-input[aria-invalid="true"]{box-shadow:inset 0 0 0 1px var(--status-danger,#f23f43)}
-.fe2ee-error{margin:0;font-size:14px;color:var(--status-danger,#f23f43)}
-.fe2ee-code{font-size:28px;line-height:36px;font-weight:600;letter-spacing:.08em;font-variant-numeric:tabular-nums;color:var(--header-primary,#f2f3f5)}
-.fe2ee-recovery{font-size:18px;line-height:28px;font-weight:600;letter-spacing:.06em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;user-select:all;padding:12px;border-radius:8px;color:var(--header-primary,#f2f3f5);background:var(--background-base-lowest,#1e1f22)}
-.fe2ee-device{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:32px}
-.fe2ee-device span{overflow-wrap:anywhere}
-.fe2ee-device small{display:block;font-size:13px;color:var(--text-muted,#b5bac1)}
+.fe2ee-dialog .fe2ee-error,.fe2ee-page .fe2ee-error{margin:0;font-size:14px;line-height:18px;color:var(--text-feedback-critical,var(--status-danger,#f23f43))}
+.fe2ee-code{font-size:28px;line-height:36px;font-weight:600;letter-spacing:.08em;font-variant-numeric:tabular-nums;color:var(--text-strong,#f2f3f5)}
+.fe2ee-recovery{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:0;padding:12px;list-style:none;border-radius:8px;background:var(--background-base-lowest,#1e1f22)}
+.fe2ee-recovery li{font-family:var(--font-code,ui-monospace,monospace);font-size:16px;line-height:24px;font-weight:600;text-align:center;letter-spacing:.06em;color:var(--text-strong,#f2f3f5)}
+.fe2ee-devices{display:flex;flex-direction:column;border-radius:8px;background:var(--card-background-default,var(--background-base-lower,#2b2d31));box-shadow:inset 0 0 0 1px var(--border-subtle,rgb(255 255 255 / .06))}
+.fe2ee-device{display:flex;align-items:center;gap:12px;padding:12px 16px}
+.fe2ee-device + .fe2ee-device{border-top:1px solid var(--border-subtle,rgb(255 255 255 / .06))}
+.fe2ee-device-icon{flex:none;width:40px;height:40px;display:grid;place-items:center;border-radius:50%;color:var(--icon-default,#b5bac1);background:var(--background-mod-subtle,rgb(255 255 255 / .06))}
+.fe2ee-device-icon svg{width:20px;height:20px}
+.fe2ee-device-text{flex:1;min-width:0;display:flex;flex-direction:column}
+.fe2ee-device-name{font-size:15px;line-height:20px;font-weight:600;color:var(--text-strong,#f2f3f5);overflow-wrap:anywhere}
+.fe2ee-device-meta{font-size:13px;line-height:18px;color:var(--text-muted,#b5bac1);overflow-wrap:anywhere}
+.fe2ee-device-meta[data-current="true"]{color:var(--text-feedback-positive,var(--status-positive,#23a55a))}
+.fe2ee-page{display:flex;flex-direction:column;gap:24px;font-size:15px;line-height:22px;color:var(--text-default,#dbdee1);padding-bottom:40px}
+.fe2ee-page .fe2ee-section{border-top:0;padding-top:0}
+.fe2ee-page .fe2ee-section h3{font-size:18px;line-height:22px}
 `;
   var svg = (path, label) => `<svg viewBox="0 0 24 24" fill="currentColor" ${label ? `role="img" aria-label="${label}"` : 'aria-hidden="true"'}><path fill-rule="evenodd" d="${path}"/></svg>`;
   var escape = (text) => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
   var currentChannel = () => /^\/channels\/@me\/(\d+)/.exec(location.pathname)?.[1] ?? null;
   var memberName = (m) => m.global_name || m.username;
-  var createUi = ({ engine: engine2, states: states2, enableChannel, link: link2, verifyPassword: verifyPassword2 }) => {
+  var reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var relative = new Intl.RelativeTimeFormat(void 0, { numeric: "auto" });
+  var ago = (iso) => {
+    const seconds = (Date.parse(iso) - Date.now()) / 1e3;
+    const steps = [
+      [60, "second"],
+      [60, "minute"],
+      [24, "hour"],
+      [30, "day"],
+      [12, "month"],
+      [Infinity, "year"]
+    ];
+    let value = seconds;
+    for (const [size, unit] of steps) {
+      if (Math.abs(value) < size) return relative.format(Math.round(value), unit);
+      value /= size;
+    }
+    return "";
+  };
+  var createUi = ({ engine: engine2, states: states2, enableChannel, link: link2, verifyPassword: verifyPassword2, reset }) => {
     const style = document.createElement("style");
     style.textContent = css;
-    const banners = document.createElement("div");
-    banners.className = "fe2ee-banners";
+    const bar = document.createElement("div");
+    bar.className = "fe2ee-notice";
+    bar.setAttribute("role", "status");
     let failure2 = null;
     let transient = null;
+    let transientTimer = null;
     let unlockOpen = null;
     const approvals = /* @__PURE__ */ new Map();
     let members = null;
     let scheduled = false;
+    let tooltip = null;
     const mount = () => {
       if (!style.isConnected) document.head.append(style);
-      if (!banners.isConnected && document.body) document.body.append(banners);
     };
-    const banner = (id, tone, text, action) => {
-      let el = banners.querySelector(`[data-id="${id}"]`);
-      if (!el) {
-        el = document.createElement("div");
-        el.className = "fe2ee-banner";
-        el.dataset.id = id;
-        el.setAttribute("role", tone === "danger" ? "alert" : "status");
-        banners.append(el);
-      }
-      const key = `${tone}|${text}|${action?.label ?? ""}`;
-      if (el.dataset.key === key) return;
-      el.dataset.key = key;
-      el.dataset.tone = tone;
-      el.innerHTML = `${svg(LOCK_PATH)}<p>${escape(text)}</p>`;
-      if (action) {
-        const button2 = document.createElement("button");
-        button2.type = "button";
-        button2.className = "fe2ee-button";
-        button2.textContent = action.label;
-        button2.addEventListener("click", action.run);
-        el.append(button2);
-      }
+    const flash = (channelId, notice, ms = 8e3) => {
+      transient = { ...notice, channelId, until: Date.now() + ms };
+      if (transientTimer) clearTimeout(transientTimer);
+      transientTimer = setTimeout(refresh, ms + 50);
+      refresh();
     };
-    const dropBanner = (id) => banners.querySelector(`[data-id="${id}"]`)?.remove();
-    const dialog = (title, build) => {
-      const el = document.createElement("dialog");
-      el.className = "fe2ee-dialog";
-      el.setAttribute("aria-label", title);
-      const body = document.createElement("div");
-      body.className = "fe2ee-dialog-body";
-      body.innerHTML = `<h2>${escape(title)}</h2>`;
-      const actions = document.createElement("div");
-      actions.className = "fe2ee-dialog-actions";
-      el.append(body, actions);
-      const close = () => {
-        el.close();
-        el.remove();
-      };
-      el.addEventListener("cancel", close);
-      build(body, actions, close);
+    const hideTooltip = () => {
+      tooltip?.remove();
+      tooltip = null;
+    };
+    const showTooltip = (anchor, text) => {
+      hideTooltip();
+      const el = document.createElement("div");
+      el.className = "fe2ee-tooltip";
+      el.setAttribute("role", "tooltip");
+      el.textContent = text;
       document.body.append(el);
-      el.showModal();
-      return el;
+      const box = anchor.getBoundingClientRect();
+      const below = box.bottom + 8 + el.offsetHeight < innerHeight;
+      el.dataset.side = below ? "bottom" : "top";
+      el.style.top = `${below ? box.bottom + 8 : box.top - 8 - el.offsetHeight}px`;
+      el.style.left = `${Math.max(8, Math.min(innerWidth - el.offsetWidth - 8, box.left + box.width / 2 - el.offsetWidth / 2))}px`;
+      tooltip = el;
+    };
+    const withTooltip = (el, text) => {
+      const show = () => showTooltip(el, text());
+      el.addEventListener("mouseenter", show);
+      el.addEventListener("focus", show);
+      el.addEventListener("mouseleave", hideTooltip);
+      el.addEventListener("blur", hideTooltip);
+      el.addEventListener("click", hideTooltip);
     };
     const button = (label, variant, run2) => {
       const el = document.createElement("button");
@@ -3730,79 +4188,75 @@ ${approver}`;
       el.addEventListener("click", run2);
       return el;
     };
-    const confirmEnable = (channelId) => dialog("Turn on end-to-end encryption?", (body, actions, close) => {
-      body.insertAdjacentHTML(
-        "beforeend",
-        "<p>New messages in this conversation will be encrypted in your browser before they're sent, and only the people in it can read them. Encryption can't be turned off later.</p><p>Attachments, stickers and polls can't be sent here until encrypted attachments ship.</p>"
-      );
-      const confirm = button("Turn on encryption", "primary", async () => {
-        confirm.disabled = true;
-        try {
-          await enableChannel(channelId);
-          close();
-        } catch (error) {
-          confirm.disabled = false;
-          showError(error, channelId);
-          close();
+    const dialog = (title, build) => {
+      const el = document.createElement("dialog");
+      el.className = "fe2ee-dialog";
+      el.setAttribute("aria-label", title);
+      const head = document.createElement("div");
+      head.className = "fe2ee-dialog-head";
+      head.innerHTML = `<h2>${escape(title)}</h2>`;
+      const x = document.createElement("button");
+      x.type = "button";
+      x.className = "fe2ee-close";
+      x.setAttribute("aria-label", "Close");
+      x.innerHTML = svg(CLOSE_PATH);
+      head.append(x);
+      const body = document.createElement("div");
+      body.className = "fe2ee-dialog-body";
+      const actions = document.createElement("div");
+      actions.className = "fe2ee-dialog-actions";
+      el.append(head, body, actions);
+      let dismissable = true;
+      let closing = false;
+      const close = () => {
+        if (closing || !el.isConnected) return;
+        closing = true;
+        const finish = () => {
+          el.close();
+          el.remove();
+        };
+        if (reducedMotion()) return finish();
+        el.dataset.closing = "";
+        el.addEventListener("animationend", finish, { once: true });
+        setTimeout(finish, 250);
+      };
+      const handle = {
+        el,
+        close,
+        setDismissable: (value) => {
+          dismissable = value;
+          x.hidden = !value;
         }
+      };
+      x.addEventListener("click", close);
+      el.addEventListener("cancel", (event) => {
+        event.preventDefault();
+        if (dismissable) close();
       });
-      actions.append(button("Cancel", "secondary", close), confirm);
-    });
-    const showSafety = async (channelId) => {
-      const list = await Promise.all((await engine2.channelMembers(channelId)).map((id) => engine2.profile(id)));
-      dialog("Safety numbers", (body, actions, close) => {
-        body.insertAdjacentHTML(
-          "beforeend",
-          "<p>Compare these numbers with each person in a call or face to face. If they match, nobody is intercepting your messages. Mark them as verified so you're warned if they change.</p>"
-        );
-        for (const member of list) {
-          const section2 = document.createElement("section");
-          section2.className = "fe2ee-member";
-          section2.innerHTML = `<div class="fe2ee-member-head"><span class="fe2ee-member-name">${escape(memberName(member))}</span><span class="fe2ee-status"></span></div><div class="fe2ee-digits" aria-label="Safety number for ${escape(memberName(member))}">Calculating…</div><div class="fe2ee-member-actions"></div>`;
-          body.append(section2);
-          const render = async () => {
-            const contact = engine2.contacts[member.id];
-            const status = section2.querySelector(".fe2ee-status");
-            status.dataset.verified = String(!!contact?.verified && !contact.pendingKey);
-            status.innerHTML = contact?.pendingKey ? `${svg(OPEN_LOCK_PATH)}Safety number changed` : contact?.verified ? `${svg(LOCK_PATH)}Verified` : `${svg(OPEN_LOCK_PATH)}Not verified`;
-            const digits = await engine2.safetyNumber(member.id);
-            const grid = section2.querySelector(".fe2ee-digits");
-            grid.innerHTML = digits ? (digits.match(/\d{5}/g) ?? []).map((g) => `<span>${g}</span>`).join("") : "This person hasn't set up encryption yet.";
-            grid.dataset.number = digits ?? "";
-            const row = section2.querySelector(".fe2ee-member-actions");
-            row.replaceChildren();
-            if (!contact) return;
-            if (contact.pendingKey)
-              row.append(
-                button("Accept new safety number", "primary", async () => {
-                  await engine2.acceptIdentity(member.id);
-                  render();
-                })
-              );
-            else
-              row.append(
-                button(contact.verified ? "Remove verification" : "Mark as verified", contact.verified ? "secondary" : "primary", async () => {
-                  await engine2.setVerified(member.id, !contact.verified);
-                  render();
-                })
-              );
-          };
-          render();
-        }
-        actions.append(
-          button("Encryption settings", "secondary", () => {
-            close();
-            showSettings();
-          }),
-          button("Close", "secondary", close)
-        );
+      el.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (dismissable) close();
       });
+      let pressedBackdrop = false;
+      el.addEventListener("pointerdown", (event) => {
+        pressedBackdrop = event.target === el;
+      });
+      el.addEventListener("click", (event) => {
+        if (event.target === el && pressedBackdrop && dismissable) close();
+        pressedBackdrop = false;
+      });
+      build(body, actions, handle);
+      document.body.append(el);
+      el.showModal();
+      return handle;
     };
     const field = (labelText, type, autocomplete) => {
       const id = `fe2ee-${Math.random().toString(36).slice(2)}`;
       const wrap = document.createElement("div");
       wrap.className = "fe2ee-field";
-      wrap.innerHTML = `<label for="${id}">${escape(labelText)}</label><div class="fe2ee-row"></div><p class="fe2ee-error" id="${id}-error" hidden></p>`;
+      wrap.innerHTML = `<label for="${id}">${escape(labelText)}</label><div class="fe2ee-row"></div><p class="fe2ee-error" id="${id}-error" role="alert" hidden></p>`;
       const input = document.createElement("input");
       input.className = "fe2ee-input";
       input.id = id;
@@ -3827,6 +4281,148 @@ ${approver}`;
       el.innerHTML = `<h3>${escape(title)}</h3>${text ? `<p>${escape(text)}</p>` : ""}`;
       return el;
     };
+    const describe = (el, text) => {
+      const p = document.createElement("p");
+      p.textContent = text;
+      el.append(p);
+      return p;
+    };
+    const namesOf = async (ids) => {
+      const list = await Promise.all(ids.map((id) => engine2.profile(id)));
+      const names = list.map(memberName);
+      if (names.length <= 1) return names[0] ?? "Someone here";
+      return `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+    };
+    const showError = (error, channelId) => {
+      const name = (id) => id && members?.channelId === channelId ? members.list.find((m) => m.id === id) ?? null : null;
+      const body = error?.body;
+      if (body?.message === "E2EE_RECIPIENT_NO_DEVICES") {
+        const ids = Array.isArray(body.user_ids) ? body.user_ids.map(String) : [];
+        namesOf(ids).then(
+          (who) => flash(channelId, {
+            tone: "warning",
+            text: `${who} ${ids.length > 1 ? "haven't" : "hasn't"} set up encryption yet. Ask them to open the app once, then try again.`
+          })
+        );
+        return;
+      }
+      let text = "Your message couldn't be encrypted, so it wasn't sent.";
+      let action;
+      if (error instanceof E2eeError) {
+        const who = name(error.userId);
+        if (error.code === "NO_DEVICES")
+          text = `${who ? memberName(who) : "Someone here"} hasn't set up encryption yet, so your message wasn't sent. Ask them to open the app once.`;
+        else if (error.code === "IDENTITY_CHANGED") text = `${who ? memberName(who) : "Someone"}'s safety number changed. Review it before sending more messages.`;
+        else if (error.code === "UNSUPPORTED") text = "Files, stickers and polls can't be sent in encrypted conversations yet.";
+        else if (error.code === "NOT_LINKED") {
+          text = "Unlock this browser to send encrypted messages. Your message wasn't sent.";
+          action = { label: "Unlock", run: showUnlock };
+        } else if (error.code === "NOT_READY") text = "End-to-end encryption is unavailable right now, so your message wasn't sent.";
+      }
+      flash(channelId, { tone: "danger", text, action });
+    };
+    const confirmEnable = (channelId) => dialog("Turn on end-to-end encryption?", (body, actions, { close }) => {
+      body.insertAdjacentHTML(
+        "beforeend",
+        "<p>New messages in this conversation are encrypted in your browser before they're sent, and only the people in it can read them. Encryption can't be turned off later.</p><p>Files, stickers and polls can't be sent here until encrypted attachments ship.</p>"
+      );
+      const confirm = button("Turn on encryption", "primary", async () => {
+        confirm.disabled = true;
+        try {
+          await enableChannel(channelId);
+        } catch (error) {
+          showError(error, channelId);
+        }
+        close();
+      });
+      actions.append(button("Cancel", "secondary", close), confirm);
+    });
+    const showSafety = async (channelId) => {
+      const list = await Promise.all((await engine2.channelMembers(channelId)).map((id) => engine2.profile(id)));
+      dialog("Safety numbers", (body, actions, { close }) => {
+        body.insertAdjacentHTML(
+          "beforeend",
+          "<p>Compare these numbers with each person in a call or face to face, or scan the code with their phone. If they match, nobody is intercepting your messages. Mark them as verified so you're warned if they change.</p>"
+        );
+        for (const member of list) {
+          const block = document.createElement("section");
+          block.className = "fe2ee-member";
+          block.innerHTML = `<div class="fe2ee-member-head"><span class="fe2ee-member-name">${escape(memberName(member))}</span><span class="fe2ee-status"></span></div><div class="fe2ee-safety"><div class="fe2ee-digits" aria-label="Safety number for ${escape(memberName(member))}">Calculating…</div></div><div class="fe2ee-member-actions"></div>`;
+          body.append(block);
+          const render = async () => {
+            const contact = engine2.contacts[member.id];
+            const status = block.querySelector(".fe2ee-status");
+            status.dataset.verified = String(!!contact?.verified && !contact.pendingKey);
+            status.innerHTML = contact?.pendingKey ? `${svg(OPEN_LOCK_PATH)}Safety number changed` : contact?.verified ? `${svg(VERIFIED_PATH)}Verified` : `${svg(OPEN_LOCK_PATH)}Not verified`;
+            const digits = await engine2.safetyNumber(member.id);
+            const grid = block.querySelector(".fe2ee-digits");
+            grid.innerHTML = digits ? (digits.match(/\d{5}/g) ?? []).map((g) => `<span>${g}</span>`).join("") : "This person hasn't set up encryption yet.";
+            grid.dataset.number = digits ?? "";
+            block.querySelector(".fe2ee-qr")?.remove();
+            if (digits) {
+              const qr = document.createElement("div");
+              qr.className = "fe2ee-qr";
+              qr.innerHTML = qrSvg(digits, `QR code of the safety number for ${escape(memberName(member))}`);
+              grid.after(qr);
+            }
+            const row = block.querySelector(".fe2ee-member-actions");
+            row.replaceChildren();
+            if (!contact) return;
+            if (contact.pendingKey)
+              row.append(
+                button("Accept new safety number", "primary", async () => {
+                  await engine2.acceptIdentity(member.id);
+                  render();
+                })
+              );
+            else
+              row.append(
+                button(contact.verified ? "Remove verification" : "Mark as verified", contact.verified ? "secondary" : "primary", async () => {
+                  await engine2.setVerified(member.id, !contact.verified);
+                  render();
+                })
+              );
+          };
+          render();
+        }
+        actions.append(
+          button("Encryption settings", "secondary", () => {
+            close();
+            showSettings();
+          }),
+          button("Done", "primary", close)
+        );
+      });
+    };
+    const showReset = (onDone) => dialog("Reset encryption?", (body, actions, { close }) => {
+      describe(
+        body,
+        "Only do this if you lost your recovery code and no other signed-in browser can approve this one. You get new encryption keys and can keep chatting, but nobody can read the messages sent before the reset anymore, on any device."
+      );
+      describe(body, "Your other browsers have to be approved again, and the people you talk to are told that your safety number changed.");
+      const { wrap, input, setError } = field("Account password", "password", "current-password");
+      body.append(wrap);
+      const confirm = button("Reset encryption", "danger", async () => {
+        if (!input.value) return setError("Enter your password.");
+        confirm.disabled = true;
+        setError(null);
+        try {
+          await reset(input.value);
+          close();
+          onDone?.();
+          const channelId = currentChannel();
+          if (channelId) flash(channelId, { tone: "info", text: "Encryption was reset. New messages use your new keys." }, 6e3);
+        } catch (error) {
+          const status = error?.status;
+          setError(status === 400 ? "That password isn't right." : error instanceof Error ? error.message : "Couldn't reset encryption. Try again.");
+        } finally {
+          confirm.disabled = false;
+        }
+      });
+      input.addEventListener("keydown", (event) => event.key === "Enter" && confirm.click());
+      actions.append(button("Cancel", "secondary", close), confirm);
+      requestAnimationFrame(() => input.focus());
+    });
     const unlockForm = (kind) => {
       const { wrap, input, row, setError } = kind === "password" ? field("Account password", "password", "current-password") : field("Recovery code", "text", "off");
       if (kind === "recovery") input.placeholder = "XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX";
@@ -3847,15 +4443,13 @@ ${approver}`;
       return wrap;
     };
     const showUnlock = () => {
-      if (unlockOpen) return;
+      if (unlockOpen || !engine2.locked) return;
       const current = link2.outgoing();
       if (!current || current.state === "denied" || current.state === "failed") link2.request().catch(() => {
       });
-      dialog("Unlock encrypted messages", (body, actions, close) => {
+      dialog("Unlock encrypted messages", (body, actions, { el, close }) => {
         const backup = engine2.backup;
-        const intro = document.createElement("p");
-        intro.textContent = "This browser can't read your encrypted messages yet. Bring your keys over with one of these.";
-        body.append(intro);
+        describe(body, "This browser can't read your encrypted messages yet. Bring your keys over with one of these.");
         if (backup?.wrapped_secret && backup.identity_key === engine2.serverKey) {
           const own = section(
             backup.mode === "recovery" ? "Enter your recovery code" : "Enter your password",
@@ -3869,21 +4463,25 @@ ${approver}`;
         status.setAttribute("role", "status");
         const code = document.createElement("div");
         code.className = "fe2ee-code";
-        const again = button("Ask again", "secondary", () => link2.request().catch(() => {
+        const again = button("Ask for approval", "secondary", () => link2.request().catch(() => {
         }));
         approval.append(status, code, again);
         body.append(approval);
+        const lost = section(backup?.mode === "recovery" ? "Lost your code?" : "Can't unlock this browser?");
+        describe(lost, "If you can't use any of these, reset encryption to keep chatting. Messages sent before the reset can't be read anymore.");
+        lost.append(button("Reset encryption", "link", () => showReset(done)));
+        body.append(lost);
         const render = () => {
           const state = link2.outgoing();
           code.hidden = state?.state !== "comparing";
           code.textContent = state?.sas ?? "";
-          again.hidden = !state || state.state !== "denied" && state.state !== "failed";
-          status.textContent = state?.state === "comparing" ? `${state.approverName ?? "Your other device"} is asking you to approve this browser. Check that it shows this code, then approve it there.` : state?.state === "denied" ? "Your other device declined this login." : state?.state === "failed" ? "The approval didn't unlock this browser. Ask again to retry." : "Open the app on a browser where you're already signed in. It will ask you to approve this one.";
+          again.hidden = state?.state === "waiting" || state?.state === "comparing" || state?.state === "done";
+          again.textContent = state ? "Ask again" : "Ask for approval";
+          status.textContent = state?.state === "comparing" ? `${state.approverName ?? "Your other device"} is asking you to approve this browser. Check that it shows this code, then approve it there.` : state?.state === "denied" ? "Your other device declined this login." : state?.state === "failed" ? "The approval didn't unlock this browser. Ask again to retry." : state?.state === "waiting" ? "Open the app on a browser where you're already signed in. It asks you to approve this one." : "Ask a browser where you're already signed in to approve this one.";
           if (engine2.linked) {
             done();
-            transient = { text: "This browser is unlocked. Your encrypted messages are loading.", until: Date.now() + 5e3 };
-            refresh();
-            setTimeout(refresh, 5100);
+            const channelId = currentChannel();
+            if (channelId) flash(channelId, { tone: "info", text: "This browser is unlocked. Your encrypted messages are loading." }, 5e3);
           }
         };
         const stop = engine2.onChange(render);
@@ -3893,83 +4491,145 @@ ${approver}`;
           close();
         };
         unlockOpen = { render, close: done };
-        body.closest("dialog")?.addEventListener("close", () => {
+        el.addEventListener("close", () => {
           stop();
           unlockOpen = null;
         });
-        actions.append(button("Not now", "secondary", done));
+        actions.append(
+          button("Not now", "secondary", () => {
+            link2.cancel().catch(() => {
+            });
+            done();
+          })
+        );
         render();
       });
     };
     const showApproval = (prompt) => {
-      dialog(`New login on ${prompt.name}`, (body, actions, close) => {
+      if (approvals.has(prompt.requestId)) return;
+      dialog(`New login on ${prompt.name}`, (body, actions, { el, close }) => {
         body.insertAdjacentHTML(
           "beforeend",
           `<p>Approve it only if you just signed in there yourself, because it gets access to your encrypted messages. The other browser should show this code:</p><div class="fe2ee-code">${escape(prompt.sas)}</div>`
         );
+        const error = document.createElement("p");
+        error.className = "fe2ee-error";
+        error.setAttribute("role", "alert");
+        error.hidden = true;
+        body.append(error);
         const finish = () => {
           approvals.delete(prompt.requestId);
           close();
         };
         approvals.set(prompt.requestId, finish);
-        const approve = button("Approve login", "primary", async () => {
-          approve.disabled = true;
+        el.addEventListener("close", () => approvals.delete(prompt.requestId));
+        const run2 = async (action) => {
+          approve.disabled = deny.disabled = true;
+          error.hidden = true;
           try {
-            await prompt.approve();
-          } catch (error) {
-            transient = { text: `Couldn't approve that login: ${error instanceof Error ? error.message : String(error)}`, until: Date.now() + 8e3 };
-            refresh();
-          }
-          finish();
-        });
-        actions.append(
-          button("Deny", "secondary", () => {
+            await action();
             finish();
-            prompt.deny().catch(() => {
-            });
-          }),
-          approve
-        );
+          } catch (failure3) {
+            error.textContent = `Couldn't answer that login: ${failure3 instanceof Error ? failure3.message : String(failure3)}`;
+            error.hidden = false;
+            approve.disabled = deny.disabled = false;
+          }
+        };
+        const approve = button("Approve login", "primary", () => run2(prompt.approve));
+        const deny = button("Deny", "secondary", () => run2(prompt.deny));
+        actions.append(deny, approve);
       });
     };
     const dismissApproval = (requestId) => approvals.get(requestId)?.();
-    const showRecoveryCode = () => dialog("Use a recovery code", (body, actions, close) => {
-      const intro = document.createElement("p");
-      intro.textContent = "We'll make a code that locks your key backup instead of your password. You'll need it to set up a new browser when no other device is around to approve it. We only show it once.";
-      body.append(intro);
-      const create = button("Make recovery code", "primary", async () => {
-        create.disabled = true;
-        try {
-          const code = await engine2.useRecoveryCode();
-          intro.textContent = "Save this code somewhere safe, like a password manager. Anyone with it and access to your account can read your encrypted messages.";
-          const box = document.createElement("div");
-          box.className = "fe2ee-recovery";
-          box.dataset.code = code;
-          box.textContent = code;
-          body.append(box);
-          actions.replaceChildren(
-            button("Copy code", "secondary", () => navigator.clipboard?.writeText(code).catch(() => {
-            })),
-            button("I saved it", "primary", close)
-          );
-        } catch (error) {
-          create.disabled = false;
-          transient = { text: `Couldn't make a recovery code: ${error instanceof Error ? error.message : String(error)}`, until: Date.now() + 8e3 };
-          refresh();
-        }
+    const showRecoveryCode = () => dialog("Use a recovery code", (body, actions, { close, setDismissable }) => {
+      const intro = describe(
+        body,
+        "We'll make a code that locks your key backup instead of your password. You'll need it to set up a new browser when no other device is around to approve it. We only show it once."
+      );
+      const code = generateRecoveryCode();
+      const create = button("Make recovery code", "primary", () => {
+        setDismissable(false);
+        intro.textContent = "Save this code somewhere safe, like a password manager. Anyone with it and access to your account can read your encrypted messages. It replaces your password lock once you confirm.";
+        const grid = document.createElement("ol");
+        grid.className = "fe2ee-recovery";
+        grid.dataset.code = code;
+        grid.setAttribute("aria-label", "Recovery code");
+        grid.innerHTML = code.split("-").map((group) => `<li>${escape(group)}</li>`).join("");
+        const error = document.createElement("p");
+        error.className = "fe2ee-error";
+        error.setAttribute("role", "alert");
+        error.hidden = true;
+        body.append(grid, error);
+        let copiedTimer = null;
+        const copy = button("Copy code", "secondary", () => {
+          navigator.clipboard?.writeText(code).then(() => {
+            copy.textContent = "Copied!";
+            if (copiedTimer) clearTimeout(copiedTimer);
+            copiedTimer = setTimeout(() => copy.textContent = "Copy code", 2e3);
+          }).catch(() => {
+            copy.textContent = "Couldn't copy";
+          });
+        });
+        const saved = button("I saved it", "primary", async () => {
+          saved.disabled = true;
+          error.hidden = true;
+          try {
+            await engine2.setBackupMode("recovery", code);
+            close();
+          } catch (failure3) {
+            error.textContent = `Couldn't switch to the recovery code: ${failure3 instanceof Error ? failure3.message : String(failure3)}`;
+            error.hidden = false;
+            saved.disabled = false;
+          }
+        });
+        actions.replaceChildren(button("Cancel", "secondary", close), copy, saved);
       });
       actions.append(button("Cancel", "secondary", close), create);
     });
-    const showSettings = () => dialog("Encryption settings", (body, actions, close) => {
+    const deviceMeta = (device) => {
+      const current = device.device_id === engine2.device?.deviceId;
+      const session = device.session;
+      const state = current ? "This browser" : device.status === "pending" ? "Waiting for approval" : session && !session.signed_in ? "Signed out" : session?.last_seen && Date.now() - Date.parse(session.last_seen) < 5 * 60 * 1e3 ? "Active now" : session?.last_seen ? `Last active ${ago(session.last_seen)}` : "Can read encrypted messages";
+      const added = device.created_at ? `Added ${new Date(device.created_at).toLocaleString(void 0, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}` : null;
+      return { current, text: [state, session?.location, added].filter(Boolean).join(" · ") };
+    };
+    const confirmRemove = (device, onDone) => dialog("Remove this device?", (body, actions, { close }) => {
+      describe(
+        body,
+        `${device.name ?? "This browser"} is signed out and can't read new encrypted messages. To read them there again, it needs your recovery code, your password, or approval from another device.`
+      );
+      const error = document.createElement("p");
+      error.className = "fe2ee-error";
+      error.setAttribute("role", "alert");
+      error.hidden = true;
+      body.append(error);
+      const confirm = button("Remove device", "danger", async () => {
+        confirm.disabled = true;
+        try {
+          await engine2.removeDevice(device.device_id);
+          close();
+          onDone();
+        } catch (failure3) {
+          error.textContent = `Couldn't remove it: ${failure3 instanceof Error ? failure3.message : String(failure3)}`;
+          error.hidden = false;
+          confirm.disabled = false;
+        }
+      });
+      actions.append(button("Cancel", "secondary", close), confirm);
+    });
+    const buildSettings = (root, close) => {
       const browser = section("This browser");
       const backupSection = section("Key backup");
-      const devices = section("Your devices");
-      body.append(browser, backupSection, devices);
-      const describe = (el, text) => {
-        const p = document.createElement("p");
-        p.textContent = text;
-        el.append(p);
-      };
+      const devices = section("Your devices", "Every browser listed here can read your encrypted messages. Remove the ones you don't recognize or don't use anymore.");
+      const resetSection = section(
+        "Reset encryption",
+        "If you lost your recovery code and no other browser can approve a new one, reset encryption to keep chatting. Messages sent before the reset can't be read anymore."
+      );
+      const list = document.createElement("div");
+      list.className = "fe2ee-devices";
+      devices.append(list);
+      resetSection.append(button("Reset encryption", "danger", () => showReset()));
+      root.append(browser, backupSection, devices, resetSection);
       const clear = (el) => el.querySelectorAll(":scope > :not(h3)").forEach((child) => child.remove());
       const renderBrowser = () => {
         clear(browser);
@@ -3977,16 +4637,20 @@ ${approver}`;
         if (!engine2.linked)
           browser.append(
             button("Unlock this browser", "primary", () => {
-              close();
+              close?.();
               showUnlock();
             })
           );
       };
-      const renderBackup = () => {
-        clear(backupSection);
+      let backupKey = "";
+      const renderBackup = (force = false) => {
         const backup = engine2.backup;
+        const key = `${backup?.mode}|${backup?.version}|${!!backup?.wrapped_secret}|${engine2.hasSecret}`;
+        if (!force && key === backupKey) return;
+        backupKey = key;
+        clear(backupSection);
         backupSection.dataset.mode = backup?.mode ?? "none";
-        if (!backup) return describe(backupSection, "Your keys aren't backed up yet. Sign in on a browser that can read your messages to create the backup.");
+        if (!backup) return void describe(backupSection, "Your keys aren't backed up yet. Sign in on a browser that can read your messages to create the backup.");
         if (backup.mode === "recovery")
           describe(backupSection, "Your keys are backed up and locked with a recovery code. New browsers ask for that code, and your password can't unlock them.");
         else if (backup.wrapped_secret)
@@ -3999,7 +4663,7 @@ ${approver}`;
         if (backup.mode === "password") {
           backupSection.append(
             button("Use a recovery code instead", "secondary", () => {
-              close();
+              close?.();
               showRecoveryCode();
             })
           );
@@ -4013,88 +4677,120 @@ ${approver}`;
           try {
             if (!await verifyPassword2(input.value)) return setError("That password isn't right.");
             await engine2.setBackupMode("password", input.value);
-            renderBackup();
+            renderBackup(true);
           } catch (error) {
             setError(error instanceof Error ? error.message : String(error));
           } finally {
             save.disabled = false;
           }
         });
+        input.addEventListener("keydown", (event) => event.key === "Enter" && save.click());
         row.append(save);
         backupSection.append(
           wrap,
           button("Make a new recovery code", "secondary", () => {
-            close();
+            close?.();
             showRecoveryCode();
           })
         );
       };
       const renderDevices = () => {
-        clear(devices);
-        for (const device of engine2.devices.filter((d) => d.status !== "revoked")) {
+        list.replaceChildren();
+        const active = engine2.devices.filter((d) => d.status !== "revoked").sort(
+          (a, b) => Number(b.device_id === engine2.device?.deviceId) - Number(a.device_id === engine2.device?.deviceId) || Date.parse(b.created_at ?? "") - Date.parse(a.created_at ?? "")
+        );
+        for (const device of active) {
           const row = document.createElement("div");
           row.className = "fe2ee-device";
-          const current = device.device_id === engine2.device?.deviceId;
-          row.innerHTML = `<span>${escape(device.name ?? "Unknown browser")}<small>${current ? "This browser" : device.status === "active" ? "Can read encrypted messages" : "Waiting for approval"}</small></span>`;
-          if (!current)
-            row.append(
-              button("Remove", "secondary", async () => {
-                await engine2.removeDevice(device.device_id).catch(() => {
-                });
-                renderDevices();
-              })
-            );
-          devices.append(row);
+          const { current, text } = deviceMeta(device);
+          row.innerHTML = `<div class="fe2ee-device-icon">${svg(SCREEN_PATH)}</div><div class="fe2ee-device-text"><span class="fe2ee-device-name">${escape(device.name ?? "Unknown browser")}</span><span class="fe2ee-device-meta" data-current="${current}">${escape(text)}</span></div>`;
+          if (!current) row.append(button("Remove", "secondary", () => confirmRemove(device, renderDevices)));
+          list.append(row);
         }
       };
-      renderBrowser();
-      renderBackup();
-      renderDevices();
-      engine2.reloadBackup().then(renderBackup, () => {
+      const render = () => {
+        renderBrowser();
+        renderBackup();
+        renderDevices();
+      };
+      render();
+      engine2.reloadBackup().then(
+        () => renderBackup(true),
+        () => {
+        }
+      );
+      engine2.refresh().catch(() => {
       });
-      actions.append(button("Close", "secondary", close));
+      return engine2.onChange(render);
+    };
+    const showSettings = () => dialog("Encryption settings", (body, actions, { el, close }) => {
+      const stop = buildSettings(body, close);
+      el.addEventListener("close", () => stop());
+      actions.append(button("Done", "primary", close));
     });
-    const showError = (error, channelId) => {
-      const name = (id) => id && members?.channelId === channelId ? members.list.find((m) => m.id === id) ?? null : null;
-      let text = "Your message couldn't be encrypted, so it wasn't sent.";
-      if (error instanceof E2eeError) {
-        const who = name(error.userId);
-        if (error.code === "NO_DEVICES")
-          text = `${who ? memberName(who) : "Someone here"} hasn't set up encryption yet, so your message wasn't sent. Ask them to open the app once.`;
-        else if (error.code === "IDENTITY_CHANGED") text = `${who ? memberName(who) : "Someone"}'s safety number changed. Review it before sending more messages.`;
-        else if (error.code === "UNSUPPORTED") text = error.message;
-        else if (error.code === "NOT_LINKED") {
-          transient = {
-            text: "This browser can't send encrypted messages until you unlock it, so your message wasn't sent.",
-            until: Date.now() + 8e3,
-            action: { label: "Unlock", run: showUnlock }
-          };
-          refresh();
-          setTimeout(refresh, 8100);
-          return;
-        } else if (error.code === "NOT_READY") text = "End-to-end encryption is unavailable right now, so your message wasn't sent.";
-      } else if (error?.body?.message === "E2EE_RECIPIENT_NO_DEVICES")
-        text = "Everyone here needs to open the app once before encryption can be turned on.";
-      transient = { text, until: Date.now() + 8e3 };
-      refresh();
-      setTimeout(refresh, 8100);
+    const mountSettings = (container) => {
+      mount();
+      const root = document.createElement("div");
+      root.className = "fe2ee-page";
+      container.replaceChildren(root);
+      if (!engine2.userId) {
+        describe(root, failure2 ?? "Encryption is still starting up.");
+        return () => {
+        };
+      }
+      const stop = buildSettings(root);
+      return () => {
+        stop();
+        root.remove();
+      };
+    };
+    const beforeSend = (channelId, extras) => {
+      if (!engine2.isEncrypted(channelId)) return false;
+      if (failure2) {
+        flash(channelId, { tone: "danger", text: failure2 });
+        return true;
+      }
+      if (extras.hasAttachments || extras.hasStickers) {
+        flash(channelId, { tone: "warning", text: "Files and stickers can't be sent in encrypted conversations yet. Remove them to send your message." });
+        return true;
+      }
+      const changed = members?.channelId === channelId ? members.list.find((m) => engine2.contacts[m.id]?.pendingKey) : void 0;
+      if (changed) {
+        flash(channelId, {
+          tone: "warning",
+          text: `${memberName(changed)}'s safety number changed. Review it before sending. Your message is still in the text box.`,
+          action: { label: "Review", run: () => showSafety(channelId) }
+        });
+        return true;
+      }
+      if (engine2.locked) {
+        showUnlock();
+        flash(channelId, {
+          tone: "warning",
+          text: "Unlock this browser to send encrypted messages. Your message is still in the text box.",
+          action: { label: "Unlock", run: showUnlock }
+        });
+        return true;
+      }
+      return false;
     };
     const decorateMessages = () => {
       for (const [id, info] of states2) {
         const content = document.getElementById(`message-content-${id}`);
         if (!content) continue;
         const existing = content.querySelector(":scope > .fe2ee-lock");
-        if (existing?.dataset.state === info.state) continue;
+        const trailing = existing ? [...content.children].slice([...content.children].indexOf(existing) + 1).every((el) => el.classList.contains("fe2ee-unlock")) : false;
+        if (existing?.dataset.state === info.state && trailing) continue;
         existing?.remove();
         content.querySelector(":scope > .fe2ee-unlock")?.remove();
         const lock = document.createElement("span");
         lock.className = "fe2ee-lock";
         lock.dataset.state = info.state;
-        const label = info.state === "decrypted" ? "End-to-end encrypted" : info.state === "pending" ? "Decrypting" : info.state === "missing" ? "This browser doesn't have the key for this message" : `Couldn't decrypt: ${info.reason ?? "unknown error"}`;
-        lock.title = label;
+        const label = info.state === "decrypted" ? "End-to-end encrypted" : info.state === "pending" ? "Decrypting" : info.state === "locked" ? "Unlock this browser to read this message" : info.state === "missing" ? "This browser doesn't have the key for this message" : `Couldn't decrypt: ${info.reason ?? "unknown error"}`;
         lock.innerHTML = svg(info.state === "decrypted" || info.state === "pending" ? LOCK_PATH : OPEN_LOCK_PATH, label);
+        withTooltip(lock, () => label);
         content.append(lock);
-        if (info.state === "missing") {
+        if (info.state === "missing" || info.state === "locked") {
           const unlock = document.createElement("button");
           unlock.type = "button";
           unlock.className = "fe2ee-unlock";
@@ -4108,6 +4804,13 @@ ${approver}`;
         }
       }
     };
+    const headerLabel = (channelId) => {
+      if (!engine2.isEncrypted(channelId)) return "Turn On Encryption";
+      const list = members?.channelId === channelId ? members.list : [];
+      if (list.some((m) => engine2.contacts[m.id]?.pendingKey)) return "Safety Number Changed";
+      if (list.length && list.every((m) => engine2.contacts[m.id]?.verified)) return "Encrypted and Verified";
+      return "End-to-End Encrypted";
+    };
     const decorateHeader = (channelId) => {
       const existing = document.querySelector(".fe2ee-toggle");
       if (!channelId) return existing?.remove();
@@ -4115,49 +4818,61 @@ ${approver}`;
       const toolbar = toolbars.find((t) => t.parentElement?.className.includes("upperContainer")) ?? toolbars[0];
       if (!toolbar) return;
       const on = engine2.isEncrypted(channelId);
+      const list = members?.channelId === channelId ? members.list : [];
+      const verified = on && list.length > 0 && list.every((m) => engine2.contacts[m.id]?.verified && !engine2.contacts[m.id]?.pendingKey);
       let toggle = existing;
       if (!toggle || toggle.parentElement !== toolbar) {
         toggle?.remove();
         toggle = document.createElement("button");
         toggle.type = "button";
-        const sibling = toolbar.querySelector('[role="button"]');
-        toggle.className = `fe2ee-toggle ${sibling?.className ?? ""}`;
+        toggle.className = "fe2ee-toggle";
         toggle.addEventListener("click", () => {
           const id = currentChannel();
           if (!id) return;
           if (engine2.isEncrypted(id)) showSafety(id);
           else confirmEnable(id);
         });
+        withTooltip(toggle, () => headerLabel(currentChannel() ?? ""));
         toolbar.prepend(toggle);
       }
-      const key = String(on);
-      if (toggle.dataset.on === key) return;
-      toggle.dataset.on = key;
-      toggle.setAttribute("aria-pressed", key);
-      toggle.setAttribute("aria-label", on ? "End-to-end encryption is on. View safety numbers" : "Turn on end-to-end encryption");
-      toggle.title = on ? "End-to-end encrypted" : "Turn on end-to-end encryption";
-      toggle.innerHTML = svg(on ? LOCK_PATH : OPEN_LOCK_PATH);
-      toggle.querySelector("svg").setAttribute("width", "20");
-      toggle.querySelector("svg").setAttribute("height", "20");
+      const key = `${on}|${verified}`;
+      if (toggle.dataset.key === key) return;
+      toggle.dataset.key = key;
+      toggle.dataset.verified = String(verified);
+      toggle.setAttribute("aria-pressed", String(on));
+      toggle.setAttribute("aria-label", on ? `${headerLabel(channelId)}. View safety numbers` : "Turn on end-to-end encryption");
+      toggle.innerHTML = svg(verified ? VERIFIED_PATH : on ? LOCK_PATH : OPEN_LOCK_PATH);
     };
-    const decorateBanners = (channelId) => {
-      if (failure2) banner("failure", "danger", failure2);
-      else dropBanner("failure");
-      if (transient && transient.until > Date.now()) banner("transient", "warning", transient.text, transient.action);
-      else dropBanner("transient");
-      if (channelId && engine2.isEncrypted(channelId) && members?.channelId === channelId) {
-        const changed = members.list.find((m) => engine2.contacts[m.id]?.pendingKey);
-        if (changed)
-          banner("changed", "warning", `${memberName(changed)}'s safety number changed. Sending is paused until you review it.`, {
-            label: "Review",
-            run: () => showSafety(channelId)
-          });
-        else dropBanner("changed");
-        if (engine2.locked && !failure2) banner("linked", "info", "Unlock this browser to read and send encrypted messages here.", { label: "Unlock", run: showUnlock });
-        else dropBanner("linked");
-      } else {
-        dropBanner("changed");
-        dropBanner("linked");
+    const currentNotice = (channelId) => {
+      if (!channelId) return null;
+      const temporary = transient && transient.channelId === channelId && transient.until > Date.now() ? transient : null;
+      if (!engine2.isEncrypted(channelId)) return temporary;
+      if (failure2) return { tone: "danger", text: failure2 };
+      const changed = members?.channelId === channelId ? members.list.find((m) => engine2.contacts[m.id]?.pendingKey) : void 0;
+      if (changed)
+        return {
+          tone: "warning",
+          text: `${memberName(changed)}'s safety number changed. Sending is paused until you review it.`,
+          action: { label: "Review", run: () => showSafety(channelId) }
+        };
+      if (temporary) return temporary;
+      if (engine2.locked) return { tone: "info", text: "Unlock this browser to read and send encrypted messages here.", action: { label: "Unlock", run: showUnlock } };
+      return null;
+    };
+    const decorateNotice = (channelId) => {
+      const notice = currentNotice(channelId);
+      const form = document.querySelector('[role="textbox"]')?.closest("form");
+      if (!notice || !form) return bar.remove();
+      if (bar.parentElement !== form || form.firstElementChild !== bar) form.prepend(bar);
+      const key = `${notice.tone}|${notice.text}|${notice.action?.label ?? ""}`;
+      if (bar.dataset.key === key) return;
+      bar.dataset.key = key;
+      bar.dataset.tone = notice.tone;
+      bar.setAttribute("role", notice.tone === "danger" ? "alert" : "status");
+      bar.innerHTML = `${svg(notice.tone === "info" ? LOCK_PATH : OPEN_LOCK_PATH)}<p>${escape(notice.text)}</p>`;
+      if (notice.action) {
+        const { run: run2 } = notice.action;
+        bar.append(button(notice.action.label, "secondary", run2));
       }
     };
     const refresh = () => {
@@ -4175,9 +4890,10 @@ ${approver}`;
           }).catch(() => {
           });
         }
+        if (tooltip && !document.querySelector(".fe2ee-toggle:hover, .fe2ee-lock:hover")) hideTooltip();
         decorateMessages();
         decorateHeader(channelId);
-        decorateBanners(channelId);
+        decorateNotice(channelId);
       });
     };
     const start2 = () => {
@@ -4195,6 +4911,8 @@ ${approver}`;
       showApproval,
       dismissApproval,
       showSettings,
+      mountSettings,
+      beforeSend,
       renderUnlock: () => unlockOpen?.render(),
       fail: (text) => {
         failure2 = text;
@@ -4278,15 +4996,37 @@ ${approver}`;
     }
   };
   var engine = new Engine(api);
-  var link = createLink(engine, api, {
-    onPrompt: (prompt) => ui.showApproval(prompt),
-    onChange: () => ui.renderUnlock(),
-    onDismiss: (requestId) => ui.dismissApproval(requestId)
-  });
   var apiBase = () => {
     const env = window.GLOBAL_ENV;
     return `${env?.API_ENDPOINT ?? "/api"}/v${env?.API_VERSION ?? 9}`;
   };
+  var storedToken = () => {
+    try {
+      const value = JSON.parse(localStorage.getItem("token") ?? "null");
+      return typeof value === "string" ? value : null;
+    } catch {
+      return null;
+    }
+  };
+  var link = createLink(engine, api, {
+    onPrompt: (prompt) => ui.showApproval(prompt),
+    onChange: () => ui.renderUnlock(),
+    onDismiss: (requestId) => ui.dismissApproval(requestId),
+    onPeerUnlock: () => {
+      if (initialized && engine.locked) engine.refresh().catch((error) => console.error("[e2ee] refresh failed", error));
+    },
+    beacon: (body) => {
+      const token = storedToken();
+      if (!token) return;
+      fetch(`${apiBase()}/users/@me/e2ee/link`, {
+        method: "POST",
+        keepalive: true,
+        headers: { "content-type": "application/json", authorization: token },
+        body: JSON.stringify(body)
+      }).catch(() => {
+      });
+    }
+  });
   var tokenApi = (token) => ({
     async request(method, url, body) {
       const res = await fetch(`${apiBase()}${url}`, {
@@ -4300,19 +5040,20 @@ ${approver}`;
     }
   });
   var verifyPassword = async (password) => {
-    const me = await api.request("get", "/users/@me");
-    const base = apiBase();
-    const res = await fetch(`${base}/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ login: me.email, password }) });
-    const body = await res.json().catch(() => null);
-    if (body?.token) await fetch(`${base}/auth/logout`, { method: "POST", headers: { "content-type": "application/json", authorization: body.token }, body: "{}" }).catch(() => {
-    });
-    return res.ok && !!(body?.token || body?.ticket);
+    try {
+      await api.request("post", "/users/@me/e2ee/password", { password });
+      return true;
+    } catch (error) {
+      if (error?.status === 400) return false;
+      throw error;
+    }
   };
   var ui = createUi({
     engine,
     states,
     link,
     verifyPassword,
+    reset: (password) => engine.reset(password),
     enableChannel: async (channelId) => {
       await api.request("put", `/channels/${channelId}/e2ee`, { enabled: true });
       engine.setChannelEncrypted(channelId);
@@ -4371,12 +5112,16 @@ ${approver}`;
       await engine.init(userId);
       await selfTest();
       initialized = true;
-      engine.onUnlock(() => hooks.retryAll());
+      link.start(userId);
+      engine.onUnlock(() => {
+        hooks.retryAll();
+        if (engine.linked) {
+          link.cancel();
+          link.unlocked();
+        }
+      });
       ui.refresh();
-      if (engine.locked) {
-        link.request().catch((error) => console.error("[e2ee] link request failed", error));
-        ui.showUnlock();
-      }
+      if (engine.locked) ui.showUnlock();
     } catch (error) {
       fail(`Self-test failed: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -4478,5 +5223,9 @@ ${approver}`;
     states: Object.fromEntries(states),
     received: { ...received }
   });
+  loader.isEncrypted = (channelId) => engine.isEncrypted(channelId);
+  loader.beforeSend = (channelId, extras) => ui.beforeSend(channelId, extras);
+  loader.mountSettings = (container) => ui.mountSettings(container);
+  loader.openSettings = () => ui.showSettings();
   tick();
 })();

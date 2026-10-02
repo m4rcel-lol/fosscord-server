@@ -16,6 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+import bcrypt from "bcrypt";
 import { Request, Response, Router } from "express";
 import { Not } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
@@ -28,10 +29,14 @@ import {
     e2eeRotationMessage,
     e2eeUserKeys,
     emitE2eeUserEvent,
+    passwordMismatch,
+    pruneE2eeDevices,
+    revokeE2eeDevices,
     verifyEd25519,
+    withE2eeSessions,
 } from "@spacebar/api/util";
-import { E2eeDevice, E2eeIdentity } from "@spacebar/database";
-import { E2eeIdentityUpdateSchema, E2eeStateResponse } from "@spacebar/schemas";
+import { E2eeBackupKey, E2eeDevice, E2eeIdentity, E2eeKeyBackup, User } from "@spacebar/database";
+import { E2eeIdentityUpdateSchema, E2eePasswordSchema, E2eeResetSchema, E2eeStateResponse } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
 
@@ -47,6 +52,53 @@ router.get(
         responses: { 200: { body: "E2eeStateResponse" } },
     }),
     async (req: Request, res: Response) => {
+        const deviceId = typeof req.query.device_id === "string" ? req.query.device_id : null;
+        const sessionId = req.session?.session_id;
+        if (deviceId && sessionId) await E2eeDevice.update({ id: deviceId, user_id: req.user_id, status: Not("revoked") }, { session_id: sessionId });
+        if (await pruneE2eeDevices(req.user_id)) await emitE2eeUserEvent("E2EE_DEVICES_UPDATE", req.user_id);
+        const current = await state(req.user_id);
+        res.json({ ...current, devices: await withE2eeSessions(req.user_id, current.devices) });
+    },
+);
+
+const checkPassword = async (userId: string, password: unknown) => {
+    const user = await User.findOneOrFail({ where: { id: userId }, select: { id: true, data: true } });
+    if (typeof password !== "string" || !user.data?.hash || !(await bcrypt.compare(password, user.data.hash))) throw passwordMismatch();
+};
+
+router.post(
+    "/password",
+    e2eeRateLimit("e2ee_password", 10, 600),
+    route({
+        spacebarOnly: true,
+        requestBody: "E2eePasswordSchema",
+        responses: { 204: {}, 400: { body: "APIErrorResponse" } },
+    }),
+    async (req: Request, res: Response) => {
+        await checkPassword(req.user_id, (req.body as E2eePasswordSchema).password);
+        res.sendStatus(204);
+    },
+);
+
+router.post(
+    "/reset",
+    e2eeRateLimit("e2ee_reset", 5, 3600),
+    route({
+        spacebarOnly: true,
+        requestBody: "E2eeResetSchema",
+        responses: { 200: { body: "E2eeStateResponse" }, 400: { body: "APIErrorResponse" } },
+    }),
+    async (req: Request, res: Response) => {
+        const { password, public_key } = req.body as E2eeResetSchema;
+        await checkPassword(req.user_id, password);
+        if (!decodeKey(public_key, 32)) throw E2eeErrors.INVALID_SIGNATURE;
+        await revokeE2eeDevices(await E2eeDevice.find({ where: { user_id: req.user_id, status: Not("revoked") } }));
+        await E2eeBackupKey.delete({ user_id: req.user_id });
+        await E2eeKeyBackup.delete({ user_id: req.user_id });
+        await E2eeIdentity.delete({ user_id: req.user_id });
+        await E2eeIdentity.create({ user_id: req.user_id, public_key, previous_key: null, rotation_signature: null, created_at: new Date() }).save();
+        await emitE2eeUserEvent("E2EE_IDENTITY_UPDATE", req.user_id);
+        await emitE2eeUserEvent("E2EE_DEVICES_UPDATE", req.user_id);
         res.json(await state(req.user_id));
     },
 );

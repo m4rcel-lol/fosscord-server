@@ -81,7 +81,7 @@ log(`users ${tester.id} and ${friend.id}, dm ${dm.id}, e2ee state reset`);
 
 const launch = async (user, options = {}) => {
     const context = await chromium.launchPersistentContext(join(profiles, options.profile ?? user.name), {
-        channel: "chrome",
+        ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: "chrome" }),
         headless: true,
         viewport: { width: 1280, height: 800 },
         colorScheme: "dark",
@@ -138,7 +138,7 @@ const open = async (context, user, { login = false, extraInit } = {}) => {
     return { context, page, sent, errors, user, askedToUnlock };
 };
 
-const dialogOpen = (s) => s.page.locator("dialog.fe2ee-dialog[open]").count();
+const dialogOpen = (s) => s.page.locator("dialog.fe2ee-dialog[open]:not([data-closing])").count();
 const backupRow = () => JSON.parse(sql(`select row_to_json(b) from e2ee_key_backups b where user_id = '${tester.id}'`) || "null");
 const waitFor = async (what, check, timeout = 20000) => {
     const deadline = Date.now() + timeout;
@@ -169,7 +169,7 @@ const diagnose = async (...sessions) => {
         const state = await s.page
             .evaluate(() => ({
                 status: window.__fosscordE2ee?.status?.(),
-                banners: document.querySelector(".fe2ee-banners")?.innerText,
+                notice: document.querySelector(".fe2ee-notice")?.innerText,
                 messages: [...document.querySelectorAll('[id^="message-content-"]')].map((el) => el.id + ": " + el.textContent).slice(-5),
             }))
             .catch((e) => String(e));
@@ -324,7 +324,7 @@ try {
                 const verify = s.page.locator("dialog.fe2ee-dialog button", { hasText: "Mark as verified" });
                 if (await verify.count()) await verify.click();
                 await s.page.locator("dialog.fe2ee-dialog .fe2ee-status", { hasText: "Verified" }).waitFor({ timeout: 5000 });
-                await s.page.locator("dialog.fe2ee-dialog button", { hasText: "Close" }).click();
+                await s.page.locator("dialog.fe2ee-dialog button", { hasText: "Done" }).click();
             }
             assert.equal(numbers[0], numbers[1], "both sides compute the same safety number");
             log(`safety number ${numbers[0].match(/\d{5}/g).join(" ")}`);
@@ -417,7 +417,7 @@ try {
             await waitDecrypted(b, afterRotation);
             await b.page.locator(".fe2ee-toggle").click();
             await b.page.locator("dialog.fe2ee-dialog .fe2ee-status", { hasText: "Verified" }).waitFor({ timeout: 8000 });
-            assert.equal(await b.page.locator(".fe2ee-banner[data-id='changed']").count(), 0, "friend sees no safety number warning after the signed rotation");
+            assert.equal(await b.page.locator(".fe2ee-notice", { hasText: "safety number changed" }).count(), 0, "friend sees no safety number warning after the signed rotation");
             log("friend still trusts tester after the rotation");
         } catch (error) {
             await diagnose(b);
@@ -533,7 +533,7 @@ try {
         try {
             await waitReady(e);
             assert.equal((await status(e)).locked, true, "the password alone doesn't unlock a recovery-code backup");
-            const missing = e.page.locator('[id^="message-content-"]', { hasText: "Sent before this browser was set up" }).first();
+            const missing = e.page.locator('[id^="message-content-"]', { hasText: "Unlock this browser to read this message" }).first();
             await missing.waitFor({ timeout: 12000 });
             await shot(e, "6-missing-keys");
             if (!(await dialogOpen(e))) await missing.locator(".fe2ee-unlock").click();
@@ -566,7 +566,7 @@ try {
                 const prompt = a.page.locator("dialog.fe2ee-dialog", { hasText: "New login on" });
                 await prompt.waitFor({ timeout: 15000 });
                 const codeA = (await prompt.locator(".fe2ee-code").innerText()).trim();
-                if (!(await dialogOpen(f))) await f.page.locator(".fe2ee-banner[data-id='linked'] button").click();
+                if (!(await dialogOpen(f))) await f.page.locator(".fe2ee-notice button", { hasText: "Unlock" }).click();
                 const codeF = f.page.locator("dialog.fe2ee-dialog .fe2ee-code");
                 await f.page.waitForFunction(() => /^\d{3} \d{3}$/.test(document.querySelector("dialog.fe2ee-dialog .fe2ee-code")?.textContent ?? ""), null, { timeout: 8000 });
                 assert.equal((await codeF.innerText()).trim(), codeA, "both browsers show the same code");
@@ -596,8 +596,8 @@ try {
         };
         const a = await launch(tester, { extraInit: breakX25519 });
         try {
-            await a.page.locator(".fe2ee-banner[data-id='failure']").waitFor({ timeout: 20000 });
-            const text = await a.page.locator(".fe2ee-banner[data-id='failure']").innerText();
+            await a.page.locator(".fe2ee-notice[data-tone='danger']").waitFor({ timeout: 20000 });
+            const text = await a.page.locator(".fe2ee-notice[data-tone='danger']").innerText();
             assert.match(text, /unavailable/);
             await shot(a, "3-self-test-banner");
             const before = (await call("GET", `/channels/${dm.id}/messages?limit=1`, tester.token)).body[0].id;
