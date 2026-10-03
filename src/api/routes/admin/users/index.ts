@@ -18,7 +18,9 @@
 
 import { Request, Response, Router } from "express";
 import { Brackets } from "typeorm";
+import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
+import { Rights } from "@spacebar/util";
 import { User } from "@spacebar/database";
 import { AdminUserTag, UserFlags } from "@spacebar/schemas";
 
@@ -47,6 +49,11 @@ export const ADMIN_USER_COLUMNS = [
 
 // entities carry class-level defaults for every column, so only ever send the columns we selected
 export const pickAdminUser = (user: User) => ({ ...Object.fromEntries(ADMIN_USER_COLUMNS.map((c) => [c, user[c] ?? null])), tag: userTag(user) });
+
+export const assertCanManage = (req: Request, target: Pick<User, "id" | "rights">) => {
+    if (target.id !== req.user_id && new Rights(target.rights).has("OPERATOR") && !req.rights.has("OPERATOR"))
+        throw new HTTPError("Only operators can manage other operators", 403);
+};
 
 const TAG_FLAGS = { verified: Number(UserFlags.FLAGS.VERIFIED_BOT), ai: Number(UserFlags.FLAGS.AI_ACCOUNT) };
 

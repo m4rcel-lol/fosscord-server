@@ -23,6 +23,7 @@ import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
 import { ReportMenuTypeNames, ReportMenuType, type CreateReportSchema, ReportMenuTypeNameArray } from "@spacebar/schemas";
 import { FieldErrors } from "@spacebar/util";
+import { createReport } from "@spacebar/api/util";
 
 const router = Router({ mergeParams: true });
 if (process.env.LOG_ROUTES !== "false") console.log("[Server] Registering reporting menu routes...");
@@ -68,18 +69,17 @@ for (const type of Object.values(ReportMenuTypeNames)) {
     router.post(
         `/${type}`,
         route({
-            description: `Get reporting menu options for ${type} reports.`,
+            description: `Submit a ${type} report to the instance staff.`,
             requestBody: "CreateReportSchema",
             responses: {
                 200: {
-                    body: "ReportingMenuResponse",
+                    body: "CreateReportResponse",
                 },
                 204: {},
             },
             spacebarOnly: false, // Maps to /reporting/:id
         }),
-        (req: Request, res: Response) => {
-            // TODO: implement
+        async (req: Request, res: Response) => {
             const body = req.body as CreateReportSchema;
             if (body.name !== type)
                 throw FieldErrors({
@@ -170,7 +170,7 @@ for (const type of Object.values(ReportMenuTypeNames)) {
                     requireFields(body, ["guild_id", "channel_id"]);
                     break;
                 case ReportMenuType.GUILD_SCHEDULED_EVENT:
-                    requireFields(body, ["guild_id", "scheduled_event_id"]);
+                    requireFields(body, ["guild_id", "guild_scheduled_event_id"]);
                     break;
                 case ReportMenuType.MESSAGE:
                     requireFields(body, ["channel_id", "message_id"]);
@@ -180,10 +180,10 @@ for (const type of Object.values(ReportMenuTypeNames)) {
                     requireFields(body, ["channel_id", "guild_id", "stage_instance_id"]);
                     break;
                 case ReportMenuType.FIRST_DM:
-                    requireFields(body, ["user_id", "channel_id"]);
+                    requireFields(body, ["channel_id", "message_id"]);
                     break;
                 case ReportMenuType.USER:
-                    requireFields(body, ["reported_user_id"]);
+                    if (!body.user_id && !body.reported_user_id) requireFields(body, ["user_id"]);
                     break;
                 case ReportMenuType.APPLICATION:
                     requireFields(body, ["application_id"]);
@@ -195,7 +195,8 @@ for (const type of Object.values(ReportMenuTypeNames)) {
                     throw new HTTPError("Unknown report menu type", 400);
             }
 
-            throw new HTTPError("Validation success - implementation TODO", 418);
+            const report = await createReport(type, body, req.user_id, menuData);
+            res.json({ report_id: report.id });
         },
     );
     if (process.env.LOG_ROUTES !== "false") console.log(`[Server] Route /reporting/${type} registered (reports).`);

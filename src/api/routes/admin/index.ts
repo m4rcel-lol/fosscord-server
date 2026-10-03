@@ -19,8 +19,8 @@
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { ADMIN_PANEL_RIGHTS } from "@spacebar/api/util";
-import { Guild, Member, Message, RESOLVED_INCIDENT_STATES, StatusIncident, User } from "@spacebar/database";
-import { Config, getRevInfoOrFail, getRights, SpacebarApiErrors } from "@spacebar/util";
+import { Guild, Member, Message, Report, RESOLVED_INCIDENT_STATES, StatusIncident, User } from "@spacebar/database";
+import { brandImageUrls, Config, getRevInfoOrFail, getRights, instanceName, SpacebarApiErrors } from "@spacebar/util";
 import { In, Not } from "typeorm";
 
 const router = Router({ mergeParams: true });
@@ -35,24 +35,25 @@ router.get(
         const rights = await getRights(req.user_id);
         if (!rights.any([...ADMIN_PANEL_RIGHTS])) throw SpacebarApiErrors.MISSING_RIGHTS.withParams(ADMIN_PANEL_RIGHTS.join(" | "));
 
-        const [users, guilds, messages, members, disabledUsers, openIncidents] = await Promise.all([
+        const [users, guilds, messages, members, disabledUsers, openIncidents, openReports] = await Promise.all([
             User.count({ where: { bot: false } }),
             Guild.count(),
             Message.count(),
             Member.count(),
             User.count({ where: { disabled: true } }),
             StatusIncident.count({ where: { status: Not(In(RESOLVED_INCIDENT_STATES)) } }),
+            Report.count({ where: { status: "open" } }),
         ]);
 
         const general = Config.get().general;
         res.json({
             instance: {
                 id: general.instanceId,
-                name: general.instanceName,
+                name: instanceName(),
                 description: general.instanceDescription,
-                image: general.image,
+                image: brandImageUrls().icon ?? general.image,
             },
-            counts: { users, guilds, messages, members, disabled_users: disabledUsers, open_incidents: openIncidents },
+            counts: { users, guilds, messages, members, disabled_users: disabledUsers, open_incidents: openIncidents, open_reports: openReports },
             uptime: process.uptime(),
             revision: getRevInfoOrFail(),
             access: {
@@ -61,6 +62,8 @@ router.get(
                 status: rights.has("OPERATOR"),
                 users: rights.has("MANAGE_USERS"),
                 guilds: rights.has("MANAGE_GUILDS"),
+                reports: rights.has("MANAGE_USERS"),
+                system: rights.has("OPERATOR"),
             },
         });
     },

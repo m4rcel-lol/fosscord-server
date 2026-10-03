@@ -4862,6 +4862,9 @@
             },
             "absoluteRate": {
                 "$ref": "#/definitions/GlobalRateLimits"
+            },
+            "e2ee": {
+                "$ref": "#/definitions/E2eeLimits"
             }
         },
         "additionalProperties": false,
@@ -4869,6 +4872,7 @@
             "absoluteRate",
             "application",
             "channel",
+            "e2ee",
             "guild",
             "message",
             "rate",
@@ -9414,10 +9418,17 @@
             "elements": {
                 "type": "object",
                 "additionalProperties": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
+                    "anyOf": [
+                        {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        {
+                            "type": "string"
+                        }
+                    ]
                 }
             },
             "channel_id": {
@@ -9438,6 +9449,9 @@
             "reported_user_id": {
                 "type": "string"
             },
+            "entrypoint": {
+                "type": "string"
+            },
             "application_id": {
                 "type": "string"
             },
@@ -9455,6 +9469,19 @@
             "name",
             "variant",
             "version"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "CreateReportResponse": {
+        "type": "object",
+        "properties": {
+            "report_id": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "report_id"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -9575,6 +9602,40 @@
                 },
                 "additionalProperties": false
             },
+            "client": {
+                "type": "object",
+                "properties": {
+                    "instanceName": {
+                        "maxLength": 100,
+                        "type": "string"
+                    },
+                    "icon": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "logo": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "helpUrl": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "activityApplicationHost": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    }
+                },
+                "additionalProperties": false
+            },
             "register": {
                 "type": "object",
                 "properties": {
@@ -9587,17 +9648,202 @@
                     "requireInvite": {
                         "type": "boolean"
                     },
+                    "guestsRequireInvite": {
+                        "type": "boolean"
+                    },
                     "requireCaptcha": {
                         "type": "boolean"
                     },
                     "allowMultipleAccounts": {
                         "type": "boolean"
+                    },
+                    "incrementingDiscriminators": {
+                        "type": "boolean"
+                    },
+                    "email": {
+                        "type": "object",
+                        "properties": {
+                            "required": {
+                                "type": "boolean"
+                            }
+                        },
+                        "additionalProperties": false
+                    },
+                    "dateOfBirth": {
+                        "type": "object",
+                        "properties": {
+                            "minimum": {
+                                "minimum": 0,
+                                "maximum": 100,
+                                "type": "integer"
+                            }
+                        },
+                        "additionalProperties": false
+                    },
+                    "password": {
+                        "type": "object",
+                        "properties": {
+                            "minLength": {
+                                "minimum": 1,
+                                "maximum": 72,
+                                "type": "integer"
+                            },
+                            "minNumbers": {
+                                "minimum": 0,
+                                "type": "integer"
+                            },
+                            "minUpperCase": {
+                                "minimum": 0,
+                                "type": "integer"
+                            },
+                            "minSymbols": {
+                                "minimum": 0,
+                                "type": "integer"
+                            }
+                        },
+                        "additionalProperties": false
+                    }
+                },
+                "additionalProperties": false
+            },
+            "login": {
+                "type": "object",
+                "properties": {
+                    "requireCaptcha": {
+                        "type": "boolean"
+                    }
+                },
+                "additionalProperties": false
+            },
+            "passwordReset": {
+                "type": "object",
+                "properties": {
+                    "requireCaptcha": {
+                        "type": "boolean"
+                    }
+                },
+                "additionalProperties": false
+            },
+            "captcha": {
+                "type": "object",
+                "properties": {
+                    "enabled": {
+                        "type": "boolean"
+                    },
+                    "service": {
+                        "anyOf": [
+                            {
+                                "enum": [
+                                    "cap",
+                                    "hcaptcha",
+                                    "recaptcha"
+                                ],
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "sitekey": {
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "secret": {
+                        "description": "Write only. An empty string keeps the current secret.",
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    },
+                    "instance": {
+                        "description": "Base URL of a Cap Standalone server",
+                        "type": [
+                            "null",
+                            "string"
+                        ]
+                    }
+                },
+                "additionalProperties": false
+            },
+            "rate": {
+                "type": "object",
+                "properties": {
+                    "enabled": {
+                        "type": "boolean"
+                    },
+                    "ip": {
+                        "$ref": "#/definitions/AdminRateLimitSchema"
+                    },
+                    "global": {
+                        "$ref": "#/definitions/AdminRateLimitSchema"
+                    },
+                    "error": {
+                        "$ref": "#/definitions/AdminRateLimitSchema"
+                    },
+                    "login": {
+                        "$ref": "#/definitions/AdminRateLimitSchema"
+                    },
+                    "register": {
+                        "$ref": "#/definitions/AdminRateLimitSchema"
+                    }
+                },
+                "additionalProperties": false
+            },
+            "e2ee": {
+                "type": "object",
+                "properties": {
+                    "maxEnvelopeBytes": {
+                        "minimum": 1024,
+                        "type": "integer"
+                    },
+                    "maxEnvelopeDevices": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "pendingDeviceTtlHours": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "deviceRegistrationsPerHour": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "deviceUpdatesPerHour": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "keyQueriesPerMinute": {
+                        "minimum": 1,
+                        "type": "integer"
                     }
                 },
                 "additionalProperties": false
             }
         },
         "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminRateLimitSchema": {
+        "type": "object",
+        "properties": {
+            "count": {
+                "minimum": 1,
+                "type": "integer"
+            },
+            "window": {
+                "description": "Seconds",
+                "minimum": 1,
+                "type": "integer"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "count",
+            "window"
+        ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "AdminUserUpdateSchema": {
@@ -10070,6 +10316,61 @@
             "body",
             "title"
         ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminReportUpdateSchema": {
+        "type": "object",
+        "properties": {
+            "status": {
+                "enum": [
+                    "dismissed",
+                    "open",
+                    "resolved"
+                ],
+                "type": "string"
+            },
+            "resolution_note": {
+                "maxLength": 2000,
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "delete_message": {
+                "description": "Also delete the reported message. Needs the MANAGE_MESSAGES right.",
+                "type": "boolean"
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminPasswordResetSchema": {
+        "type": "object",
+        "properties": {
+            "send_email": {
+                "description": "Also email the link, when the user has an email address and the instance can send email",
+                "type": "boolean"
+            },
+            "revoke_sessions": {
+                "description": "Sign the user out of every session",
+                "type": "boolean"
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminSessionsRevokeSchema": {
+        "type": "object",
+        "properties": {
+            "session_ids": {
+                "description": "The sessions to end; omit to end all of them",
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            }
+        },
+        "additionalProperties": false,
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "AttachmentListResponse": {
@@ -21189,6 +21490,43 @@
             "enabled",
             "limit",
             "window"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeLimits": {
+        "type": "object",
+        "properties": {
+            "maxEnvelopeBytes": {
+                "type": "integer"
+            },
+            "maxEnvelopeDevices": {
+                "type": "integer",
+                "default": 256
+            },
+            "pendingDeviceTtlHours": {
+                "type": "integer"
+            },
+            "deviceRegistrationsPerHour": {
+                "type": "integer",
+                "default": 30
+            },
+            "deviceUpdatesPerHour": {
+                "type": "integer",
+                "default": 60
+            },
+            "keyQueriesPerMinute": {
+                "type": "integer",
+                "default": 60
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "deviceRegistrationsPerHour",
+            "deviceUpdatesPerHour",
+            "keyQueriesPerMinute",
+            "maxEnvelopeBytes",
+            "maxEnvelopeDevices",
+            "pendingDeviceTtlHours"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
