@@ -29,6 +29,7 @@ import {
     appIconUrl,
     appManifest,
     brandImageUrls,
+    brandPage,
     Config,
     DEFAULT_ICON_FILE,
     helpUrl,
@@ -115,7 +116,7 @@ const BRANDED_ASSETS: Record<string, { wordmark?: boolean; svg: (iconUri: string
 
 export function TestClientAssets(app: Application) {
     const noCache = { setHeaders: (res: Response) => res.set("Cache-Control", "no-cache") };
-    app.get("/assets/favicon.ico", (req, res) => void sendBrandImage(res, instanceIcon() ?? { file: DEFAULT_ICON_FILE }, "no-cache"));
+    app.get(["/assets/favicon.ico", "/favicon.ico"], (req, res) => void sendBrandImage(res, instanceIcon() ?? { file: DEFAULT_ICON_FILE }, "no-cache"));
     app.get(["/manifest.webmanifest", "/manifest.json"], (req, res) => {
         res.set("Cache-Control", "no-cache");
         res.type("application/manifest+json").send(JSON.stringify(appManifest()));
@@ -269,6 +270,31 @@ const buildHtml = () => {
         .replace(/<title>[^<]*<\/title>/, () => `<title>${title}</title>\n    ${appMeta}`);
 };
 
+const EXTRA_ROOTS = ["", "ra"];
+
+const clientRoots = () => {
+    const html = fs.readFileSync(path.join(CACHE_PATH, "index.html"), "utf8");
+    const entry = html.match(/src="\/assets\/(web\.[0-9a-f]+\.js)"/)?.[1];
+    if (!entry) return null;
+    const source = fs.readFileSync(path.join(CACHE_PATH, entry), "utf8");
+    const start = source.indexOf('Object.freeze({INDEX:"/",');
+    if (start === -1) return null;
+    let depth = 0;
+    let end = start;
+    for (let i = source.indexOf("{", start); i < source.length; i++) {
+        if (source[i] === "{") depth++;
+        else if (source[i] === "}" && !--depth) {
+            end = i;
+            break;
+        }
+    }
+    const roots = new Set(EXTRA_ROOTS);
+    for (const [, root] of source.slice(start, end).matchAll(/[`"]\/([\w@.-]*)/g)) roots.add(root.toLowerCase());
+    return roots.size > EXTRA_ROOTS.length ? roots : null;
+};
+
+const renderNotFound = () => brandPage(fs.readFileSync(path.join(ASSET_FOLDER_PATH, "public", "not-found.html"), "utf8"));
+
 const renderPage = () => {
     const body = Buffer.from(buildHtml());
     return {
@@ -285,6 +311,7 @@ export default function TestClient(app: Application) {
     const brandStamp = () => JSON.stringify([Config.get().client.instanceName, brandImageUrls(), helpUrl()]);
     let brand = brandStamp();
     let page = renderPage();
+    let roots = clientRoots();
     const missLog = path.join(ASSET_FOLDER_PATH, "cacheMisses");
 
     app.get("/assets/version.:channel.json", (req, res) => {
@@ -309,9 +336,14 @@ export default function TestClient(app: Application) {
             .join();
     let stamp = DEVELOPMENT ? sourceStamp() : "";
 
+    app.get("/gift/:code", (req, res) => res.redirect(`/gifts/${encodeURIComponent(req.params.code)}`));
+
     app.get("/{*splat}", (req, res, next) => {
         if (/^\/(api|cdn|attachments|avatars|icons|banners|emojis|stickers|imageproxy)\b/.test(req.path)) return next();
-        if ((DEVELOPMENT && stamp !== (stamp = sourceStamp())) || brand !== (brand = brandStamp())) page = renderPage();
+        const sourceChanged = DEVELOPMENT && stamp !== (stamp = sourceStamp());
+        if (sourceChanged) roots = clientRoots();
+        if (sourceChanged || brand !== (brand = brandStamp())) page = renderPage();
+        if (roots && !roots.has(req.path.split("/")[1].toLowerCase())) return res.status(404).set("Cache-Control", "no-cache").type("html").send(renderNotFound());
         res.set({ "Cache-Control": "no-cache", ETag: page.etag });
         res.vary("Accept-Encoding");
         res.type("html");
