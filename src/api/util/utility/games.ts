@@ -19,6 +19,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { ASSETS_FOLDER } from "@spacebar/util";
+import { CustomGame } from "@spacebar/database";
 
 export interface DetectableGame {
     id: string;
@@ -43,10 +44,39 @@ const CACHE_FILE = path.join(ASSETS_FOLDER, "detectable.json");
 const TTL = 6 * 3_600_000;
 const SUGGESTED = ["Minecraft", "Fortnite", "League of Legends", "VALORANT", "Roblox", "Counter-Strike 2", "Genshin Impact", "Overwatch 2", "Apex Legends", "Grand Theft Auto V"];
 
-let loaded: { games: DetectableGame[]; byId: Map<string, DetectableGame>; expires: number } | undefined;
-let pending: Promise<NonNullable<typeof loaded>> | undefined;
+type GameIndex = { games: DetectableGame[]; byId: Map<string, DetectableGame>; expires: number };
+
+let loaded: GameIndex | undefined;
+let pending: Promise<GameIndex> | undefined;
+// games the admins added, kept until one of them changes; listed before discord's
+let custom: DetectableGame[] | undefined;
+let merged: { remote: GameIndex; custom: DetectableGame[]; index: GameIndex } | undefined;
 
 const index = (games: DetectableGame[], expires: number) => ({ games, byId: new Map(games.map((x) => [x.id, x])), expires });
+
+export const cleanGameAliases = (aliases: string[] | undefined) => [...new Set((aliases ?? []).map((alias) => alias.trim()).filter(Boolean))];
+
+export const serializeCustomGame = (game: CustomGame) => ({
+    id: game.id,
+    name: game.name,
+    aliases: game.aliases ?? [],
+    icon_hash: game.icon_hash ?? null,
+    cover_image_hash: game.cover_image_hash ?? null,
+    created_at: game.created_at,
+});
+
+export const customGameToDetectable = (game: CustomGame): DetectableGame => ({
+    id: game.id,
+    name: game.name,
+    aliases: game.aliases ?? [],
+    executables: [],
+    icon_hash: game.icon_hash ?? null,
+    cover_image_hash: game.cover_image_hash ?? null,
+    themes: [],
+    third_party_skus: [],
+    overlay: false,
+    hook: false,
+});
 
 async function fetchList() {
     const res = await fetch(SOURCE, { signal: AbortSignal.timeout(20000) }).catch(() => undefined);
@@ -60,6 +90,18 @@ async function fetchList() {
 
 export const DetectableGames = {
     async load() {
+        const remote = await this.loadRemote();
+        custom ??= (await CustomGame.find({ order: { name: "ASC" } })).map(customGameToDetectable);
+        if (merged?.remote !== remote || merged.custom !== custom) merged = { remote, custom, index: index([...custom, ...remote.games], remote.expires) };
+        return merged.index;
+    },
+
+    /** Call after adding, changing or removing a custom game. */
+    invalidateCustom() {
+        custom = undefined;
+    },
+
+    async loadRemote() {
         if (loaded && loaded.expires > Date.now()) return loaded;
         pending ??= (async () => {
             const stat = await fs.stat(CACHE_FILE).catch(() => undefined);

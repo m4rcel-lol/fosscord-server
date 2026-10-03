@@ -478,6 +478,8 @@ const TABS = {
     settings: renderSettings,
     users: renderUsers,
     badges: renderBadges,
+    games: renderGames,
+    store: renderStore,
     announcements: renderAnnouncements,
     guilds: renderGuilds,
     reports: renderReports,
@@ -1940,6 +1942,446 @@ function openBadge(badge, refresh) {
         if (done !== undefined) {
             closeDrawer();
             refresh();
+        }
+    });
+}
+
+/* ---------- games ---------- */
+
+// art lives where the client looks for game art: app-icons/<game id>/<hash>
+const gameArt = (g, hash, cls = "") =>
+    hash ? html`<img class="avatar square ${cls}" src="/app-icons/${g.id}/${hash}.png?size=128" alt="" loading="lazy" />` : html`<span class="avatar square ${cls}">${initials(g.name)}</span>`;
+
+async function renderGames(view) {
+    const games = await api("/admin/games");
+    mount(
+        view,
+        html`
+            <div class="page-head">
+                <div>
+                    <h1>Games</h1>
+                    <p class="muted">
+                        Games you add here show up next to the built-in game list wherever people pick games, such as the games on their profile or their server's profile. Open
+                        clients see new games in search right away; their full game list refreshes within a few hours.
+                    </p>
+                </div>
+                <button class="btn primary" id="new-game" type="button">Add game</button>
+            </div>
+            ${games.length
+                ? html`<div class="table-wrap">
+                      <table>
+                          <thead>
+                              <tr>
+                                  <th>Game</th>
+                                  <th class="hide-sm">Also found by</th>
+                                  <th class="hide-sm">Added</th>
+                              </tr>
+                          </thead>
+                          <tbody>
+                              ${games.map(
+                                  (g) => html`<tr data-id="${g.id}">
+                                      <td><div class="ident">${gameArt(g, g.icon_hash)}<strong>${g.name}</strong></div></td>
+                                      <td class="hide-sm">${g.aliases.length ? html`<span class="muted">${g.aliases.join(", ")}</span>` : html`<span class="muted">—</span>`}</td>
+                                      <td class="hide-sm"><span class="muted">${fmtDate(g.created_at)}</span></td>
+                                  </tr>`,
+                              )}
+                          </tbody>
+                      </table>
+                  </div>`
+                : html`<div class="card empty">No custom games yet. Add one so people can put it on their profile or server.</div>`}
+        `,
+    );
+    const refresh = () => renderGames(view);
+    $("#new-game").addEventListener("click", () => openGame(null, refresh));
+    for (const row of $$("tbody tr", view)) row.addEventListener("click", () => openGame(games.find((g) => g.id === row.dataset.id), refresh));
+}
+
+function openGame(game, refresh) {
+    // undefined keeps the saved art, null removes it, a data: URI replaces it
+    const art = { icon: undefined, cover: undefined };
+    const body = openDrawer(
+        game ? "Edit game" : "Add game",
+        html`
+            <form id="game-form" class="stack">
+                <div class="card row" style="gap:12px">
+                    <span id="game-preview"></span>
+                    <div class="grow">
+                        <strong id="game-preview-name">${game?.name ?? "Game name"}</strong>
+                        <div class="muted">How it looks in game pickers and on profiles.</div>
+                    </div>
+                </div>
+                <label>Name<input name="name" required maxlength="100" value="${game?.name ?? ""}" placeholder="My Game" /></label>
+                <label
+                    >Also found by<span class="hint">Optional. Other names people might search for, separated by commas.</span
+                    ><input name="aliases" value="${(game?.aliases ?? []).join(", ")}" placeholder="MG, My Game Remastered"
+                /></label>
+                <div class="form-grid">
+                    <div class="stack">
+                        <label>Icon<span class="hint">Square image, at least 256×256.</span><input name="icon" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" /></label>
+                        ${game?.icon_hash ? html`<button class="btn small" type="button" data-remove="icon">Remove icon</button>` : ""}
+                    </div>
+                    <div class="stack">
+                        <label>Cover art<span class="hint">Optional. A tall box-art style image, like 600×800.</span><input name="cover" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" /></label>
+                        ${game?.cover_image_hash ? html`<button class="btn small" type="button" data-remove="cover">Remove cover art</button>` : ""}
+                    </div>
+                </div>
+                <div class="form-actions">
+                    ${game ? html`<button class="btn danger" id="game-delete" type="button" style="margin-right:auto">Delete game</button>` : ""}
+                    <button class="btn primary" type="submit">${game ? "Save game" : "Add game"}</button>
+                </div>
+            </form>
+        `,
+    );
+    const form = $("#game-form", body);
+    const preview = () => {
+        const icon = art.icon === undefined ? (game?.icon_hash ? `/app-icons/${game.id}/${game.icon_hash}.png?size=128` : null) : art.icon;
+        const name = form.name.value || "Game name";
+        mount($("#game-preview"), icon ? html`<img class="avatar square large" src="${icon}" alt="" />` : html`<span class="avatar square large">${initials(name)}</span>`);
+        $("#game-preview-name").textContent = name;
+    };
+    preview();
+    form.name.addEventListener("input", preview);
+
+    for (const key of ["icon", "cover"]) {
+        form[key].addEventListener("change", async () => {
+            const file = form[key].files[0];
+            if (!file) return;
+            if (file.size > 8 * 1024 * 1024) {
+                form[key].value = "";
+                return toast("Game art has to be under 8 MB.", "error");
+            }
+            art[key] = await readAsDataUrl(file);
+            preview();
+        });
+    }
+    for (const btn of $$("[data-remove]", form))
+        btn.addEventListener("click", () => {
+            art[btn.dataset.remove] = null;
+            form[btn.dataset.remove].value = "";
+            btn.remove();
+            preview();
+        });
+
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const payload = {
+            name: form.name.value,
+            aliases: form.aliases.value
+                .split(",")
+                .map((alias) => alias.trim())
+                .filter(Boolean),
+        };
+        if (art.icon !== undefined && (game || art.icon)) payload.icon_data = art.icon;
+        if (art.cover !== undefined && (game || art.cover)) payload.cover_data = art.cover;
+        const done = await act(
+            $("button[type=submit]", form),
+            () => (game ? api(`/admin/games/${game.id}`, { method: "PATCH", body: payload }) : api("/admin/games", { method: "POST", body: payload })),
+            game ? "Game saved" : "Game added",
+        );
+        if (done) {
+            closeDrawer();
+            refresh();
+        }
+    });
+
+    $("#game-delete", body)?.addEventListener("click", async (e) => {
+        if (!confirm(`Delete "${game.name}"? Profiles and servers that list it stop showing it.`)) return;
+        const done = await act(e.currentTarget, () => api(`/admin/games/${game.id}`, { method: "DELETE" }), "Game deleted");
+        if (done !== undefined) {
+            closeDrawer();
+            refresh();
+        }
+    });
+}
+
+/* ---------- store ---------- */
+
+const STORE_TYPES = [
+    [0, "Avatar decoration", "Drawn around the avatar."],
+    [2, "Nameplate", "Shown behind the name in member lists and DMs."],
+    [1, "Profile effect", "Plays over the profile card."],
+    [3, "Profile frame", "Wraps the profile card."],
+];
+const storeTypeName = (type) => STORE_TYPES.find(([t]) => t === type)?.[1] ?? "Item";
+const IMAGE_TYPES = "image/png,image/apng,image/gif,image/webp,image/jpeg,image/avif";
+// art goes up as JSON, and the API takes bodies up to 10 MB
+const MAX_ART_BYTES = 7 * 1024 * 1024;
+
+const storeState = { data: null };
+
+async function renderStore(view) {
+    const data = (storeState.data = await api("/admin/store"));
+    mount(
+        view,
+        html`
+            <div class="page-head">
+                <div>
+                    <h1>Store</h1>
+                    <p class="muted">
+                        Packs of avatar decorations, nameplates, profile effects and profile frames people can pick up for free in the shop. Your packs come first, then the
+                        ones mirrored from Discord, which you can take out of the shop. Changed art can take up to 6 hours to update for people who already loaded it.
+                    </p>
+                </div>
+                <button class="btn primary" id="new-pack" type="button">Add pack</button>
+            </div>
+            <div class="stack">
+                <h2>Your packs</h2>
+                ${data.packs.length
+                    ? html`<div class="table-wrap">
+                          <table>
+                              <thead>
+                                  <tr>
+                                      <th>Pack</th>
+                                      <th class="hide-sm">Items</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  ${data.packs.map(
+                                      (p) => html`<tr data-pack="${p.id}">
+                                          <td>
+                                              <div class="ident">
+                                                  ${p.logo || p.banner
+                                                      ? html`<img class="avatar square" src="${p.logo || p.banner}" alt="" loading="lazy" style="object-fit:cover" />`
+                                                      : html`<span class="avatar square">${initials(p.name)}</span>`}
+                                                  <div><strong>${p.name}</strong><span class="muted">${p.summary || "No summary"}</span></div>
+                                              </div>
+                                          </td>
+                                          <td class="hide-sm">
+                                              <span class="badges"
+                                                  >${STORE_TYPES.map(([type, name]) => {
+                                                      const count = p.items.filter((i) => i.type === type).length;
+                                                      return count ? html`<span class="badge">${count} ${name.toLowerCase()}${count === 1 ? "" : "s"}</span>` : "";
+                                                  })}${p.items.length ? "" : html`<span class="muted">Empty</span>`}</span
+                                              >
+                                          </td>
+                                      </tr>`,
+                                  )}
+                              </tbody>
+                          </table>
+                      </div>`
+                    : html`<div class="card empty">No packs yet. Add one, then fill it with decorations, nameplates, effects and frames.</div>`}
+                <h2>Packs from Discord</h2>
+                <p class="muted" style="margin:0">Turn a pack off to take it out of the shop. People who already have its items keep them.</p>
+                <div class="card stack" style="gap:0;padding:0">
+                    ${data.builtin.map(
+                        (b) => html`<label class="list-item toggle" style="padding:10px 16px;margin:0">
+                            <input type="checkbox" data-builtin="${b.sku_id}" ${b.hidden ? "" : raw("checked")} />
+                            <span class="grow"><strong>${b.name}</strong><span class="hint">${b.items} ${b.items === 1 ? "item" : "items"}</span></span>
+                        </label>`,
+                    )}
+                </div>
+            </div>
+        `,
+    );
+    const refresh = () => renderStore(view);
+    $("#new-pack").addEventListener("click", () => openPack(null, refresh));
+    for (const row of $$("tr[data-pack]", view)) row.addEventListener("click", () => openPack(row.dataset.pack, refresh));
+    for (const box of $$("[data-builtin]", view))
+        box.addEventListener("change", async () => {
+            const done = await act(null, () => api(`/admin/store/builtin/${box.dataset.builtin}`, { method: "PATCH", body: { hidden: !box.checked } }), box.checked ? "Back in the shop" : "Taken out of the shop");
+            if (!done) box.checked = !box.checked;
+        });
+}
+
+// reads a picked file as a data: URI, refusing ones too big to send
+async function pickArt(input) {
+    const file = input.files[0];
+    if (!file) return undefined;
+    if (file.size > MAX_ART_BYTES) {
+        input.value = "";
+        toast("Files have to be under 7 MB.", "error");
+        return undefined;
+    }
+    return readAsDataUrl(file);
+}
+
+function artField(name, label, hint, current, { accept = IMAGE_TYPES, removable = true } = {}) {
+    const isVideo = current && /\/video\?/.test(current);
+    return html`<div class="stack" style="gap:6px">
+        <label>${label}${hint ? html`<span class="hint">${hint}</span>` : ""}<input type="file" data-art="${name}" accept="${accept}" /></label>
+        <div class="row" style="gap:8px" data-art-preview="${name}">
+            ${current
+                ? html`${isVideo
+                          ? html`<video src="${current}" autoplay loop muted playsinline style="max-height:64px;max-width:220px;border-radius:6px"></video>`
+                          : html`<img src="${current}" alt="" style="max-height:64px;max-width:220px;border-radius:6px" />`}
+                      ${removable ? html`<button class="btn small" type="button" data-art-remove="${name}">Remove</button>` : ""}`
+                : html`<span class="muted">Nothing uploaded</span>`}
+        </div>
+    </div>`;
+}
+
+async function openPack(packId, refresh) {
+    const pack = packId ? storeState.data.packs.find((p) => p.id === packId) : null;
+    const art = {};
+    const body = openDrawer(
+        pack ? pack.name : "Add pack",
+        html`
+            <form id="pack-form" class="stack">
+                <label>Name<input name="name" required maxlength="100" value="${pack?.name ?? ""}" placeholder="Spooky Season" /></label>
+                <label>Summary<span class="hint">Optional. Shown under the name in the shop.</span><textarea name="summary" maxlength="500" rows="2">${pack?.summary ?? ""}</textarea></label>
+                <label>Order<span class="hint">Lower numbers come first in the shop. The first pack is the big one at the top.</span><input name="position" type="number" step="1" value="${pack?.position ?? 0}" /></label>
+                ${artField("banner", "Banner", "A wide image across the top of the pack, around 1280×300.", pack?.banner)}
+                ${artField("logo", "Logo", "Optional. Shown on the banner.", pack?.logo)}
+                <div class="form-actions">
+                    ${pack ? html`<button class="btn danger" id="pack-delete" type="button" style="margin-right:auto">Delete pack</button>` : ""}
+                    <button class="btn primary" type="submit">${pack ? "Save pack" : "Add pack"}</button>
+                </div>
+            </form>
+            ${pack
+                ? html`<div class="stack" style="margin-top:20px">
+                      <div class="row" style="justify-content:space-between"><h3 style="margin:0">Items</h3><button class="btn small primary" id="item-new" type="button">Add item</button></div>
+                      ${pack.items.length
+                          ? html`<div class="card stack" style="gap:0;padding:0">
+                                ${pack.items.map(
+                                    (item) => html`<div class="list-item" style="padding:10px 16px;cursor:pointer" data-item="${item.id}">
+                                        <div class="ident grow">${itemThumb(item)}<div><strong>${item.name}</strong><span class="muted">${storeTypeName(item.type)}</span></div></div>
+                                    </div>`,
+                                )}
+                            </div>`
+                          : html`<p class="muted" style="margin:0">No items yet.</p>`}
+                  </div>`
+                : ""}
+        `,
+    );
+    const form = $("#pack-form", body);
+    for (const input of $$("[data-art]", form)) input.addEventListener("change", async () => (art[input.dataset.art] = await pickArt(input)));
+    for (const btn of $$("[data-art-remove]", form))
+        btn.addEventListener("click", () => {
+            art[btn.dataset.artRemove] = null;
+            mount(btn.parentElement, html`<span class="muted">Removed when you save</span>`);
+        });
+
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const payload = { name: form.name.value, summary: form.summary.value, position: Number(form.position.value) || 0 };
+        for (const slot of ["banner", "logo"]) if (art[slot] !== undefined && (pack || art[slot])) payload[`${slot}_data`] = art[slot];
+        const saved = await act(
+            $("button[type=submit]", form),
+            () => (pack ? api(`/admin/store/packs/${pack.id}`, { method: "PATCH", body: payload }) : api("/admin/store/packs", { method: "POST", body: payload })),
+            pack ? "Pack saved" : "Pack added",
+        );
+        if (saved) {
+            await refresh();
+            openPack(saved.id, refresh);
+        }
+    });
+    $("#pack-delete", body)?.addEventListener("click", async (e) => {
+        if (!confirm(`Delete "${pack.name}" and its ${pack.items.length} ${pack.items.length === 1 ? "item" : "items"}? People who have them stop seeing them.`)) return;
+        const done = await act(e.currentTarget, () => api(`/admin/store/packs/${pack.id}`, { method: "DELETE" }), "Pack deleted");
+        if (done !== undefined) {
+            closeDrawer();
+            refresh();
+        }
+    });
+    $("#item-new", body)?.addEventListener("click", () => openStoreItem(pack, null, refresh));
+    for (const row of $$("[data-item]", body)) row.addEventListener("click", () => openStoreItem(pack, pack.items.find((i) => i.id === row.dataset.item), refresh));
+}
+
+const itemThumb = (item) => {
+    const src = item.art.image ?? item.art.static ?? item.art.thumbnail ?? item.art.effect ?? item.art.front_top ?? item.art.front_bottom ?? item.art.back_top;
+    return src ? html`<img class="avatar square" src="${src}" alt="" loading="lazy" style="object-fit:contain;background:var(--bg-2, #111)" />` : html`<span class="avatar square">?</span>`;
+};
+
+function storeItemFields(type, item) {
+    const { palettes, sizes } = storeState.data;
+    const a = item?.art ?? {};
+    switch (type) {
+        case 0:
+            return artField("image", "Decoration", "A square PNG, APNG, GIF or WebP, 288×288. It's drawn over the avatar, so leave the middle transparent.", a.image, { removable: false });
+        case 2:
+            return html`<label>Color<span class="hint">The background behind the name.</span><select name="palette">${options(palettes.map((p) => [p, p.replace("_", " ")]), item?.palette ?? "violet")}</select></label>
+                ${artField("static", "Still image", "A wide PNG, 448×84. Shown when it isn't animating.", a.static, { accept: "image/png,image/webp,image/jpeg,image/avif", removable: false })}
+                ${artField("motion", "Animation", "Optional. A WebM video, or an animated PNG or GIF, the same size.", a.motion, { accept: `video/webm,video/mp4,${IMAGE_TYPES}` })}`;
+        case 1:
+            return html`${artField("effect", "Effect", `An animated PNG, GIF or WebP, ${sizes.effect.width}×${sizes.effect.height}, drawn over the whole profile card.`, a.effect, { removable: false })}
+                ${artField("thumbnail", "Thumbnail", "Optional. The preview in the shop and the effect picker. The effect itself is used otherwise.", a.thumbnail)}
+                ${artField("reduced", "Reduced motion", "Optional. A still image shown to people who turned animations off.", a.reduced)}
+                <div class="form-grid">
+                    <label>Length<span class="hint">One play of the animation, in milliseconds.</span><input name="duration" type="number" min="100" max="60000" step="1" value="${item?.duration ?? 3000}" /></label>
+                    <label class="toggle"><input type="checkbox" name="loop" ${item?.loop === false ? "" : raw("checked")} /><span>Play on repeat</span></label>
+                </div>`;
+        case 3:
+            return html`<p class="muted" style="margin:0">
+                    Layers are ${sizes.frame.width}px wide: the ${sizes.frame.inner_width}px profile card plus the art past its sides. Top layers sit at the top of the card and bottom layers at the
+                    bottom; front layers go over the card and back layers behind it. At least one layer is needed.
+                </p>
+                <div class="form-grid">
+                    <label>Reaches above the card<span class="hint">How many pixels of the top layers stick out above the card.</span><input name="overflow_top" type="number" min="0" max="2000" step="1" value="${item?.overflow_top ?? 280}" /></label>
+                    <label>Reaches below the card<span class="hint">How many pixels of the bottom layers stick out below it.</span><input name="overflow_bottom" type="number" min="0" max="2000" step="1" value="${item?.overflow_bottom ?? 190}" /></label>
+                </div>
+                ${artField("front_top", "Front, top", "", a.front_top)} ${artField("front_bottom", "Front, bottom", "", a.front_bottom)} ${artField("back_top", "Back, top", "", a.back_top)}
+                ${artField("back_bottom", "Back, bottom", "", a.back_bottom)}`;
+        default:
+            return "";
+    }
+}
+
+function openStoreItem(pack, item, refresh) {
+    let type = item?.type ?? 0;
+    const art = {};
+    const body = openDrawer(
+        item ? `Edit ${storeTypeName(item.type).toLowerCase()}` : `Add to ${pack.name}`,
+        html`
+            <form id="store-item-form" class="stack">
+                ${item
+                    ? ""
+                    : html`<label>Type<select name="type">${options(STORE_TYPES.map(([t, name]) => [String(t), name]), "0")}</select><span class="hint" id="store-type-hint">${STORE_TYPES[0][2]}</span></label>`}
+                <label>Name<input name="name" required maxlength="100" value="${item?.name ?? ""}" placeholder="Pumpkin Crown" /></label>
+                <label>Summary<span class="hint">Optional. Shown in the shop; each type has a default.</span><input name="summary" maxlength="500" value="${item?.summary ?? ""}" /></label>
+                <label>Description for screen readers<span class="hint">What it looks like, for people who can't see it.</span><input name="label" maxlength="500" value="${item?.label ?? ""}" /></label>
+                <div class="stack" id="store-type-fields"></div>
+                <div class="form-actions">
+                    <button class="btn" id="store-item-back" type="button" style="margin-right:auto">Back to ${pack.name}</button>
+                    ${item ? html`<button class="btn danger" id="store-item-delete" type="button">Delete</button>` : ""}
+                    <button class="btn primary" type="submit">${item ? "Save" : "Add item"}</button>
+                </div>
+            </form>
+        `,
+    );
+    const form = $("#store-item-form", body);
+    const renderFields = () => {
+        for (const key of Object.keys(art)) delete art[key];
+        mount($("#store-type-fields", body), storeItemFields(type, item));
+        for (const input of $$("[data-art]", form)) input.addEventListener("change", async () => (art[input.dataset.art] = await pickArt(input)));
+        for (const btn of $$("[data-art-remove]", form))
+            btn.addEventListener("click", () => {
+                art[btn.dataset.artRemove] = null;
+                mount(btn.parentElement, html`<span class="muted">Removed when you save</span>`);
+            });
+    };
+    renderFields();
+    form.type?.addEventListener("change", () => {
+        type = Number(form.type.value);
+        $("#store-type-hint").textContent = STORE_TYPES.find(([t]) => t === type)?.[2] ?? "";
+        renderFields();
+    });
+
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const payload = { name: form.name.value, summary: form.summary.value, label: form.label.value };
+        if (!item) payload.type = type;
+        if (type === 2) payload.palette = form.palette.value;
+        if (type === 1) Object.assign(payload, { duration: Number(form.duration.value) || 3000, loop: form.loop.checked });
+        if (type === 3) Object.assign(payload, { overflow_top: Number(form.overflow_top.value) || 0, overflow_bottom: Number(form.overflow_bottom.value) || 0 });
+        const changed = Object.fromEntries(Object.entries(art).filter(([, v]) => v !== undefined && (item || v)));
+        if (Object.keys(changed).length) payload.art = changed;
+        const saved = await act(
+            $("button[type=submit]", form),
+            () => (item ? api(`/admin/store/items/${item.id}`, { method: "PATCH", body: payload }) : api(`/admin/store/packs/${pack.id}/items`, { method: "POST", body: payload })),
+            item ? "Item saved" : "Item added",
+        );
+        if (saved) {
+            await refresh();
+            openPack(pack.id, refresh);
+        }
+    });
+    $("#store-item-back", body).addEventListener("click", () => openPack(pack.id, refresh));
+    $("#store-item-delete", body)?.addEventListener("click", async (e) => {
+        if (!confirm(`Delete "${item.name}"? People who have it stop seeing it.`)) return;
+        const done = await act(e.currentTarget, () => api(`/admin/store/items/${item.id}`, { method: "DELETE" }), "Item deleted");
+        if (done !== undefined) {
+            await refresh();
+            openPack(pack.id, refresh);
         }
     });
 }

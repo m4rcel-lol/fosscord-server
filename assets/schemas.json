@@ -10808,6 +10808,263 @@
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
+    "AdminStorePackCreateSchema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "minLength": 1,
+                "maxLength": 100,
+                "type": "string"
+            },
+            "summary": {
+                "maxLength": 500,
+                "type": "string"
+            },
+            "banner_data": {
+                "description": "Wide banner shown at the top of the pack in the shop, as a data: URI image",
+                "type": "string"
+            },
+            "logo_data": {
+                "description": "Logo shown on the banner, as a data: URI image",
+                "type": "string"
+            },
+            "position": {
+                "type": "integer"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "name"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminStorePackUpdateSchema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "minLength": 1,
+                "maxLength": 100,
+                "type": "string"
+            },
+            "summary": {
+                "maxLength": 500,
+                "type": "string"
+            },
+            "banner_data": {
+                "description": "New banner as a data: URI image, or null to remove it",
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "logo_data": {
+                "description": "New logo as a data: URI image, or null to remove it",
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "position": {
+                "type": "integer"
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminStoreBuiltinPackUpdateSchema": {
+        "type": "object",
+        "properties": {
+            "hidden": {
+                "description": "Take the pack out of the shop; people who already have its items keep them",
+                "type": "boolean"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "hidden"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminStoreItemCreateSchema": {
+        "type": "object",
+        "properties": {
+            "type": {
+                "description": "0 avatar decoration, 1 profile effect, 2 nameplate, 3 profile frame",
+                "enum": [
+                    0,
+                    1,
+                    2,
+                    3
+                ],
+                "type": "number"
+            },
+            "name": {
+                "minLength": 1,
+                "maxLength": 100,
+                "type": "string"
+            },
+            "summary": {
+                "maxLength": 500,
+                "type": "string"
+            },
+            "label": {
+                "description": "What it looks like, read out by screen readers",
+                "maxLength": 500,
+                "type": "string"
+            },
+            "palette": {
+                "description": "Nameplates: the color behind the name",
+                "type": "string"
+            },
+            "duration": {
+                "description": "Profile effects: how long one play of the animation lasts, in milliseconds",
+                "minimum": 100,
+                "maximum": 60000,
+                "type": "integer"
+            },
+            "loop": {
+                "description": "Profile effects: play the animation on repeat",
+                "type": "boolean"
+            },
+            "overflow_top": {
+                "description": "Profile frames: how far the top layers reach above the profile card, in pixels at 1200px wide",
+                "minimum": 0,
+                "maximum": 2000,
+                "type": "integer"
+            },
+            "overflow_bottom": {
+                "description": "Profile frames: how far the bottom layers reach below the profile card",
+                "minimum": 0,
+                "maximum": 2000,
+                "type": "integer"
+            },
+            "position": {
+                "type": "integer"
+            },
+            "art": {
+                "description": "Art for a store item, each a data: URI to upload or null to remove. Which ones apply depends on the type:\navatar decorations use image; nameplates static (a still image) and motion (a webm/mp4 video or an animated image);\nprofile effects effect (an animated image drawn over the profile card), thumbnail and reduced (shown instead when\nanimations are reduced); profile frames front_top, front_bottom, back_top and back_bottom (1312px wide layers)",
+                "$ref": "#/definitions/AdminStoreItemArt"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "name",
+            "type"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminStoreItemUpdateSchema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "minLength": 1,
+                "maxLength": 100,
+                "type": "string"
+            },
+            "summary": {
+                "maxLength": 500,
+                "type": "string"
+            },
+            "label": {
+                "maxLength": 500,
+                "type": "string"
+            },
+            "palette": {
+                "type": "string"
+            },
+            "duration": {
+                "minimum": 100,
+                "maximum": 60000,
+                "type": "integer"
+            },
+            "loop": {
+                "type": "boolean"
+            },
+            "overflow_top": {
+                "minimum": 0,
+                "maximum": 2000,
+                "type": "integer"
+            },
+            "overflow_bottom": {
+                "minimum": 0,
+                "maximum": 2000,
+                "type": "integer"
+            },
+            "position": {
+                "type": "integer"
+            },
+            "art": {
+                "description": "Art for a store item, each a data: URI to upload or null to remove. Which ones apply depends on the type:\navatar decorations use image; nameplates static (a still image) and motion (a webm/mp4 video or an animated image);\nprofile effects effect (an animated image drawn over the profile card), thumbnail and reduced (shown instead when\nanimations are reduced); profile frames front_top, front_bottom, back_top and back_bottom (1312px wide layers)",
+                "$ref": "#/definitions/AdminStoreItemArt"
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminCustomGameCreateSchema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "minLength": 1,
+                "maxLength": 100,
+                "type": "string"
+            },
+            "aliases": {
+                "description": "Other names people search it by",
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "icon_data": {
+                "description": "Square icon as a data: URI image",
+                "type": "string"
+            },
+            "cover_data": {
+                "description": "Cover art as a data: URI image",
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "name"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminCustomGameUpdateSchema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "minLength": 1,
+                "maxLength": 100,
+                "type": "string"
+            },
+            "aliases": {
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "icon_data": {
+                "description": "New icon as a data: URI image, or null to remove it",
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "cover_data": {
+                "description": "New cover art as a data: URI image, or null to remove it",
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
     "AdminOfficialAccountUpdateSchema": {
         "type": "object",
         "properties": {
@@ -23644,6 +23901,74 @@
             "verifying"
         ],
         "type": "string",
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "AdminStoreItemArt": {
+        "description": "Art for a store item, each a data: URI to upload or null to remove. Which ones apply depends on the type:\navatar decorations use image; nameplates static (a still image) and motion (a webm/mp4 video or an animated image);\nprofile effects effect (an animated image drawn over the profile card), thumbnail and reduced (shown instead when\nanimations are reduced); profile frames front_top, front_bottom, back_top and back_bottom (1312px wide layers)",
+        "type": "object",
+        "properties": {
+            "image": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "static": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "motion": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "effect": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "thumbnail": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "reduced": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "front_top": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "front_bottom": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "back_top": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "back_bottom": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "MessageReferenceIds": {

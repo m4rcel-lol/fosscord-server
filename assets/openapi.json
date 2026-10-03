@@ -9888,6 +9888,241 @@
                     "status"
                 ]
             },
+            "AdminStorePackCreateSchema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "minLength": 1,
+                        "maxLength": 100,
+                        "type": "string"
+                    },
+                    "summary": {
+                        "maxLength": 500,
+                        "type": "string"
+                    },
+                    "banner_data": {
+                        "description": "Wide banner shown at the top of the pack in the shop, as a data: URI image",
+                        "type": "string"
+                    },
+                    "logo_data": {
+                        "description": "Logo shown on the banner, as a data: URI image",
+                        "type": "string"
+                    },
+                    "position": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "name"
+                ]
+            },
+            "AdminStorePackUpdateSchema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "minLength": 1,
+                        "maxLength": 100,
+                        "type": "string"
+                    },
+                    "summary": {
+                        "maxLength": 500,
+                        "type": "string"
+                    },
+                    "banner_data": {
+                        "description": "New banner as a data: URI image, or null to remove it",
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "logo_data": {
+                        "description": "New logo as a data: URI image, or null to remove it",
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "position": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "AdminStoreBuiltinPackUpdateSchema": {
+                "type": "object",
+                "properties": {
+                    "hidden": {
+                        "description": "Take the pack out of the shop; people who already have its items keep them",
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "hidden"
+                ]
+            },
+            "AdminStoreItemCreateSchema": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "description": "0 avatar decoration, 1 profile effect, 2 nameplate, 3 profile frame",
+                        "enum": [
+                            0,
+                            1,
+                            2,
+                            3
+                        ],
+                        "type": "number"
+                    },
+                    "name": {
+                        "minLength": 1,
+                        "maxLength": 100,
+                        "type": "string"
+                    },
+                    "summary": {
+                        "maxLength": 500,
+                        "type": "string"
+                    },
+                    "label": {
+                        "description": "What it looks like, read out by screen readers",
+                        "maxLength": 500,
+                        "type": "string"
+                    },
+                    "palette": {
+                        "description": "Nameplates: the color behind the name",
+                        "type": "string"
+                    },
+                    "duration": {
+                        "description": "Profile effects: how long one play of the animation lasts, in milliseconds",
+                        "minimum": 100,
+                        "maximum": 60000,
+                        "type": "integer"
+                    },
+                    "loop": {
+                        "description": "Profile effects: play the animation on repeat",
+                        "type": "boolean"
+                    },
+                    "overflow_top": {
+                        "description": "Profile frames: how far the top layers reach above the profile card, in pixels at 1200px wide",
+                        "minimum": 0,
+                        "maximum": 2000,
+                        "type": "integer"
+                    },
+                    "overflow_bottom": {
+                        "description": "Profile frames: how far the bottom layers reach below the profile card",
+                        "minimum": 0,
+                        "maximum": 2000,
+                        "type": "integer"
+                    },
+                    "position": {
+                        "type": "integer"
+                    },
+                    "art": {
+                        "description": "Art for a store item, each a data: URI to upload or null to remove. Which ones apply depends on the type:\navatar decorations use image; nameplates static (a still image) and motion (a webm/mp4 video or an animated image);\nprofile effects effect (an animated image drawn over the profile card), thumbnail and reduced (shown instead when\nanimations are reduced); profile frames front_top, front_bottom, back_top and back_bottom (1312px wide layers)",
+                        "$ref": "#/components/schemas/AdminStoreItemArt"
+                    }
+                },
+                "required": [
+                    "name",
+                    "type"
+                ]
+            },
+            "AdminStoreItemUpdateSchema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "minLength": 1,
+                        "maxLength": 100,
+                        "type": "string"
+                    },
+                    "summary": {
+                        "maxLength": 500,
+                        "type": "string"
+                    },
+                    "label": {
+                        "maxLength": 500,
+                        "type": "string"
+                    },
+                    "palette": {
+                        "type": "string"
+                    },
+                    "duration": {
+                        "minimum": 100,
+                        "maximum": 60000,
+                        "type": "integer"
+                    },
+                    "loop": {
+                        "type": "boolean"
+                    },
+                    "overflow_top": {
+                        "minimum": 0,
+                        "maximum": 2000,
+                        "type": "integer"
+                    },
+                    "overflow_bottom": {
+                        "minimum": 0,
+                        "maximum": 2000,
+                        "type": "integer"
+                    },
+                    "position": {
+                        "type": "integer"
+                    },
+                    "art": {
+                        "description": "Art for a store item, each a data: URI to upload or null to remove. Which ones apply depends on the type:\navatar decorations use image; nameplates static (a still image) and motion (a webm/mp4 video or an animated image);\nprofile effects effect (an animated image drawn over the profile card), thumbnail and reduced (shown instead when\nanimations are reduced); profile frames front_top, front_bottom, back_top and back_bottom (1312px wide layers)",
+                        "$ref": "#/components/schemas/AdminStoreItemArt"
+                    }
+                }
+            },
+            "AdminCustomGameCreateSchema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "minLength": 1,
+                        "maxLength": 100,
+                        "type": "string"
+                    },
+                    "aliases": {
+                        "description": "Other names people search it by",
+                        "maxItems": 20,
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "icon_data": {
+                        "description": "Square icon as a data: URI image",
+                        "type": "string"
+                    },
+                    "cover_data": {
+                        "description": "Cover art as a data: URI image",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "name"
+                ]
+            },
+            "AdminCustomGameUpdateSchema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "minLength": 1,
+                        "maxLength": 100,
+                        "type": "string"
+                    },
+                    "aliases": {
+                        "maxItems": 20,
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "icon_data": {
+                        "description": "New icon as a data: URI image, or null to remove it",
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "cover_data": {
+                        "description": "New cover art as a data: URI image, or null to remove it",
+                        "type": "string",
+                        "nullable": true
+                    }
+                }
+            },
             "AdminOfficialAccountUpdateSchema": {
                 "type": "object",
                 "properties": {
@@ -21834,6 +22069,52 @@
                     "verifying"
                 ],
                 "type": "string"
+            },
+            "AdminStoreItemArt": {
+                "description": "Art for a store item, each a data: URI to upload or null to remove. Which ones apply depends on the type:\navatar decorations use image; nameplates static (a still image) and motion (a webm/mp4 video or an animated image);\nprofile effects effect (an animated image drawn over the profile card), thumbnail and reduced (shown instead when\nanimations are reduced); profile frames front_top, front_bottom, back_top and back_bottom (1312px wide layers)",
+                "type": "object",
+                "properties": {
+                    "image": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "static": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "motion": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "effect": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "thumbnail": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "reduced": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "front_top": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "front_bottom": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "back_top": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "back_bottom": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                }
             },
             "MessageReferenceIds": {
                 "type": "object",
@@ -45424,6 +45705,318 @@
                 ]
             }
         },
+        "/api/admin/store/packs/": {
+            "post": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Add a pack to the store",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminStorePackCreateSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/admin/store/packs/{pack_id}/items/": {
+            "post": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Add an avatar decoration, profile effect, nameplate or profile frame to a store pack",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminStoreItemCreateSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "pack_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "pack_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/admin/store/packs/{pack_id}/": {
+            "patch": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Change a store pack's name, summary, art or position",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminStorePackUpdateSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "pack_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "pack_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            },
+            "delete": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Delete a store pack and its items; people who have them stop seeing them on profiles",
+                "responses": {
+                    "204": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "pack_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "pack_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/admin/store/items/{item_id}/": {
+            "patch": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Change a store item's details or art",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminStoreItemUpdateSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "item_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "item_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            },
+            "delete": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Delete a store item; people who have it stop seeing it on profiles",
+                "responses": {
+                    "204": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "item_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "item_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/admin/store/": {
+            "get": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "The store's own packs and items, and the mirrored discord packs with whether each is in the shop",
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/admin/store/builtin/{sku_id}/": {
+            "patch": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Take a mirrored discord pack out of the shop or put it back; people who have its items keep them",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminStoreBuiltinPackUpdateSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "sku_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "sku_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
         "/api/admin/status/incidents/": {
             "get": {
                 "x-right-required": "OPERATOR",
@@ -46184,6 +46777,144 @@
                             "type": "string"
                         },
                         "description": "guild_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/admin/games/": {
+            "get": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "List the games admins added for users to put on their profiles and servers",
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            },
+            "post": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Add a custom game users can pick for their profile and server",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminCustomGameCreateSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/admin/games/{game_id}/": {
+            "patch": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Change a custom game's name, aliases or art",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminCustomGameUpdateSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "game_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "game_id"
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            },
+            "delete": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Remove a custom game; profiles and servers that list it stop showing it",
+                "responses": {
+                    "204": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "game_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "game_id"
                     }
                 ],
                 "tags": [

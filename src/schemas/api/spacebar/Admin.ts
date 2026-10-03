@@ -343,6 +343,199 @@ export interface AdminStatusIncidentPostUpdateSchema {
     body: string;
 }
 
+export interface AdminStorePackCreateSchema {
+    /**
+     * @minLength 1
+     * @maxLength 100
+     */
+    name: string;
+    /**
+     * @maxLength 500
+     */
+    summary?: string;
+    /**
+     * Wide banner shown at the top of the pack in the shop, as a data: URI image
+     */
+    banner_data?: string;
+    /**
+     * Logo shown on the banner, as a data: URI image
+     */
+    logo_data?: string;
+    position?: number;
+}
+
+export interface AdminStorePackUpdateSchema {
+    /**
+     * @minLength 1
+     * @maxLength 100
+     */
+    name?: string;
+    /**
+     * @maxLength 500
+     */
+    summary?: string;
+    /**
+     * New banner as a data: URI image, or null to remove it
+     */
+    banner_data?: string | null;
+    /**
+     * New logo as a data: URI image, or null to remove it
+     */
+    logo_data?: string | null;
+    position?: number;
+}
+
+export interface AdminStoreBuiltinPackUpdateSchema {
+    /**
+     * Take the pack out of the shop; people who already have its items keep them
+     */
+    hidden: boolean;
+}
+
+/**
+ * Art for a store item, each a data: URI to upload or null to remove. Which ones apply depends on the type:
+ * avatar decorations use image; nameplates static (a still image) and motion (a webm/mp4 video or an animated image);
+ * profile effects effect (an animated image drawn over the profile card), thumbnail and reduced (shown instead when
+ * animations are reduced); profile frames front_top, front_bottom, back_top and back_bottom (1312px wide layers)
+ */
+export interface AdminStoreItemArt {
+    image?: string | null;
+    static?: string | null;
+    motion?: string | null;
+    effect?: string | null;
+    thumbnail?: string | null;
+    reduced?: string | null;
+    front_top?: string | null;
+    front_bottom?: string | null;
+    back_top?: string | null;
+    back_bottom?: string | null;
+}
+
+export interface AdminStoreItemCreateSchema {
+    /**
+     * 0 avatar decoration, 1 profile effect, 2 nameplate, 3 profile frame
+     */
+    type: 0 | 1 | 2 | 3;
+    /**
+     * @minLength 1
+     * @maxLength 100
+     */
+    name: string;
+    /**
+     * @maxLength 500
+     */
+    summary?: string;
+    /**
+     * What it looks like, read out by screen readers
+     * @maxLength 500
+     */
+    label?: string;
+    /**
+     * Nameplates: the color behind the name
+     */
+    palette?: string;
+    /**
+     * Profile effects: how long one play of the animation lasts, in milliseconds
+     * @minimum 100
+     * @maximum 60000
+     */
+    duration?: number;
+    /**
+     * Profile effects: play the animation on repeat
+     */
+    loop?: boolean;
+    /**
+     * Profile frames: how far the top layers reach above the profile card, in pixels at 1200px wide
+     * @minimum 0
+     * @maximum 2000
+     */
+    overflow_top?: number;
+    /**
+     * Profile frames: how far the bottom layers reach below the profile card
+     * @minimum 0
+     * @maximum 2000
+     */
+    overflow_bottom?: number;
+    position?: number;
+    art?: AdminStoreItemArt;
+}
+
+export interface AdminStoreItemUpdateSchema {
+    /**
+     * @minLength 1
+     * @maxLength 100
+     */
+    name?: string;
+    /**
+     * @maxLength 500
+     */
+    summary?: string;
+    /**
+     * @maxLength 500
+     */
+    label?: string;
+    palette?: string;
+    /**
+     * @minimum 100
+     * @maximum 60000
+     */
+    duration?: number;
+    loop?: boolean;
+    /**
+     * @minimum 0
+     * @maximum 2000
+     */
+    overflow_top?: number;
+    /**
+     * @minimum 0
+     * @maximum 2000
+     */
+    overflow_bottom?: number;
+    position?: number;
+    art?: AdminStoreItemArt;
+}
+
+export interface AdminCustomGameCreateSchema {
+    /**
+     * @minLength 1
+     * @maxLength 100
+     */
+    name: string;
+    /**
+     * Other names people search it by
+     * @maxItems 20
+     */
+    aliases?: string[];
+    /**
+     * Square icon as a data: URI image
+     */
+    icon_data?: string;
+    /**
+     * Cover art as a data: URI image
+     */
+    cover_data?: string;
+}
+
+export interface AdminCustomGameUpdateSchema {
+    /**
+     * @minLength 1
+     * @maxLength 100
+     */
+    name?: string;
+    /**
+     * @maxItems 20
+     */
+    aliases?: string[];
+    /**
+     * New icon as a data: URI image, or null to remove it
+     */
+    icon_data?: string | null;
+    /**
+     * New cover art as a data: URI image, or null to remove it
+     */
+    cover_data?: string | null;
+}
+
 export interface AdminOfficialAccountUpdateSchema {
     /**
      * New profile picture as a data: URI image, or null for the default one

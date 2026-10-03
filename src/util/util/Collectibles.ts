@@ -66,7 +66,8 @@ interface CollectiblePrices {
     [group: string]: { country_prices: { country_code: string; prices: { amount: number; currency: string; exponent: number }[] } };
 }
 
-type Catalog = { categories: CollectibleCategory[]; products: Map<string, CollectibleProduct>; items: Map<string, CollectibleItem> };
+// builtin keeps every pack of the mirrored catalog, including the ones taken out of the shop
+type Catalog = { categories: CollectibleCategory[]; products: Map<string, CollectibleProduct>; items: Map<string, CollectibleItem>; builtin?: CollectibleCategory[] };
 
 const SOURCES = {
     catalog: {
@@ -83,6 +84,29 @@ const REFRESH_MS = Number(process.env.COLLECTIBLES_REFRESH_HOURS || 12) * 3_600_
 
 let catalog: Promise<Catalog> | undefined;
 let refreshTimer: NodeJS.Timeout | undefined;
+
+// the admin panel's own packs, and the mirrored packs it took out of the shop. The api registers this, since the
+// database isn't reachable from here
+export type CustomCollectibles = { categories: CollectibleCategory[]; hidden: string[] };
+let customSource: (() => Promise<CustomCollectibles>) | undefined;
+
+const withCustom = async (base: Catalog): Promise<Catalog> => {
+    const custom = await customSource?.().catch((e) => {
+        console.error("[Collectibles] could not load the custom packs", e);
+        return undefined;
+    });
+    if (!custom) return { ...base, builtin: base.categories };
+    const products = new Map(base.products);
+    const items = new Map(base.items);
+    for (const category of custom.categories)
+        for (const product of category.products) {
+            products.set(product.sku_id, product);
+            for (const item of product.items) items.set(item.sku_id, item);
+        }
+    // hidden packs only leave the shop, so people who already have their items can keep using them
+    const hidden = new Set(custom.hidden);
+    return { categories: [...custom.categories, ...base.categories.filter((x) => !hidden.has(x.sku_id))], products, items, builtin: base.categories };
+};
 
 const localize = (raw: string) => {
     const branded = raw.replace(/\bDiscord\b/g, JSON.stringify(instanceName()).slice(1, -1));
@@ -174,7 +198,7 @@ const refresh = async () => {
         lastRefresh = { at: new Date().toISOString(), ok: false, error: `Could not download ${SOURCES.catalog.url}` };
         return lastRefresh;
     }
-    const next = parse(raw, effectsRaw ?? (await fs.readFile(SOURCES.effects.file, "utf8").catch(() => undefined)));
+    const next = await withCustom(parse(raw, effectsRaw ?? (await fs.readFile(SOURCES.effects.file, "utf8").catch(() => undefined))));
     catalog = Promise.resolve(next);
     console.log(`[Collectibles] refreshed catalog: ${next.categories.length} categories, ${next.products.size} products`);
     lastRefresh = {
@@ -197,10 +221,10 @@ const load = async (): Promise<Catalog> => {
     const [catalogFile, effectsFile] = await Promise.all([read(SOURCES.catalog), read(SOURCES.effects)]);
     if (!catalogFile.raw) {
         catalog = undefined;
-        return { categories: [], products: new Map(), items: new Map() };
+        return withCustom({ categories: [], products: new Map(), items: new Map() });
     }
     if (catalogFile.stale || effectsFile.stale) void refresh();
-    return parse(catalogFile.raw, effectsFile.raw);
+    return withCustom(parse(catalogFile.raw, effectsFile.raw));
 };
 
 const listedSkus = (category: CollectibleCategory) => category.products.map((x) => x.sku_id);
@@ -209,6 +233,16 @@ export const Collectibles = {
     get: () => (catalog ??= load()),
 
     refresh,
+
+    setCustomSource(source: () => Promise<CustomCollectibles>) {
+        customSource = source;
+        catalog = undefined;
+    },
+
+    /** Rebuilds the catalog from the cached files, for when the custom packs change. */
+    reload() {
+        catalog = undefined;
+    },
 
     async status() {
         const [catalogSource, effectsSource] = await Promise.all([sourceStatus(SOURCES.catalog), sourceStatus(SOURCES.effects)]);
@@ -224,6 +258,12 @@ export const Collectibles = {
 
     async categories() {
         return (await Collectibles.get()).categories;
+    },
+
+    /** Every pack of the mirrored catalog, including hidden ones. */
+    async builtinCategories() {
+        const loaded = await Collectibles.get();
+        return loaded.builtin ?? loaded.categories;
     },
 
     async product(sku_id: string) {
