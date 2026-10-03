@@ -542,6 +542,7 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
                     throw new HTTPError("Referenced message not found in the specified channel", 404);
                 if (referenced) message.referenced_message = referenced;
                 else message.message_reference = undefined;
+                if (referenced && opts.type === MessageType.THREAD_STARTER_MESSAGE) await Message.fillReplies([referenced]);
             }
             if (
                 message.message_reference &&
