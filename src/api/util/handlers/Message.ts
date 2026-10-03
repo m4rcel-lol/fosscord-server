@@ -449,8 +449,13 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
             });
 
             await message.author.save();
+        } else if (message.author.username !== message.webhook.name || (message.author.avatar ?? null) !== (message.webhook.avatar ?? null)) {
+            message.author.username = message.webhook.name;
+            message.author.avatar = message.webhook.avatar;
+            await User.update({ id: message.author.id }, { username: message.author.username, avatar: message.author.avatar ?? (() => "NULL") });
         }
 
+        if (!isEdit) message.avatar = message.webhook.avatar ?? undefined;
         if (opts.username) {
             message.username = opts.username;
             message.author.username = message.username;

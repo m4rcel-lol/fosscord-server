@@ -378,6 +378,8 @@ export class Message extends BaseClass {
 
             author_id: undefined,
             member_id: undefined,
+            username: undefined,
+            avatar: undefined,
             webhook_id: this.webhook_id ?? undefined,
             application_id: this.application_id ?? undefined,
             mentions: this.mentions?.map((user) => {
@@ -403,7 +405,7 @@ export class Message extends BaseClass {
                 ...(this.author?.toPartialUser() ?? undefined),
                 // Webhooks
                 username: this.username ?? this.author?.username ?? null,
-                avatar: this.avatar ?? this.author?.avatar ?? null,
+                avatar: (this.webhook_id ? this.avatar : (this.avatar ?? this.author?.avatar)) ?? null,
             },
             activity: this.activity ?? undefined,
             application:
