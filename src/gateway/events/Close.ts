@@ -41,7 +41,11 @@ export async function Close(this: WebSocket, code: number, reason: Buffer) {
                 const s = await Session.findOne({
                     where: { user_id: this.user_id, session_id: authSessionId },
                 });
-                if (!s || (s.last_seen?.getTime() ?? 0) > closedAt || openConnections.some((x) => x !== this && x.session_id === authSessionId && x.user_id === this.user_id))
+                if (
+                    !s ||
+                    (s.last_seen?.getTime() ?? 0) > closedAt ||
+                    openConnections.some((x) => x !== this && x.session?.session_id === authSessionId && x.user_id === this.user_id)
+                )
                     return;
                 await Session.update({ user_id: this.user_id, session_id: authSessionId }, { status: "offline", activities: [], client_status: {} });
                 await emitSessionsReplace(this.user_id);

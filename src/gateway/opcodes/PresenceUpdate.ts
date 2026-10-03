@@ -62,7 +62,7 @@ export async function onPresenceUpdate(this: WebSocket, { d }: Payload) {
 async function savePresence(this: WebSocket) {
     if (!this.session) return;
     await Session.update(
-        { session_id: this.session_id },
+        { session_id: this.session.session_id },
         { status: this.session.status, activities: this.session.activities, client_status: this.session.client_status, last_seen: this.session.last_seen },
     );
     await broadcastPresence(this.user_id);
