@@ -10375,9 +10375,7 @@
                         "additionalProperties": false
                     },
                     "intents": {
-                        "type": "number",
-                        "properties": {},
-                        "additionalProperties": false
+                        "type": "number"
                     },
                     "presence": {
                         "$ref": "#/components/schemas/ActivitySchema"
@@ -10396,9 +10394,7 @@
                         "maxItems": 2,
                         "type": "array",
                         "items": {
-                            "type": "number",
-                            "properties": {},
-                            "additionalProperties": false
+                            "type": "number"
                         }
                     },
                     "guild_subscriptions": {
@@ -21832,6 +21828,9 @@
     "tags": [
         {
             "name": ""
+        },
+        {
+            "name": "__development"
         },
         {
             "name": "_spacebar"
@@ -47090,6 +47089,21 @@
                         "label": "Spacebar-only",
                         "color": "red"
                     }
+                ]
+            }
+        },
+        "/__development/build_overrides/": {
+            "get": {
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No description available"
+                    }
+                },
+                "tags": [
+                    "__development"
                 ]
             }
         },
