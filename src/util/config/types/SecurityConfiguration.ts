@@ -45,4 +45,5 @@ export class SecurityConfiguration {
     cdnSignatureDuration: string = "24h";
     cdnSignatureIncludeIp: boolean = true;
     cdnSignatureIncludeUserAgent: boolean = true;
+    allowPrivateNetworkRequests: boolean = false;
 }

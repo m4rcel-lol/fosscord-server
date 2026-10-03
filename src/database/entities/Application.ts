@@ -111,6 +111,9 @@ export class Application extends BaseClass {
     @Column({ type: "jsonb", nullable: true })
     install_params?: { scopes: string[]; permissions: string };
 
+    @Column({ type: "jsonb", nullable: true })
+    integration_types_config?: Partial<Record<"0" | "1", { oauth2_install_params?: { scopes: string[]; permissions: string } }>> | null;
+
     @Column({ nullable: true })
     terms_of_service_url?: string;
 

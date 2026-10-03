@@ -431,7 +431,8 @@ textarea[aria-invalid="true"] {
     color: var(--color-text-primary);
 }
 
-input[type="checkbox"] {
+input[type="checkbox"],
+input[type="radio"] {
     width: 18px;
     height: 18px;
     margin: 0;
@@ -464,6 +465,48 @@ input[type="checkbox"] {
     font-weight: 500;
     color: var(--color-text-primary);
     cursor: pointer;
+}
+
+.radio-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 24px;
+}
+
+.emoji-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+    margin-top: 20px;
+}
+
+.emoji-grid > p {
+    grid-column: 1 / -1;
+}
+
+.emoji-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 12px 12px;
+    border-radius: 12px;
+    background: var(--color-bg-input);
+}
+
+.emoji-item img {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+}
+
+.emoji-item span {
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .token-box {

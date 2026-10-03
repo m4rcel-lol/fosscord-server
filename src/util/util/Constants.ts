@@ -838,7 +838,7 @@ export const DiscordApiErrors = {
         return new ApiError("Missing required OAuth2 scope", 50026);
     },
     get INVALID_WEBHOOK_TOKEN_PROVIDED() {
-        return new ApiError("Invalid webhook token provided", 50027);
+        return new ApiError("Invalid Webhook Token", 50027, 401);
     },
     get INVALID_ROLE() {
         return new ApiError("Invalid role", 50028);

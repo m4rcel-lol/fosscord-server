@@ -129,6 +129,30 @@ router.patch(
             await app.bot.save();
         }
 
+        if (body.custom_install_url && !/^https?:$/.test(URL.canParse(body.custom_install_url) ? new URL(body.custom_install_url).protocol : ""))
+            throw FieldErrors({ custom_install_url: { code: "URL_TYPE_INVALID_URL", message: "Not a well formed URL." } });
+        if (body.custom_install_url === "") body.custom_install_url = null;
+
+        if (body.integration_types_config) {
+            const config = body.integration_types_config;
+            if (!config["0"] && !config["1"]) throw FieldErrors({ integration_types_config: { code: "BASE_TYPE_REQUIRED", message: "Pick at least one installation context." } });
+            for (const [type, entry] of Object.entries(config)) {
+                const params = entry?.oauth2_install_params;
+                if (!params) continue;
+                const allowed = type === "1" ? ["applications.commands"] : ["bot", "applications.commands", "webhook.incoming"];
+                if (!params.scopes.length || params.scopes.some((scope) => !allowed.includes(scope)) || !/^\d+$/.test(params.permissions || "0"))
+                    throw FieldErrors({
+                        [`integration_types_config.${type}.oauth2_install_params`]: { code: "BASE_TYPE_CHOICES", message: "Invalid install scopes or permissions." },
+                    });
+                params.permissions = params.scopes.includes("bot") ? params.permissions || "0" : "0";
+            }
+        }
+
+        if (body.flags !== undefined) {
+            const editable = (1 << 13) | (1 << 15) | (1 << 19);
+            body.flags = (app.flags & ~editable) | (body.flags & editable);
+        }
+
         app.assign(body);
 
         await app.save();

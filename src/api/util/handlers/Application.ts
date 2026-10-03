@@ -20,7 +20,7 @@ import { createPrivateKey, generateKeyPairSync, randomBytes, sign } from "node:c
 import { ILike, In, Not, IsNull } from "typeorm";
 import { Application, ApplicationCommand, EmbeddedActivity, Member } from "@spacebar/database";
 import { serializeCommand } from "./ApplicationCommands";
-import { Snowflake } from "@spacebar/util";
+import { isPublicUrl, Snowflake } from "@spacebar/util";
 
 export async function ensureInteractionKeys(applicationId: string) {
     const app = await Application.findOneOrFail({ where: { id: applicationId }, select: { id: true, verify_key: true, interactions_private_key: true } });
@@ -36,8 +36,10 @@ export async function postSignedInteraction(url: string, privateKeyPem: string, 
     const body = JSON.stringify(payload);
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const signature = signatureOverride ?? sign(null, Buffer.from(timestamp + body), createPrivateKey(privateKeyPem)).toString("hex");
+    if (!(await isPublicUrl(url, { httpsOnly: true }))) throw new Error(`interactions endpoint ${url} is not a public https url`);
     return fetch(url, {
         method: "POST",
+        redirect: "error",
         headers: {
             "content-type": "application/json",
             "user-agent": "Discord-Interactions/1.0 (+https://discord.com)",
@@ -80,8 +82,10 @@ export function toPublicApplication(app: Application) {
         terms_of_service_url: app.terms_of_service_url ?? undefined,
         privacy_policy_url: app.privacy_policy_url ?? undefined,
         custom_install_url: app.custom_install_url ?? undefined,
-        install_params: app.install_params ?? { scopes: ["bot", "applications.commands"], permissions: "0" },
-        integration_types_config: {
+        install_params: app.integration_types_config
+            ? app.integration_types_config["0"]?.oauth2_install_params
+            : (app.install_params ?? { scopes: ["bot", "applications.commands"], permissions: "0" }),
+        integration_types_config: app.integration_types_config ?? {
             "0": { oauth2_install_params: app.install_params ?? { scopes: ["bot", "applications.commands"], permissions: "0" } },
             "1": { oauth2_install_params: { scopes: ["applications.commands"], permissions: "0" } },
         },
@@ -123,7 +127,7 @@ export async function findPublicApplications(ids: string[]) {
     const activities = await EmbeddedActivity.find({ where: { application_id: In(apps.map((a) => a.id)) } });
     return apps.map((app) => {
         const activity = activities.find((a) => a.application_id === app.id);
-        return { ...toPublicApplication(app), ...(activity && { embedded_activity_config: activityConfig(activity) }) };
+        return { ...toPublicApplication(app), ...(activity && { embedded_activity_config: activityConfig(activity), embedded_surfaces: [0] }) };
     });
 }
 

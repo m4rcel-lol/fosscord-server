@@ -34,7 +34,7 @@ const LAUNCHABLE_CHANNELS = [ChannelType.GUILD_VOICE, ChannelType.GUILD_STAGE_VO
 export const BUILTIN_ACTIVITIES: Record<string, BuiltinActivity> = { [whiteboard.key]: whiteboard };
 
 export function activityApplication(activity: EmbeddedActivity) {
-    return { ...toPublicApplication(activity.application), embedded_activity_config: activityConfig(activity) };
+    return { ...toPublicApplication(activity.application), embedded_activity_config: activityConfig(activity), embedded_surfaces: [0] };
 }
 
 export async function activityShelf() {

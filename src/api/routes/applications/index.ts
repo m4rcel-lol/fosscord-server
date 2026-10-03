@@ -20,7 +20,7 @@ import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { ensureInteractionKeys, toOwnedApplication } from "@spacebar/api/util/handlers/Application";
 import { Application } from "@spacebar/database";
-import { Config, createAppBotUser } from "@spacebar/util";
+import { createAppBotUser } from "@spacebar/util";
 import { ApplicationCreateSchema } from "@spacebar/schemas";
 import { trimSpecial } from "@spacebar/extensions";
 
@@ -66,10 +66,7 @@ router.post(
             flags: 0,
         });
 
-        // april 14, 2023: discord made bot users be automatically added to all new apps
-        if (Config.get().general.autoCreateBotUsers) {
-            await createAppBotUser(app, req);
-        } else await app.save();
+        await createAppBotUser(app, req);
         await ensureInteractionKeys(app.id);
         app.verify_key = (await Application.findOneOrFail({ where: { id: app.id }, select: { id: true, verify_key: true } })).verify_key;
 

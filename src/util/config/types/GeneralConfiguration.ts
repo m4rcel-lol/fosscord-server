@@ -28,5 +28,4 @@ export class GeneralConfiguration {
     correspondenceUserID: string | null = null;
     image: string | null = null;
     instanceId: string = Snowflake.generate();
-    autoCreateBotUsers: boolean = false;
 }

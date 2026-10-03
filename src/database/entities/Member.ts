@@ -32,7 +32,15 @@ import {
     UserGuildSettings,
 } from "@spacebar/schemas";
 import { ReadyGuildDTO } from "../../util/dtos/ReadyGuildDTO";
-import { GuildCreateEvent, GuildDeleteEvent, GuildMemberAddEvent, GuildMemberRemoveEvent, GuildMemberUpdateEvent, MessageCreateEvent } from "../../util/interfaces/Event";
+import {
+    GuildCreateEvent,
+    GuildDeleteEvent,
+    GuildMemberAddEvent,
+    GuildMemberRemoveEvent,
+    GuildMemberUpdateEvent,
+    GuildRoleDeleteEvent,
+    MessageCreateEvent,
+} from "../../util/interfaces/Event";
 import { BaseClassWithoutId } from "./BaseClass";
 import { Ban } from "./Ban";
 import { Channel } from "./Channel";
@@ -226,12 +234,21 @@ export class Member extends BaseClassWithoutId {
             relations: { user: true },
         });
 
+        const managedRoles = member.user.bot ? (await Role.find({ where: { guild_id, managed: true } })).filter((role) => role.tags?.bot_id === user_id) : [];
+
         // use promise all to execute all promises at the same time -> save time
         return Promise.all([
             Member.delete({
                 id: user_id,
                 guild_id,
-            }),
+            }).then(() =>
+                Promise.all(
+                    managedRoles.map(async (role) => {
+                        await Role.delete({ id: role.id });
+                        await emitEvent({ event: "GUILD_ROLE_DELETE", guild_id, data: { guild_id, role_id: role.id } } satisfies GuildRoleDeleteEvent);
+                    }),
+                ),
+            ),
             Guild.decrement({ id: guild_id }, "member_count", 1),
 
             emitEvent({
