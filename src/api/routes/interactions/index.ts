@@ -141,7 +141,10 @@ router.post("/", route({}), async (req: Request, res: Response) => {
     let command: ApplicationCommand | null = null;
     const messageId = body.type === InteractionType.MessageComponent ? body.message_id : triggering?.messageId;
     const message = messageId ? await fetchInteractionMessage(messageId) : null;
-    if (messageId && (!message || message.channel_id !== channel.id || message.application_id !== application.id)) throw DiscordApiErrors.UNKNOWN_MESSAGE;
+    const authoredByApp =
+        !!message &&
+        (message.application_id === application.id || (!message.webhook_id && message.author_id === application.bot.id) || message.webhook?.application_id === application.id);
+    if (messageId && (!message || message.channel_id !== channel.id || !authoredByApp)) throw DiscordApiErrors.UNKNOWN_MESSAGE;
 
     switch (body.type) {
         case InteractionType.ApplicationCommand:

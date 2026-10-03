@@ -36,7 +36,7 @@ async function interactionMessage(req: Request) {
     const id = message_id === "@original" ? interaction.responseMessageId : /^\d+$/.test(message_id) ? message_id : undefined;
     const message = id ? await fetchInteractionMessage(id) : null;
     if (!message) throw DiscordApiErrors.UNKNOWN_MESSAGE;
-    const isSource = message.id === interaction.messageId && message.application_id === interaction.applicationId;
+    const isSource = message.id === interaction.messageId;
     if (!isSource && !messageBelongsToInteraction(interaction, message)) throw DiscordApiErrors.UNKNOWN_MESSAGE;
     return { interaction, message };
 }
