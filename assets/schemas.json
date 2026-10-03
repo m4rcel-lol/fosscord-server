@@ -6695,7 +6695,7 @@
             "channel_overrides": {
                 "type": "object",
                 "additionalProperties": {
-                    "$ref": "#/definitions/ChannelOverride"
+                    "$ref": "#/definitions/ChannelOverrideSchema"
                 }
             },
             "version": {
@@ -6744,6 +6744,41 @@
             "notify_highlights": {
                 "const": 0,
                 "type": "number"
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "ChannelOverrideSchema": {
+        "type": "object",
+        "properties": {
+            "message_notifications": {
+                "type": "integer"
+            },
+            "mute_config": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/MuteConfig"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "muted": {
+                "type": "boolean"
+            },
+            "channel_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "collapsed": {
+                "type": "boolean"
+            },
+            "flags": {
+                "type": "integer"
             }
         },
         "additionalProperties": false,
@@ -13275,6 +13310,16 @@
                     }
                 ]
             },
+            "private_channel_settings": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/UserGuildSettings"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
             "profile_widgets": {
                 "anyOf": [
                     {
@@ -14058,6 +14103,149 @@
             "status",
             "updated_at",
             "user_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "UserGuildSettings": {
+        "type": "object",
+        "properties": {
+            "channel_overrides": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "additionalProperties": {
+                            "$ref": "#/definitions/ChannelOverride"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "message_notifications": {
+                "type": "integer"
+            },
+            "mobile_push": {
+                "type": "boolean"
+            },
+            "mute_config": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/MuteConfig"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "muted": {
+                "type": "boolean"
+            },
+            "suppress_everyone": {
+                "type": "boolean"
+            },
+            "suppress_roles": {
+                "type": "boolean"
+            },
+            "version": {
+                "type": "integer"
+            },
+            "guild_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "flags": {
+                "type": "integer"
+            },
+            "mute_scheduled_events": {
+                "type": "boolean"
+            },
+            "hide_muted_channels": {
+                "type": "boolean"
+            },
+            "notify_highlights": {
+                "type": "integer",
+                "const": 0
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "channel_overrides",
+            "flags",
+            "guild_id",
+            "hide_muted_channels",
+            "message_notifications",
+            "mobile_push",
+            "mute_config",
+            "mute_scheduled_events",
+            "muted",
+            "notify_highlights",
+            "suppress_everyone",
+            "suppress_roles",
+            "version"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "ChannelOverride": {
+        "type": "object",
+        "properties": {
+            "message_notifications": {
+                "type": "integer"
+            },
+            "mute_config": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/MuteConfig"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "muted": {
+                "type": "boolean"
+            },
+            "channel_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "collapsed": {
+                "type": "boolean"
+            },
+            "flags": {
+                "type": "integer"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "channel_id",
+            "message_notifications",
+            "mute_config",
+            "muted"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "MuteConfig": {
+        "type": "object",
+        "properties": {
+            "end_time": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "selected_time_window": {
+                "type": "integer"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "end_time",
+            "selected_time_window"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -16337,133 +16525,6 @@
             "dms_disabled_until",
             "invites_disabled_until",
             "raid_detected_at"
-        ],
-        "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "UserGuildSettings": {
-        "type": "object",
-        "properties": {
-            "channel_overrides": {
-                "anyOf": [
-                    {
-                        "type": "object",
-                        "additionalProperties": {
-                            "$ref": "#/definitions/ChannelOverride"
-                        }
-                    },
-                    {
-                        "type": "null"
-                    }
-                ]
-            },
-            "message_notifications": {
-                "type": "integer"
-            },
-            "mobile_push": {
-                "type": "boolean"
-            },
-            "mute_config": {
-                "anyOf": [
-                    {
-                        "$ref": "#/definitions/MuteConfig"
-                    },
-                    {
-                        "type": "null"
-                    }
-                ]
-            },
-            "muted": {
-                "type": "boolean"
-            },
-            "suppress_everyone": {
-                "type": "boolean"
-            },
-            "suppress_roles": {
-                "type": "boolean"
-            },
-            "version": {
-                "type": "integer"
-            },
-            "guild_id": {
-                "type": [
-                    "null",
-                    "string"
-                ]
-            },
-            "flags": {
-                "type": "integer"
-            },
-            "mute_scheduled_events": {
-                "type": "boolean"
-            },
-            "hide_muted_channels": {
-                "type": "boolean"
-            },
-            "notify_highlights": {
-                "type": "integer",
-                "const": 0
-            }
-        },
-        "additionalProperties": false,
-        "required": [
-            "channel_overrides",
-            "flags",
-            "guild_id",
-            "hide_muted_channels",
-            "message_notifications",
-            "mobile_push",
-            "mute_config",
-            "mute_scheduled_events",
-            "muted",
-            "notify_highlights",
-            "suppress_everyone",
-            "suppress_roles",
-            "version"
-        ],
-        "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "ChannelOverride": {
-        "type": "object",
-        "properties": {
-            "message_notifications": {
-                "type": "integer"
-            },
-            "mute_config": {
-                "$ref": "#/definitions/MuteConfig"
-            },
-            "muted": {
-                "type": "boolean"
-            },
-            "channel_id": {
-                "type": [
-                    "null",
-                    "string"
-                ]
-            }
-        },
-        "additionalProperties": false,
-        "required": [
-            "channel_id",
-            "message_notifications",
-            "mute_config",
-            "muted"
-        ],
-        "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "MuteConfig": {
-        "type": "object",
-        "properties": {
-            "end_time": {
-                "type": "integer"
-            },
-            "selected_time_window": {
-                "type": "integer"
-            }
-        },
-        "additionalProperties": false,
-        "required": [
-            "end_time",
-            "selected_time_window"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
