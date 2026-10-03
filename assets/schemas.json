@@ -6692,7 +6692,38 @@
             "channel_overrides": {
                 "type": "object",
                 "additionalProperties": {
-                    "$ref": "#/definitions/ChannelOverride"
+                    "additionalProperties": false,
+                    "type": "object",
+                    "properties": {
+                        "message_notifications": {
+                            "type": "integer"
+                        },
+                        "muted": {
+                            "type": "boolean"
+                        },
+                        "channel_id": {
+                            "type": [
+                                "null",
+                                "string"
+                            ]
+                        },
+                        "mute_config": {
+                            "anyOf": [
+                                {
+                                    "$ref": "#/definitions/MuteConfig"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ]
+                        },
+                        "collapsed": {
+                            "type": "boolean"
+                        },
+                        "flags": {
+                            "type": "integer"
+                        }
+                    }
                 }
             },
             "version": {

@@ -16,11 +16,11 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { ChannelOverride, UserGuildSettings } from "@spacebar/schemas";
+import { ChannelOverride, MuteConfig, UserGuildSettings } from "@spacebar/schemas";
 
 // This sucks. I would use a DeepPartial, my own or typeorms, but they both generate inncorect schema
 export interface UserGuildSettingsSchema extends Partial<Omit<UserGuildSettings, "channel_overrides">> {
     channel_overrides?: {
-        [channel_id: string]: ChannelOverride;
+        [channel_id: string]: Partial<Omit<ChannelOverride, "mute_config">> & { mute_config?: MuteConfig | null; collapsed?: boolean; flags?: number };
     };
 }
