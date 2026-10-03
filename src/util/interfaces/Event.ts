@@ -229,6 +229,24 @@ export interface GuildBanAddEvent extends Event {
     };
 }
 
+export interface GuildJoinRequestCreateEvent extends Event {
+    event: "GUILD_JOIN_REQUEST_CREATE" | "GUILD_JOIN_REQUEST_UPDATE";
+    data: {
+        guild_id: string;
+        status: string;
+        request: Record<string, unknown>;
+    };
+}
+
+export interface GuildJoinRequestDeleteEvent extends Event {
+    event: "GUILD_JOIN_REQUEST_DELETE";
+    data: {
+        guild_id: string;
+        id: string;
+        user_id: string;
+    };
+}
+
 export interface AutoModerationRuleEvent extends Event {
     event: "AUTO_MODERATION_RULE_CREATE" | "AUTO_MODERATION_RULE_UPDATE" | "AUTO_MODERATION_RULE_DELETE";
     data: Record<string, unknown>;
@@ -809,6 +827,8 @@ export interface CallDeleteEvent extends Event {
 }
 
 export type EventData =
+    | GuildJoinRequestCreateEvent
+    | GuildJoinRequestDeleteEvent
     | OAuth2TokenCreateEvent
     | OAuth2TokenDeleteEvent
     | CallCreateEvent
@@ -1049,6 +1069,9 @@ export type EVENT =
     | "AUTO_MODERATION_RULE_DELETE"
     | "AUTO_MODERATION_ACTION_EXECUTION"
     | "AUTO_MODERATION_MENTION_RAID_DETECTION"
+    | "GUILD_JOIN_REQUEST_CREATE"
+    | "GUILD_JOIN_REQUEST_UPDATE"
+    | "GUILD_JOIN_REQUEST_DELETE"
     | CUSTOMEVENTS;
 
 export type CUSTOMEVENTS =

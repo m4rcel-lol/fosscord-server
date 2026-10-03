@@ -22,6 +22,7 @@ import { route } from "@spacebar/api/middlewares";
 import { AuditLog, Channel, Guild, Member } from "@spacebar/database";
 import { ApiError, DiscordApiErrors, FieldErrors, GuildUpdateEvent, Permissions, emitEvent, getPermission, getRights, handleFile } from "@spacebar/util";
 import { AuditLogEvents, GuildCreateResponse, GuildUpdateSchema } from "@spacebar/schemas";
+import { bulkActionJoinRequests, isApplyGuild } from "@spacebar/api/util";
 
 const router = Router({ mergeParams: true });
 
@@ -134,6 +135,7 @@ router.patch(
         if (body.discovery_splash && body.discovery_splash !== guild.discovery_splash)
             body.discovery_splash = await handleFile(`/discovery-splashes/${guild_id}`, body.discovery_splash);
 
+        const wasApply = isApplyGuild(guild.features);
         if (body.features) {
             const MUTABLE_FEATURES = [
                 "COMMUNITY",
@@ -142,6 +144,7 @@ router.patch(
                 "RAID_ALERTS_DISABLED",
                 "NON_COMMUNITY_RAID_ALERTS",
                 "MEMBER_VERIFICATION_GATE_ENABLED",
+                "MEMBER_VERIFICATION_MANUAL_APPROVAL",
                 "PREVIEW_ENABLED",
                 "NEWS",
                 "WELCOME_SCREEN_ENABLED",
@@ -269,6 +272,7 @@ router.patch(
             } satisfies GuildCreateResponse,
             guild_id,
         } satisfies GuildUpdateEvent);
+        if (wasApply && !isApplyGuild(guild.features)) await bulkActionJoinRequests(guild_id, req.user_id, "APPROVED");
 
         return res.json(data);
     },

@@ -9415,9 +9415,57 @@
                     "null",
                     "string"
                 ]
+            },
+            "bulk_action": {
+                "enum": [
+                    "APPROVED",
+                    "REJECTED"
+                ],
+                "type": "string"
             }
         },
         "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "GuildJoinRequestActionSchema": {
+        "type": "object",
+        "properties": {
+            "action": {
+                "enum": [
+                    "APPROVED",
+                    "REJECTED"
+                ],
+                "type": "string"
+            },
+            "rejection_reason": {
+                "maxLength": 160,
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "action"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "GuildJoinRequestBulkActionSchema": {
+        "type": "object",
+        "properties": {
+            "action": {
+                "enum": [
+                    "APPROVED",
+                    "REJECTED"
+                ],
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "action"
+        ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "GuildProfileResponse": {
@@ -17083,6 +17131,19 @@
                 "type": "boolean"
             },
             "values": {
+                "anyOf": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "choices": {
                 "anyOf": [
                     {
                         "type": "array",

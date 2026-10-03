@@ -17,7 +17,7 @@
 */
 
 import { route } from "@spacebar/api/middlewares";
-import { onGuildMemberJoin } from "@spacebar/api/util";
+import { APPLICATION_BYPASS_INVITE_FLAG, isApplyGuild, onGuildMemberJoin, startJoinRequest } from "@spacebar/api/util";
 import { AuditLog, Ban, Channel, Guild, GuildScheduledEvent, Invite, Member, PublicInviteRelation, Recipient, ScheduledEvents, User } from "@spacebar/database";
 import { ChannelRecipientAddEvent, Config, DiscordApiErrors, DmChannelDTO, emitEvent, getPermission, InviteDeleteEvent } from "@spacebar/util";
 import { Request, Response, Router } from "express";
@@ -170,6 +170,14 @@ router.post(
         const invitesPaused = incidents_data?.invites_disabled_until && new Date(incidents_data.invites_disabled_until).getTime() > Date.now();
         if (invitesPaused && !(await Member.findOne({ where: { id: req.user_id, guild_id }, select: { index: true } }))) {
             throw new HTTPError("Invites to this server are paused.", 403);
+        }
+
+        if (isApplyGuild(features) && !(found.flags & APPLICATION_BYPASS_INVITE_FLAG) && !(await Member.exists({ where: { id: req.user_id, guild_id } }))) {
+            if (found.isExpired()) throw DiscordApiErrors.UNKNOWN_INVITE;
+            const join_request = await startJoinRequest(guild_id, req.user_id);
+            const invite = await Invite.findOneOrFail({ where: { code: invite_code }, relations: Object.fromEntries(PublicInviteRelation.map((i) => [i, true])) });
+            await invite.guild?.withPresenceCount();
+            return res.json({ ...invite.toPublicJSON(), new_member: true, show_verification_form: true, join_request: join_request.toJSON("self") });
         }
 
         const { new_member } = await Invite.joinGuild(req.user_id, invite_code);

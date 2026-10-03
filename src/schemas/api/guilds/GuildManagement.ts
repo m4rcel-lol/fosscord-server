@@ -121,6 +121,7 @@ export interface GuildMemberVerificationFormField {
     automations?: unknown[] | null;
     required: boolean;
     values?: string[] | null;
+    choices?: string[] | null;
     response?: unknown;
     placeholder?: string | null;
 }
@@ -135,6 +136,19 @@ export interface GuildMemberVerificationModifySchema {
     enabled?: boolean;
     form_fields?: GuildMemberVerificationFormField[];
     description?: string | null;
+    bulk_action?: "APPROVED" | "REJECTED";
+}
+
+export interface GuildJoinRequestActionSchema {
+    action: "APPROVED" | "REJECTED";
+    /**
+     * @maxLength 160
+     */
+    rejection_reason?: string | null;
+}
+
+export interface GuildJoinRequestBulkActionSchema {
+    action: "APPROVED" | "REJECTED";
 }
 
 export interface GuildDiscoveryMetadata {

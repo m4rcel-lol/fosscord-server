@@ -355,7 +355,7 @@ export class Member extends BaseClassWithoutId {
         user_id: string,
         guild_id: string,
         isRegistration: boolean = false,
-        source?: { source_invite_code?: string | null; join_source_type?: number; inviter_id?: string | null },
+        source?: { source_invite_code?: string | null; join_source_type?: number; inviter_id?: string | null; pending?: boolean },
     ) {
         const totalSw = Stopwatch.startNew();
         const incSw = Stopwatch.startNew();
@@ -402,7 +402,9 @@ export class Member extends BaseClassWithoutId {
             joined_at: new Date(),
             deaf: false,
             mute: false,
-            pending: !!guild.features.includes("MEMBER_VERIFICATION_GATE_ENABLED") && !!guild.member_verification?.form_fields?.length && guild.owner_id !== user_id,
+            pending:
+                source?.pending ??
+                (!!guild.features.includes("MEMBER_VERIFICATION_GATE_ENABLED") && !!guild.member_verification?.form_fields?.length && guild.owner_id !== user_id),
             bio: "",
             source_invite_code: source?.source_invite_code ?? null,
             join_source_type: source?.join_source_type ?? null,

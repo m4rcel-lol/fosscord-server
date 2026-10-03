@@ -25,6 +25,7 @@ import {
     Application,
     Channel,
     Guild,
+    GuildJoinRequest,
     Member,
     MemberPrivateProjection,
     ReadState,
@@ -709,9 +710,10 @@ export async function onIdentify(this: WebSocket, data: Payload) {
         return a + (b as { micros: number }).micros;
     }, 0);
 
-    const [authenticator_types, preferences] = await Promise.all([
+    const [authenticator_types, preferences, guild_join_requests] = await Promise.all([
         SecurityKey.authenticatorTypes(this.user_id),
         User.findOne({ where: { id: this.user_id }, select: { id: true, account_preferences: true, private_channel_settings: true } }),
+        GuildJoinRequest.activeForUser(this.user_id),
     ]);
 
     // const d: ReadyEventData = {
@@ -757,7 +759,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
                     },
                 },
                 experiments: [],
-                guild_join_requests: [],
+                guild_join_requests: guild_join_requests.map((request) => request.toJSON("self")),
                 connected_accounts: [],
                 guild_experiments: [],
                 apex_experiments: getApexExperiments(this.user_id),
