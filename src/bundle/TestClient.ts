@@ -116,7 +116,7 @@ const BRANDED_ASSETS: Record<string, { wordmark?: boolean; svg: (iconUri: string
 export function TestClientAssets(app: Application) {
     const noCache = { setHeaders: (res: Response) => res.set("Cache-Control", "no-cache") };
     app.get("/assets/favicon.ico", (req, res) => void sendBrandImage(res, instanceIcon() ?? { file: DEFAULT_ICON_FILE }, "no-cache"));
-    app.get("/manifest.webmanifest", (req, res) => {
+    app.get(["/manifest.webmanifest", "/manifest.json"], (req, res) => {
         res.set("Cache-Control", "no-cache");
         res.type("application/manifest+json").send(JSON.stringify(appManifest()));
     });
