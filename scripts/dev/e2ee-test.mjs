@@ -111,7 +111,11 @@ const open = async (context, user, { login = false, extraInit } = {}) => {
             sessionStorage.setItem("e2ee-test-cleared", nonce);
             localStorage.clear();
         }, randomBytes(8).toString("hex"));
-    else await context.addInitScript((token) => localStorage.setItem("token", JSON.stringify(token)), user.token);
+    else
+        await context.addInitScript((token) => {
+            localStorage.setItem("token", JSON.stringify(token));
+            localStorage.removeItem("tokens");
+        }, user.token);
     if (extraInit) await context.addInitScript(extraInit);
     const page = context.pages()[0] ?? (await context.newPage());
     const sent = [];

@@ -390,7 +390,7 @@ export class Message extends BaseClass {
             mention_channels: this.mention_channels?.map((ch) => ch.toJSON()) ?? [],
             attachments: this.attachments?.map((att) => att.toJSON()) ?? [],
 
-            nonce: undefined,
+            nonce: this.encrypted && !this.encrypted.mid ? (this.nonce ?? undefined) : undefined,
             tts: this.tts ?? false,
             guild: undefined,
             webhook: undefined,
