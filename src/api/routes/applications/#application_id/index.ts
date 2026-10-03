@@ -17,6 +17,7 @@
 */
 
 import { Request, Response, Router } from "express";
+import { Not } from "typeorm";
 import { HTTPError } from "lambert-server/HTTPError";
 import { verifyToken } from "node-2fa";
 import { route } from "@spacebar/api/middlewares";
@@ -206,7 +207,7 @@ router.post(
 
         if (app.owner.totp_secret && (!req.body.code || !verifyToken(app.owner.totp_secret, req.body.code))) throw new HTTPError(req.t("auth:login.INVALID_TOTP_CODE"), 60008);
         if (app.bot) {
-            const memberships = await Member.find({ where: { id: app.bot.id }, select: { guild_id: true } });
+            const memberships = await Member.find({ where: { id: app.bot.id, guild: { owner_id: Not(app.bot.id) } }, select: { guild_id: true } });
             for (const { guild_id } of memberships) {
                 await Member.removeFromGuild(app.bot.id, guild_id);
                 await emitEvent({ event: "GUILD_INTEGRATIONS_UPDATE", guild_id, data: { guild_id } } satisfies GuildIntegrationUpdateEvent);
