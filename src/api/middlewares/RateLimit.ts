@@ -46,6 +46,7 @@ export function routeBucket(req: Request) {
             const previous = segments[i - 1];
             if (previous === "reactions") return ":emoji";
             if (i === 2 && segments[0] === "webhooks") return ":token";
+            if (i === 1 && previous === "users" && segment === req.user_id) return "@me";
             if (Snowflake.test(segment) && !(i === 1 && MajorParameters.has(previous))) return ":id";
             return segment;
         })
@@ -186,10 +187,16 @@ export async function initRateLimits(app: Router) {
     app.use("/guilds/:guild_id", rateLimit(routes.guild));
     app.use("/webhooks/:webhook_id", rateLimit(routes.webhook));
     app.use("/channels/:channel_id", rateLimit(routes.channel));
-    app.patch("/users/@me", rateLimit(routes.userProfile));
+    const userProfile = rateLimit({ bucket: "PATCH users/@me", ...routes.userProfile });
+    app.patch("/users/:user_id", (req, res, next) => ([req.user_id, "@me"].includes(`${req.params.user_id}`) ? userProfile(req, res, next) : next()));
     const userWrites = rateLimit({ onlyWrites: true, ...routes.user });
-    app.use("/users/@me", (req, res, next) => (req.path.startsWith("/e2ee/") ? next() : userWrites(req, res, next)));
-    app.use("/invites/:code", rateLimit({ onlyWrites: true, ...routes.invite }));
+    app.use("/users/:user_id", (req, res, next) =>
+        ![req.user_id, "@me"].includes(`${req.params.user_id}`) || req.path.startsWith("/e2ee/") ? next() : userWrites(req, res, next),
+    );
+    const guildJoin = rateLimit({ bucket: "guild-join", ...routes.invite });
+    app.post("/invites/:code", guildJoin);
+    app.put("/guilds/:guild_id/members/@me", guildJoin);
+    app.delete("/invites/:code", rateLimit(routes.invite));
     app.use(
         ["/guilds/:guild_id/emojis", "/guilds/:guild_id/stickers", "/guilds/:guild_id/soundboard-sounds", "/applications/:application_id/emojis"],
         rateLimit({ onlyWrites: true, ...routes.expression }),

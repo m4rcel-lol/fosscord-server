@@ -16,9 +16,9 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { AuditLog, Ban, Guild, Member, Message, User } from "@spacebar/database";
-import { DiscordApiErrors, emitEvent, FieldErrors, GuildBanAddEvent, MessageDeleteBulkEvent } from "@spacebar/util";
-import { AuditLogEvents } from "@spacebar/schemas";
+import { AuditLog, Ban, Guild, GuildInsights, Member, Message, User } from "@spacebar/database";
+import { DiscordApiErrors, emitEvent, FieldErrors, GuildBanAddEvent, GuildDeleteEvent, GuildMemberRemoveEvent, MessageDeleteBulkEvent, Snowflake } from "@spacebar/util";
+import { AuditLogEvents, PublicUserProjection } from "@spacebar/schemas";
 import { In, MoreThan } from "typeorm";
 
 export const MAX_BAN_DELETE_SECONDS = 604800;
@@ -35,19 +35,21 @@ export function banDeleteSeconds(body: { delete_message_seconds?: unknown; delet
     return Math.floor(seconds);
 }
 
-const highestPosition = (member: Member | null, guild_id: string) => Math.max(0, ...(member?.roles ?? []).filter((role) => role.id !== guild_id).map((role) => role.position));
+const highestPosition = (member: Member | null | undefined, guild_id: string) =>
+    Math.max(0, ...(member?.roles ?? []).filter((role) => role.id !== guild_id).map((role) => role.position));
+
+export async function bannableUsers(guild_id: string, actor_id: string, target_ids: string[]) {
+    const guild = await Guild.findOneOrFail({ where: { id: guild_id }, select: { id: true, owner_id: true } });
+    const candidates = target_ids.filter((id) => id !== guild.owner_id && (guild.owner_id === actor_id || id !== actor_id));
+    if (guild.owner_id === actor_id || !candidates.length) return candidates;
+    const members = await Member.find({ where: { guild_id, id: In([actor_id, ...candidates]) }, relations: { roles: true } });
+    const byId = new Map(members.map((member) => [member.id, member]));
+    const actorHighest = highestPosition(byId.get(actor_id), guild_id);
+    return candidates.filter((id) => !byId.has(id) || highestPosition(byId.get(id), guild_id) < actorHighest);
+}
 
 export async function banHierarchy(guild_id: string, actor_id: string) {
-    const guild = await Guild.findOneOrFail({ where: { id: guild_id }, select: { id: true, owner_id: true } });
-    const actor = guild.owner_id === actor_id ? null : await Member.findOne({ where: { id: actor_id, guild_id }, relations: { roles: true } });
-    const actorHighest = highestPosition(actor, guild_id);
-    return async (target_id: string) => {
-        if (target_id === guild.owner_id) return false;
-        if (guild.owner_id === actor_id) return true;
-        if (target_id === actor_id) return false;
-        const target = await Member.findOne({ where: { id: target_id, guild_id }, relations: { roles: true } });
-        return !target || highestPosition(target, guild_id) < actorHighest;
-    };
+    return async (target_id: string) => (await bannableUsers(guild_id, actor_id, [target_id])).length > 0;
 }
 
 async function deleteRecentMessages(guild_id: string, user_ids: string[], seconds: number) {
@@ -62,28 +64,63 @@ async function deleteRecentMessages(guild_id: string, user_ids: string[], second
         await emitEvent({ event: "MESSAGE_DELETE_BULK", channel_id, data: { ids: list.map((m) => m.id), channel_id, guild_id } } satisfies MessageDeleteBulkEvent);
 }
 
-export async function banUser(opts: { guild_id: string; user_id: string; executor_id: string; reason?: string; delete_message_seconds: number; ip?: string }) {
-    const user = await User.getPublicUser(opts.user_id).catch(() => null);
-    if (!user) throw DiscordApiErrors.UNKNOWN_USER;
-    if (await Ban.exists({ where: { guild_id: opts.guild_id, user_id: opts.user_id } })) return false;
-
-    await Ban.create({ user_id: opts.user_id, guild_id: opts.guild_id, executor_id: opts.executor_id, reason: opts.reason, ip: opts.ip }).save();
-    if (await Member.exists({ where: { id: opts.user_id, guild_id: opts.guild_id } })) await Member.removeFromGuild(opts.user_id, opts.guild_id);
-    await deleteRecentMessages(opts.guild_id, [opts.user_id], opts.delete_message_seconds);
-    await Promise.all([
-        AuditLog.log({
-            guild_id: opts.guild_id,
-            user_id: opts.executor_id,
-            action_type: AuditLogEvents.MEMBER_BAN_ADD,
-            target_id: opts.user_id,
-            reason: opts.reason,
-            options: opts.delete_message_seconds ? { delete_member_days: String(Math.round(opts.delete_message_seconds / 86400)) } : undefined,
-        }),
-        emitEvent({
-            event: "GUILD_BAN_ADD",
-            data: { guild_id: opts.guild_id, user, delete_message_secs: opts.delete_message_seconds },
-            guild_id: opts.guild_id,
-        } satisfies GuildBanAddEvent),
+export async function banUsers(opts: { guild_id: string; user_ids: string[]; executor_id: string; reason?: string; delete_message_seconds: number; ip?: string }) {
+    const { guild_id, executor_id, reason, ip, delete_message_seconds } = opts;
+    const user_ids = [...new Set(opts.user_ids)];
+    if (!user_ids.length) return { banned: [], unknown: [] };
+    const [users, existing, members] = await Promise.all([
+        User.find({ where: { id: In(user_ids) }, select: Object.fromEntries(PublicUserProjection.map((key) => [key, true])) }),
+        Ban.find({ where: { guild_id, user_id: In(user_ids) }, select: { id: true, user_id: true } }),
+        Member.find({ where: { guild_id, id: In(user_ids) }, select: { id: true, guild_id: true, joined_at: true } }),
     ]);
-    return true;
+    const known = new Set(users.map((user) => user.id));
+    const already = new Set(existing.map((ban) => ban.user_id));
+    const targets = users.filter((user) => !already.has(user.id));
+    const unknown = user_ids.filter((id) => !known.has(id));
+    if (!targets.length) return { banned: [], unknown };
+
+    const targetIds = new Set(targets.map((user) => user.id));
+    const leaving = members.filter((member) => targetIds.has(member.id));
+    const bots = new Set(targets.filter((user) => user.bot).map((user) => user.id));
+    const humans = leaving.filter((member) => !bots.has(member.id));
+
+    await Ban.insert(targets.map((user) => ({ id: Snowflake.generate(), user_id: user.id, guild_id, executor_id, reason, ip })));
+    for (const member of leaving.filter((member) => bots.has(member.id))) await Member.removeFromGuild(member.id, guild_id);
+    if (humans.length) {
+        await Member.delete({ guild_id, id: In(humans.map((member) => member.id)) });
+        await Guild.decrement({ id: guild_id }, "member_count", humans.length);
+        GuildInsights.recordLeave(guild_id, ...humans.map((member) => member.joined_at));
+    }
+    await deleteRecentMessages(guild_id, [...targetIds], delete_message_seconds);
+    await AuditLog.logMany(
+        targets.map((user) => ({
+            guild_id,
+            user_id: executor_id,
+            action_type: AuditLogEvents.MEMBER_BAN_ADD,
+            target_id: user.id,
+            reason,
+            options: delete_message_seconds ? { delete_member_days: String(Math.round(delete_message_seconds / 86400)) } : undefined,
+        })),
+    );
+    const publicUsers = new Map(targets.map((user) => [user.id, user.toPublicUser()]));
+    await Promise.all([
+        ...humans.flatMap((member) => [
+            emitEvent({ event: "GUILD_DELETE", data: { id: guild_id }, user_id: member.id } satisfies GuildDeleteEvent),
+            emitEvent({ event: "GUILD_MEMBER_REMOVE", data: { guild_id, user: publicUsers.get(member.id)! }, guild_id } satisfies GuildMemberRemoveEvent),
+        ]),
+        ...targets.map((user) =>
+            emitEvent({
+                event: "GUILD_BAN_ADD",
+                data: { guild_id, user: publicUsers.get(user.id)!, delete_message_secs: delete_message_seconds },
+                guild_id,
+            } satisfies GuildBanAddEvent),
+        ),
+    ]);
+    return { banned: [...targetIds], unknown };
+}
+
+export async function banUser(opts: { guild_id: string; user_id: string; executor_id: string; reason?: string; delete_message_seconds: number; ip?: string }) {
+    const { banned, unknown } = await banUsers({ ...opts, user_ids: [opts.user_id] });
+    if (unknown.length) throw DiscordApiErrors.UNKNOWN_USER;
+    return banned.length > 0;
 }

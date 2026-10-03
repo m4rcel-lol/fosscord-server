@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity, Index, JoinColumn, ManyToOne, Unique } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, Unique } from "typeorm";
 import { BaseClass } from "./BaseClass";
 import { User } from "./User";
 import { Channel } from "./Channel";
@@ -27,7 +27,6 @@ import { Message } from "./Message";
 })
 @Unique("UQ_saved_message_user_message", ["user_id", "message_id"])
 export class SavedMessage extends BaseClass {
-    @Index("IDX_saved_message_user_id")
     @Column()
     user_id: string;
 

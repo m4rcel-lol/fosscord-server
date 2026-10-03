@@ -20,7 +20,7 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
 import { AuditLog, Ban, User } from "@spacebar/database";
-import { DiscordApiErrors, GuildBanRemoveEvent, emitEvent } from "@spacebar/util";
+import { DiscordApiErrors, FieldErrors, GuildBanRemoveEvent, emitEvent } from "@spacebar/util";
 import { banDeleteSeconds, banHierarchy, banUser } from "@spacebar/api/util";
 import { AuditLogEvents, BanCreateSchema, BanRegistrySchema, GuildBanResponse, GuildBansResponse, PublicUser } from "@spacebar/schemas";
 
@@ -32,9 +32,26 @@ router.get(
     "/",
     route({
         permission: "BAN_MEMBERS",
+        query: {
+            limit: {
+                type: "number",
+                description: "Max number of bans to return (1-1000, default 1000)",
+            },
+            before: {
+                type: "string",
+                description: "Get bans before this user ID",
+            },
+            after: {
+                type: "string",
+                description: "Get bans after this user ID",
+            },
+        },
         responses: {
             200: {
                 body: "GuildBansResponse",
+            },
+            400: {
+                body: "APIErrorResponse",
             },
             403: {
                 body: "APIErrorResponse",
@@ -43,34 +60,35 @@ router.get(
     }),
     async (req: Request, res: Response) => {
         const { guild_id } = req.params as { [key: string]: string };
+        const limit = req.query.limit === undefined ? 1000 : Number(req.query.limit);
+        if (!Number.isInteger(limit) || limit < 1 || limit > 1000) throw FieldErrors({ limit: { code: "NUMBER_TYPE_MAX", message: "Must be between 1 and 1000." } });
+        const before = typeof req.query.before === "string" && /^\d{1,20}$/.test(req.query.before) ? req.query.before : undefined;
+        const after = typeof req.query.after === "string" && /^\d{1,20}$/.test(req.query.after) ? req.query.after : undefined;
 
-        let bans = await Ban.find({ where: { guild_id: guild_id } });
-        const promisesToAwait: Promise<PublicUser>[] = [];
-        const bansObj: GuildBansResponse = [];
+        const query = Ban.createQueryBuilder("ban")
+            .innerJoin("ban.user", "user")
+            .select(["ban.id", "ban.user_id", "ban.reason", ...["id", "username", "discriminator", "global_name", "avatar", "public_flags"].map((column) => `user.${column}`)])
+            .where("ban.guild_id = :guild_id", { guild_id })
+            .andWhere("ban.user_id IS DISTINCT FROM ban.executor_id")
+            .limit(limit);
+        if (after) query.andWhere("ban.user_id > :after", { after });
+        if (before && !after) query.andWhere("ban.user_id < :before", { before });
+        const bans = await query.orderBy("ban.user_id", before && !after ? "DESC" : "ASC").getMany();
+        if (before && !after) bans.reverse();
 
-        bans = bans.filter((ban) => ban.user_id !== ban.executor_id); // pretend self-bans don't exist to prevent victim chasing
-
-        bans.forEach((ban) => {
-            promisesToAwait.push(User.getPublicUser(ban.user_id));
-        });
-
-        const bannedUsers = await Promise.all(promisesToAwait);
-
-        bans.forEach((ban, index) => {
-            const user = bannedUsers[index];
-            bansObj.push({
+        return res.json(
+            bans.map((ban) => ({
                 reason: ban.reason ?? null,
                 user: {
-                    username: user.username,
-                    discriminator: user.discriminator,
-                    id: user.id,
-                    avatar: user.avatar ?? null,
-                    public_flags: user.public_flags,
+                    username: ban.user.username,
+                    discriminator: ban.user.discriminator,
+                    global_name: ban.user.global_name ?? null,
+                    id: ban.user.id,
+                    avatar: ban.user.avatar ?? null,
+                    public_flags: Number(ban.user.public_flags),
                 },
-            });
-        });
-
-        return res.json(bansObj);
+            })) satisfies GuildBansResponse,
+        );
     },
 );
 
@@ -130,7 +148,7 @@ router.get(
                     discriminator: user.discriminator,
                     id: user.id,
                     avatar: user.avatar ?? null,
-                    public_flags: user.public_flags,
+                    public_flags: Number(user.public_flags),
                 },
             };
         });

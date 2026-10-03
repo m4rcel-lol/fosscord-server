@@ -60,12 +60,11 @@ import { JsonRemoveEmpty } from "@spacebar/util/util/Decorators";
 @Index(["channel_id", "id"], { unique: true })
 export class Message extends BaseClass {
     @Column({ nullable: true })
-    @Index()
     channel_id?: string;
 
-    @JoinColumn({ name: "channel_id", foreignKeyConstraintName: "FK_message_channel_id" })
+    @JoinColumn({ name: "channel_id" })
     @ManyToOne(() => Channel, {
-        onDelete: "CASCADE",
+        createForeignKeyConstraints: false,
     })
     channel: Channel;
 
@@ -84,9 +83,9 @@ export class Message extends BaseClass {
     @JsonRemoveEmpty
     guild_id?: string;
 
-    @JoinColumn({ name: "guild_id", foreignKeyConstraintName: "FK_message_guild_id" })
+    @JoinColumn({ name: "guild_id" })
     @ManyToOne(() => Guild, {
-        onDelete: "CASCADE",
+        createForeignKeyConstraints: false,
     })
     guild?: Guild;
 
@@ -391,7 +390,7 @@ export class Message extends BaseClass {
             mention_channels: this.mention_channels?.map((ch) => ch.toJSON()) ?? [],
             attachments: this.attachments?.map((att) => att.toJSON()) ?? [],
 
-            nonce: this.nonce ?? undefined,
+            nonce: undefined,
             tts: this.tts ?? false,
             guild: undefined,
             webhook: undefined,

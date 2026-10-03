@@ -151,8 +151,17 @@ export type PartialEmoji =
       };
 
 export interface AllowedMentions {
+    /**
+     * @maxItems 3
+     */
     parse?: ("users" | "roles" | "everyone")[];
+    /**
+     * @maxItems 100
+     */
     roles?: Snowflake[];
+    /**
+     * @maxItems 100
+     */
     users?: Snowflake[];
     replied_user?: boolean;
 }

@@ -335,6 +335,9 @@ export class Guild extends BaseClass {
     @Column({ select: false, type: "int8", array: true })
     channel_ordering: string[];
 
+    @Column({ select: false, type: "bigint", default: 0 })
+    channels_version: string;
+
     @Column({ default: 0 })
     discovery_weight: number = 0;
 

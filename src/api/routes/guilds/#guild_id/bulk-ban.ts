@@ -20,7 +20,7 @@ import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { BulkBanSchema } from "@spacebar/schemas";
 import { Config, DiscordApiErrors, FieldErrors } from "@spacebar/util";
-import { banDeleteSeconds, banHierarchy, banUser } from "@spacebar/api/util";
+import { banDeleteSeconds, bannableUsers, banUsers } from "@spacebar/api/util";
 
 const router: Router = Router({ mergeParams: true });
 
@@ -50,19 +50,17 @@ router.post(
         const delete_message_seconds = banDeleteSeconds(body);
         const headerReason = req.headers["x-audit-log-reason"];
         const reason = Array.isArray(headerReason) ? headerReason[0] : headerReason;
-        const canBan = await banHierarchy(guild_id, req.user_id);
-
-        const banned_users: string[] = [];
-        const failed_users: string[] = [];
-        for (const user_id of userIds) {
-            try {
-                if (!/^\d{1,20}$/.test(user_id) || !(await canBan(user_id))) throw new Error("not allowed");
-                const banned = await banUser({ guild_id, user_id, executor_id: req.user_id, reason: reason ? decodeURIComponent(reason) : undefined, delete_message_seconds });
-                (banned ? banned_users : failed_users).push(user_id);
-            } catch {
-                failed_users.push(user_id);
-            }
-        }
+        const valid = userIds.filter((user_id) => /^\d{1,20}$/.test(user_id));
+        const allowed = await bannableUsers(guild_id, req.user_id, valid);
+        const { banned } = await banUsers({
+            guild_id,
+            user_ids: allowed,
+            executor_id: req.user_id,
+            reason: reason ? decodeURIComponent(reason) : undefined,
+            delete_message_seconds,
+        });
+        const banned_users = userIds.filter((user_id) => banned.includes(user_id));
+        const failed_users = userIds.filter((user_id) => !banned.includes(user_id));
 
         if (!banned_users.length) throw DiscordApiErrors.BULK_BAN_FAILED;
         return res.json({ banned_users, failed_users });

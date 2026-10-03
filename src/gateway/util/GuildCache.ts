@@ -22,7 +22,7 @@ import { Channel, Emoji, getDatabase, Role, Sticker } from "@spacebar/database";
 import { GuildCacheEventId, JSONStringify, listenEvent } from "@spacebar/util";
 import { ChannelType, PublicChannel } from "@spacebar/schemas";
 
-export type CachedChannel = PublicChannel & { id: string; last_message_id?: string | null; last_pin_timestamp?: string; e2ee_enabled_at?: string | null };
+export type CachedChannel = PublicChannel & { id: string; last_message_id?: string | null; last_pin_timestamp?: string; e2ee_enabled_at?: string | null; version?: string };
 
 export interface GuildCacheEntry {
     channels: CachedChannel[];
@@ -91,10 +91,10 @@ export async function getGuildCache(guildIds: string[]): Promise<Map<string, Gui
     const started = ++generation;
     const [cacheable, live] = await Promise.all([
         subscribe(),
-        getDatabase()!.query(`SELECT id, guild_id, last_message_id, last_pin_timestamp, e2ee_enabled_at FROM channels WHERE guild_id = ANY($1) AND NOT (type = ANY($2))`, [
+        getDatabase()!.query(`SELECT id, guild_id, last_message_id, last_pin_timestamp, e2ee_enabled_at, version FROM channels WHERE guild_id = ANY($1) AND NOT (type = ANY($2))`, [
             guildIds,
             threadTypes,
-        ]) as Promise<{ id: string; guild_id: string; last_message_id: string | null; last_pin_timestamp: Date | null; e2ee_enabled_at: Date | null }[]>,
+        ]) as Promise<{ id: string; guild_id: string; last_message_id: string | null; last_pin_timestamp: Date | null; e2ee_enabled_at: Date | null; version: string }[]>,
     ]);
     const liveByGuild = arrayGroupBy(live, (c) => c.guild_id);
     const now = Date.now();
@@ -133,6 +133,7 @@ export async function getGuildCache(guildIds: string[]): Promise<Map<string, Gui
                 return {
                     ...channel,
                     last_message_id: fresh.last_message_id,
+                    version: `${fresh.version}`,
                     last_pin_timestamp: dateString(fresh.last_pin_timestamp),
                     e2ee_enabled_at: fresh.e2ee_enabled_at ? new Date(fresh.e2ee_enabled_at).toISOString().replace("Z", "+00:00") : null,
                 };

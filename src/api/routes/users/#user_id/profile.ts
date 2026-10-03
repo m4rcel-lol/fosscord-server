@@ -21,7 +21,7 @@ import { In } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
 import { profileMetadata, resolveProfileCollectibles } from "@spacebar/api/util";
 import { Badge, Member, Relationship, User } from "@spacebar/database";
-import { Config, emitEvent, FieldErrors, handleFile, UserUpdateEvent } from "@spacebar/util";
+import { Config, DiscordApiErrors, emitEvent, FieldErrors, handleFile, UserUpdateEvent } from "@spacebar/util";
 import { PartialConnectedAccountResponse, PrivateUserProjection, PublicUserProjection, RelationshipType, UserProfileModifySchema } from "@spacebar/schemas";
 
 import { profileApplication } from "@spacebar/api/util/handlers/Application";
@@ -144,6 +144,7 @@ router.get("/", route({ responses: { 200: { body: "UserProfileResponse" } } }), 
 });
 
 router.patch("/", route({ requestBody: "UserProfileModifySchema" }), async (req: Request, res: Response) => {
+    if (![req.user_id, "@me"].includes(`${req.params.user_id}`)) throw DiscordApiErrors.MISSING_ACCESS;
     const body = req.body as UserProfileModifySchema;
 
     const user = await User.findOneOrFail({

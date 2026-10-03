@@ -49,73 +49,86 @@ router.get(
 
         const user = req.user;
 
-        const memberships = await Member.find({
-            where: { id: req.user_id, ...(guild_id === undefined || guild_id === "0" ? {} : { guild_id: String(guild_id) }) },
-            select: {
-                guild_id: true,
-                id: true,
-                communication_disabled_until: true,
-                roles: {
-                    // We don't want to include all guild roles, as this could cause a lot more explosive behavior
+        const scope = guild_id === undefined || guild_id === "0" ? null : String(guild_id);
+        const db = Message.getRepository();
+        const [guildRows, roleRows] = await Promise.all([
+            db.query(`SELECT guild_id FROM members WHERE id = $1 AND ($2::bigint IS NULL OR guild_id = $2)`, [req.user_id, scope]) as Promise<{ guild_id: string }[]>,
+            (roles
+                ? db.query(
+                      `SELECT mr.role_id FROM members m JOIN member_roles mr ON mr."index" = m."index" JOIN roles r ON r.id = mr.role_id
+                       WHERE m.id = $1 AND ($2::bigint IS NULL OR m.guild_id = $2) AND r.mentionable`,
+                      [req.user_id, scope],
+                  )
+                : Promise.resolve([])) as Promise<{ role_id: string }[]>,
+        ]);
+        const guildIds = guildRows.map((row) => `${row.guild_id}`);
+        const ownedMentionableRoleIds = roleRows.map((row) => `${row.role_id}`);
+        const memberByGuild = new Map<string, Member>();
+        const loadMembers = async (ids: string[]) => {
+            const missing = [...new Set(ids)].filter((id) => !memberByGuild.has(id));
+            if (!missing.length) return;
+            const found = await Member.find({
+                where: { id: req.user_id, guild_id: In(missing) },
+                select: {
+                    guild_id: true,
                     id: true,
-                    position: true,
-                    permissions: true,
-                    mentionable: true, // cause we can skip querying for unmentionable roles
+                    communication_disabled_until: true,
+                    roles: { id: true, position: true, permissions: true },
+                    guild: { id: true, owner_id: true },
                 },
-                guild: {
-                    id: true,
-                    owner_id: true,
-                },
-            },
-            relations: { guild: true, roles: true },
-        });
-
-        const channels = await Channel.find({
-            where: {
-                guild_id: In(memberships.map((m) => m.guild_id)),
-            },
-            select: { id: true, guild_id: true, permission_overwrites: true, parent_id: true, type: true },
-        });
-        const byId = new Map(channels.map((c) => [c.id, c]));
-        const privateThreads = channels.filter((c) => c.type === ChannelType.GUILD_PRIVATE_THREAD).map((c) => c.id);
-        const joinedPrivateThreads = new Set(
-            privateThreads.length ? (await ThreadMember.find({ where: { id: In(privateThreads), user_id: req.user_id }, select: { id: true } })).map((m) => m.id) : [],
-        );
-
-        const visibleChannels = channels.filter((c) => {
+                relations: { guild: true, roles: true },
+            });
+            for (const member of found) memberByGuild.set(member.guild_id, member);
+        };
+        const channels = new Map<string, Channel | null>();
+        const joinedPrivateThreads = new Set<string>();
+        const threadTypes = [ChannelType.GUILD_PUBLIC_THREAD, ChannelType.GUILD_PRIVATE_THREAD, ChannelType.GUILD_NEWS_THREAD];
+        const loadChannels = async (channelIds: string[]) => {
+            const missing = channelIds.filter((id) => !channels.has(id));
+            if (!missing.length) return;
+            const found = await Channel.find({ where: { id: In(missing) }, select: { id: true, guild_id: true, permission_overwrites: true, parent_id: true, type: true } });
+            for (const id of missing) channels.set(id, null);
+            for (const c of found) channels.set(c.id, c);
+            const privateThreads = found.filter((c) => c.type === ChannelType.GUILD_PRIVATE_THREAD).map((c) => c.id);
+            if (privateThreads.length)
+                for (const m of await ThreadMember.find({ where: { id: In(privateThreads), user_id: req.user_id }, select: { id: true } })) joinedPrivateThreads.add(m.id);
+            await loadChannels(found.filter((c) => c.parent_id && threadTypes.includes(c.type)).map((c) => c.parent_id!));
+        };
+        const canView = (channelId: string) => {
+            const c = channels.get(channelId);
+            const member = c?.guild_id ? memberByGuild.get(c.guild_id) : undefined;
+            if (!c || !member) return false;
             if (c.type === ChannelType.GUILD_PRIVATE_THREAD && !joinedPrivateThreads.has(c.id)) return false;
-            const member = memberships.find((m) => m.guild_id === c.guild_id)!;
-            const source =
-                c.parent_id && [ChannelType.GUILD_PUBLIC_THREAD, ChannelType.GUILD_PRIVATE_THREAD, ChannelType.GUILD_NEWS_THREAD].includes(c.type) ? byId.get(c.parent_id) : c;
+            const source = c.parent_id && threadTypes.includes(c.type) ? channels.get(c.parent_id) : c;
             return Permissions.finalPermission({
                 user: { id: member.id, roles: member.roles.map((r) => r.id), communication_disabled_until: member.communication_disabled_until, flags: 0 },
                 guild: { id: member.guild.id, owner_id: member.guild.owner_id!, roles: member.roles },
                 channel: { overwrites: source?.permission_overwrites ?? [] },
             }).has("VIEW_CHANNEL");
-        });
+        };
 
-        const visibleChannelIds = visibleChannels.map((c) => c.id);
-        const ownedMentionableRoleIds = memberships.reduce((acc, m) => {
-            acc.push(...m.roles.filter((r) => r.mentionable).map((r) => r.id));
-            return acc;
-        }, [] as Snowflake[]);
-
-        const ids: string[] = visibleChannelIds.length
-            ? (
-                  await Message.getRepository().query(
-                      `SELECT id FROM (
-                          (SELECT m.id FROM message_user_mentions u JOIN messages m ON m.id = u.message_id
-                           WHERE u.user_id = $1 AND m.channel_id = ANY($2::bigint[]) AND ($3::bigint IS NULL OR u.message_id < $3) AND m.author_id IS DISTINCT FROM $1 ORDER BY u.message_id DESC LIMIT $4)
-                          UNION
-                          (SELECT id FROM messages WHERE $5 AND mention_everyone AND channel_id = ANY($2::bigint[]) AND ($3::bigint IS NULL OR id < $3) AND author_id IS DISTINCT FROM $1 ORDER BY id DESC LIMIT $4)
-                          UNION
-                          (SELECT m.id FROM message_role_mentions r JOIN messages m ON m.id = r.message_id
-                           WHERE $6 AND r.role_id = ANY($7::bigint[]) AND m.channel_id = ANY($2::bigint[]) AND ($3::bigint IS NULL OR r.message_id < $3) AND m.author_id IS DISTINCT FROM $1 ORDER BY r.message_id DESC LIMIT $4)
-                      ) mentioned WHERE NOT EXISTS (SELECT 1 FROM mention_dismissals d WHERE d.user_id = $1 AND d.message_id = mentioned.id) ORDER BY id DESC LIMIT $4`,
-                      [user.id, visibleChannelIds, before ?? null, limit, everyone, roles, ownedMentionableRoleIds],
-                  )
-              ).map((row: { id: string }) => `${row.id}`)
-            : [];
+        const ids: string[] = [];
+        const batch = Math.min(limit * 2, 200);
+        let cursor = before ?? null;
+        for (let round = 0; guildIds.length && ids.length < limit && round < 5; round++) {
+            const rows: { id: string; channel_id: string }[] = await Message.getRepository().query(
+                `SELECT id, channel_id FROM (
+                    (SELECT m.id, m.channel_id FROM message_user_mentions u JOIN messages m ON m.id = u.message_id
+                     WHERE u.user_id = $1 AND m.guild_id = ANY($2::bigint[]) AND ($3::bigint IS NULL OR u.message_id < $3) AND m.author_id IS DISTINCT FROM $1 ORDER BY u.message_id DESC LIMIT $4)
+                    UNION
+                    (SELECT id, channel_id FROM messages WHERE $5 AND mention_everyone AND guild_id = ANY($2::bigint[]) AND ($3::bigint IS NULL OR id < $3) AND author_id IS DISTINCT FROM $1 ORDER BY id DESC LIMIT $4)
+                    UNION
+                    (SELECT m.id, m.channel_id FROM message_role_mentions r JOIN messages m ON m.id = r.message_id
+                     WHERE $6 AND r.role_id = ANY($7::bigint[]) AND m.guild_id = ANY($2::bigint[]) AND ($3::bigint IS NULL OR r.message_id < $3) AND m.author_id IS DISTINCT FROM $1 ORDER BY r.message_id DESC LIMIT $4)
+                ) mentioned WHERE NOT EXISTS (SELECT 1 FROM mention_dismissals d WHERE d.user_id = $1 AND d.message_id = mentioned.id) ORDER BY id DESC LIMIT $4`,
+                [user.id, guildIds, cursor, batch, everyone, roles, ownedMentionableRoleIds],
+            );
+            await loadChannels([...new Set(rows.map((row) => `${row.channel_id}`))]);
+            await loadMembers(rows.map((row) => channels.get(`${row.channel_id}`)?.guild_id).filter((id): id is string => !!id));
+            for (const row of rows) if (ids.length < limit && canView(`${row.channel_id}`)) ids.push(`${row.id}`);
+            if (rows.length < batch) break;
+            cursor = `${rows[rows.length - 1].id}`;
+        }
         if (!ids.length) return res.json([]);
 
         const sw = Stopwatch.startNew();

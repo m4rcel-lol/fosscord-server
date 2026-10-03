@@ -19,6 +19,7 @@
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
+import { purgeDeletedChannels } from "@spacebar/api/util";
 import { Guild } from "@spacebar/database";
 import { GuildDeleteEvent, emitEvent } from "@spacebar/util";
 
@@ -58,6 +59,7 @@ router.post(
                 guild_id: guild_id,
             } satisfies GuildDeleteEvent),
         ]);
+        void purgeDeletedChannels();
 
         return res.sendStatus(204);
     },

@@ -19,7 +19,7 @@
 import { Request, Response, Router } from "express";
 import { Not } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
-import { AUTO_ARCHIVE_DURATION_ERROR, AUTO_ARCHIVE_DURATIONS, emitThreadUpdate, sendMessage, setThreadArchived } from "@spacebar/api/util";
+import { AUTO_ARCHIVE_DURATION_ERROR, AUTO_ARCHIVE_DURATIONS, emitThreadUpdate, purgeDeletedChannels, sendMessage, setThreadArchived } from "@spacebar/api/util";
 import { AuditLog, Channel, Guild, Recipient, Tag, ThreadMember, VoiceChannels } from "@spacebar/database";
 import {
     ChannelDeleteEvent,
@@ -169,6 +169,7 @@ router.delete(
         }
 
         res.send(channel);
+        void purgeDeletedChannels();
     },
 );
 
