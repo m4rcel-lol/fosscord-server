@@ -23,7 +23,7 @@ import { HTTPError } from "lambert-server/HTTPError";
 import { Config } from "@spacebar/util";
 import { storage, multer, setCacheControl } from "../util";
 
-const ALLOWED_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+const ALLOWED_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/avif", "image/gif"];
 
 const router = Router({ mergeParams: true });
 

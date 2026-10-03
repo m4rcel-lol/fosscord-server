@@ -4,15 +4,15 @@
 
 `docker-compose.yml` and `Dockerfile` at the repository root run a complete public instance on one Linux host. There are five services:
 
-| Service    | Image                                        | What it does                                                                                                                     |
-| ---------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `postgres` | `postgres:18-alpine`                         | The database.                                                                                                                    |
-| `client`   | `fosscord-server`, built from `Dockerfile`   | Runs before the server starts. Downloads the Discord web client into the `client` volume when it is empty, then exits.           |
-| `sfu`      | `fosscord-sfu`, the Go stage of `Dockerfile` | The pion SFU from `extra/pion-sfu`. It carries voice, video and Go Live media on a single UDP port.                              |
-| `server`   | `fosscord-server`                            | The bundle: API, CDN, gateway, voice gateway and the web client, all on port 3001 inside the compose network.                    |
-| `caddy`    | `caddy:2-alpine`                             | Terminates TLS with automatic certificates, serves HTTP/1.1, HTTP/2 and HTTP/3, compresses responses and proxies the websockets. |
+| Service    | Image                                        | What it does                                                                                                                                          |
+| ---------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `postgres` | `postgres:18-alpine`                         | The database.                                                                                                                                         |
+| `client`   | `fosscord-server`, built from `Dockerfile`   | Runs before the server starts. Downloads the Discord web client into the `client` volume when it is empty, then exits.                                |
+| `sfu`      | `fosscord-sfu`, the Go stage of `Dockerfile` | The pion SFU from `extra/pion-sfu`. It carries voice, video and Go Live media on a single UDP port.                                                   |
+| `server`   | `fosscord-server`                            | The bundle: API, CDN, gateway, voice gateway and the web client, all on port 3001 inside the compose network.                                         |
+| `caddy`    | `caddy:2-alpine`                             | Optional, see below. Terminates TLS with automatic certificates, serves HTTP/1.1, HTTP/2 and HTTP/3, compresses responses and proxies the websockets. |
 
-Only Caddy and the SFU publish ports. The server and Postgres are reachable inside the compose network and nowhere else.
+Caddy and the SFU publish ports to the internet. The server is also published on the host's loopback, `127.0.0.1:3001`, for a reverse proxy outside compose. Postgres is reachable inside the compose network and nowhere else.
 
 ### Before you start
 
@@ -35,7 +35,7 @@ On the first start the `client` service runs `scripts/client.js`, `scripts/e2ee-
 docker compose logs -f client
 ```
 
-The server starts when the client service has exited, and Caddy starts when the server answers `/api/ping`. `docker compose ps` shows every service as `healthy` once the instance is up. Open `https://<DOMAIN>/register` to make the first account.
+The server starts when the client service has exited, and Caddy, when it's enabled, starts when the server answers `/api/ping`. `docker compose ps` shows every service as `healthy` once the instance is up. Open `https://<DOMAIN>/register` to make the first account.
 
 When `docker compose` runs from a checkout that also has a development `.env`, pass the production file explicitly with `docker compose --env-file prod.env ...`, because compose reads `.env` from the project directory by default.
 
@@ -50,6 +50,8 @@ Every variable lives in `.env`. `.env.example` lists all of them.
 | `WRTC_PUBLIC_IP`                                     | yes      | Public IPv4 address clients send voice and video to. The SFU announces it in its ICE candidates. Behind NAT, use the outside address and forward the voice port to the host.                                                                                               |
 | `WRTC_PORT`                                          | no       | UDP port for all media, 50000 by default. It is published on the host under the same number, because the SFU announces the port it listens on.                                                                                                                             |
 | `INSTANCE_NAME`                                      | no       | Name shown in the client, emails, the developer portal and the status page. Sets `general.instanceName` and `client.instanceName`.                                                                                                                                         |
+| `COMPOSE_PROFILES`                                   | no       | `caddy` starts the bundled Caddy service, as `.env.example` sets it. Leave it empty to run the stack without Caddy and put your own reverse proxy in front, see [Without the bundled Caddy](#without-the-bundled-caddy).                                                   |
+| `SERVER_PORT`                                        | no       | Port on `127.0.0.1` the server is published on for your own reverse proxy, 3001 by default.                                                                                                                                                                                |
 | `CADDY_GLOBAL_OPTIONS`                               | no       | One line added to Caddy's global options block. `local_certs` makes Caddy sign the certificate with its own CA, for testing without a public domain. `email you@example.com` sets the ACME account email.                                                                  |
 | `TRUSTED_PROXIES`                                    | no       | Express `trust proxy` value for `security.trustedProxies`. The default, `uniquelocal`, trusts the private ranges Docker networks use, so the server reads the client address Caddy puts in `X-Forwarded-For`.                                                              |
 | `CAP_INSTANCE_URL`, `CAP_SITE_KEY`, `CAP_SECRET_KEY` | no       | A [Cap Standalone](https://capjs.js.org/guide/standalone/) server, the site key and its secret. With all three set, registration asks for a Cap captcha. The server verifies at `<CAP_INSTANCE_URL>/<CAP_SITE_KEY>/siteverify`, and the browser has to reach the same URL. |
@@ -131,6 +133,14 @@ The server talks to the SFU over `/run/sfu/sfu.sock` in the shared `sfu` volume.
 
 Clients send media straight to `WRTC_PUBLIC_IP:WRTC_PORT` over UDP, so that address has to be reachable from the internet. There is no TURN server, so a client behind a firewall that blocks outgoing UDP cannot join calls.
 
+### Without the bundled Caddy
+
+The `caddy` service only starts with the `caddy` profile. To use a reverse proxy that already runs on the host, such as a system Caddy or nginx, leave `COMPOSE_PROFILES` empty in `.env`, so `docker compose up -d` starts everything except Caddy. Point the proxy at `127.0.0.1:3001`, or `SERVER_PORT` if you changed it. It has to pass websocket upgrades through, which Caddy's `reverse_proxy` does on its own. For a system Caddy, `docker/Caddyfile` works with `server:3001` replaced by `localhost:3001`. `stream_close_delay` needs Caddy 2.7 or newer, so drop that line on older versions.
+
+The proxy connects through Docker's bridge network, whose addresses are in the private ranges the default `TRUSTED_PROXIES` trusts, so the server still reads the client address from `X-Forwarded-For`. Ports 80 and 443 are then the proxy's business. The voice port still has to be open, because media goes straight to the SFU.
+
+A stack that was running with Caddy keeps the container around after the profile is turned off. Remove it with `docker compose --profile caddy rm -sf caddy`.
+
 ### Trying it locally
 
 Caddy's internal CA and a made-up domain are enough to run the whole stack on one machine:
@@ -140,6 +150,7 @@ cat > local.env <<EOF
 DOMAIN=fosscord.test
 POSTGRES_PASSWORD=local
 WRTC_PUBLIC_IP=127.0.0.1
+COMPOSE_PROFILES=caddy
 CADDY_GLOBAL_OPTIONS=local_certs
 EOF
 docker compose --env-file local.env up -d --build --wait

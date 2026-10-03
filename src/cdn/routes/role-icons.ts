@@ -29,7 +29,7 @@ import { storage, multer, setCacheControl } from "../util";
 // TODO: generate different sizes of icon
 // TODO: generate different image types of icon
 
-const STATIC_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/svg+xml", "image/svg"];
+const STATIC_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/avif", "image/svg+xml", "image/svg"];
 const ALLOWED_MIME_TYPES = [...STATIC_MIME_TYPES];
 
 const router = Router({ mergeParams: true });

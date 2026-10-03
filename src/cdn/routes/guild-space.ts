@@ -24,7 +24,7 @@ import { Config } from "@spacebar/util";
 import { storage, multer, setCacheControl, setCacheControlNotFound } from "../util";
 
 const ANIMATED_MIME_TYPES = ["image/apng", "image/gif", "image/gifv"];
-const ALLOWED_MIME_TYPES = [...ANIMATED_MIME_TYPES, "image/png", "image/jpeg", "image/webp"];
+const ALLOWED_MIME_TYPES = [...ANIMATED_MIME_TYPES, "image/png", "image/jpeg", "image/webp", "image/avif"];
 
 const router = Router({ mergeParams: true });
 

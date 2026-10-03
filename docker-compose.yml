@@ -87,6 +87,9 @@ services:
             SMTP_PASSWORD: ${SMTP_PASSWORD:-}
             EMAIL_FROM: ${EMAIL_FROM:-}
             LOG_REQUESTS: ${LOG_REQUESTS:-500,501}
+        # only on the host's loopback, for a reverse proxy running outside compose instead of the caddy service
+        ports:
+            - "127.0.0.1:${SERVER_PORT:-3001}:3001"
         volumes:
             - state:/data/state
             - storage:/data/storage
@@ -99,8 +102,10 @@ services:
             retries: 3
             start_period: 2m
 
+    # optional: starts only with the caddy profile, COMPOSE_PROFILES=caddy in .env
     caddy:
         image: caddy:2-alpine
+        profiles: ["caddy"]
         restart: unless-stopped
         depends_on:
             server:

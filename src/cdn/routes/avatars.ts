@@ -31,7 +31,7 @@ import { storage, multer, setCacheControl } from "../util";
 // TODO: delete old icons
 
 const ANIMATED_MIME_TYPES = ["image/apng", "image/gif", "image/gifv"];
-const STATIC_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/svg+xml", "image/svg"];
+const STATIC_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/avif", "image/svg+xml", "image/svg"];
 const ALLOWED_MIME_TYPES = [...ANIMATED_MIME_TYPES, ...STATIC_MIME_TYPES];
 
 const CLIENT_WUMPUS_USER_ID = "47835198259242069";

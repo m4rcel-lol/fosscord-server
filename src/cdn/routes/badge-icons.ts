@@ -26,7 +26,7 @@ import { HTTPError } from "lambert-server/HTTPError";
 import { storage, multer, setCacheControl, setCacheControlNotFound, fetchUpstreamAsset } from "../util";
 
 const BUNDLED_BADGES = path.join(ASSETS_FOLDER, "badge-icons");
-const ALLOWED_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+const ALLOWED_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/avif", "image/gif"];
 
 const router = Router({ mergeParams: true });
 

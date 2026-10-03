@@ -25,7 +25,7 @@ import { storage, FileStorage } from "@spacebar/cdn";
 import { Message, User, Webhook } from "@spacebar/database";
 
 const ANIMATED_MIME_TYPES = ["image/apng", "image/gif", "image/gifv"];
-const STATIC_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/svg+xml", "image/svg"];
+const STATIC_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/avif", "image/svg+xml", "image/svg"];
 
 const router = Router({ mergeParams: true });
 
