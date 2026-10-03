@@ -227,6 +227,18 @@ export interface PublicMessage {
     // spacebar extension
     webhook: PublicMessageWebhook;
     encrypted?: E2eeEnvelope;
+    soundboard_sounds?: MessageSoundboardSound[];
+}
+
+export interface MessageSoundboardSound {
+    sound_id: string;
+    name: string;
+    volume: number;
+    emoji_id: string | null;
+    emoji_name: string | null;
+    guild_id?: string;
+    user_id?: string;
+    available: boolean;
 }
 
 export interface PublicMessageWebhook {

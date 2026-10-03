@@ -28,6 +28,9 @@ const defaults: Record<string, { variant: number; config?: object }> = {
     "2026-03-message-bookmarks": { variant: 1 },
     "2026-07-message-bookmarks-v2": { variant: 1, config: { b: SAVED_MESSAGE_LIMIT, r: MESSAGE_REMINDER_LIMIT } },
     "2026-08-mark-channel-unread": { variant: 1 },
+    "2026-03-soundmoji-rendering": { variant: 1 },
+    "2026-03-soundmoji-sending": { variant: 2 },
+    "2026-09-soundboard-favorites": { variant: 1 },
 };
 
 export type ApexAssignment = [number, number, number, number, number, string | undefined];

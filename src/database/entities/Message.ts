@@ -40,6 +40,7 @@ import {
     MessageType,
     PartialMessage,
     MessageCall,
+    MessageSoundboardSound,
     Poll,
     PollAnswerCount,
     PublicMessage,
@@ -297,6 +298,9 @@ export class Message extends BaseClass {
     encrypted?: E2eeEnvelope | null;
 
     @Column({ type: "jsonb", nullable: true })
+    soundboard_sounds?: MessageSoundboardSound[] | null;
+
+    @Column({ type: "jsonb", nullable: true })
     call?: MessageCall | null;
 
     get isWebhook() {
@@ -421,6 +425,7 @@ export class Message extends BaseClass {
             thread: this.thread ? this.thread.toJSON() : this.thread,
             referenced_message: shallow ? undefined : this.referenced_message === null ? null : this.referenced_message?.toJSON(true),
             encrypted: this.encrypted ?? undefined,
+            soundboard_sounds: this.soundboard_sounds?.length ? this.soundboard_sounds : undefined,
         } satisfies PublicMessage;
     }
 

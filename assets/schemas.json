@@ -16975,6 +16975,19 @@
                     }
                 ]
             },
+            "soundboard_sounds": {
+                "anyOf": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/definitions/MessageSoundboardSound"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
             "call": {
                 "anyOf": [
                     {
@@ -18555,6 +18568,51 @@
             "enc",
             "user_id",
             "wrapped"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "MessageSoundboardSound": {
+        "type": "object",
+        "properties": {
+            "sound_id": {
+                "type": "string"
+            },
+            "name": {
+                "type": "string"
+            },
+            "volume": {
+                "type": "integer"
+            },
+            "emoji_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "emoji_name": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "guild_id": {
+                "type": "string"
+            },
+            "user_id": {
+                "type": "string"
+            },
+            "available": {
+                "type": "boolean"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "available",
+            "emoji_id",
+            "emoji_name",
+            "name",
+            "sound_id",
+            "volume"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -20712,6 +20770,12 @@
             },
             "encrypted": {
                 "$ref": "#/definitions/E2eeEnvelope"
+            },
+            "soundboard_sounds": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/MessageSoundboardSound"
+                }
             }
         },
         "additionalProperties": false,

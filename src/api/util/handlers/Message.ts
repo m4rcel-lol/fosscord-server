@@ -20,6 +20,7 @@ import { HTTPError } from "lambert-server/HTTPError";
 import { In, Raw } from "typeorm";
 // noinspection ES6PreferShortImport -- Causes a circular reference...
 import { fillMessageUrlEmbeds } from "../utility/EmbedHandlers";
+import { resolveSoundmoji } from "../utility/Soundboard";
 import { getDatabase, Application, Attachment, Channel, CloudAttachment, Guild, Member, Message, ReadState, Role, Session, Sticker, User, Webhook } from "@spacebar/database";
 import { mathLogBase, arrayDistributeSequentially, Stopwatch, Random } from "@spacebar/extensions";
 import {
@@ -560,6 +561,7 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
     }
 
     message.content = opts.content?.trim();
+    message.soundboard_sounds = await resolveSoundmoji(message.content);
 
     if (message.poll) {
         message.poll.results = { answer_counts: [], is_finalized: false };
