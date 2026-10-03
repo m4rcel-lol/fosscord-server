@@ -214,8 +214,9 @@ router.patch(
         if ("channel_id" in body) {
             permission.hasThrow("MOVE_MEMBERS");
             if (voiceChannelId && !(await getPermission(member_id, guild_id, voiceChannelId)).has("CONNECT")) throw DiscordApiErrors.MISSING_PERMISSIONS.withParams("CONNECT");
-            if (!(await VoiceState.exists({ where: { user_id: member_id, guild_id, channel_id: Not(IsNull()) } }))) throw DiscordApiErrors.TARGET_USER_IS_NOT_CONNECTED_TO_VOICE;
         }
+        if (("mute" in body || "deaf" in body || "channel_id" in body) && !(await VoiceState.exists({ where: { user_id: member_id, guild_id, channel_id: Not(IsNull()) } })))
+            throw DiscordApiErrors.TARGET_USER_IS_NOT_CONNECTED_TO_VOICE;
 
         if (changes.avatar) changes.avatar = await handleFile(`/guilds/${guild_id}/users/${member_id}/avatars`, changes.avatar);
         else if (changes.avatar === null) Object.assign(member, { avatar: null });
