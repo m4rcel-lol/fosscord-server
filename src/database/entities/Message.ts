@@ -62,9 +62,9 @@ export class Message extends BaseClass {
     @Column({ nullable: true })
     channel_id?: string;
 
-    @JoinColumn({ name: "channel_id", foreignKeyConstraintName: "FK_message_channel_id" })
+    @JoinColumn({ name: "channel_id" })
     @ManyToOne(() => Channel, {
-        onDelete: "CASCADE",
+        createForeignKeyConstraints: false,
     })
     channel: Channel;
 
@@ -83,9 +83,9 @@ export class Message extends BaseClass {
     @JsonRemoveEmpty
     guild_id?: string;
 
-    @JoinColumn({ name: "guild_id", foreignKeyConstraintName: "FK_message_guild_id" })
+    @JoinColumn({ name: "guild_id" })
     @ManyToOne(() => Guild, {
-        onDelete: "CASCADE",
+        createForeignKeyConstraints: false,
     })
     guild?: Guild;
 

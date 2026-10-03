@@ -22,7 +22,7 @@ import { route } from "@spacebar/api/middlewares";
 import { Channel, Guild, Member, User } from "@spacebar/database";
 import { Config, emitEvent, GuildDeleteEvent } from "@spacebar/util";
 import { AdminGuildUpdateSchema } from "@spacebar/schemas";
-import { applyGuildTag, syncTagAdopters } from "@spacebar/api/util";
+import { applyGuildTag, purgeDeletedChannels, syncTagAdopters } from "@spacebar/api/util";
 import { pickOwner } from "../index";
 
 const router = Router({ mergeParams: true });
@@ -143,6 +143,7 @@ router.delete(
             Guild.delete({ id: guild_id }), // cascades to all guild related data
             emitEvent({ event: "GUILD_DELETE", data: { id: guild_id }, guild_id } satisfies GuildDeleteEvent),
         ]);
+        void purgeDeletedChannels();
 
         // new users would otherwise be auto-joined into a server that no longer exists
         const autoJoin = Config.get().guild.autoJoin;
