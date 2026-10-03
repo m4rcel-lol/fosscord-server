@@ -927,8 +927,10 @@ details > summary::-webkit-details-marker {
 
 nav a {
     display: flex;
+    flex-shrink: 0;
     align-items: center;
     gap: 8px;
+    white-space: nowrap;
 }
 
 .nav-count {
