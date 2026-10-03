@@ -42,6 +42,7 @@ export class FileStorage implements Storage {
         try {
             return await fsp.readFile(path);
         } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== "EISDIR") return null;
             try {
                 console.warn("[CDN] Warning: falling back to first file in dir for path", path);
                 const files = fs.readdirSync(path);
