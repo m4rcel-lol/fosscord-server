@@ -20,7 +20,7 @@ import { HTTPError } from "lambert-server/HTTPError";
 import { Column, Entity, Index, JoinColumn, ManyToOne, OneToMany } from "typeorm";
 import { DmChannelDTO } from "../../util/dtos";
 import { ChannelCreateEvent, ChannelRecipientRemoveEvent, ThreadCreateEvent, ThreadMembersUpdateEvent } from "../../util/interfaces";
-import { InvisibleCharacters, Snowflake, emitEvent, getPermission, Permissions, Config, DiscordApiErrors } from "@spacebar/util/util";
+import { InvisibleCharacters, Snowflake, emitEvent, getPermission, Permissions, Config, DiscordApiErrors, FieldErrors } from "@spacebar/util/util";
 import { BaseClass } from "./BaseClass";
 import { Guild } from "./Guild";
 import { Invite } from "./Invite";
@@ -204,6 +204,20 @@ export class Channel extends BaseClass {
     /** Must be calculated Channel.calculatePosition */
     position: number;
 
+    static normalizeName(type: ChannelType, name: string, ircLikeCategories = false) {
+        const slugged =
+            [ChannelType.GUILD_TEXT, ChannelType.GUILD_NEWS, ChannelType.GUILD_FORUM, ChannelType.GUILD_MEDIA, ChannelType.GUILD_DIRECTORY].includes(type) ||
+            (ircLikeCategories && type === ChannelType.GUILD_CATEGORY);
+        if (!slugged) return name.trim();
+        return name
+            .trim()
+            .replace(/[\s\-~]+/g, "-")
+            .replace(/[\\'!"#$%&()*+,./:;<=>?@[\]^`{|}~]/g, "")
+            .replace(/-{2,}/g, "-")
+            .replace(/^-+|-+$/g, "")
+            .toLowerCase();
+    }
+
     // TODO: DM channel
     static async createChannel(
         channel: Partial<Channel>,
@@ -233,25 +247,11 @@ export class Channel extends BaseClass {
 
         if (!opts?.skipNameChecks) {
             if (!guild.features.includes("ALLOW_INVALID_CHANNEL_NAMES") && channel.name) {
-                for (const character of InvisibleCharacters) if (channel.name.includes(character)) throw new HTTPError("Channel name cannot include invalid characters", 403);
-
-                // Categories skip these checks on discord.com
-                if (
-                    (channel.type !== ChannelType.GUILD_CATEGORY && channel.type !== ChannelType.GUILD_STAGE_VOICE && channel.type !== ChannelType.GUILD_VOICE) ||
-                    guild.features.includes("IRC_LIKE_CATEGORY_NAMES")
-                ) {
-                    if (channel.name.includes(" ")) throw new HTTPError("Channel name cannot include invalid characters", 403);
-
-                    if (channel.name.match(/--+/g)) throw new HTTPError("Channel name cannot include multiple adjacent dashes.", 403);
-
-                    if (channel.name.charAt(0) === "-" || channel.name.charAt(channel.name.length - 1) === "-")
-                        throw new HTTPError("Channel name cannot start/end with dash.", 403);
-                } else channel.name = channel.name.trim(); //category names are trimmed client side on discord.com
+                for (const character of InvisibleCharacters) channel.name = channel.name.replaceAll(character, "");
+                channel.name = Channel.normalizeName(channel.type ?? ChannelType.GUILD_TEXT, channel.name, guild.features.includes("IRC_LIKE_CATEGORY_NAMES"));
             }
 
-            if (!guild.features.includes("ALLOW_UNNAMED_CHANNELS")) {
-                if (!channel.name) throw new HTTPError("Channel name cannot be empty.", 403);
-            }
+            if (!guild.features.includes("ALLOW_UNNAMED_CHANNELS") && !channel.name) throw FieldErrors({ name: { code: "BASE_TYPE_REQUIRED", message: "This field is required" } });
         }
 
         switch (channel.type) {

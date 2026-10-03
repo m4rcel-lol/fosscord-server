@@ -203,7 +203,7 @@ router.get(
             where: { id: message_id, channel_id },
         });
         const reaction = findReaction(message.reactions, emoji);
-        if (!reaction) throw new HTTPError("Reaction not found", 404);
+        if (!reaction) return res.json([]);
 
         const after = req.query.after ? `${req.query.after}` : undefined;
         const ids = usersOf(reaction, type).filter((id) => !after || BigInt(id) > BigInt(after));

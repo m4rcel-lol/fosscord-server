@@ -20,8 +20,9 @@ import { Request, Response, Router } from "express";
 import { FrecencyUserSettings } from "discord-protos";
 import { JsonValue } from "@protobuf-ts/runtime";
 import { route } from "@spacebar/api/middlewares";
-import { UserSettingsProtos } from "@spacebar/database";
-import { emitEvent, FieldErrors, OrmUtils } from "@spacebar/util";
+import { MoreThan } from "typeorm";
+import { Message, Recipient, UserSettingsProtos } from "@spacebar/database";
+import { emitEvent, FieldErrors, OrmUtils, Snowflake } from "@spacebar/util";
 import { SettingsProtoJsonResponse, SettingsProtoResponse, SettingsProtoUpdateJsonSchema, SettingsProtoUpdateSchema } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
@@ -33,6 +34,47 @@ const parseSettings = <T>(parse: () => T) => {
         throw FieldErrors({ settings: { code: "BASE_TYPE_INVALID", message: "Invalid settings payload." } });
     }
 };
+
+const SEED_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+
+async function withSeededFrecency(userId: string, settings: FrecencyUserSettings) {
+    const stored = settings.guildAndChannelFrecency?.guildAndChannels ?? {};
+    const since = (BigInt(Date.now() - SEED_WINDOW_MS - Snowflake.EPOCH) << 22n).toString();
+    const [messages, recipients] = await Promise.all([
+        Message.find({
+            where: { author_id: userId, id: MoreThan(since) },
+            select: { id: true, channel_id: true, guild_id: true },
+            order: { id: "DESC" },
+            take: 500,
+        }),
+        Recipient.find({
+            where: { user_id: userId, closed: false },
+            relations: { channel: true },
+            select: { id: true, channel: { id: true, last_message_id: true } },
+        }),
+    ]);
+    const uses = new Map<string, bigint[]>();
+    const track = (key: string | undefined | null, at: bigint) => {
+        if (!key) return;
+        const list = uses.get(key) ?? [];
+        list.push(at);
+        uses.set(key, list);
+    };
+    for (const message of messages) {
+        const at = BigInt(Snowflake.deconstruct(message.id).timestamp);
+        track(message.channel_id, at);
+        track(message.guild_id, at);
+    }
+    for (const { channel } of recipients)
+        if (channel?.last_message_id && !uses.has(channel.id)) track(channel.id, BigInt(Snowflake.deconstruct(channel.last_message_id).timestamp));
+    const missing = [...uses].filter(([key]) => !stored[key]);
+    if (!missing.length) return settings;
+    const seeded = missing
+        .sort(([, a], [, b]) => b.length - a.length)
+        .slice(0, Math.max(0, 100 - Object.keys(stored).length))
+        .map(([key, list]) => [key, { totalUses: list.length, recentUses: list.slice(0, 10).sort((a, b) => (a < b ? -1 : 1)), frecency: -1, score: 0 }]);
+    return { ...settings, guildAndChannelFrecency: { guildAndChannels: { ...stored, ...Object.fromEntries(seeded) } } } as FrecencyUserSettings;
+}
 
 //#region Protobuf
 router.get(
@@ -55,7 +97,7 @@ router.get(
         const userSettings = await UserSettingsProtos.getOrDefault(req.user_id);
 
         res.json({
-            settings: FrecencyUserSettings.toBase64(userSettings.frecencySettings!),
+            settings: FrecencyUserSettings.toBase64(await withSeededFrecency(req.user_id, userSettings.frecencySettings!)),
         } satisfies SettingsProtoResponse);
     },
 );
@@ -101,7 +143,7 @@ router.get(
         const userSettings = await UserSettingsProtos.getOrDefault(req.user_id);
 
         res.json({
-            settings: FrecencyUserSettings.toJson(userSettings.frecencySettings!),
+            settings: FrecencyUserSettings.toJson(await withSeededFrecency(req.user_id, userSettings.frecencySettings!)),
         } satisfies SettingsProtoJsonResponse);
     },
 );
