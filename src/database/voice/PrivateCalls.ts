@@ -43,7 +43,7 @@ export class PrivateCalls {
         await Message.createQueryBuilder()
             .update()
             .set({ call: () => `jsonb_set("call", '{ended_timestamp}', to_jsonb(to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')))` })
-            .where(`"type" = :type AND "call" IS NOT NULL AND "call"->>'ended_timestamp' IS NULL`, { type: MessageType.CALL })
+            .where(`"type" = ${MessageType.CALL} AND "call" IS NOT NULL AND ("call"->>'ended_timestamp') IS NULL`)
             .execute();
     }
 

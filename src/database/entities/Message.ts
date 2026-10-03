@@ -60,7 +60,6 @@ import { JsonRemoveEmpty } from "@spacebar/util/util/Decorators";
 @Index(["channel_id", "id"], { unique: true })
 export class Message extends BaseClass {
     @Column({ nullable: true })
-    @Index()
     channel_id?: string;
 
     @JoinColumn({ name: "channel_id", foreignKeyConstraintName: "FK_message_channel_id" })
