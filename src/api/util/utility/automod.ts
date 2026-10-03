@@ -17,7 +17,7 @@
 */
 
 import { AuditLog, AutomodRule, Channel, Guild, Member, Message, User, VoiceChannels } from "@spacebar/database";
-import { ApiError, Config, emitEvent, ErrorList, FieldError, GuildMemberUpdateEvent, Permissions, Snowflake } from "@spacebar/util";
+import { ApiError, Config, emitEvent, ErrorList, FieldError, Permissions, Snowflake } from "@spacebar/util";
 import {
     AuditLogEvents,
     AutomodAction,
@@ -33,7 +33,7 @@ import {
     MessageType,
 } from "@spacebar/schemas";
 import { In, MoreThan } from "typeorm";
-import { mentionRaidActive, postGuildSystemMessage, recordGuildJoin, recordMentionSpam } from "./safety";
+import { emitMemberUpdate, mentionRaidActive, postGuildSystemMessage, recordGuildJoin, recordMentionSpam } from "./safety";
 
 export const AUTOMOD_QUARANTINE_FLAGS = 128 | 256 | 1024;
 const QUARANTINED_NAME = 128;
@@ -364,20 +364,6 @@ async function sendAlert(match: AutomodMatch, channel_id: string, opts: { guild_
     });
 }
 
-export async function emitMemberUpdate(guild_id: string, user_id: string) {
-    const updated = await Member.findOneOrFail({ where: { id: user_id, guild_id }, relations: { user: true, roles: true } });
-    await emitEvent({
-        event: "GUILD_MEMBER_UPDATE",
-        guild_id,
-        data: {
-            ...updated.toPublicMember(),
-            guild_id,
-            user: updated.user.toPublicUser(),
-            roles: updated.roles.map((x) => x.id).filter((id) => id !== guild_id),
-        },
-    } satisfies GuildMemberUpdateEvent);
-}
-
 async function timeoutMember(member: Member, seconds: number) {
     const until = new Date(Date.now() + Math.min(seconds, MAX_TIMEOUT_SECONDS) * 1000);
     await Member.update({ id: member.id, guild_id: member.guild_id }, { communication_disabled_until: until });
@@ -396,16 +382,20 @@ export async function checkMemberProfile(guild_id: string, user_id: string, even
     const guild = await Guild.findOne({ where: { id: guild_id }, select: { id: true, owner_id: true } });
     const elevated = (Permissions.rolePermission(member.roles) & (Permissions.FLAGS.ADMINISTRATOR | Permissions.FLAGS.MANAGE_GUILD)) !== 0n;
     if (guild?.owner_id === user_id || elevated) rules.length = 0;
-    const names = [member.nick, member.user.global_name, member.user.username].filter((name): name is string => !!name);
+    const names = Object.entries({ nickname: member.nick, display_name: member.user.global_name, username: member.user.username }).filter(
+        (entry): entry is [string, string] => !!entry[1],
+    );
+    let field = "username";
 
     let match: AutomodMatch | null = null;
     for (const rule of rules) {
         if (exempt(rule, [], roles)) continue;
         const metadata = (rule.trigger_metadata ?? {}) as AutomodCustomWordsRule;
-        for (const name of names) {
+        for (const [kind, name] of names) {
             const found = matchKeywords(name, metadata.keyword_filter ?? [], metadata.regex_patterns ?? [], metadata.allow_list ?? []);
             if (found) {
                 match = { rule, ...found };
+                field = kind;
                 break;
             }
         }
@@ -428,8 +418,8 @@ export async function checkMemberProfile(guild_id: string, user_id: string, even
             const alert = await sendAlert(match, action.metadata.channel_id, {
                 guild_id,
                 user_id,
-                fields: { decision_id, quarantine_event: event, ...(quarantine ? { quarantine_user: "username", quarantine_user_action: "block_guild_interactions" } : {}) },
-                content: names.join("\n"),
+                fields: { decision_id, quarantine_event: event, ...(quarantine ? { quarantine_user: field, quarantine_user_action: "quarantine_user" } : {}) },
+                content: names.find(([kind]) => kind === field)?.[1] ?? "",
             }).catch((e) => console.error("[AutoMod] alert failed", e));
             if (alert) alert_system_message_id = alert.id;
         }

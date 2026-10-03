@@ -24,11 +24,20 @@ import { Snowflake } from "@spacebar/util";
 const router = Router({ mergeParams: true });
 
 type Query<T> = { or_query?: T[]; and_query?: T[]; range?: { gte?: T; lte?: T } };
+type SafetySignals = {
+    unusual_dm_activity_until?: Query<number>;
+    communication_disabled_until?: Query<number>;
+    unusual_account_activity?: boolean;
+    automod_quarantined_username?: boolean;
+};
 type Filter = {
     user_id?: Query<string>;
     usernames?: Query<string>;
     role_ids?: Query<string>;
     guild_joined_at?: Query<number>;
+    source_invite_code?: Query<string>;
+    join_source_type?: Query<number>;
+    safety_signals?: SafetySignals;
     is_pending?: boolean;
 };
 type Cursor = { guild_joined_at?: number; user_id?: string };
@@ -58,7 +67,18 @@ router.post(
         });
 
         const joined = (m: Member) => new Date(m.joined_at).getTime();
-        const names = (m: Member) => [m.nick, m.user.username].filter(Boolean).map((n) => `${n}`.toLowerCase());
+        const names = (m: Member) => [m.nick, m.user.username, m.user.global_name].filter(Boolean).map((n) => `${n}`.toLowerCase());
+        const time = (value?: Date | string | null) => (value ? new Date(value).getTime() : null);
+        const signals = (m: Member, query: SafetySignals) => {
+            const checks: boolean[] = [];
+            const dm = time(m.unusual_dm_activity_until);
+            const timeout = time(m.communication_disabled_until);
+            if (query.unusual_dm_activity_until) checks.push(dm != null && inRange(dm, query.unusual_dm_activity_until.range));
+            if (query.communication_disabled_until) checks.push(timeout != null && inRange(timeout, query.communication_disabled_until.range));
+            if (query.automod_quarantined_username) checks.push((m.flags & 128) !== 0);
+            if (query.unusual_account_activity) checks.push(false);
+            return checks;
+        };
         const inRange = <T>(value: T, range?: { gte?: T; lte?: T }) => !range || ((range.gte == null || value >= range.gte) && (range.lte == null || value <= range.lte));
 
         const andMatch = (m: Member) => {
@@ -79,6 +99,9 @@ router.post(
                 return false;
             if (!inRange(joined(m), and_query.guild_joined_at?.range)) return false;
             if (and_query.is_pending != null && !!m.pending !== and_query.is_pending) return false;
+            if (and_query.source_invite_code?.or_query && !and_query.source_invite_code.or_query.includes(m.source_invite_code ?? "")) return false;
+            if (and_query.join_source_type?.or_query && !and_query.join_source_type.or_query.map(Number).includes(m.join_source_type ?? 0)) return false;
+            if (and_query.safety_signals && !signals(m, and_query.safety_signals).every(Boolean)) return false;
             return true;
         };
 
@@ -87,6 +110,7 @@ router.post(
             if (or_query.usernames?.or_query) checks.push(or_query.usernames.or_query.some((q) => names(m).some((n) => n.startsWith(q.toLowerCase()))));
             if (or_query.user_id?.or_query) checks.push(or_query.user_id.or_query.includes(m.id));
             if (or_query.role_ids?.or_query) checks.push(or_query.role_ids.or_query.some((id) => m.roles.some((r) => r.id === id)));
+            if (or_query.safety_signals) checks.push(...signals(m, or_query.safety_signals));
             return checks.length === 0 || checks.some(Boolean);
         };
 

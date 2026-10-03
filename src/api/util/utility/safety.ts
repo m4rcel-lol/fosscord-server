@@ -17,7 +17,7 @@
 */
 
 import { Channel, Guild, GuildIncidentsData, Member, Message, User } from "@spacebar/database";
-import { Config, DiscordApiErrors, emitEvent, MessageCreateEvent, Snowflake } from "@spacebar/util";
+import { Config, DiscordApiErrors, emitEvent, GuildMemberUpdateEvent, MessageCreateEvent, Snowflake } from "@spacebar/util";
 import { Embed, EmbedType, MessageType } from "@spacebar/schemas";
 import { getSystemAccount } from "./systemAccounts";
 
@@ -28,6 +28,20 @@ const joinLog = new Map<string, number[]>();
 const dmLog = new Map<string, { at: number; sender: string; recipient: string }[]>();
 const mentionLog = new Map<string, { at: number; user_id: string }[]>();
 const mentionRaids = new Map<string, number>();
+
+export async function emitMemberUpdate(guild_id: string, user_id: string) {
+    const updated = await Member.findOneOrFail({ where: { id: user_id, guild_id }, relations: { user: true, roles: true } });
+    await emitEvent({
+        event: "GUILD_MEMBER_UPDATE",
+        guild_id,
+        data: {
+            ...updated.toPublicMember(),
+            guild_id,
+            user: updated.user.toPublicUser(),
+            roles: updated.roles.map((x) => x.id).filter((id) => id !== guild_id),
+        },
+    } satisfies GuildMemberUpdateEvent);
+}
 
 const prune = <T>(entries: T[], since: number, at: (entry: T) => number) => entries.filter((entry) => at(entry) >= since);
 
@@ -106,7 +120,10 @@ export async function recordGuildMemberDm(guild_ids: string[], sender: string, r
         const entries = [...prune(dmLog.get(guild_id) ?? [], now - dmRaidWindowSeconds * 1000, (entry) => entry.at), { at: now, sender, recipient }];
         dmLog.set(guild_id, entries);
         const fromSender = new Set(entries.filter((entry) => entry.sender === sender).map((entry) => entry.recipient));
-        if (fromSender.size >= dmRaidThreshold) await flagIncident(guild_id, "dm_spam_detected_at", { raid_type: "dm_raid", dms_sent: String(fromSender.size) });
+        if (fromSender.size < dmRaidThreshold) continue;
+        await Member.update({ id: sender, guild_id }, { unusual_dm_activity_until: new Date(now + 24 * 60 * 60 * 1000) });
+        await emitMemberUpdate(guild_id, sender).catch(() => undefined);
+        await flagIncident(guild_id, "dm_spam_detected_at", { raid_type: "dm_raid", dms_sent: String(fromSender.size) });
     }
 }
 

@@ -89,6 +89,7 @@ export type PublicMemberKeys =
     | "theme_colors"
     | "pronouns"
     | "communication_disabled_until"
+    | "unusual_dm_activity_until"
     | "flags"
     | "avatar_decoration_data"
     | "collectibles"
@@ -110,6 +111,7 @@ export const PublicMemberProjection: PublicMemberKeys[] = [
     "theme_colors",
     "pronouns",
     "communication_disabled_until",
+    "unusual_dm_activity_until",
     "flags",
     "avatar_decoration_data",
     "collectibles",
