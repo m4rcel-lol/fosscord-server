@@ -1,0 +1,243 @@
+.fosscord-insights {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 32px;
+}
+
+.fosscord-insights-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.fosscord-insights-range {
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 8px;
+    background: var(--background-mod-subtle);
+}
+
+.fosscord-insights-range button {
+    min-height: 28px;
+    padding: 0 12px;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 14px;
+    font-weight: 500;
+    transition:
+        background-color 120ms ease-out,
+        color 120ms ease-out,
+        scale 200ms ease-out;
+}
+
+.fosscord-insights-range button:active {
+    scale: 0.97;
+}
+
+.fosscord-insights-range button[aria-pressed="true"] {
+    background: var(--background-surface-high);
+    color: var(--text-strong);
+}
+
+.fosscord-insights-range button:focus-visible {
+    outline: 2px solid var(--brand-500);
+    outline-offset: 1px;
+}
+
+@media (hover: hover) {
+    .fosscord-insights-range button:hover {
+        color: var(--text-default);
+    }
+}
+
+.fosscord-insights-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+}
+
+.fosscord-insights-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--background-base-lower);
+}
+
+.fosscord-insights-card-header {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.fosscord-insights-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+}
+
+.fosscord-insights-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.fosscord-insights-swatch {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+}
+
+.fosscord-insights-number {
+    font-variant-numeric: tabular-nums;
+}
+
+.fosscord-insights-plot {
+    display: flex;
+    gap: 8px;
+}
+
+.fosscord-insights-axis-y {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: flex-end;
+    height: 140px;
+    min-width: 16px;
+}
+
+.fosscord-insights-canvas {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+}
+
+.fosscord-insights-canvas svg {
+    display: block;
+    width: 100%;
+    height: 140px;
+    overflow: visible;
+}
+
+.fosscord-insights-baseline {
+    stroke: var(--border-subtle);
+    stroke-width: 1;
+}
+
+.fosscord-insights-gridline {
+    stroke: var(--border-subtle);
+    stroke-width: 1;
+    stroke-dasharray: 2 4;
+}
+
+.fosscord-insights-hover {
+    fill: var(--background-mod-subtle);
+}
+
+.fosscord-insights-primary {
+    fill: var(--brand-500);
+    stroke: var(--brand-500);
+    background: var(--brand-500);
+}
+
+.fosscord-insights-secondary {
+    fill: var(--text-feedback-warning);
+    stroke: var(--text-feedback-warning);
+    background: var(--text-feedback-warning);
+}
+
+.fosscord-insights-line {
+    fill: none;
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+.fosscord-insights-axis-x {
+    position: relative;
+    height: 16px;
+    margin-top: 4px;
+}
+
+.fosscord-insights-axis-x > * {
+    position: absolute;
+    translate: -50% 0;
+    white-space: nowrap;
+}
+
+.fosscord-insights-axis-x > :first-child {
+    translate: 0 0;
+}
+
+.fosscord-insights-axis-x > :last-child:not(:first-child) {
+    translate: -100% 0;
+}
+
+.fosscord-insights-tooltip {
+    position: absolute;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--background-surface-high);
+    box-shadow:
+        0 0 0 1px var(--border-subtle),
+        0 2px 4px rgb(0 0 0 / 0.08),
+        0 8px 16px rgb(0 0 0 / 0.12);
+    pointer-events: none;
+}
+
+.fosscord-insights-ranking {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.fosscord-insights-ranking li {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.fosscord-insights-ranking-label {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.fosscord-insights-ellipsis {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fosscord-insights-meter {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--background-mod-subtle);
+    overflow: hidden;
+}
+
+.fosscord-insights-meter > div {
+    height: 100%;
+    border-radius: 3px;
+}
+
+.fosscord-insights-empty {
+    text-wrap: pretty;
+}
