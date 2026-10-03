@@ -1,0 +1,30 @@
+diff --git a/src/plugins/silentTyping/index.tsx b/src/plugins/silentTyping/index.tsx
+--- a/src/plugins/silentTyping/index.tsx
++++ b/src/plugins/silentTyping/index.tsx
+@@ -129,26 +129,6 @@
+         },
+     ],
+ 
+-    commands: [{
+-        name: "silenttype",
+-        description: "Toggle whether you're hiding that you're typing or not.",
+-        inputType: ApplicationCommandInputType.BUILT_IN,
+-        options: [
+-            {
+-                name: "value",
+-                description: "Whether to hide or not that you're typing (default is toggle)",
+-                required: false,
+-                type: ApplicationCommandOptionType.BOOLEAN,
+-            },
+-        ],
+-        execute: async (args, ctx) => {
+-            settings.store.isEnabled = !!findOption(args, "value", !settings.store.isEnabled);
+-            sendBotMessage(ctx.channel.id, {
+-                content: settings.store.isEnabled ? "Silent typing enabled!" : "Silent typing disabled!",
+-            });
+-        },
+-    }],
+-
+     async startTyping(channelId: string) {
+         if (settings.store.isEnabled) return;
+         FluxDispatcher.dispatch({ type: "TYPING_START_LOCAL", channelId });
