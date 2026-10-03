@@ -17,10 +17,10 @@
 */
 
 import { Request, Response, Router } from "express";
-import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
-import { Ban, Member, User } from "@spacebar/database";
-import { Config, DiscordApiErrors, GuildBanAddEvent, emitEvent } from "@spacebar/util";
+import { BulkBanSchema } from "@spacebar/schemas";
+import { Config, DiscordApiErrors, FieldErrors } from "@spacebar/util";
+import { banDeleteSeconds, banHierarchy, banUser } from "@spacebar/api/util";
 
 const router: Router = Router({ mergeParams: true });
 
@@ -43,73 +43,29 @@ router.post(
     }),
     async (req: Request, res: Response) => {
         const { guild_id } = req.params as { [key: string]: string };
+        const body = (req.body ?? {}) as BulkBanSchema;
+        const userIds = Array.isArray(body.user_ids) ? [...new Set(body.user_ids.map(String))] : null;
+        const max = Config.get().limits.guild.maxBulkBanUsers;
+        if (!userIds?.length || userIds.length > max) throw FieldErrors({ user_ids: { code: "BASE_TYPE_BAD_LENGTH", message: `Must be between 1 and ${max} in length.` } });
+        const delete_message_seconds = banDeleteSeconds(body);
+        const headerReason = req.headers["x-audit-log-reason"];
+        const reason = Array.isArray(headerReason) ? headerReason[0] : headerReason;
+        const canBan = await banHierarchy(guild_id, req.user_id);
 
-        const userIds: Array<string> = req.body.user_ids;
-        if (!userIds) throw new HTTPError("The user_ids array is missing", 400);
-
-        if (userIds.length > Config.get().limits.guild.maxBulkBanUsers) throw new HTTPError("The user_ids array must be between 1 and 200 in length", 400);
-
-        const banned_users = [];
-        const failed_users = [];
-        for await (const banned_user_id of userIds) {
-            if (req.user_id === banned_user_id && banned_user_id === req.permission?.cache.guild?.owner_id) {
-                failed_users.push(banned_user_id);
-                continue;
-            }
-
-            if (req.permission?.cache.guild?.owner_id === banned_user_id) {
-                failed_users.push(banned_user_id);
-                continue;
-            }
-
-            const existingBan = await Ban.findOne({
-                where: { guild_id: guild_id, user_id: banned_user_id },
-            });
-            if (existingBan) {
-                failed_users.push(banned_user_id);
-                continue;
-            }
-
-            let banned_user;
+        const banned_users: string[] = [];
+        const failed_users: string[] = [];
+        for (const user_id of userIds) {
             try {
-                banned_user = await User.getPublicUser(banned_user_id);
+                if (!/^\d{1,20}$/.test(user_id) || !(await canBan(user_id))) throw new Error("not allowed");
+                const banned = await banUser({ guild_id, user_id, executor_id: req.user_id, reason: reason ? decodeURIComponent(reason) : undefined, delete_message_seconds });
+                (banned ? banned_users : failed_users).push(user_id);
             } catch {
-                failed_users.push(banned_user_id);
-                continue;
-            }
-
-            const ban = Ban.create({
-                user_id: banned_user_id,
-                guild_id: guild_id,
-                ip: req.ip,
-                executor_id: req.user_id,
-                reason: req.body.reason, // || otherwise empty
-            });
-
-            try {
-                await Promise.all([
-                    Member.removeFromGuild(banned_user_id, guild_id),
-                    ban.save(),
-                    emitEvent({
-                        event: "GUILD_BAN_ADD",
-                        data: {
-                            guild_id: guild_id,
-                            user: banned_user,
-                        },
-                        guild_id: guild_id,
-                    } satisfies GuildBanAddEvent),
-                ]);
-                banned_users.push(banned_user_id);
-            } catch {
-                failed_users.push(banned_user_id);
+                failed_users.push(user_id);
             }
         }
 
-        if (banned_users.length === 0 && failed_users.length > 0) throw DiscordApiErrors.BULK_BAN_FAILED;
-        return res.json({
-            banned_users: banned_users,
-            failed_users: failed_users,
-        });
+        if (!banned_users.length) throw DiscordApiErrors.BULK_BAN_FAILED;
+        return res.json({ banned_users, failed_users });
     },
 );
 
