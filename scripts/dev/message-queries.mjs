@@ -118,16 +118,26 @@ for (const [name, fn] of Object.entries(scenarios)) {
         times.push(ms);
         sample ??= lines;
     }
-    rows.push({ name, queries: percentile(counts, 0.5), min: Math.min(...counts), max: Math.max(...counts), p50: percentile(times, 0.5), p90: percentile(times, 0.9) });
+    rows.push({
+        name,
+        queries: percentile(counts, 0.5),
+        min: Math.min(...counts),
+        max: Math.max(...counts),
+        fastest: Math.min(...times),
+        p50: percentile(times, 0.5),
+        p90: percentile(times, 0.9),
+    });
     if (trace) {
         console.log(`\n${name}: ${sample.length} queries`);
         sample.forEach((line, i) => console.log(`${String(i + 1).padStart(3)} ${line.replace(/ -- PARAMETERS: .*/, "").slice(0, 400)}`));
     }
 }
 
-console.log(`\n${"scenario".padEnd(20)} ${"queries".padStart(8)} ${"min".padStart(5)} ${"max".padStart(5)} ${"p50 ms".padStart(8)} ${"p90 ms".padStart(8)}`);
+console.log(
+    `\n${"scenario".padEnd(20)} ${"queries".padStart(8)} ${"min".padStart(5)} ${"max".padStart(5)} ${"min ms".padStart(8)} ${"p50 ms".padStart(8)} ${"p90 ms".padStart(8)}`,
+);
 for (const r of rows)
     console.log(
-        `${r.name.padEnd(20)} ${String(r.queries).padStart(8)} ${String(r.min).padStart(5)} ${String(r.max).padStart(5)} ${r.p50.toFixed(1).padStart(8)} ${r.p90.toFixed(1).padStart(8)}`,
+        `${r.name.padEnd(20)} ${String(r.queries).padStart(8)} ${String(r.min).padStart(5)} ${String(r.max).padStart(5)} ${r.fastest.toFixed(1).padStart(8)} ${r.p50.toFixed(1).padStart(8)} ${r.p90.toFixed(1).padStart(8)}`,
     );
 console.log(`\n${runs} runs per scenario, queries counted from DB_LOGGING output in ${logPath}`);
