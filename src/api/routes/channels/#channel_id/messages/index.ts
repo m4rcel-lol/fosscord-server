@@ -31,23 +31,14 @@ import {
     NewUrlUserSignatureData,
     Rights,
     Snowflake,
-    uploadFile,
+    uploadMessageFiles,
 } from "@spacebar/util";
+import { MessageOptionAttachment } from "@spacebar/util/dtos/MessageOptions";
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import multer from "multer";
 import { FindManyOptions, FindOperator, LessThan, MoreThan, MoreThanOrEqual } from "typeorm";
-import {
-    AcknowledgeDeleteSchema,
-    isTextChannel,
-    MessageCreateAttachment,
-    MessageCreateCloudAttachment,
-    MessageCreateSchema,
-    PartialUser,
-    PollAnswerCount,
-    PublicMessage,
-    ReadStateType,
-} from "@spacebar/schemas";
+import { AcknowledgeDeleteSchema, isTextChannel, MessageCreateSchema, PartialUser, PollAnswerCount, PublicMessage, ReadStateType } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
 
@@ -286,7 +277,6 @@ router.post(
         const { channel_id } = req.params as { [key: string]: string };
         const body = req.body as MessageCreateSchema;
         const messageId = Snowflake.generate();
-        const attachments: (Attachment | MessageCreateAttachment | MessageCreateCloudAttachment)[] = body.attachments ?? [];
 
         const channel = await Channel.findOneOrFail({
             where: { id: channel_id },
@@ -347,13 +337,11 @@ router.post(
         if (channel.guild_id) await checkAutomod({ guild_id: channel.guild_id, channel, user_id: req.user_id, content: body.content, permission: req.permission });
 
         const files = (req.files as Express.Multer.File[]) ?? [];
-        for (const currFile of files) {
-            try {
-                const file = await uploadFile(`/attachments/${channel.id}/${messageId}`, currFile);
-                attachments.push(file);
-            } catch (error) {
-                return res.status(400).json({ message: error?.toString() });
-            }
+        let attachments: MessageOptionAttachment[];
+        try {
+            attachments = await uploadMessageFiles(`/attachments/${channel.id}/${messageId}`, files, body.attachments ?? []);
+        } catch (error) {
+            return res.status(400).json({ message: error?.toString() });
         }
 
         const embeds = body.embeds || [];

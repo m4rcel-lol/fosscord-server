@@ -19,10 +19,23 @@
 import { Request, Response } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { MoreThan } from "typeorm";
+import { MessageOptionAttachment } from "@spacebar/util/dtos/MessageOptions";
 import { handleMessage, postHandleMessage } from "./Message";
 import { createInteractionMessage, editInteractionMessage, fetchInteractionMessage } from "./Interaction";
 import { Attachment, Channel, Message, Webhook } from "@spacebar/database";
-import { Config, DiscordApiErrors, emitEvent, FieldErrors, getInteractionByToken, MessageCreateEvent, Snowflake, uploadFile, ValidateName, handleFile } from "@spacebar/util";
+import {
+    Config,
+    DiscordApiErrors,
+    emitEvent,
+    FieldErrors,
+    getInteractionByToken,
+    MessageCreateEvent,
+    Snowflake,
+    uploadFile,
+    uploadMessageFiles,
+    ValidateName,
+    handleFile,
+} from "@spacebar/util";
 import { InteractionMessage, WebhookExecuteSchema, WebhookResponse, WebhookUpdateSchema } from "@spacebar/schemas";
 
 export const webhookToJSON = (webhook: Webhook, opts: { withToken?: boolean; withUser?: boolean } = { withToken: true, withUser: true }): WebhookResponse => ({
@@ -117,8 +130,6 @@ export const executeWebhook = async (req: Request, res: Response) => {
         res.status(204).send();
     }
 
-    const attachments: Attachment[] = [];
-
     if (!webhook.channel.isWritable()) {
         if (wait) {
             throw new HTTPError(`Cannot send messages to channel of type ${webhook.channel.type}`, 400);
@@ -161,15 +172,13 @@ export const executeWebhook = async (req: Request, res: Response) => {
     }
 
     const files = (req.files as Express.Multer.File[]) ?? [];
-    for (const currFile of files) {
-        try {
-            const file = await uploadFile(`/attachments/${sendChannel.id}/${messageId}`, currFile);
-            attachments.push(Attachment.create(file));
-        } catch (error) {
-            if (wait) res.status(400).json({ message: error?.toString() });
-            console.error("[webhookExecute] Failed to handle attachment:", error);
-            return;
-        }
+    let attachments: MessageOptionAttachment[];
+    try {
+        attachments = await uploadMessageFiles(`/attachments/${sendChannel.id}/${messageId}`, files, body.attachments ?? []);
+    } catch (error) {
+        if (wait) res.status(400).json({ message: error?.toString() });
+        console.error("[webhookExecute] Failed to handle attachment:", error);
+        return;
     }
 
     const embeds = body.embeds || [];
