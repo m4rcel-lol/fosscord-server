@@ -11,6 +11,8 @@ Each feature has one of four marks:
 
 `scripts/dev/parity-probe.mjs` repeats the API side of these checks. Run it against a seeded dev server with `PORT=<port> node scripts/dev/parity-probe.mjs`, or pass a word to run only the checks whose name contains it. On 2026-10-03 it ran 152 checks: 151 passed and the GitHub connection was skipped because no provider is configured.
 
+`scripts/dev/everyday-flow.mjs` drives two Brave contexts through the everyday path: both users register through `/register`, become friends, trade DMs, and one creates a server and invites the other through a DM. They then reply, react, upload, edit and delete messages, open a thread from a reply, join the same voice channel, change profile and theme settings, rename the server, add a role, set a channel topic, and the first user logs out and back in. It prints each step with every console error, failed request and new server log error, and exits non-zero if any appear. Run it with `node scripts/dev/everyday-flow.mjs --port <port> --browser <path to Brave> --server-log <path to server.log>`, and add `--shots <dir>` to keep screenshots of a failed step.
+
 ## Accounts and sign-in
 
 | Feature                                       | Status   | Notes                                                                                                              |
