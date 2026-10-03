@@ -27,6 +27,9 @@ export interface IpcPayload {
     trackType?: "audio" | "video";
     publisherId?: string;
     ssrc?: number;
+    blockAudio?: boolean;
+    blockVideo?: boolean;
+    deaf?: boolean;
 }
 
 interface IpcMessage {

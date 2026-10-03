@@ -21,4 +21,6 @@ export interface VoiceStateModifySchema {
     suppress?: boolean;
     request_to_speak_timestamp?: string | null;
     silent?: boolean;
+    self_video?: boolean;
+    self_stream?: boolean;
 }

@@ -19,4 +19,11 @@ export interface WebRtcWebSocket extends WebSocket {
     resumeTimer?: NodeJS.Timeout;
     lastActivity?: number;
     speaking?: boolean;
+    moderation?: VoiceModeration;
+}
+
+export interface VoiceModeration {
+    mute: boolean;
+    deaf: boolean;
+    video: boolean;
 }

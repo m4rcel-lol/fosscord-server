@@ -21,6 +21,7 @@ import { randomUUID } from "node:crypto";
 import EventEmitter from "node:events";
 import type { ClientEmitter, Codec, SignalingDelegate, SSRCs, VideoStream, WebRtcClient } from "@spacebarchat/spacebar-webrtc-types";
 import { IpcClient, IpcPayload } from "./IpcClient";
+import type { VoiceModeration } from "../util/WebRtcWebSocket";
 
 type RoomType = "guild-voice" | "dm-voice" | "stream";
 
@@ -82,6 +83,10 @@ class PionClient implements WebRtcClient<unknown> {
         else this.incoming = { audio_ssrc: this.incoming.audio_ssrc };
         this.published[type] = false;
         this.server.ipc.send({ type: "stop-publish", clientId: this.uniqueId, trackType: type });
+    }
+
+    moderate({ mute, deaf, video }: VoiceModeration) {
+        this.server.ipc.send({ type: "moderate", clientId: this.uniqueId, blockAudio: mute, blockVideo: video, deaf });
     }
 
     requestKeyframe() {

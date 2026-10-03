@@ -7077,6 +7077,12 @@
             },
             "silent": {
                 "type": "boolean"
+            },
+            "self_video": {
+                "type": "boolean"
+            },
+            "self_stream": {
+                "type": "boolean"
             }
         },
         "additionalProperties": false,

@@ -154,6 +154,9 @@ func (pt *PublishedTrack) ingest(pkt *rtp.Packet) {
 	if recovered {
 		pt.recovered.Add(1)
 	}
+	if pt.blocked() {
+		return
+	}
 	pt.cache.put(pkt)
 
 	if !pt.publisher.isPublishing(pt.kind) {
@@ -167,7 +170,7 @@ func (pt *PublishedTrack) ingest(pkt *rtp.Packet) {
 		other.mu.Lock()
 		isSubscribed := other.subscriptions[subKey]
 		other.mu.Unlock()
-		if isSubscribed {
+		if isSubscribed && pt.forwardsTo(other) {
 			_ = other.master(pt.kind).WriteRTP(pkt, pt.extensions)
 		}
 	}
@@ -342,6 +345,9 @@ func (sub *Peer) readSink(sink *rtcpSink, ssrc uint32) {
 }
 
 func (sub *Peer) retransmit(pt *PublishedTrack, nack *rtcp.TransportLayerNack) {
+	if !pt.forwardsTo(sub) {
+		return
+	}
 	rtxSSRC := uint32(pt.ssrc) + 1
 	sequence := func() uint16 { return sub.nextRTXSequence(rtxSSRC) }
 	for _, pair := range nack.Nacks {

@@ -18,7 +18,7 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { Channel, Member, StageInstances, VoiceChannels, VoiceState } from "@spacebar/database";
+import { Channel, GoLiveStreams, Member, StageInstances, VoiceChannels, VoiceState } from "@spacebar/database";
 import { DiscordApiErrors, getPermission } from "@spacebar/util";
 import { ChannelType, VoiceStateModifySchema } from "@spacebar/schemas";
 import { sleep } from "@spacebar/extensions";
@@ -109,7 +109,11 @@ router.patch(
             }
         }
 
+        if (body.self_video === false) voiceState.self_video = false;
+        if (body.self_stream === false) voiceState.self_stream = false;
+
         await voiceState.save();
+        if (body.self_stream === false) await GoLiveStreams.end(user_id);
         await VoiceChannels.publish(voiceState);
         await StageInstances.speakersChanged(channel.id);
         return res.sendStatus(204);
