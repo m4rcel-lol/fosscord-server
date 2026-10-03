@@ -74,7 +74,7 @@ export async function publishUserMessage(opts: { channel: Channel; user_id: stri
     await emitEvent({
         event: "MESSAGE_CREATE",
         channel_id: channel.id,
-        data: message.toJSON(),
+        data: { ...message.toJSON(), nonce: message.nonce ?? undefined },
     } satisfies MessageCreateEvent);
 
     postHandleMessage(message).catch((e) => console.error("[Message] post-message handler failed", e));
