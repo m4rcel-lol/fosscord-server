@@ -37,6 +37,7 @@ const call = async (method, path, token, body) => {
 };
 
 const sql = (query) => execFileSync("psql", [database, "-At", "-c", query], { encoding: "utf8" }).trim();
+sql(`DELETE FROM rate_limits`);
 
 const suffix = randomBytes(4).toString("hex");
 const accountsFile = new URL("./.e2ee-test-accounts", import.meta.url);
