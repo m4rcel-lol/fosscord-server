@@ -5631,6 +5631,7 @@
                 "type": "string"
             },
             "nonce": {
+                "maxLength": 25,
                 "type": "string"
             },
             "channel_id": {
@@ -5906,6 +5907,7 @@
                 "type": "string"
             },
             "nonce": {
+                "maxLength": 25,
                 "type": "string"
             },
             "channel_id": {
@@ -7316,6 +7318,7 @@
                 }
             },
             "nonce": {
+                "maxLength": 25,
                 "type": "string"
             },
             "enforce_nonce": {
@@ -18044,6 +18047,7 @@
                 "$ref": "#/definitions/MessageComponentType.Section"
             },
             "components": {
+                "maxItems": 3,
                 "type": "array",
                 "items": {
                     "$ref": "#/definitions/TextDisplayComponent"
@@ -18083,6 +18087,7 @@
                 "$ref": "#/definitions/MessageComponentType.TextDisplay"
             },
             "content": {
+                "maxLength": 4000,
                 "type": "string"
             },
             "id": {
@@ -18108,6 +18113,7 @@
                 "$ref": "#/definitions/MessageComponentType.Thumbnail"
             },
             "description": {
+                "maxLength": 1024,
                 "type": "string"
             },
             "media": {
@@ -18186,6 +18192,7 @@
                 "$ref": "#/definitions/ButtonStyle"
             },
             "label": {
+                "maxLength": 80,
                 "type": "string"
             },
             "emoji": {
@@ -18229,12 +18236,14 @@
                 ]
             },
             "custom_id": {
+                "maxLength": 100,
                 "type": "string"
             },
             "sku_id": {
                 "type": "string"
             },
             "url": {
+                "maxLength": 512,
                 "type": "string"
             },
             "disabled": {
@@ -18275,6 +18284,7 @@
                 "$ref": "#/definitions/MessageComponentType.MediaGallery"
             },
             "items": {
+                "maxItems": 10,
                 "type": "array",
                 "items": {
                     "type": "object",
@@ -18283,6 +18293,7 @@
                             "$ref": "#/definitions/UnfurledMediaItem"
                         },
                         "description": {
+                            "maxLength": 1024,
                             "type": "string"
                         },
                         "spoiler": {
@@ -18386,6 +18397,7 @@
                 "$ref": "#/definitions/MessageComponentType.ActionRow"
             },
             "components": {
+                "maxItems": 5,
                 "type": "array",
                 "items": {
                     "anyOf": [
@@ -18434,6 +18446,7 @@
                 "type": "number"
             },
             "custom_id": {
+                "maxLength": 100,
                 "type": "string"
             },
             "channel_types": {
@@ -18443,9 +18456,11 @@
                 }
             },
             "placeholder": {
+                "maxLength": 150,
                 "type": "string"
             },
             "default_values": {
+                "maxItems": 25,
                 "type": "array",
                 "items": {
                     "$ref": "#/definitions/SelectMenuDefaultOption"
@@ -18500,12 +18515,14 @@
                 "$ref": "#/definitions/MessageComponentType.StringSelect"
             },
             "options": {
+                "maxItems": 25,
                 "type": "array",
                 "items": {
                     "$ref": "#/definitions/SelectMenuOption"
                 }
             },
             "custom_id": {
+                "maxLength": 100,
                 "type": "string"
             },
             "channel_types": {
@@ -18515,9 +18532,11 @@
                 }
             },
             "placeholder": {
+                "maxLength": 150,
                 "type": "string"
             },
             "default_values": {
+                "maxItems": 25,
                 "type": "array",
                 "items": {
                     "$ref": "#/definitions/SelectMenuDefaultOption"
@@ -18553,12 +18572,15 @@
         "type": "object",
         "properties": {
             "label": {
+                "maxLength": 100,
                 "type": "string"
             },
             "value": {
+                "maxLength": 100,
                 "type": "string"
             },
             "description": {
+                "maxLength": 100,
                 "type": "string"
             },
             "emoji": {
@@ -18619,12 +18641,14 @@
                 "$ref": "#/definitions/MessageComponentType.TextInput"
             },
             "custom_id": {
+                "maxLength": 100,
                 "type": "string"
             },
             "style": {
                 "$ref": "#/definitions/TextInputStyle"
             },
             "label": {
+                "maxLength": 45,
                 "type": "string"
             },
             "min_length": {
@@ -18637,9 +18661,11 @@
                 "type": "boolean"
             },
             "value": {
+                "maxLength": 4000,
                 "type": "string"
             },
             "placeholder": {
+                "maxLength": 100,
                 "type": "string"
             },
             "id": {
@@ -18675,6 +18701,7 @@
                 "$ref": "#/definitions/MessageComponentType.Container"
             },
             "components": {
+                "maxItems": 40,
                 "type": "array",
                 "items": {
                     "anyOf": [
@@ -19646,6 +19673,7 @@
         "type": "object",
         "properties": {
             "parse": {
+                "maxItems": 3,
                 "type": "array",
                 "items": {
                     "enum": [
@@ -19657,12 +19685,14 @@
                 }
             },
             "roles": {
+                "maxItems": 100,
                 "type": "array",
                 "items": {
                     "type": "string"
                 }
             },
             "users": {
+                "maxItems": 100,
                 "type": "array",
                 "items": {
                     "type": "string"

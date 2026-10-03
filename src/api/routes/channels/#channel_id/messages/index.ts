@@ -277,6 +277,8 @@ router.post(
     async (req: Request, res: Response) => {
         const { channel_id } = req.params as { [key: string]: string };
         const body = req.body as MessageCreateSchema;
+        if (body.components?.length && !req.user_bot)
+            throw FieldErrors({ components: { code: "COMPONENT_VALIDATION_FAILED", message: "Only applications can send message components" } });
         const messageId = Snowflake.generate();
 
         const channel = await Channel.findOneOrFail({
@@ -311,7 +313,7 @@ router.post(
                 relations: { author: true, attachments: true, mentions: true, mention_roles: true, sticker_items: true },
             });
             if (existing) {
-                return res.json(existing.toPublicJSON(req.user_id));
+                return res.json({ ...existing.toPublicJSON(req.user_id), nonce: existing.nonce });
             }
         }
 
@@ -353,14 +355,15 @@ router.post(
             const recipient = channel.recipients?.find((r) => r.user_id !== req.user_id)?.user_id;
             if (recipient) recordGuildMemberDm(dmViaGuilds, req.user_id, recipient).catch((e) => console.error("[Safety] dm raid check failed", e));
         }
-        return res.json(
-            message.withSignedAttachments(
+        return res.json({
+            ...message.withSignedAttachments(
                 new NewUrlUserSignatureData({
                     ip: req.ip,
                     userAgent: req.headers["user-agent"] as string,
                 }),
             ),
-        );
+            nonce: message.nonce ?? undefined,
+        });
     },
 );
 

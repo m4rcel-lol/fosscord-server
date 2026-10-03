@@ -25,12 +25,18 @@ export interface MessageComponent {
 
 export interface SectionComponent extends MessageComponent {
     type: MessageComponentType.Section;
+    /**
+     * @maxItems 3
+     */
     components: TextDisplayComponent[];
     accessory: ThumbnailComponent | ButtonComponent;
 }
 
 export interface ThumbnailComponent extends MessageComponent {
     type: MessageComponentType.Thumbnail;
+    /**
+     * @maxLength 1024
+     */
     description?: string;
     media: UnfurledMediaItem;
     spoiler?: boolean;
@@ -51,12 +57,21 @@ export interface UnfurledMediaItem {
 }
 export interface TextDisplayComponent extends MessageComponent {
     type: MessageComponentType.TextDisplay;
+    /**
+     * @maxLength 4000
+     */
     content: string;
 }
 export interface MediaGalleryComponent extends MessageComponent {
     type: MessageComponentType.MediaGallery;
+    /**
+     * @maxItems 10
+     */
     items: {
         media: UnfurledMediaItem;
+        /**
+         * @maxLength 1024
+         */
         description?: string;
         spoiler?: boolean;
     }[];
@@ -81,11 +96,17 @@ export interface SeperatorComponent extends MessageComponent {
 
 export interface ActionRowComponent extends MessageComponent {
     type: MessageComponentType.ActionRow;
+    /**
+     * @maxItems 5
+     */
     components: (ButtonComponent | StringSelectMenuComponent | SelectMenuComponent | TextInputComponent)[];
 }
 
 export interface ContainerComponent extends MessageComponent {
     type: MessageComponentType.Container;
+    /**
+     * @maxItems 40
+     */
     components: (ActionRowComponent | TextDisplayComponent | SectionComponent | MediaGalleryComponent | SeperatorComponent | FileComponent)[];
     accent_color?: number;
     spoiler?: boolean;
@@ -96,10 +117,19 @@ export type BaseMessageComponents = ActionRowComponent | SectionComponent | Text
 export interface ButtonComponent extends MessageComponent {
     type: MessageComponentType.Button;
     style: ButtonStyle;
+    /**
+     * @maxLength 80
+     */
     label?: string;
     emoji?: PartialEmoji;
+    /**
+     * @maxLength 100
+     */
     custom_id?: string;
     sku_id?: string;
+    /**
+     * @maxLength 512
+     */
     url?: string;
     disabled?: boolean;
 }
@@ -120,9 +150,18 @@ export interface SelectMenuComponent extends MessageComponent {
         | MessageComponentType.RoleSelect
         | MessageComponentType.MentionableSelect
         | MessageComponentType.ChannelSelect;
+    /**
+     * @maxLength 100
+     */
     custom_id: string;
     channel_types?: number[];
+    /**
+     * @maxLength 150
+     */
     placeholder?: string;
+    /**
+     * @maxItems 25
+     */
     default_values?: SelectMenuDefaultOption[]; // only for non-string selects
     min_values?: number;
     max_values?: number;
@@ -130,8 +169,17 @@ export interface SelectMenuComponent extends MessageComponent {
 }
 
 export interface SelectMenuOption {
+    /**
+     * @maxLength 100
+     */
     label: string;
+    /**
+     * @maxLength 100
+     */
     value: string;
+    /**
+     * @maxLength 100
+     */
     description?: string;
     emoji?: PartialEmoji;
     default?: boolean;
@@ -144,18 +192,33 @@ export interface SelectMenuDefaultOption {
 
 export interface StringSelectMenuComponent extends SelectMenuComponent {
     type: MessageComponentType.StringSelect;
+    /**
+     * @maxItems 25
+     */
     options: SelectMenuOption[];
 }
 
 export interface TextInputComponent extends MessageComponent {
     type: MessageComponentType.TextInput;
+    /**
+     * @maxLength 100
+     */
     custom_id: string;
     style: TextInputStyle;
+    /**
+     * @maxLength 45
+     */
     label: string;
     min_length?: number;
     max_length?: number;
     required?: boolean;
+    /**
+     * @maxLength 4000
+     */
     value?: string;
+    /**
+     * @maxLength 100
+     */
     placeholder?: string;
 }
 

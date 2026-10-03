@@ -237,7 +237,11 @@ export function handleComps(components: BaseMessageComponents[], flags: number) 
     if (!compv2) {
         const bad = components.reduce((bad, comp) => bad || !v1CompTypes.has(comp.type), false);
         if (bad) throw new HTTPError("Must be comp v2");
+        if (components.length > actionRowLimit) throw FieldErrors({ components: { code: "BASE_TYPE_MAX_LENGTH", message: `Must be ${actionRowLimit} or fewer in length.` } });
     }
+    type Node = { components?: Node[]; accessory?: Node };
+    const count = (nodes: Node[]): number => nodes.reduce((sum, node) => sum + 1 + (Array.isArray(node.components) ? count(node.components) : 0) + (node.accessory ? 1 : 0), 0);
+    if (count(components as Node[]) > 40) throw FieldErrors({ components: { code: "BASE_TYPE_MAX_LENGTH", message: "Must be 40 or fewer in total components." } });
     const medias: UnfurledMediaItem[] = [];
     for (const comp of components || []) {
         if (comp.type === MessageComponentType.ActionRow) {
@@ -687,7 +691,7 @@ export async function sendMessage(opts: MessageOptions) {
         emitEvent({
             event: "MESSAGE_CREATE",
             ...(ephemeral ? { user_id: message.interaction_metadata?.user_id } : { channel_id: message.channel_id }),
-            data: message.toJSON(),
+            data: { ...message.toJSON(), nonce: message.nonce ?? undefined },
         } satisfies MessageCreateEvent),
     ]);
 

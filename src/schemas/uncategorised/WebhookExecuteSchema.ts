@@ -42,6 +42,9 @@ export interface WebhookExecuteSchema {
         fail_if_not_exists?: boolean;
     };
     sticker_ids?: string[];
+    /**
+     * @maxLength 25
+     */
     nonce?: string;
     enforce_nonce?: boolean; // For Discord compatibility, it's the default behavior here
     poll?: PollCreationSchema;

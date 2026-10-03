@@ -34,6 +34,7 @@ import {
     uploadFile,
     NewUrlUserSignatureData,
     DiscordApiErrors,
+    FieldErrors,
     MessageFlags,
 } from "@spacebar/util";
 import { MessageCreateAttachment, MessageCreateCloudAttachment, MessageCreateSchema, MessageEditSchema, ChannelType, EmbedType, MessageType } from "@spacebar/schemas";
@@ -70,6 +71,8 @@ router.patch(
     async (req: Request, res: Response) => {
         const { message_id, channel_id } = req.params as { [key: string]: string };
         let body = req.body as MessageEditSchema;
+        if (body.components?.length && !req.user_bot)
+            throw FieldErrors({ components: { code: "COMPONENT_VALIDATION_FAILED", message: "Only applications can send message components" } });
 
         const message = await Message.findOneOrFail({
             where: { id: message_id, channel_id },
