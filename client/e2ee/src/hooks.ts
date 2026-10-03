@@ -20,12 +20,13 @@ import { Attachments, UploadRef } from "./attachments";
 import { E2eeError, Engine, FALLBACK_CONTENT, RawMessage } from "./engine";
 import { Payload, StickerMeta } from "./files";
 import { DispatchHandler, Dispatcher, FluxAction, GatewayStore, HttpCall, HttpClient, HttpMethod, HttpOptions, HttpResponse } from "./webpack";
+import { t } from "./i18n";
 
 export type MessageState = "decrypted" | "pending" | "locked" | "missing" | "failed";
 
-export const DECRYPTING_CONTENT = "Decrypting…";
-export const MISSING_CONTENT = "Sent before this browser was set up";
-export const LOCKED_CONTENT = "Unlock this browser to read this message";
+const decryptingContent = () => t("Decrypting…");
+const missingContent = () => t("Sent before this browser was set up");
+const lockedContent = () => t("Unlock this browser to read this message");
 
 const SEARCH_URL = /^\/channels\/(\d+)\/messages\/search(\/tabs)?$/;
 const SEARCH_PAGES = 10;
@@ -111,12 +112,12 @@ export const createHooks = (ctx: HookContext) => {
         }
         if (!ctx.isReady()) {
             if (ctx.failClosed()) {
-                states.set(message.id, { state: "failed", reason: "Encryption is unavailable in this client build" });
+                states.set(message.id, { state: "failed", reason: t("Encryption is unavailable in this client build") });
                 message.content = FALLBACK_CONTENT;
             } else {
                 retry.set(message.id, clone(message));
                 states.set(message.id, { state: "pending" });
-                message.content = DECRYPTING_CONTENT;
+                message.content = decryptingContent();
             }
             return Promise.resolve();
         }
@@ -136,7 +137,7 @@ export const createHooks = (ctx: HookContext) => {
                         const locked = code === "LOCKED";
                         states.set(message.id, { state: locked ? "locked" : "missing", reason: error instanceof Error ? error.message : String(error) });
                         retry.set(message.id, original);
-                        message.content = locked ? LOCKED_CONTENT : MISSING_CONTENT;
+                        message.content = locked ? lockedContent() : missingContent();
                     } else {
                         states.set(message.id, { state: "failed", reason: error instanceof Error ? error.message : String(error) });
                         message.content = FALLBACK_CONTENT;
@@ -150,7 +151,7 @@ export const createHooks = (ctx: HookContext) => {
             const again = engine.cached(message);
             const state = states.get(message.id)?.state;
             if (again) show(message, again);
-            else message.content = state === "missing" ? MISSING_CONTENT : state === "locked" ? LOCKED_CONTENT : state === "failed" ? FALLBACK_CONTENT : message.content;
+            else message.content = state === "missing" ? missingContent() : state === "locked" ? lockedContent() : state === "failed" ? FALLBACK_CONTENT : message.content;
             ctx.onState();
         });
     };
@@ -186,19 +187,19 @@ export const createHooks = (ctx: HookContext) => {
         const [, channelId, messageId] = match;
         if (method === "post" && messageId) return opts;
         if (!engine.isEncrypted(channelId)) return opts;
-        if (ctx.failClosed()) throw new E2eeError("NOT_READY", "Encryption is unavailable in this client build");
-        if (!(await ctx.ready)) throw new E2eeError("NOT_READY", "Encryption is unavailable in this client build");
+        if (ctx.failClosed()) throw new E2eeError("NOT_READY", t("Encryption is unavailable in this client build"));
+        if (!(await ctx.ready)) throw new E2eeError("NOT_READY", t("Encryption is unavailable in this client build"));
         const body = { ...((opts.body ?? {}) as Record<string, unknown>) };
         if (method === "patch" && body.content === undefined && body.attachments === undefined) return opts;
-        if (body.poll) throw new E2eeError("UNSUPPORTED", "Polls can't be sent in encrypted conversations yet");
-        if (opts.attachments?.length) throw new E2eeError("UNSUPPORTED", "This file couldn't be encrypted");
+        if (body.poll) throw new E2eeError("UNSUPPORTED", t("Polls can't be sent in encrypted conversations yet"));
+        if (opts.attachments?.length) throw new E2eeError("UNSUPPORTED", t("This file couldn't be encrypted"));
         const nonce = method === "post" ? String(body.nonce ?? `${Date.now()}${Math.floor(Math.random() * 1000)}`) : undefined;
         if (nonce) body.nonce = nonce;
         const payload: Payload = { content: String(body.content ?? "") };
         const refs = Array.isArray(body.attachments) ? (body.attachments as UploadRef[]) : [];
         if (method === "post") {
             const metas = refs.map((ref) => ctx.attachments.metaFor(ref));
-            if (metas.some((meta) => !meta)) throw new E2eeError("UNSUPPORTED", "A file wasn't encrypted before it was uploaded");
+            if (metas.some((meta) => !meta)) throw new E2eeError("UNSUPPORTED", t("A file wasn't encrypted before it was uploaded"));
             if (metas.length) {
                 payload.attachments = metas.map((meta) => meta!);
                 body.attachments = refs.map((ref, i) => ({ id: ref.id, filename: metas[i]!.name, uploaded_filename: ref.uploaded_filename }));
@@ -208,7 +209,7 @@ export const createHooks = (ctx: HookContext) => {
             delete body.sticker_ids;
         } else {
             const previous = payloads.get(messageId);
-            if (!previous) throw new E2eeError("NOT_READY", "This message isn't decrypted in this browser yet");
+            if (!previous) throw new E2eeError("NOT_READY", t("This message isn't decrypted in this browser yet"));
             if (body.content === undefined) payload.content = previous.content;
             let kept = previous.attachments;
             if (Array.isArray(body.attachments)) {
@@ -294,7 +295,7 @@ export const createHooks = (ctx: HookContext) => {
                 if (create && engine.isEncrypted(create[1])) {
                     const created = (async () => {
                         if (ctx.failClosed() || !(await ctx.ready)) {
-                            const error = new E2eeError("NOT_READY", "Encryption is unavailable in this client build");
+                            const error = new E2eeError("NOT_READY", t("Encryption is unavailable in this client build"));
                             ctx.onError(error, create[1]);
                             throw error;
                         }
@@ -427,7 +428,7 @@ export const createHooks = (ctx: HookContext) => {
                     continue;
                 }
                 const copy = clone(message);
-                message.content = DECRYPTING_CONTENT;
+                message.content = decryptingContent();
                 decryptOne(copy).then(() => {
                     if (states.get(copy.id)?.state !== "pending") redispatch(copy);
                 });

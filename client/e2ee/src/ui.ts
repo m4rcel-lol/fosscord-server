@@ -21,6 +21,7 @@ import { ChannelMember, E2eeError, Engine, ServerDevice } from "./engine";
 import { MessageState } from "./hooks";
 import { Incoming, Outgoing } from "./link";
 import { qrSvg } from "./qr";
+import { conjunction, locale, t } from "./i18n";
 
 const LOCK_PATH = "M7 10V7a5 5 0 0 1 10 0v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1Zm2 0h6V7a3 3 0 0 0-6 0v3Z";
 const OPEN_LOCK_PATH = "M9 10h9a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1V7a5 5 0 0 1 9.58-2 1 1 0 1 1-1.83.8A3 3 0 0 0 9 7v3Z";
@@ -129,8 +130,6 @@ const memberName = (m: ChannelMember) => m.global_name || m.username;
 
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-const relative = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
-
 const ago = (iso: string) => {
     const seconds = (Date.parse(iso) - Date.now()) / 1000;
     const steps: [number, Intl.RelativeTimeFormatUnit][] = [
@@ -143,7 +142,7 @@ const ago = (iso: string) => {
     ];
     let value = seconds;
     for (const [size, unit] of steps) {
-        if (Math.abs(value) < size) return relative.format(Math.round(value), unit);
+        if (Math.abs(value) < size) return new Intl.RelativeTimeFormat(locale(), { numeric: "auto" }).format(Math.round(value), unit);
         value /= size;
     }
     return "";
@@ -262,7 +261,7 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
         const x = document.createElement("button");
         x.type = "button";
         x.className = "fe2ee-close";
-        x.setAttribute("aria-label", "Close");
+        x.setAttribute("aria-label", t("Close"));
         x.innerHTML = svg(CLOSE_PATH);
         head.append(x);
         const body = document.createElement("div");
@@ -358,8 +357,8 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
     const namesOf = async (ids: string[]) => {
         const list = await Promise.all(ids.map((id) => engine.profile(id)));
         const names = list.map(memberName);
-        if (names.length <= 1) return names[0] ?? "Someone here";
-        return `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+        if (names.length <= 1) return names[0] ?? t("Someone here");
+        return conjunction(names);
     };
 
     const showError = (error: unknown, channelId: string) => {
@@ -370,34 +369,38 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
             namesOf(ids).then((who) =>
                 flash(channelId, {
                     tone: "warning",
-                    text: `${who} ${ids.length > 1 ? "haven't" : "hasn't"} set up encryption yet. Ask them to open the app once, then try again.`,
+                    text:
+                        ids.length > 1
+                            ? t("{names} haven't set up encryption yet. Ask them to open the app once, then try again.", { names: who })
+                            : t("{name} hasn't set up encryption yet. Ask them to open the app once, then try again.", { name: who }),
                 }),
             );
             return;
         }
-        let text = "Your message couldn't be encrypted, so it wasn't sent.";
+        let text = t("Your message couldn't be encrypted, so it wasn't sent.");
         let action: Notice["action"];
         if (error instanceof E2eeError) {
             const who = name(error.userId);
             if (error.code === "NO_DEVICES")
-                text = `${who ? memberName(who) : "Someone here"} hasn't set up encryption yet, so your message wasn't sent. Ask them to open the app once.`;
-            else if (error.code === "IDENTITY_CHANGED") text = `${who ? memberName(who) : "Someone"}'s safety number changed. Review it before sending more messages.`;
-            else if (error.code === "UNSUPPORTED") text = `${error.message}. Your message wasn't sent.`;
+                text = t("{name} hasn't set up encryption yet, so your message wasn't sent. Ask them to open the app once.", { name: who ? memberName(who) : t("Someone here") });
+            else if (error.code === "IDENTITY_CHANGED")
+                text = t("{name}'s safety number changed. Review it before sending more messages.", { name: who ? memberName(who) : t("Someone") });
+            else if (error.code === "UNSUPPORTED") text = t("{reason}. Your message wasn't sent.", { reason: error.message });
             else if (error.code === "NOT_LINKED") {
-                text = "Unlock this browser to send encrypted messages. Your message wasn't sent.";
-                action = { label: "Unlock", run: showUnlock };
-            } else if (error.code === "NOT_READY") text = "End-to-end encryption is unavailable right now, so your message wasn't sent.";
+                text = t("Unlock this browser to send encrypted messages. Your message wasn't sent.");
+                action = { label: t("Unlock"), run: showUnlock };
+            } else if (error.code === "NOT_READY") text = t("End-to-end encryption is unavailable right now, so your message wasn't sent.");
         }
         flash(channelId, { tone: "danger", text, action });
     };
 
     const confirmEnable = (channelId: string) =>
-        dialog("Turn on end-to-end encryption?", (body, actions, { close }) => {
+        dialog(t("Turn on end-to-end encryption?"), (body, actions, { close }) => {
             body.insertAdjacentHTML(
                 "beforeend",
-                "<p>New messages, files and stickers in this conversation are encrypted in your browser before they're sent, and only the people in it can read them. Encryption can't be turned off later.</p><p>Polls can't be sent in encrypted conversations.</p>",
+                `<p>${escape(t("New messages, files and stickers in this conversation are encrypted in your browser before they're sent, and only the people in it can read them. Encryption can't be turned off later."))}</p><p>${escape(t("Polls can't be sent in encrypted conversations."))}</p>`,
             );
-            const confirm = button("Turn on encryption", "primary", async () => {
+            const confirm = button(t("Turn on encryption"), "primary", async () => {
                 confirm.disabled = true;
                 try {
                     await enableChannel(channelId);
@@ -406,39 +409,39 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
                 }
                 close();
             });
-            actions.append(button("Cancel", "secondary", close), confirm);
+            actions.append(button(t("Cancel"), "secondary", close), confirm);
         });
 
     const showSafety = async (channelId: string) => {
         const list = await Promise.all((await engine.channelMembers(channelId)).map((id) => engine.profile(id)));
-        dialog("Safety numbers", (body, actions, { close }) => {
+        dialog(t("Safety numbers"), (body, actions, { close }) => {
             body.insertAdjacentHTML(
                 "beforeend",
-                "<p>Compare these numbers with each person in a call or face to face, or scan the code with their phone. If they match, nobody is intercepting your messages. Mark them as verified so you're warned if they change.</p>",
+                `<p>${escape(t("Compare these numbers with each person in a call or face to face, or scan the code with their phone. If they match, nobody is intercepting your messages. Mark them as verified so you're warned if they change."))}</p>`,
             );
             for (const member of list) {
                 const block = document.createElement("section");
                 block.className = "fe2ee-member";
-                block.innerHTML = `<div class="fe2ee-member-head"><span class="fe2ee-member-name">${escape(memberName(member))}</span><span class="fe2ee-status"></span></div><div class="fe2ee-safety"><div class="fe2ee-digits" aria-label="Safety number for ${escape(memberName(member))}">Calculating…</div></div><div class="fe2ee-member-actions"></div>`;
+                block.innerHTML = `<div class="fe2ee-member-head"><span class="fe2ee-member-name">${escape(memberName(member))}</span><span class="fe2ee-status"></span></div><div class="fe2ee-safety"><div class="fe2ee-digits" aria-label="${escape(t("Safety number for {name}", { name: memberName(member) }))}">${escape(t("Calculating…"))}</div></div><div class="fe2ee-member-actions"></div>`;
                 body.append(block);
                 const render = async () => {
                     const contact = engine.contacts[member.id];
                     const status = block.querySelector<HTMLElement>(".fe2ee-status")!;
                     status.dataset.verified = String(!!contact?.verified && !contact.pendingKey);
                     status.innerHTML = contact?.pendingKey
-                        ? `${svg(OPEN_LOCK_PATH)}Safety number changed`
+                        ? `${svg(OPEN_LOCK_PATH)}${escape(t("Safety number changed"))}`
                         : contact?.verified
-                          ? `${svg(VERIFIED_PATH)}Verified`
-                          : `${svg(OPEN_LOCK_PATH)}Not verified`;
+                          ? `${svg(VERIFIED_PATH)}${escape(t("Verified"))}`
+                          : `${svg(OPEN_LOCK_PATH)}${escape(t("Not verified"))}`;
                     const digits = await engine.safetyNumber(member.id);
                     const grid = block.querySelector<HTMLElement>(".fe2ee-digits")!;
-                    grid.innerHTML = digits ? (digits.match(/\d{5}/g) ?? []).map((g) => `<span>${g}</span>`).join("") : "This person hasn't set up encryption yet.";
+                    grid.innerHTML = digits ? (digits.match(/\d{5}/g) ?? []).map((g) => `<span>${g}</span>`).join("") : escape(t("This person hasn't set up encryption yet."));
                     grid.dataset.number = digits ?? "";
                     block.querySelector(".fe2ee-qr")?.remove();
                     if (digits) {
                         const qr = document.createElement("div");
                         qr.className = "fe2ee-qr";
-                        qr.innerHTML = qrSvg(digits, `QR code of the safety number for ${escape(memberName(member))}`);
+                        qr.innerHTML = qrSvg(digits, escape(t("QR code of the safety number for {name}", { name: memberName(member) })));
                         grid.after(qr);
                     }
                     const row = block.querySelector<HTMLElement>(".fe2ee-member-actions")!;
@@ -446,14 +449,14 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
                     if (!contact) return;
                     if (contact.pendingKey)
                         row.append(
-                            button("Accept new safety number", "primary", async () => {
+                            button(t("Accept new safety number"), "primary", async () => {
                                 await engine.acceptIdentity(member.id);
                                 render();
                             }),
                         );
                     else
                         row.append(
-                            button(contact.verified ? "Remove verification" : "Mark as verified", contact.verified ? "secondary" : "primary", async () => {
+                            button(contact.verified ? t("Remove verification") : t("Mark as verified"), contact.verified ? "secondary" : "primary", async () => {
                                 await engine.setVerified(member.id, !contact.verified);
                                 render();
                             }),
@@ -462,26 +465,28 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
                 render();
             }
             actions.append(
-                button("Encryption settings", "secondary", () => {
+                button(t("Encryption settings"), "secondary", () => {
                     close();
                     showSettings();
                 }),
-                button("Done", "primary", close),
+                button(t("Done"), "primary", close),
             );
         });
     };
 
     const showReset = (onDone?: () => void) =>
-        dialog("Reset encryption?", (body, actions, { close }) => {
+        dialog(t("Reset encryption?"), (body, actions, { close }) => {
             describe(
                 body,
-                "Only do this if you lost your recovery code and no other signed-in browser can approve this one. You get new encryption keys and can keep chatting, but nobody can read the messages sent before the reset anymore, on any device.",
+                t(
+                    "Only do this if you lost your recovery code and no other signed-in browser can approve this one. You get new encryption keys and can keep chatting, but nobody can read the messages sent before the reset anymore, on any device.",
+                ),
             );
-            describe(body, "Your other browsers have to be approved again, and the people you talk to are told that your safety number changed.");
-            const { wrap, input, setError } = field("Account password", "password", "current-password");
+            describe(body, t("Your other browsers have to be approved again, and the people you talk to are told that your safety number changed."));
+            const { wrap, input, setError } = field(t("Account password"), "password", "current-password");
             body.append(wrap);
-            const confirm = button("Reset encryption", "danger", async () => {
-                if (!input.value) return setError("Enter your password.");
+            const confirm = button(t("Reset encryption"), "danger", async () => {
+                if (!input.value) return setError(t("Enter your password."));
                 confirm.disabled = true;
                 setError(null);
                 try {
@@ -489,24 +494,24 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
                     close();
                     onDone?.();
                     const channelId = currentChannel();
-                    if (channelId) flash(channelId, { tone: "info", text: "Encryption was reset. New messages use your new keys." }, 6000);
+                    if (channelId) flash(channelId, { tone: "info", text: t("Encryption was reset. New messages use your new keys.") }, 6000);
                 } catch (error) {
                     const status = (error as { status?: number })?.status;
-                    setError(status === 400 ? "That password isn't right." : error instanceof Error ? error.message : "Couldn't reset encryption. Try again.");
+                    setError(status === 400 ? t("That password isn't right.") : error instanceof Error ? error.message : t("Couldn't reset encryption. Try again."));
                 } finally {
                     confirm.disabled = false;
                 }
             });
             input.addEventListener("keydown", (event) => event.key === "Enter" && confirm.click());
-            actions.append(button("Cancel", "secondary", close), confirm);
+            actions.append(button(t("Cancel"), "secondary", close), confirm);
             requestAnimationFrame(() => input.focus());
         });
 
     const unlockForm = (kind: "password" | "recovery") => {
-        const { wrap, input, row, setError } = kind === "password" ? field("Account password", "password", "current-password") : field("Recovery code", "text", "off");
+        const { wrap, input, row, setError } = kind === "password" ? field(t("Account password"), "password", "current-password") : field(t("Recovery code"), "text", "off");
         if (kind === "recovery") input.placeholder = "XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX";
-        const submit = button("Unlock", "primary", async () => {
-            if (!input.value.trim()) return setError(kind === "password" ? "Enter your password." : "Enter your recovery code.");
+        const submit = button(t("Unlock"), "primary", async () => {
+            if (!input.value.trim()) return setError(kind === "password" ? t("Enter your password.") : t("Enter your recovery code."));
             submit.disabled = true;
             setError(null);
             try {
@@ -526,56 +531,60 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
         if (unlockOpen || !engine.locked) return;
         const current = link.outgoing();
         if (!current || current.state === "denied" || current.state === "failed") link.request().catch(() => {});
-        dialog("Unlock encrypted messages", (body, actions, { el, close }) => {
+        dialog(t("Unlock encrypted messages"), (body, actions, { el, close }) => {
             const backup = engine.backup;
-            describe(body, "This browser can't read your encrypted messages yet. Bring your keys over with one of these.");
+            describe(body, t("This browser can't read your encrypted messages yet. Bring your keys over with one of these."));
             if (!backup || (backup.mode === "password" && !backup.wrapped_secret)) {
                 const own = section(
-                    "Enter your password",
-                    "If your keys aren't backed up with your password yet, open the app on a browser you used before. It asks for your password once, and then it works here too.",
+                    t("Enter your password"),
+                    t(
+                        "If your keys aren't backed up with your password yet, open the app on a browser you used before. It asks for your password once, and then it works here too.",
+                    ),
                 );
                 own.append(unlockForm("password"));
                 body.append(own);
             } else if (backup.wrapped_secret && backup.identity_key === engine.serverKey) {
                 const own = section(
-                    backup.mode === "recovery" ? "Enter your recovery code" : "Enter your password",
-                    backup.mode === "recovery" ? "Use the code you saved when you switched to a recovery code." : undefined,
+                    backup.mode === "recovery" ? t("Enter your recovery code") : t("Enter your password"),
+                    backup.mode === "recovery" ? t("Use the code you saved when you switched to a recovery code.") : undefined,
                 );
                 own.append(unlockForm(backup.mode));
                 body.append(own);
             }
-            const approval = section("Approve from another device");
+            const approval = section(t("Approve from another device"));
             const status = document.createElement("p");
             status.setAttribute("role", "status");
             const code = document.createElement("div");
             code.className = "fe2ee-code";
-            const again = button("Ask for approval", "secondary", () => link.request().catch(() => {}));
+            const again = button(t("Ask for approval"), "secondary", () => link.request().catch(() => {}));
             approval.append(status, code, again);
             body.append(approval);
-            const lost = section(backup?.mode === "recovery" ? "Lost your code?" : "Can't unlock this browser?");
-            describe(lost, "If you can't use any of these, reset encryption to keep chatting. Messages sent before the reset can't be read anymore.");
-            lost.append(button("Reset encryption", "link", () => showReset(done)));
+            const lost = section(backup?.mode === "recovery" ? t("Lost your code?") : t("Can't unlock this browser?"));
+            describe(lost, t("If you can't use any of these, reset encryption to keep chatting. Messages sent before the reset can't be read anymore."));
+            lost.append(button(t("Reset encryption"), "link", () => showReset(done)));
             body.append(lost);
             const render = () => {
                 const state = link.outgoing();
                 code.hidden = state?.state !== "comparing";
                 code.textContent = state?.sas ?? "";
                 again.hidden = state?.state === "waiting" || state?.state === "comparing" || state?.state === "done";
-                again.textContent = state ? "Ask again" : "Ask for approval";
+                again.textContent = state ? t("Ask again") : t("Ask for approval");
                 status.textContent =
                     state?.state === "comparing"
-                        ? `${state.approverName ?? "Your other device"} is asking you to approve this browser. Check that it shows this code, then approve it there.`
+                        ? t("{name} is asking you to approve this browser. Check that it shows this code, then approve it there.", {
+                              name: state.approverName ?? t("Your other device"),
+                          })
                         : state?.state === "denied"
-                          ? "Your other device declined this login."
+                          ? t("Your other device declined this login.")
                           : state?.state === "failed"
-                            ? "The approval didn't unlock this browser. Ask again to retry."
+                            ? t("The approval didn't unlock this browser. Ask again to retry.")
                             : state?.state === "waiting"
-                              ? "Open the app on a browser where you're already signed in. It asks you to approve this one."
-                              : "Ask a browser where you're already signed in to approve this one.";
+                              ? t("Open the app on a browser where you're already signed in. It asks you to approve this one.")
+                              : t("Ask a browser where you're already signed in to approve this one.");
                 if (engine.linked) {
                     done();
                     const channelId = currentChannel();
-                    if (channelId) flash(channelId, { tone: "info", text: "This browser is unlocked. Your encrypted messages are loading." }, 5000);
+                    if (channelId) flash(channelId, { tone: "info", text: t("This browser is unlocked. Your encrypted messages are loading.") }, 5000);
                 }
             };
             const stop = engine.onChange(render);
@@ -591,7 +600,7 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
                 if (engine.locked) snoozeUnlock();
             });
             actions.append(
-                button("Not now", "secondary", () => {
+                button(t("Not now"), "secondary", () => {
                     link.cancel().catch(() => {});
                     done();
                 }),
@@ -602,10 +611,10 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
 
     const showApproval = (prompt: Incoming) => {
         if (approvals.has(prompt.requestId)) return;
-        dialog(`New login on ${prompt.name}`, (body, actions, { el, close }) => {
+        dialog(t("New login on {name}", { name: prompt.name }), (body, actions, { el, close }) => {
             body.insertAdjacentHTML(
                 "beforeend",
-                `<p>Approve it only if you just signed in there yourself, because it gets access to your encrypted messages. The other browser should show this code:</p><div class="fe2ee-code">${escape(prompt.sas)}</div>`,
+                `<p>${escape(t("Approve it only if you just signed in there yourself, because it gets access to your encrypted messages. The other browser should show this code:"))}</p><div class="fe2ee-code">${escape(prompt.sas)}</div>`,
             );
             const error = document.createElement("p");
             error.className = "fe2ee-error";
@@ -625,13 +634,13 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
                     await action();
                     finish();
                 } catch (failure) {
-                    error.textContent = `Couldn't answer that login: ${failure instanceof Error ? failure.message : String(failure)}`;
+                    error.textContent = t("Couldn't answer that login: {error}", { error: failure instanceof Error ? failure.message : String(failure) });
                     error.hidden = false;
                     approve.disabled = deny.disabled = false;
                 }
             };
-            const approve = button("Approve login", "primary", () => run(prompt.approve));
-            const deny = button("Deny", "secondary", () => run(prompt.deny));
+            const approve = button(t("Approve login"), "primary", () => run(prompt.approve));
+            const deny = button(t("Deny"), "secondary", () => run(prompt.deny));
             actions.append(deny, approve);
         });
     };
@@ -639,13 +648,13 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
     const dismissApproval = (requestId: string) => approvals.get(requestId)?.();
 
     const backupPasswordForm = (onDone: () => void) => {
-        const { wrap, input, row, setError } = field("Account password", "password", "current-password");
-        const save = button("Back up keys", "primary", async () => {
-            if (!input.value) return setError("Enter your password.");
+        const { wrap, input, row, setError } = field(t("Account password"), "password", "current-password");
+        const save = button(t("Back up keys"), "primary", async () => {
+            if (!input.value) return setError(t("Enter your password."));
             save.disabled = true;
             setError(null);
             try {
-                if (!(await verifyPassword(input.value))) return setError("That password isn't right.");
+                if (!(await verifyPassword(input.value))) return setError(t("That password isn't right."));
                 await engine.backUpWithPassword(input.value);
                 onDone();
             } catch (error) {
@@ -660,36 +669,41 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
     };
 
     const showBackupPassword = () =>
-        dialog("Back up your encryption keys", (body, actions, { close }) => {
+        dialog(t("Back up your encryption keys"), (body, actions, { close }) => {
             describe(
                 body,
-                "Your encryption keys only exist in this browser right now. Enter your account password to lock a backup of them with it, so any browser you sign in to can read your encrypted messages.",
+                t(
+                    "Your encryption keys only exist in this browser right now. Enter your account password to lock a backup of them with it, so any browser you sign in to can read your encrypted messages.",
+                ),
             );
             body.append(
                 backupPasswordForm(() => {
                     close();
                     const channelId = currentChannel();
-                    if (channelId) flash(channelId, { tone: "info", text: "Your encryption keys are backed up." }, 5000);
+                    if (channelId) flash(channelId, { tone: "info", text: t("Your encryption keys are backed up.") }, 5000);
                 }),
             );
-            actions.append(button("Not now", "secondary", close));
+            actions.append(button(t("Not now"), "secondary", close));
         });
 
     const showRecoveryCode = () =>
-        dialog("Use a recovery code", (body, actions, { close, setDismissable }) => {
+        dialog(t("Use a recovery code"), (body, actions, { close, setDismissable }) => {
             const intro = describe(
                 body,
-                "We'll make a code that locks your key backup instead of your password. You'll need it to set up a new browser when no other device is around to approve it. We only show it once.",
+                t(
+                    "We'll make a code that locks your key backup instead of your password. You'll need it to set up a new browser when no other device is around to approve it. We only show it once.",
+                ),
             );
             const code = generateRecoveryCode();
-            const create = button("Make recovery code", "primary", () => {
+            const create = button(t("Make recovery code"), "primary", () => {
                 setDismissable(false);
-                intro.textContent =
-                    "Save this code somewhere safe, like a password manager. Anyone with it and access to your account can read your encrypted messages. It replaces your password lock once you confirm.";
+                intro.textContent = t(
+                    "Save this code somewhere safe, like a password manager. Anyone with it and access to your account can read your encrypted messages. It replaces your password lock once you confirm.",
+                );
                 const grid = document.createElement("ol");
                 grid.className = "fe2ee-recovery";
                 grid.dataset.code = code;
-                grid.setAttribute("aria-label", "Recovery code");
+                grid.setAttribute("aria-label", t("Recovery code"));
                 grid.innerHTML = code
                     .split("-")
                     .map((group) => `<li>${escape(group)}</li>`)
@@ -700,101 +714,108 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
                 error.hidden = true;
                 body.append(grid, error);
                 let copiedTimer: ReturnType<typeof setTimeout> | null = null;
-                const copy = button("Copy code", "secondary", () => {
+                const copy = button(t("Copy code"), "secondary", () => {
                     navigator.clipboard
                         ?.writeText(code)
                         .then(() => {
-                            copy.textContent = "Copied!";
+                            copy.textContent = t("Copied!");
                             if (copiedTimer) clearTimeout(copiedTimer);
-                            copiedTimer = setTimeout(() => (copy.textContent = "Copy code"), 2000);
+                            copiedTimer = setTimeout(() => (copy.textContent = t("Copy code")), 2000);
                         })
                         .catch(() => {
-                            copy.textContent = "Couldn't copy";
+                            copy.textContent = t("Couldn't copy");
                         });
                 });
-                const saved = button("I saved it", "primary", async () => {
+                const saved = button(t("I saved it"), "primary", async () => {
                     saved.disabled = true;
                     error.hidden = true;
                     try {
                         await engine.setBackupMode("recovery", code);
                         close();
                     } catch (failure) {
-                        error.textContent = `Couldn't switch to the recovery code: ${failure instanceof Error ? failure.message : String(failure)}`;
+                        error.textContent = t("Couldn't switch to the recovery code: {error}", { error: failure instanceof Error ? failure.message : String(failure) });
                         error.hidden = false;
                         saved.disabled = false;
                     }
                 });
-                actions.replaceChildren(button("Cancel", "secondary", close), copy, saved);
+                actions.replaceChildren(button(t("Cancel"), "secondary", close), copy, saved);
             });
-            actions.append(button("Cancel", "secondary", close), create);
+            actions.append(button(t("Cancel"), "secondary", close), create);
         });
 
     const deviceMeta = (device: ServerDevice) => {
         const current = device.device_id === engine.device?.deviceId;
         const session = device.session;
         const state = current
-            ? "This browser"
+            ? t("This browser")
             : device.status === "pending"
-              ? "Waiting for approval"
+              ? t("Waiting for approval")
               : session && !session.signed_in
-                ? "Signed out"
+                ? t("Signed out")
                 : session?.last_seen && Date.now() - Date.parse(session.last_seen) < 5 * 60 * 1000
-                  ? "Active now"
+                  ? t("Active now")
                   : session?.last_seen
-                    ? `Last active ${ago(session.last_seen)}`
-                    : "Can read encrypted messages";
+                    ? t("Last active {time}", { time: ago(session.last_seen) })
+                    : t("Can read encrypted messages");
         const added = device.created_at
-            ? `Added ${new Date(device.created_at).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}`
+            ? t("Added {date}", {
+                  date: new Date(device.created_at).toLocaleString(locale(), { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }),
+              })
             : null;
         return { current, text: [state, session?.location, added].filter(Boolean).join(" · ") };
     };
 
     const confirmRemove = (device: ServerDevice, onDone: () => void) =>
-        dialog("Remove this device?", (body, actions, { close }) => {
+        dialog(t("Remove this device?"), (body, actions, { close }) => {
             describe(
                 body,
-                `${device.name ?? "This browser"} is signed out and can't read new encrypted messages. To read them there again, it needs your recovery code, your password, or approval from another device.`,
+                t(
+                    "{name} is signed out and can't read new encrypted messages. To read them there again, it needs your recovery code, your password, or approval from another device.",
+                    { name: device.name ?? t("This browser") },
+                ),
             );
             const error = document.createElement("p");
             error.className = "fe2ee-error";
             error.setAttribute("role", "alert");
             error.hidden = true;
             body.append(error);
-            const confirm = button("Remove device", "danger", async () => {
+            const confirm = button(t("Remove device"), "danger", async () => {
                 confirm.disabled = true;
                 try {
                     await engine.removeDevice(device.device_id);
                     close();
                     onDone();
                 } catch (failure) {
-                    error.textContent = `Couldn't remove it: ${failure instanceof Error ? failure.message : String(failure)}`;
+                    error.textContent = t("Couldn't remove it: {error}", { error: failure instanceof Error ? failure.message : String(failure) });
                     error.hidden = false;
                     confirm.disabled = false;
                 }
             });
-            actions.append(button("Cancel", "secondary", close), confirm);
+            actions.append(button(t("Cancel"), "secondary", close), confirm);
         });
 
     const buildSettings = (root: HTMLElement, close?: () => void) => {
-        const browser = section("This browser");
-        const backupSection = section("Key backup");
-        const devices = section("Your devices", "Every browser listed here can read your encrypted messages. Remove the ones you don't recognize or don't use anymore.");
+        const browser = section(t("This browser"));
+        const backupSection = section(t("Key backup"));
+        const devices = section(t("Your devices"), t("Every browser listed here can read your encrypted messages. Remove the ones you don't recognize or don't use anymore."));
         const resetSection = section(
-            "Reset encryption",
-            "If you lost your recovery code and no other browser can approve a new one, reset encryption to keep chatting. Messages sent before the reset can't be read anymore.",
+            t("Reset encryption"),
+            t(
+                "If you lost your recovery code and no other browser can approve a new one, reset encryption to keep chatting. Messages sent before the reset can't be read anymore.",
+            ),
         );
         const list = document.createElement("div");
         list.className = "fe2ee-devices";
         devices.append(list);
-        resetSection.append(button("Reset encryption", "danger", () => showReset()));
+        resetSection.append(button(t("Reset encryption"), "danger", () => showReset()));
         root.append(browser, backupSection, devices, resetSection);
         const clear = (el: HTMLElement) => el.querySelectorAll(":scope > :not(h3)").forEach((child) => child.remove());
         const renderBrowser = () => {
             clear(browser);
-            describe(browser, engine.linked ? "Unlocked. This browser can read and send encrypted messages." : "Locked. This browser can't read encrypted messages yet.");
+            describe(browser, engine.linked ? t("Unlocked. This browser can read and send encrypted messages.") : t("Locked. This browser can't read encrypted messages yet."));
             if (!engine.linked)
                 browser.append(
-                    button("Unlock this browser", "primary", () => {
+                    button(t("Unlock this browser"), "primary", () => {
                         close?.();
                         showUnlock();
                     }),
@@ -809,40 +830,42 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
             clear(backupSection);
             backupSection.dataset.mode = backup?.mode ?? "none";
             if (engine.backupNeedsPassword) {
-                describe(backupSection, "Your keys aren't backed up yet, so new browsers can't read your encrypted messages. Enter your account password to back them up.");
+                describe(backupSection, t("Your keys aren't backed up yet, so new browsers can't read your encrypted messages. Enter your account password to back them up."));
                 backupSection.append(backupPasswordForm(() => renderBackup(true)));
                 return;
             }
-            if (!backup) return void describe(backupSection, "Your keys aren't backed up yet. Open the app on a browser that can read your messages to back them up.");
+            if (!backup) return void describe(backupSection, t("Your keys aren't backed up yet. Open the app on a browser that can read your messages to back them up."));
             if (backup.mode === "recovery")
-                describe(backupSection, "Your keys are backed up and locked with a recovery code. New browsers ask for that code, and your password can't unlock them.");
+                describe(backupSection, t("Your keys are backed up and locked with a recovery code. New browsers ask for that code, and your password can't unlock them."));
             else if (backup.wrapped_secret)
                 describe(
                     backupSection,
-                    "Your keys are backed up and locked with your account password, so new browsers unlock as soon as you sign in. Someone with a copy of the server's database could try to guess a weak password offline.",
+                    t(
+                        "Your keys are backed up and locked with your account password, so new browsers unlock as soon as you sign in. Someone with a copy of the server's database could try to guess a weak password offline.",
+                    ),
                 );
             else
                 describe(
                     backupSection,
-                    "Your keys are backed up, but they aren't locked with your password yet. Open the app on a browser that can read your messages to finish the backup.",
+                    t("Your keys are backed up, but they aren't locked with your password yet. Open the app on a browser that can read your messages to finish the backup."),
                 );
             if (!engine.hasSecret) return;
             if (backup.mode === "password") {
                 backupSection.append(
-                    button("Use a recovery code instead", "secondary", () => {
+                    button(t("Use a recovery code instead"), "secondary", () => {
                         close?.();
                         showRecoveryCode();
                     }),
                 );
                 return;
             }
-            const { wrap, input, row, setError } = field("Account password", "password", "current-password");
-            const save = button("Use my password instead", "secondary", async () => {
-                if (!input.value) return setError("Enter your password.");
+            const { wrap, input, row, setError } = field(t("Account password"), "password", "current-password");
+            const save = button(t("Use my password instead"), "secondary", async () => {
+                if (!input.value) return setError(t("Enter your password."));
                 save.disabled = true;
                 setError(null);
                 try {
-                    if (!(await verifyPassword(input.value))) return setError("That password isn't right.");
+                    if (!(await verifyPassword(input.value))) return setError(t("That password isn't right."));
                     await engine.setBackupMode("password", input.value);
                     renderBackup(true);
                 } catch (error) {
@@ -855,7 +878,7 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
             row.append(save);
             backupSection.append(
                 wrap,
-                button("Make a new recovery code", "secondary", () => {
+                button(t("Make a new recovery code"), "secondary", () => {
                     close?.();
                     showRecoveryCode();
                 }),
@@ -874,8 +897,8 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
                 const row = document.createElement("div");
                 row.className = "fe2ee-device";
                 const { current, text } = deviceMeta(device);
-                row.innerHTML = `<div class="fe2ee-device-icon">${svg(SCREEN_PATH)}</div><div class="fe2ee-device-text"><span class="fe2ee-device-name">${escape(device.name ?? "Unknown browser")}</span><span class="fe2ee-device-meta" data-current="${current}">${escape(text)}</span></div>`;
-                if (!current) row.append(button("Remove", "secondary", () => confirmRemove(device, renderDevices)));
+                row.innerHTML = `<div class="fe2ee-device-icon">${svg(SCREEN_PATH)}</div><div class="fe2ee-device-text"><span class="fe2ee-device-name">${escape(device.name ?? t("Unknown browser"))}</span><span class="fe2ee-device-meta" data-current="${current}">${escape(text)}</span></div>`;
+                if (!current) row.append(button(t("Remove"), "secondary", () => confirmRemove(device, renderDevices)));
                 list.append(row);
             }
         };
@@ -893,10 +916,10 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
     };
 
     const showSettings = () =>
-        dialog("Encryption settings", (body, actions, { el, close }) => {
+        dialog(t("Encryption settings"), (body, actions, { el, close }) => {
             const stop = buildSettings(body, close);
             el.addEventListener("close", () => stop());
-            actions.append(button("Done", "primary", close));
+            actions.append(button(t("Done"), "primary", close));
         });
 
     const mountSettings = (container: HTMLElement) => {
@@ -905,7 +928,7 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
         root.className = "fe2ee-page";
         container.replaceChildren(root);
         if (!engine.userId) {
-            describe(root, failure ?? paused ?? "Encryption is still starting up.");
+            describe(root, failure ?? paused ?? t("Encryption is still starting up."));
             return () => {};
         }
         const stop = buildSettings(root);
@@ -929,8 +952,8 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
         if (changed) {
             flash(channelId, {
                 tone: "warning",
-                text: `${memberName(changed)}'s safety number changed. Review it before sending. Your message is still in the text box.`,
-                action: { label: "Review", run: () => showSafety(channelId) },
+                text: t("{name}'s safety number changed. Review it before sending. Your message is still in the text box.", { name: memberName(changed) }),
+                action: { label: t("Review"), run: () => showSafety(channelId) },
             });
             return true;
         }
@@ -938,8 +961,8 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
             showUnlock();
             flash(channelId, {
                 tone: "warning",
-                text: "Unlock this browser to send encrypted messages. Your message is still in the text box.",
-                action: { label: "Unlock", run: showUnlock },
+                text: t("Unlock this browser to send encrypted messages. Your message is still in the text box."),
+                action: { label: t("Unlock"), run: showUnlock },
             });
             return true;
         }
@@ -960,14 +983,14 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
             lock.dataset.state = info.state;
             const label =
                 info.state === "decrypted"
-                    ? "End-to-end encrypted"
+                    ? t("End-to-end encrypted")
                     : info.state === "pending"
-                      ? "Decrypting"
+                      ? t("Decrypting")
                       : info.state === "locked"
-                        ? "Unlock this browser to read this message"
+                        ? t("Unlock this browser to read this message")
                         : info.state === "missing"
-                          ? "This browser doesn't have the key for this message"
-                          : `Couldn't decrypt: ${info.reason ?? "unknown error"}`;
+                          ? t("This browser doesn't have the key for this message")
+                          : t("Couldn't decrypt: {reason}", { reason: info.reason ?? t("unknown error") });
             lock.innerHTML = svg(info.state === "decrypted" || info.state === "pending" ? LOCK_PATH : OPEN_LOCK_PATH, label);
             withTooltip(lock, () => label);
             content.append(lock);
@@ -975,7 +998,7 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
                 const unlock = document.createElement("button");
                 unlock.type = "button";
                 unlock.className = "fe2ee-unlock";
-                unlock.textContent = engine.linked ? "Get keys" : "Unlock";
+                unlock.textContent = engine.linked ? t("Get keys") : t("Unlock");
                 unlock.addEventListener("click", (event) => {
                     event.stopPropagation();
                     if (engine.linked && engine.hasSecret) showSettings();
@@ -987,11 +1010,11 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
     };
 
     const headerLabel = (channelId: string) => {
-        if (!engine.isEncrypted(channelId)) return "Turn On Encryption";
+        if (!engine.isEncrypted(channelId)) return t("Turn On Encryption");
         const list = members?.channelId === channelId ? members.list : [];
-        if (list.some((m) => engine.contacts[m.id]?.pendingKey)) return "Safety Number Changed";
-        if (list.length && list.every((m) => engine.contacts[m.id]?.verified)) return "Encrypted and Verified";
-        return "End-to-End Encrypted";
+        if (list.some((m) => engine.contacts[m.id]?.pendingKey)) return t("Safety Number Changed");
+        if (list.length && list.every((m) => engine.contacts[m.id]?.verified)) return t("Encrypted and Verified");
+        return t("End-to-End Encrypted");
     };
 
     const decorateHeader = (channelId: string | null) => {
@@ -1023,7 +1046,7 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
         toggle.dataset.key = key;
         toggle.dataset.verified = String(verified);
         toggle.setAttribute("aria-pressed", String(on));
-        toggle.setAttribute("aria-label", on ? `${headerLabel(channelId)}. View safety numbers` : "Turn on end-to-end encryption");
+        toggle.setAttribute("aria-label", on ? t("{label}. View safety numbers", { label: headerLabel(channelId) }) : t("Turn on end-to-end encryption"));
         toggle.innerHTML = svg(verified ? VERIFIED_PATH : on ? LOCK_PATH : OPEN_LOCK_PATH);
     };
 
@@ -1037,17 +1060,17 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
         if (changed)
             return {
                 tone: "warning",
-                text: `${memberName(changed)}'s safety number changed. Sending is paused until you review it.`,
-                action: { label: "Review", run: () => showSafety(channelId) },
+                text: t("{name}'s safety number changed. Sending is paused until you review it.", { name: memberName(changed) }),
+                action: { label: t("Review"), run: () => showSafety(channelId) },
             };
         if (temporary) return temporary;
-        if (engine.locked) return { tone: "info", text: "Unlock this browser to read and send encrypted messages here.", action: { label: "Unlock", run: showUnlock } };
+        if (engine.locked) return { tone: "info", text: t("Unlock this browser to read and send encrypted messages here."), action: { label: t("Unlock"), run: showUnlock } };
         if (engine.backupNeedsPassword && !backupPromptDismissed)
             return {
                 tone: "info",
-                text: "Back up your encryption keys with your password so your other browsers can read your encrypted messages.",
+                text: t("Back up your encryption keys with your password so your other browsers can read your encrypted messages."),
                 action: {
-                    label: "Back up",
+                    label: t("Back up"),
                     run: () => {
                         backupPromptDismissed = true;
                         refresh();

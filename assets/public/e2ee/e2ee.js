@@ -1111,13 +1111,13 @@ ${final ? 1 : 0}`);
     [x, y] = [y, (2 * x + 3 * y) % 5];
     SHA3_PI.push(2 * (5 * y + x));
     SHA3_ROTL.push((round + 1) * (round + 2) / 2 % 64);
-    let t = _0n;
+    let t2 = _0n;
     for (let j = 0; j < 7; j++) {
       R = (R << _1n ^ (R >> _7n) * _0x71n) % _256n;
       if (R & _2n)
-        t ^= _1n << (_1n << BigInt(j)) - _1n;
+        t2 ^= _1n << (_1n << BigInt(j)) - _1n;
     }
-    _SHA3_IOTA.push(t);
+    _SHA3_IOTA.push(t2);
   }
   var IOTAS = split(_SHA3_IOTA, true);
   var SHA3_IOTA_H = IOTAS[0];
@@ -2802,6 +2802,604 @@ ${userId}`)));
     };
   };
 
+  // client/e2ee/src/i18n.ts
+  var LOCALES = ["de", "fr", "ja", "pl", "zh-CN"];
+  var STRINGS = {
+    Close: ["Schließen", "Fermer", "閉じる", "Zamknij", "关闭"],
+    Cancel: ["Abbrechen", "Annuler", "キャンセル", "Anuluj", "取消"],
+    Done: ["Fertig", "OK", "完了", "Gotowe", "完成"],
+    Unlock: ["Entsperren", "Déverrouiller", "ロック解除", "Odblokuj", "解锁"],
+    Review: ["Prüfen", "Vérifier", "確認する", "Sprawdź", "查看"],
+    Remove: ["Entfernen", "Retirer", "削除", "Usuń", "移除"],
+    Deny: ["Ablehnen", "Refuser", "拒否", "Odrzuć", "拒绝"],
+    "Not now": ["Nicht jetzt", "Pas maintenant", "後で", "Nie teraz", "以后再说"],
+    "Back up": ["Sichern", "Sauvegarder", "バックアップ", "Utwórz kopię", "备份"],
+    "Someone here": ["Jemand hier", "Quelqu'un ici", "ここにいる誰か", "Ktoś tutaj", "这里有人"],
+    Someone: ["Jemand", "Quelqu'un", "誰か", "Ktoś", "某人"],
+    "{names} haven't set up encryption yet. Ask them to open the app once, then try again.": [
+      "{names} haben die Verschlüsselung noch nicht eingerichtet. Bitte sie, die App einmal zu öffnen, und versuche es dann erneut.",
+      "{names} n'ont pas encore configuré le chiffrement. Demande-leur d'ouvrir l'appli une fois, puis réessaie.",
+      "{names} はまだ暗号化を設定していません。一度アプリを開いてもらってから、もう一度お試しください。",
+      "{names} nie skonfigurowali jeszcze szyfrowania. Poproś ich, żeby raz otworzyli aplikację, i spróbuj ponownie.",
+      "{names} 还没有设置加密。请让他们打开一次应用，然后再试一次。"
+    ],
+    "{name} hasn't set up encryption yet. Ask them to open the app once, then try again.": [
+      "{name} hat die Verschlüsselung noch nicht eingerichtet. Bitte die Person, die App einmal zu öffnen, und versuche es dann erneut.",
+      "{name} n'a pas encore configuré le chiffrement. Demande-lui d'ouvrir l'appli une fois, puis réessaie.",
+      "{name} はまだ暗号化を設定していません。一度アプリを開いてもらってから、もう一度お試しください。",
+      "{name} nie skonfigurował(a) jeszcze szyfrowania. Poproś tę osobę, żeby raz otworzyła aplikację, i spróbuj ponownie.",
+      "{name} 还没有设置加密。请让对方打开一次应用，然后再试一次。"
+    ],
+    "Your message couldn't be encrypted, so it wasn't sent.": [
+      "Deine Nachricht konnte nicht verschlüsselt werden und wurde daher nicht gesendet.",
+      "Ton message n'a pas pu être chiffré, il n'a donc pas été envoyé.",
+      "メッセージを暗号化できなかったため、送信されませんでした。",
+      "Nie udało się zaszyfrować wiadomości, więc nie została wysłana.",
+      "你的消息无法加密，因此没有发送。"
+    ],
+    "{name} hasn't set up encryption yet, so your message wasn't sent. Ask them to open the app once.": [
+      "{name} hat die Verschlüsselung noch nicht eingerichtet, daher wurde deine Nachricht nicht gesendet. Bitte die Person, die App einmal zu öffnen.",
+      "{name} n'a pas encore configuré le chiffrement, ton message n'a donc pas été envoyé. Demande-lui d'ouvrir l'appli une fois.",
+      "{name} がまだ暗号化を設定していないため、メッセージは送信されませんでした。一度アプリを開いてもらってください。",
+      "{name} nie skonfigurował(a) jeszcze szyfrowania, więc wiadomość nie została wysłana. Poproś tę osobę, żeby raz otworzyła aplikację.",
+      "{name} 还没有设置加密，因此你的消息没有发送。请让对方打开一次应用。"
+    ],
+    "{name}'s safety number changed. Review it before sending more messages.": [
+      "Die Sicherheitsnummer von {name} hat sich geändert. Prüfe sie, bevor du weitere Nachrichten sendest.",
+      "Le numéro de sécurité de {name} a changé. Vérifie-le avant d'envoyer d'autres messages.",
+      "{name} の安全番号が変更されました。メッセージを送る前に確認してください。",
+      "Numer bezpieczeństwa użytkownika {name} się zmienił. Sprawdź go, zanim wyślesz kolejne wiadomości.",
+      "{name} 的安全码已更改。请在继续发送消息前查看。"
+    ],
+    "{reason}. Your message wasn't sent.": [
+      "{reason}. Deine Nachricht wurde nicht gesendet.",
+      "{reason}. Ton message n'a pas été envoyé.",
+      "{reason}。メッセージは送信されませんでした。",
+      "{reason}. Wiadomość nie została wysłana.",
+      "{reason}。你的消息没有发送。"
+    ],
+    "Unlock this browser to send encrypted messages. Your message wasn't sent.": [
+      "Entsperre diesen Browser, um verschlüsselte Nachrichten zu senden. Deine Nachricht wurde nicht gesendet.",
+      "Déverrouille ce navigateur pour envoyer des messages chiffrés. Ton message n'a pas été envoyé.",
+      "暗号化されたメッセージを送るには、このブラウザのロックを解除してください。メッセージは送信されませんでした。",
+      "Odblokuj tę przeglądarkę, aby wysyłać zaszyfrowane wiadomości. Wiadomość nie została wysłana.",
+      "解锁此浏览器后才能发送加密消息。你的消息没有发送。"
+    ],
+    "End-to-end encryption is unavailable right now, so your message wasn't sent.": [
+      "Die Ende-zu-Ende-Verschlüsselung ist gerade nicht verfügbar, daher wurde deine Nachricht nicht gesendet.",
+      "Le chiffrement de bout en bout est indisponible pour le moment, ton message n'a donc pas été envoyé.",
+      "現在エンドツーエンド暗号化を利用できないため、メッセージは送信されませんでした。",
+      "Szyfrowanie end-to-end jest teraz niedostępne, więc wiadomość nie została wysłana.",
+      "端到端加密暂时不可用，因此你的消息没有发送。"
+    ],
+    "Turn on end-to-end encryption?": [
+      "Ende-zu-Ende-Verschlüsselung aktivieren?",
+      "Activer le chiffrement de bout en bout ?",
+      "エンドツーエンド暗号化をオンにしますか？",
+      "Włączyć szyfrowanie end-to-end?",
+      "开启端到端加密？"
+    ],
+    "New messages, files and stickers in this conversation are encrypted in your browser before they're sent, and only the people in it can read them. Encryption can't be turned off later.": [
+      "Neue Nachrichten, Dateien und Sticker in dieser Unterhaltung werden in deinem Browser verschlüsselt, bevor sie gesendet werden, und nur die Personen darin können sie lesen. Die Verschlüsselung kann später nicht mehr deaktiviert werden.",
+      "Les nouveaux messages, fichiers et autocollants de cette conversation sont chiffrés dans ton navigateur avant d'être envoyés, et seules les personnes qui y participent peuvent les lire. Le chiffrement ne peut pas être désactivé ensuite.",
+      "この会話の新しいメッセージ、ファイル、スタンプは送信前にブラウザで暗号化され、参加しているメンバーだけが読めます。暗号化は後からオフにできません。",
+      "Nowe wiadomości, pliki i naklejki w tej rozmowie są szyfrowane w przeglądarce przed wysłaniem i mogą je odczytać tylko jej uczestnicy. Szyfrowania nie można później wyłączyć.",
+      "此对话中的新消息、文件和贴纸会在发送前于你的浏览器中加密，只有对话中的人才能阅读。加密开启后无法关闭。"
+    ],
+    "Polls can't be sent in encrypted conversations.": [
+      "In verschlüsselten Unterhaltungen können keine Umfragen gesendet werden.",
+      "Les sondages ne peuvent pas être envoyés dans les conversations chiffrées.",
+      "暗号化された会話では投票を送信できません。",
+      "W szyfrowanych rozmowach nie można wysyłać ankiet.",
+      "加密对话中无法发送投票。"
+    ],
+    "Turn on encryption": ["Verschlüsselung aktivieren", "Activer le chiffrement", "暗号化をオンにする", "Włącz szyfrowanie", "开启加密"],
+    "Safety numbers": ["Sicherheitsnummern", "Numéros de sécurité", "安全番号", "Numery bezpieczeństwa", "安全码"],
+    "Compare these numbers with each person in a call or face to face, or scan the code with their phone. If they match, nobody is intercepting your messages. Mark them as verified so you're warned if they change.": [
+      "Vergleiche diese Nummern mit jeder Person in einem Anruf oder persönlich, oder scanne den Code mit ihrem Handy. Wenn sie übereinstimmen, fängt niemand deine Nachrichten ab. Markiere sie als verifiziert, damit du gewarnt wirst, wenn sie sich ändern.",
+      "Compare ces numéros avec chaque personne lors d'un appel ou en face à face, ou scanne le code avec son téléphone. S'ils correspondent, personne n'intercepte tes messages. Marque-les comme vérifiés pour être averti s'ils changent.",
+      "通話や対面で相手とこの番号を照合するか、相手のスマートフォンでコードをスキャンしてください。一致していれば、メッセージは誰にも傍受されていません。認証済みにしておくと、番号が変わったときに警告されます。",
+      "Porównaj te numery z każdą osobą podczas rozmowy lub osobiście albo zeskanuj kod jej telefonem. Jeśli się zgadzają, nikt nie przechwytuje twoich wiadomości. Oznacz je jako zweryfikowane, aby dostać ostrzeżenie, gdy się zmienią.",
+      "请通过通话或当面与每个人核对这些数字，或用对方的手机扫描二维码。如果一致，就没有人在拦截你的消息。将其标记为已验证，之后如有变化你会收到提醒。"
+    ],
+    "Safety number for {name}": ["Sicherheitsnummer für {name}", "Numéro de sécurité de {name}", "{name} の安全番号", "Numer bezpieczeństwa: {name}", "{name} 的安全码"],
+    "Calculating…": ["Wird berechnet …", "Calcul en cours…", "計算中…", "Obliczanie…", "正在计算…"],
+    "Safety number changed": ["Sicherheitsnummer geändert", "Numéro de sécurité modifié", "安全番号が変更されました", "Numer bezpieczeństwa się zmienił", "安全码已更改"],
+    Verified: ["Verifiziert", "Vérifié", "認証済み", "Zweryfikowano", "已验证"],
+    "Not verified": ["Nicht verifiziert", "Non vérifié", "未認証", "Niezweryfikowano", "未验证"],
+    "This person hasn't set up encryption yet.": [
+      "Diese Person hat die Verschlüsselung noch nicht eingerichtet.",
+      "Cette personne n'a pas encore configuré le chiffrement.",
+      "このユーザーはまだ暗号化を設定していません。",
+      "Ta osoba nie skonfigurowała jeszcze szyfrowania.",
+      "此人还没有设置加密。"
+    ],
+    "QR code of the safety number for {name}": [
+      "QR-Code der Sicherheitsnummer für {name}",
+      "Code QR du numéro de sécurité de {name}",
+      "{name} の安全番号のQRコード",
+      "Kod QR numeru bezpieczeństwa: {name}",
+      "{name} 的安全码二维码"
+    ],
+    "Accept new safety number": ["Neue Sicherheitsnummer akzeptieren", "Accepter le nouveau numéro de sécurité", "新しい安全番号を承認", "Zaakceptuj nowy numer bezpieczeństwa", "接受新的安全码"],
+    "Remove verification": ["Verifizierung entfernen", "Retirer la vérification", "認証を解除", "Usuń weryfikację", "取消验证"],
+    "Mark as verified": ["Als verifiziert markieren", "Marquer comme vérifié", "認証済みにする", "Oznacz jako zweryfikowane", "标记为已验证"],
+    "Encryption settings": ["Verschlüsselungseinstellungen", "Paramètres de chiffrement", "暗号化の設定", "Ustawienia szyfrowania", "加密设置"],
+    "Reset encryption?": ["Verschlüsselung zurücksetzen?", "Réinitialiser le chiffrement ?", "暗号化をリセットしますか？", "Zresetować szyfrowanie?", "重置加密？"],
+    "Only do this if you lost your recovery code and no other signed-in browser can approve this one. You get new encryption keys and can keep chatting, but nobody can read the messages sent before the reset anymore, on any device.": [
+      "Tu das nur, wenn du deinen Wiederherstellungscode verloren hast und kein anderer angemeldeter Browser diesen bestätigen kann. Du bekommst neue Schlüssel und kannst weiterchatten, aber die vor dem Zurücksetzen gesendeten Nachrichten kann danach niemand mehr lesen, auf keinem Gerät.",
+      "Ne fais cela que si tu as perdu ton code de récupération et qu'aucun autre navigateur connecté ne peut approuver celui-ci. Tu obtiens de nouvelles clés et peux continuer à discuter, mais plus personne ne pourra lire les messages envoyés avant la réinitialisation, sur aucun appareil.",
+      "リカバリーコードをなくし、ログイン中の他のブラウザでこのブラウザを承認できない場合にのみ実行してください。新しい暗号鍵が作成されて会話を続けられますが、リセット前に送信されたメッセージはどのデバイスでも誰も読めなくなります。",
+      "Zrób to tylko wtedy, gdy zgubiłeś kod odzyskiwania i żadna inna zalogowana przeglądarka nie może zatwierdzić tej. Dostaniesz nowe klucze i będziesz mógł dalej rozmawiać, ale wiadomości wysłanych przed resetem nikt już nie odczyta na żadnym urządzeniu.",
+      "只有在你丢失了恢复码，并且没有其他已登录的浏览器可以批准此浏览器时才这样做。你会获得新的加密密钥并可以继续聊天，但重置前发送的消息在任何设备上都将无人能读。"
+    ],
+    "Your other browsers have to be approved again, and the people you talk to are told that your safety number changed.": [
+      "Deine anderen Browser müssen erneut bestätigt werden, und deine Gesprächspartner erfahren, dass sich deine Sicherheitsnummer geändert hat.",
+      "Tes autres navigateurs devront être approuvés à nouveau, et les personnes avec qui tu discutes seront informées que ton numéro de sécurité a changé.",
+      "他のブラウザは再度承認が必要になり、会話相手にはあなたの安全番号が変わったことが通知されます。",
+      "Pozostałe przeglądarki trzeba będzie ponownie zatwierdzić, a twoi rozmówcy dowiedzą się, że twój numer bezpieczeństwa się zmienił.",
+      "你的其他浏览器需要重新批准，与你聊天的人会收到你的安全码已更改的通知。"
+    ],
+    "Account password": ["Kontopasswort", "Mot de passe du compte", "アカウントのパスワード", "Hasło do konta", "账号密码"],
+    "Reset encryption": ["Verschlüsselung zurücksetzen", "Réinitialiser le chiffrement", "暗号化をリセット", "Zresetuj szyfrowanie", "重置加密"],
+    "Enter your password.": ["Gib dein Passwort ein.", "Saisis ton mot de passe.", "パスワードを入力してください。", "Wpisz hasło.", "请输入你的密码。"],
+    "Encryption was reset. New messages use your new keys.": [
+      "Die Verschlüsselung wurde zurückgesetzt. Neue Nachrichten verwenden deine neuen Schlüssel.",
+      "Le chiffrement a été réinitialisé. Les nouveaux messages utilisent tes nouvelles clés.",
+      "暗号化をリセットしました。新しいメッセージには新しい鍵が使われます。",
+      "Szyfrowanie zostało zresetowane. Nowe wiadomości używają nowych kluczy.",
+      "加密已重置。新消息将使用你的新密钥。"
+    ],
+    "That password isn't right.": ["Das Passwort ist falsch.", "Ce mot de passe est incorrect.", "パスワードが正しくありません。", "To hasło jest nieprawidłowe.", "密码不正确。"],
+    "Couldn't reset encryption. Try again.": [
+      "Die Verschlüsselung konnte nicht zurückgesetzt werden. Versuche es erneut.",
+      "Impossible de réinitialiser le chiffrement. Réessaie.",
+      "暗号化をリセットできませんでした。もう一度お試しください。",
+      "Nie udało się zresetować szyfrowania. Spróbuj ponownie.",
+      "无法重置加密。请重试。"
+    ],
+    "Recovery code": ["Wiederherstellungscode", "Code de récupération", "リカバリーコード", "Kod odzyskiwania", "恢复码"],
+    "Enter your recovery code.": [
+      "Gib deinen Wiederherstellungscode ein.",
+      "Saisis ton code de récupération.",
+      "リカバリーコードを入力してください。",
+      "Wpisz kod odzyskiwania.",
+      "请输入你的恢复码。"
+    ],
+    "Unlock encrypted messages": ["Verschlüsselte Nachrichten entsperren", "Déverrouiller les messages chiffrés", "暗号化されたメッセージのロックを解除", "Odblokuj zaszyfrowane wiadomości", "解锁加密消息"],
+    "This browser can't read your encrypted messages yet. Bring your keys over with one of these.": [
+      "Dieser Browser kann deine verschlüsselten Nachrichten noch nicht lesen. Übertrage deine Schlüssel auf eine dieser Arten.",
+      "Ce navigateur ne peut pas encore lire tes messages chiffrés. Transfère tes clés avec l'une de ces options.",
+      "このブラウザではまだ暗号化されたメッセージを読めません。次のいずれかの方法で鍵を移してください。",
+      "Ta przeglądarka nie może jeszcze odczytać twoich zaszyfrowanych wiadomości. Przenieś klucze jednym z tych sposobów.",
+      "此浏览器还无法读取你的加密消息。请用以下任一方式转移你的密钥。"
+    ],
+    "Enter your password": ["Passwort eingeben", "Saisir ton mot de passe", "パスワードを入力", "Wpisz hasło", "输入你的密码"],
+    "If your keys aren't backed up with your password yet, open the app on a browser you used before. It asks for your password once, and then it works here too.": [
+      "Wenn deine Schlüssel noch nicht mit deinem Passwort gesichert sind, öffne die App in einem Browser, den du schon benutzt hast. Dort wirst du einmal nach deinem Passwort gefragt, danach funktioniert es auch hier.",
+      "Si tes clés ne sont pas encore sauvegardées avec ton mot de passe, ouvre l'appli dans un navigateur que tu as déjà utilisé. Il te demandera ton mot de passe une fois, et cela fonctionnera ensuite ici aussi.",
+      "鍵がまだパスワードでバックアップされていない場合は、以前使ったブラウザでアプリを開いてください。一度パスワードを求められ、その後はここでも使えるようになります。",
+      "Jeśli twoje klucze nie mają jeszcze kopii chronionej hasłem, otwórz aplikację w przeglądarce, której używałeś wcześniej. Raz poprosi o hasło, a potem zadziała też tutaj.",
+      "如果你的密钥还没有用密码备份，请在你以前用过的浏览器中打开应用。它会请你输入一次密码，之后这里也能使用。"
+    ],
+    "Enter your recovery code": ["Wiederherstellungscode eingeben", "Saisir ton code de récupération", "リカバリーコードを入力", "Wpisz kod odzyskiwania", "输入你的恢复码"],
+    "Use the code you saved when you switched to a recovery code.": [
+      "Verwende den Code, den du beim Wechsel zu einem Wiederherstellungscode gespeichert hast.",
+      "Utilise le code que tu as enregistré lorsque tu es passé à un code de récupération.",
+      "リカバリーコードに切り替えたときに保存したコードを使ってください。",
+      "Użyj kodu zapisanego przy przejściu na kod odzyskiwania.",
+      "使用你切换到恢复码时保存的那个代码。"
+    ],
+    "Approve from another device": ["Von einem anderen Gerät bestätigen", "Approuver depuis un autre appareil", "別のデバイスから承認", "Zatwierdź na innym urządzeniu", "从其他设备批准"],
+    "Ask for approval": ["Bestätigung anfordern", "Demander une approbation", "承認をリクエスト", "Poproś o zatwierdzenie", "请求批准"],
+    "Lost your code?": ["Code verloren?", "Code perdu ?", "コードをなくしましたか？", "Zgubiony kod?", "丢失了恢复码？"],
+    "Can't unlock this browser?": [
+      "Kannst du diesen Browser nicht entsperren?",
+      "Impossible de déverrouiller ce navigateur ?",
+      "このブラウザのロックを解除できませんか？",
+      "Nie możesz odblokować tej przeglądarki?",
+      "无法解锁此浏览器？"
+    ],
+    "If you can't use any of these, reset encryption to keep chatting. Messages sent before the reset can't be read anymore.": [
+      "Wenn nichts davon geht, setze die Verschlüsselung zurück, um weiterzuchatten. Vor dem Zurücksetzen gesendete Nachrichten können dann nicht mehr gelesen werden.",
+      "Si aucune de ces options ne fonctionne, réinitialise le chiffrement pour continuer à discuter. Les messages envoyés avant la réinitialisation ne pourront plus être lus.",
+      "どの方法も使えない場合は、暗号化をリセットすれば会話を続けられます。リセット前に送信されたメッセージは読めなくなります。",
+      "Jeśli żaden sposób nie działa, zresetuj szyfrowanie, aby dalej rozmawiać. Wiadomości wysłanych przed resetem nie będzie można już odczytać.",
+      "如果以上方式都无法使用，可以重置加密以继续聊天。重置前发送的消息将无法再阅读。"
+    ],
+    "Ask again": ["Erneut anfragen", "Redemander", "もう一度リクエスト", "Poproś ponownie", "再次请求"],
+    "{name} is asking you to approve this browser. Check that it shows this code, then approve it there.": [
+      "{name} fragt, ob du diesen Browser bestätigen willst. Prüfe, ob dort dieser Code angezeigt wird, und bestätige ihn dann dort.",
+      "{name} te demande d'approuver ce navigateur. Vérifie qu'il affiche ce code, puis approuve-le là-bas.",
+      "{name} でこのブラウザの承認を求めています。同じコードが表示されていることを確認してから、そちらで承認してください。",
+      "{name} prosi o zatwierdzenie tej przeglądarki. Sprawdź, czy wyświetla ten kod, a następnie zatwierdź tam.",
+      "{name} 正在请求你批准此浏览器。请确认那边显示的是这个代码，然后在那边批准。"
+    ],
+    "Your other device": ["Dein anderes Gerät", "Ton autre appareil", "他のデバイス", "Twoje inne urządzenie", "你的其他设备"],
+    "Your other device declined this login.": [
+      "Dein anderes Gerät hat diese Anmeldung abgelehnt.",
+      "Ton autre appareil a refusé cette connexion.",
+      "他のデバイスでこのログインが拒否されました。",
+      "Twoje inne urządzenie odrzuciło to logowanie.",
+      "你的其他设备拒绝了此次登录。"
+    ],
+    "The approval didn't unlock this browser. Ask again to retry.": [
+      "Die Bestätigung hat diesen Browser nicht entsperrt. Frage erneut an, um es noch einmal zu versuchen.",
+      "L'approbation n'a pas déverrouillé ce navigateur. Redemande pour réessayer.",
+      "承認してもこのブラウザのロックは解除されませんでした。もう一度リクエストしてください。",
+      "Zatwierdzenie nie odblokowało tej przeglądarki. Poproś ponownie, aby spróbować jeszcze raz.",
+      "批准没有解锁此浏览器。请再次请求重试。"
+    ],
+    "Open the app on a browser where you're already signed in. It asks you to approve this one.": [
+      "Öffne die App in einem Browser, in dem du bereits angemeldet bist. Dort wirst du gefragt, ob du diesen hier bestätigen willst.",
+      "Ouvre l'appli dans un navigateur où tu es déjà connecté. Il te demandera d'approuver celui-ci.",
+      "すでにログインしているブラウザでアプリを開いてください。このブラウザの承認を求められます。",
+      "Otwórz aplikację w przeglądarce, w której jesteś już zalogowany. Poprosi o zatwierdzenie tej.",
+      "在你已登录的浏览器中打开应用，它会请你批准此浏览器。"
+    ],
+    "Ask a browser where you're already signed in to approve this one.": [
+      "Bitte einen Browser, in dem du bereits angemeldet bist, diesen hier zu bestätigen.",
+      "Demande à un navigateur où tu es déjà connecté d'approuver celui-ci.",
+      "すでにログインしているブラウザに、このブラウザの承認をリクエストします。",
+      "Poproś przeglądarkę, w której jesteś już zalogowany, o zatwierdzenie tej.",
+      "请已登录的浏览器批准此浏览器。"
+    ],
+    "This browser is unlocked. Your encrypted messages are loading.": [
+      "Dieser Browser ist entsperrt. Deine verschlüsselten Nachrichten werden geladen.",
+      "Ce navigateur est déverrouillé. Tes messages chiffrés sont en cours de chargement.",
+      "このブラウザのロックを解除しました。暗号化されたメッセージを読み込んでいます。",
+      "Ta przeglądarka jest odblokowana. Wczytywanie zaszyfrowanych wiadomości.",
+      "此浏览器已解锁，正在加载你的加密消息。"
+    ],
+    "New login on {name}": ["Neue Anmeldung auf {name}", "Nouvelle connexion sur {name}", "{name} での新しいログイン", "Nowe logowanie: {name}", "{name} 上的新登录"],
+    "Approve it only if you just signed in there yourself, because it gets access to your encrypted messages. The other browser should show this code:": [
+      "Bestätige sie nur, wenn du dich gerade selbst dort angemeldet hast, denn sie erhält Zugriff auf deine verschlüsselten Nachrichten. Der andere Browser sollte diesen Code anzeigen:",
+      "N'approuve que si tu viens de t'y connecter toi-même, car elle aura accès à tes messages chiffrés. L'autre navigateur doit afficher ce code :",
+      "暗号化されたメッセージにアクセスできるようになるため、自分でログインした場合にのみ承認してください。相手のブラウザには次のコードが表示されているはずです：",
+      "Zatwierdź tylko wtedy, gdy przed chwilą sam się tam zalogowałeś, bo uzyska dostęp do twoich zaszyfrowanych wiadomości. Druga przeglądarka powinna pokazywać ten kod:",
+      "只有在你刚刚亲自在那里登录时才批准，因为它将能访问你的加密消息。另一个浏览器应显示此代码："
+    ],
+    "Couldn't answer that login: {error}": [
+      "Auf diese Anmeldung konnte nicht geantwortet werden: {error}",
+      "Impossible de répondre à cette connexion : {error}",
+      "このログインに応答できませんでした：{error}",
+      "Nie udało się odpowiedzieć na to logowanie: {error}",
+      "无法回应此次登录：{error}"
+    ],
+    "Approve login": ["Anmeldung bestätigen", "Approuver la connexion", "ログインを承認", "Zatwierdź logowanie", "批准登录"],
+    "Back up keys": ["Schlüssel sichern", "Sauvegarder les clés", "鍵をバックアップ", "Utwórz kopię kluczy", "备份密钥"],
+    "Back up your encryption keys": ["Sichere deine Schlüssel", "Sauvegarde tes clés de chiffrement", "暗号鍵をバックアップ", "Utwórz kopię kluczy szyfrowania", "备份你的加密密钥"],
+    "Your encryption keys only exist in this browser right now. Enter your account password to lock a backup of them with it, so any browser you sign in to can read your encrypted messages.": [
+      "Deine Schlüssel gibt es gerade nur in diesem Browser. Gib dein Kontopasswort ein, um eine damit geschützte Sicherung anzulegen, damit jeder Browser, in dem du dich anmeldest, deine verschlüsselten Nachrichten lesen kann.",
+      "Tes clés de chiffrement n'existent pour l'instant que dans ce navigateur. Saisis le mot de passe de ton compte pour en verrouiller une sauvegarde, afin que tout navigateur où tu te connectes puisse lire tes messages chiffrés.",
+      "暗号鍵は現在このブラウザにしかありません。アカウントのパスワードを入力して鍵のバックアップをロックすると、ログインしたどのブラウザでも暗号化されたメッセージを読めるようになります。",
+      "Twoje klucze szyfrowania istnieją teraz tylko w tej przeglądarce. Wpisz hasło do konta, aby zabezpieczyć nim ich kopię, dzięki czemu każda przeglądarka, w której się zalogujesz, odczyta twoje zaszyfrowane wiadomości.",
+      "你的加密密钥目前只存在于此浏览器中。输入账号密码，用它锁定一份密钥备份，这样你登录的任何浏览器都能读取你的加密消息。"
+    ],
+    "Your encryption keys are backed up.": ["Deine Schlüssel sind gesichert.", "Tes clés de chiffrement sont sauvegardées.", "暗号鍵をバックアップしました。", "Utworzono kopię kluczy szyfrowania.", "你的加密密钥已备份。"],
+    "Use a recovery code": ["Wiederherstellungscode verwenden", "Utiliser un code de récupération", "リカバリーコードを使う", "Użyj kodu odzyskiwania", "使用恢复码"],
+    "We'll make a code that locks your key backup instead of your password. You'll need it to set up a new browser when no other device is around to approve it. We only show it once.": [
+      "Wir erstellen einen Code, der deine Schlüsselsicherung statt deines Passworts schützt. Du brauchst ihn, um einen neuen Browser einzurichten, wenn kein anderes Gerät ihn bestätigen kann. Er wird nur einmal angezeigt.",
+      "Nous allons créer un code qui verrouille la sauvegarde de tes clés à la place de ton mot de passe. Tu en auras besoin pour configurer un nouveau navigateur quand aucun autre appareil ne peut l'approuver. Il n'est affiché qu'une seule fois.",
+      "パスワードの代わりに鍵のバックアップをロックするコードを作成します。承認できる他のデバイスがないときに新しいブラウザを設定するために必要です。コードは一度しか表示されません。",
+      "Utworzymy kod, który zabezpieczy kopię kluczy zamiast hasła. Będzie potrzebny do skonfigurowania nowej przeglądarki, gdy żadne inne urządzenie nie może jej zatwierdzić. Pokażemy go tylko raz.",
+      "我们会生成一个代码，用它代替密码来锁定你的密钥备份。当没有其他设备可以批准时，你需要用它来设置新浏览器。此代码只显示一次。"
+    ],
+    "Make recovery code": ["Wiederherstellungscode erstellen", "Créer un code de récupération", "リカバリーコードを作成", "Utwórz kod odzyskiwania", "生成恢复码"],
+    "Save this code somewhere safe, like a password manager. Anyone with it and access to your account can read your encrypted messages. It replaces your password lock once you confirm.": [
+      "Bewahre diesen Code sicher auf, zum Beispiel in einem Passwortmanager. Wer ihn hat und Zugriff auf dein Konto hat, kann deine verschlüsselten Nachrichten lesen. Sobald du bestätigst, ersetzt er den Schutz durch dein Passwort.",
+      "Garde ce code en lieu sûr, par exemple dans un gestionnaire de mots de passe. Toute personne qui l'a et a accès à ton compte peut lire tes messages chiffrés. Il remplace le verrouillage par mot de passe dès que tu confirmes.",
+      "このコードはパスワードマネージャーなど安全な場所に保存してください。コードとアカウントへのアクセスがあれば、誰でも暗号化されたメッセージを読めます。確認すると、パスワードによるロックがこのコードに置き換わります。",
+      "Zapisz ten kod w bezpiecznym miejscu, na przykład w menedżerze haseł. Każdy, kto go ma i ma dostęp do twojego konta, może odczytać twoje zaszyfrowane wiadomości. Po potwierdzeniu zastąpi zabezpieczenie hasłem.",
+      "请把此代码保存在安全的地方，例如密码管理器。任何拥有它并能访问你账号的人都能读取你的加密消息。确认后，它将取代密码锁。"
+    ],
+    "Copy code": ["Code kopieren", "Copier le code", "コードをコピー", "Kopiuj kod", "复制代码"],
+    "Copied!": ["Kopiert!", "Copié !", "コピーしました！", "Skopiowano!", "已复制！"],
+    "Couldn't copy": ["Kopieren fehlgeschlagen", "Impossible de copier", "コピーできませんでした", "Nie udało się skopiować", "无法复制"],
+    "I saved it": ["Ich habe ihn gespeichert", "Je l'ai enregistré", "保存しました", "Zapisałem go", "我已保存"],
+    "Couldn't switch to the recovery code: {error}": [
+      "Wechsel zum Wiederherstellungscode fehlgeschlagen: {error}",
+      "Impossible de passer au code de récupération : {error}",
+      "リカバリーコードに切り替えられませんでした：{error}",
+      "Nie udało się przejść na kod odzyskiwania: {error}",
+      "无法切换到恢复码：{error}"
+    ],
+    "This browser": ["Dieser Browser", "Ce navigateur", "このブラウザ", "Ta przeglądarka", "此浏览器"],
+    "Waiting for approval": ["Wartet auf Bestätigung", "En attente d'approbation", "承認待ち", "Oczekuje na zatwierdzenie", "等待批准"],
+    "Signed out": ["Abgemeldet", "Déconnecté", "ログアウト済み", "Wylogowano", "已退出登录"],
+    "Active now": ["Gerade aktiv", "Actif maintenant", "現在アクティブ", "Aktywne teraz", "当前活跃"],
+    "Last active {time}": ["Zuletzt aktiv {time}", "Dernière activité {time}", "最終アクティブ：{time}", "Ostatnio aktywne {time}", "上次活跃：{time}"],
+    "Can read encrypted messages": [
+      "Kann verschlüsselte Nachrichten lesen",
+      "Peut lire les messages chiffrés",
+      "暗号化されたメッセージを読めます",
+      "Może odczytywać zaszyfrowane wiadomości",
+      "可以读取加密消息"
+    ],
+    "Added {date}": ["Hinzugefügt am {date}", "Ajouté le {date}", "{date} に追加", "Dodano {date}", "添加于 {date}"],
+    "Remove this device?": ["Dieses Gerät entfernen?", "Retirer cet appareil ?", "このデバイスを削除しますか？", "Usunąć to urządzenie?", "移除此设备？"],
+    "{name} is signed out and can't read new encrypted messages. To read them there again, it needs your recovery code, your password, or approval from another device.": [
+      "{name} wird abgemeldet und kann keine neuen verschlüsselten Nachrichten mehr lesen. Um sie dort wieder zu lesen, braucht es deinen Wiederherstellungscode, dein Passwort oder die Bestätigung eines anderen Geräts.",
+      "{name} sera déconnecté et ne pourra plus lire les nouveaux messages chiffrés. Pour les y lire à nouveau, il faudra ton code de récupération, ton mot de passe ou l'approbation d'un autre appareil.",
+      "{name} はログアウトされ、新しい暗号化されたメッセージを読めなくなります。再び読むには、リカバリーコード、パスワード、または別のデバイスからの承認が必要です。",
+      "{name} zostanie wylogowane i nie odczyta nowych zaszyfrowanych wiadomości. Aby znów je tam czytać, potrzebny będzie kod odzyskiwania, hasło lub zatwierdzenie na innym urządzeniu.",
+      "{name} 将退出登录，并且无法读取新的加密消息。要在那里再次读取，需要你的恢复码、密码或其他设备的批准。"
+    ],
+    "Remove device": ["Gerät entfernen", "Retirer l'appareil", "デバイスを削除", "Usuń urządzenie", "移除设备"],
+    "Couldn't remove it: {error}": [
+      "Entfernen fehlgeschlagen: {error}",
+      "Impossible de le retirer : {error}",
+      "削除できませんでした：{error}",
+      "Nie udało się usunąć: {error}",
+      "无法移除：{error}"
+    ],
+    "Key backup": ["Schlüsselsicherung", "Sauvegarde des clés", "鍵のバックアップ", "Kopia kluczy", "密钥备份"],
+    "Your devices": ["Deine Geräte", "Tes appareils", "あなたのデバイス", "Twoje urządzenia", "你的设备"],
+    "Every browser listed here can read your encrypted messages. Remove the ones you don't recognize or don't use anymore.": [
+      "Jeder hier aufgeführte Browser kann deine verschlüsselten Nachrichten lesen. Entferne die, die du nicht erkennst oder nicht mehr benutzt.",
+      "Chaque navigateur listé ici peut lire tes messages chiffrés. Retire ceux que tu ne reconnais pas ou que tu n'utilises plus.",
+      "ここに表示されているブラウザはすべて、暗号化されたメッセージを読めます。心当たりのないものや使わなくなったものは削除してください。",
+      "Każda przeglądarka z tej listy może odczytać twoje zaszyfrowane wiadomości. Usuń te, których nie rozpoznajesz lub już nie używasz.",
+      "这里列出的每个浏览器都能读取你的加密消息。请移除你不认识或不再使用的浏览器。"
+    ],
+    "If you lost your recovery code and no other browser can approve a new one, reset encryption to keep chatting. Messages sent before the reset can't be read anymore.": [
+      "Wenn du deinen Wiederherstellungscode verloren hast und kein anderer Browser einen neuen bestätigen kann, setze die Verschlüsselung zurück, um weiterzuchatten. Vor dem Zurücksetzen gesendete Nachrichten können dann nicht mehr gelesen werden.",
+      "Si tu as perdu ton code de récupération et qu'aucun autre navigateur ne peut en approuver un nouveau, réinitialise le chiffrement pour continuer à discuter. Les messages envoyés avant la réinitialisation ne pourront plus être lus.",
+      "リカバリーコードをなくし、新しいブラウザを承認できる他のブラウザもない場合は、暗号化をリセットすれば会話を続けられます。リセット前に送信されたメッセージは読めなくなります。",
+      "Jeśli zgubiłeś kod odzyskiwania i żadna inna przeglądarka nie może zatwierdzić nowej, zresetuj szyfrowanie, aby dalej rozmawiać. Wiadomości wysłanych przed resetem nie będzie można już odczytać.",
+      "如果你丢失了恢复码，并且没有其他浏览器可以批准新浏览器，可以重置加密以继续聊天。重置前发送的消息将无法再阅读。"
+    ],
+    "Unlocked. This browser can read and send encrypted messages.": [
+      "Entsperrt. Dieser Browser kann verschlüsselte Nachrichten lesen und senden.",
+      "Déverrouillé. Ce navigateur peut lire et envoyer des messages chiffrés.",
+      "ロック解除済み。このブラウザで暗号化されたメッセージを読んだり送ったりできます。",
+      "Odblokowano. Ta przeglądarka może odczytywać i wysyłać zaszyfrowane wiadomości.",
+      "已解锁。此浏览器可以读取和发送加密消息。"
+    ],
+    "Locked. This browser can't read encrypted messages yet.": [
+      "Gesperrt. Dieser Browser kann noch keine verschlüsselten Nachrichten lesen.",
+      "Verrouillé. Ce navigateur ne peut pas encore lire les messages chiffrés.",
+      "ロック中。このブラウザではまだ暗号化されたメッセージを読めません。",
+      "Zablokowano. Ta przeglądarka nie może jeszcze odczytywać zaszyfrowanych wiadomości.",
+      "已锁定。此浏览器还无法读取加密消息。"
+    ],
+    "Unlock this browser": ["Diesen Browser entsperren", "Déverrouiller ce navigateur", "このブラウザのロックを解除", "Odblokuj tę przeglądarkę", "解锁此浏览器"],
+    "Your keys aren't backed up yet, so new browsers can't read your encrypted messages. Enter your account password to back them up.": [
+      "Deine Schlüssel sind noch nicht gesichert, daher können neue Browser deine verschlüsselten Nachrichten nicht lesen. Gib dein Kontopasswort ein, um sie zu sichern.",
+      "Tes clés ne sont pas encore sauvegardées, les nouveaux navigateurs ne peuvent donc pas lire tes messages chiffrés. Saisis le mot de passe de ton compte pour les sauvegarder.",
+      "鍵がまだバックアップされていないため、新しいブラウザでは暗号化されたメッセージを読めません。アカウントのパスワードを入力してバックアップしてください。",
+      "Twoje klucze nie mają jeszcze kopii, więc nowe przeglądarki nie odczytają twoich zaszyfrowanych wiadomości. Wpisz hasło do konta, aby utworzyć kopię.",
+      "你的密钥还没有备份，因此新浏览器无法读取你的加密消息。输入账号密码来备份它们。"
+    ],
+    "Your keys aren't backed up yet. Open the app on a browser that can read your messages to back them up.": [
+      "Deine Schlüssel sind noch nicht gesichert. Öffne die App in einem Browser, der deine Nachrichten lesen kann, um sie zu sichern.",
+      "Tes clés ne sont pas encore sauvegardées. Ouvre l'appli dans un navigateur qui peut lire tes messages pour les sauvegarder.",
+      "鍵はまだバックアップされていません。メッセージを読めるブラウザでアプリを開いてバックアップしてください。",
+      "Twoje klucze nie mają jeszcze kopii. Otwórz aplikację w przeglądarce, która może odczytać twoje wiadomości, aby ją utworzyć.",
+      "你的密钥还没有备份。请在能读取你消息的浏览器中打开应用来备份。"
+    ],
+    "Your keys are backed up and locked with a recovery code. New browsers ask for that code, and your password can't unlock them.": [
+      "Deine Schlüssel sind gesichert und mit einem Wiederherstellungscode geschützt. Neue Browser fragen nach diesem Code, dein Passwort kann sie nicht entsperren.",
+      "Tes clés sont sauvegardées et verrouillées par un code de récupération. Les nouveaux navigateurs demandent ce code, et ton mot de passe ne peut pas les déverrouiller.",
+      "鍵はバックアップされ、リカバリーコードでロックされています。新しいブラウザではこのコードが求められ、パスワードではロックを解除できません。",
+      "Twoje klucze mają kopię zabezpieczoną kodem odzyskiwania. Nowe przeglądarki poproszą o ten kod, a hasło ich nie odblokuje.",
+      "你的密钥已备份并用恢复码锁定。新浏览器会要求输入该代码，密码无法解锁。"
+    ],
+    "Your keys are backed up and locked with your account password, so new browsers unlock as soon as you sign in. Someone with a copy of the server's database could try to guess a weak password offline.": [
+      "Deine Schlüssel sind gesichert und mit deinem Kontopasswort geschützt, daher werden neue Browser entsperrt, sobald du dich anmeldest. Wer eine Kopie der Serverdatenbank hat, könnte versuchen, ein schwaches Passwort offline zu erraten.",
+      "Tes clés sont sauvegardées et verrouillées par le mot de passe de ton compte, les nouveaux navigateurs se déverrouillent donc dès que tu te connectes. Quelqu'un disposant d'une copie de la base de données du serveur pourrait tenter de deviner un mot de passe faible hors ligne.",
+      "鍵はバックアップされ、アカウントのパスワードでロックされているため、新しいブラウザはログインするとすぐにロックが解除されます。サーバーのデータベースのコピーを持つ人は、弱いパスワードをオフラインで推測しようとする可能性があります。",
+      "Twoje klucze mają kopię zabezpieczoną hasłem do konta, więc nowe przeglądarki odblokowują się zaraz po zalogowaniu. Ktoś z kopią bazy danych serwera mógłby próbować odgadnąć słabe hasło offline.",
+      "你的密钥已备份并用账号密码锁定，因此新浏览器在你登录后会立即解锁。拥有服务器数据库副本的人可能会尝试离线猜测弱密码。"
+    ],
+    "Your keys are backed up, but they aren't locked with your password yet. Open the app on a browser that can read your messages to finish the backup.": [
+      "Deine Schlüssel sind gesichert, aber noch nicht mit deinem Passwort geschützt. Öffne die App in einem Browser, der deine Nachrichten lesen kann, um die Sicherung abzuschließen.",
+      "Tes clés sont sauvegardées, mais pas encore verrouillées par ton mot de passe. Ouvre l'appli dans un navigateur qui peut lire tes messages pour terminer la sauvegarde.",
+      "鍵はバックアップされていますが、まだパスワードでロックされていません。メッセージを読めるブラウザでアプリを開いてバックアップを完了してください。",
+      "Twoje klucze mają kopię, ale nie jest jeszcze zabezpieczona hasłem. Otwórz aplikację w przeglądarce, która może odczytać twoje wiadomości, aby dokończyć tworzenie kopii.",
+      "你的密钥已备份，但还没有用密码锁定。请在能读取你消息的浏览器中打开应用来完成备份。"
+    ],
+    "Use a recovery code instead": ["Stattdessen Wiederherstellungscode verwenden", "Utiliser plutôt un code de récupération", "代わりにリカバリーコードを使う", "Użyj zamiast tego kodu odzyskiwania", "改用恢复码"],
+    "Use my password instead": ["Stattdessen mein Passwort verwenden", "Utiliser plutôt mon mot de passe", "代わりにパスワードを使う", "Użyj zamiast tego hasła", "改用我的密码"],
+    "Make a new recovery code": ["Neuen Wiederherstellungscode erstellen", "Créer un nouveau code de récupération", "新しいリカバリーコードを作成", "Utwórz nowy kod odzyskiwania", "生成新的恢复码"],
+    "Unknown browser": ["Unbekannter Browser", "Navigateur inconnu", "不明なブラウザ", "Nieznana przeglądarka", "未知浏览器"],
+    "Encryption is still starting up.": [
+      "Die Verschlüsselung wird noch gestartet.",
+      "Le chiffrement est en cours de démarrage.",
+      "暗号化はまだ起動中です。",
+      "Szyfrowanie wciąż się uruchamia.",
+      "加密仍在启动中。"
+    ],
+    "{name}'s safety number changed. Review it before sending. Your message is still in the text box.": [
+      "Die Sicherheitsnummer von {name} hat sich geändert. Prüfe sie vor dem Senden. Deine Nachricht ist noch im Textfeld.",
+      "Le numéro de sécurité de {name} a changé. Vérifie-le avant d'envoyer. Ton message est toujours dans la zone de texte.",
+      "{name} の安全番号が変更されました。送信する前に確認してください。メッセージは入力欄に残っています。",
+      "Numer bezpieczeństwa użytkownika {name} się zmienił. Sprawdź go przed wysłaniem. Wiadomość nadal jest w polu tekstowym.",
+      "{name} 的安全码已更改。请在发送前查看。你的消息仍在输入框中。"
+    ],
+    "Unlock this browser to send encrypted messages. Your message is still in the text box.": [
+      "Entsperre diesen Browser, um verschlüsselte Nachrichten zu senden. Deine Nachricht ist noch im Textfeld.",
+      "Déverrouille ce navigateur pour envoyer des messages chiffrés. Ton message est toujours dans la zone de texte.",
+      "暗号化されたメッセージを送るには、このブラウザのロックを解除してください。メッセージは入力欄に残っています。",
+      "Odblokuj tę przeglądarkę, aby wysyłać zaszyfrowane wiadomości. Wiadomość nadal jest w polu tekstowym.",
+      "解锁此浏览器后才能发送加密消息。你的消息仍在输入框中。"
+    ],
+    "End-to-end encrypted": ["Ende-zu-Ende-verschlüsselt", "Chiffré de bout en bout", "エンドツーエンド暗号化済み", "Zaszyfrowane end-to-end", "端到端加密"],
+    Decrypting: ["Wird entschlüsselt", "Déchiffrement", "復号中", "Odszyfrowywanie", "正在解密"],
+    "Decrypting…": ["Wird entschlüsselt …", "Déchiffrement…", "復号中…", "Odszyfrowywanie…", "正在解密…"],
+    "Unlock this browser to read this message": [
+      "Entsperre diesen Browser, um diese Nachricht zu lesen",
+      "Déverrouille ce navigateur pour lire ce message",
+      "このメッセージを読むには、このブラウザのロックを解除してください",
+      "Odblokuj tę przeglądarkę, aby przeczytać tę wiadomość",
+      "解锁此浏览器以阅读这条消息"
+    ],
+    "This browser doesn't have the key for this message": [
+      "Dieser Browser hat den Schlüssel für diese Nachricht nicht",
+      "Ce navigateur n'a pas la clé de ce message",
+      "このブラウザにはこのメッセージの鍵がありません",
+      "Ta przeglądarka nie ma klucza do tej wiadomości",
+      "此浏览器没有这条消息的密钥"
+    ],
+    "Sent before this browser was set up": [
+      "Gesendet, bevor dieser Browser eingerichtet wurde",
+      "Envoyé avant la configuration de ce navigateur",
+      "このブラウザを設定する前に送信されました",
+      "Wysłano przed skonfigurowaniem tej przeglądarki",
+      "在设置此浏览器之前发送"
+    ],
+    "Couldn't decrypt: {reason}": ["Entschlüsselung fehlgeschlagen: {reason}", "Impossible de déchiffrer : {reason}", "復号できませんでした：{reason}", "Nie udało się odszyfrować: {reason}", "无法解密：{reason}"],
+    "unknown error": ["unbekannter Fehler", "erreur inconnue", "不明なエラー", "nieznany błąd", "未知错误"],
+    "Get keys": ["Schlüssel holen", "Obtenir les clés", "鍵を取得", "Pobierz klucze", "获取密钥"],
+    "Turn On Encryption": ["Verschlüsselung aktivieren", "Activer le chiffrement", "暗号化をオンにする", "Włącz szyfrowanie", "开启加密"],
+    "Safety Number Changed": ["Sicherheitsnummer geändert", "Numéro de sécurité modifié", "安全番号が変更されました", "Numer bezpieczeństwa się zmienił", "安全码已更改"],
+    "Encrypted and Verified": ["Verschlüsselt und verifiziert", "Chiffré et vérifié", "暗号化・認証済み", "Zaszyfrowane i zweryfikowane", "已加密并验证"],
+    "End-to-End Encrypted": ["Ende-zu-Ende-verschlüsselt", "Chiffré de bout en bout", "エンドツーエンド暗号化済み", "Zaszyfrowane end-to-end", "端到端加密"],
+    "{label}. View safety numbers": ["{label}. Sicherheitsnummern anzeigen", "{label}. Voir les numéros de sécurité", "{label}。安全番号を表示", "{label}. Pokaż numery bezpieczeństwa", "{label}。查看安全码"],
+    "Turn on end-to-end encryption": [
+      "Ende-zu-Ende-Verschlüsselung aktivieren",
+      "Activer le chiffrement de bout en bout",
+      "エンドツーエンド暗号化をオンにする",
+      "Włącz szyfrowanie end-to-end",
+      "开启端到端加密"
+    ],
+    "{name}'s safety number changed. Sending is paused until you review it.": [
+      "Die Sicherheitsnummer von {name} hat sich geändert. Das Senden ist pausiert, bis du sie prüfst.",
+      "Le numéro de sécurité de {name} a changé. L'envoi est suspendu jusqu'à ce que tu le vérifies.",
+      "{name} の安全番号が変更されました。確認するまで送信は一時停止されます。",
+      "Numer bezpieczeństwa użytkownika {name} się zmienił. Wysyłanie jest wstrzymane, dopóki go nie sprawdzisz.",
+      "{name} 的安全码已更改。在你查看之前，发送已暂停。"
+    ],
+    "Unlock this browser to read and send encrypted messages here.": [
+      "Entsperre diesen Browser, um hier verschlüsselte Nachrichten zu lesen und zu senden.",
+      "Déverrouille ce navigateur pour lire et envoyer des messages chiffrés ici.",
+      "ここで暗号化されたメッセージを読んだり送ったりするには、このブラウザのロックを解除してください。",
+      "Odblokuj tę przeglądarkę, aby czytać i wysyłać tu zaszyfrowane wiadomości.",
+      "解锁此浏览器以在这里读取和发送加密消息。"
+    ],
+    "Back up your encryption keys with your password so your other browsers can read your encrypted messages.": [
+      "Sichere deine Schlüssel mit deinem Passwort, damit deine anderen Browser deine verschlüsselten Nachrichten lesen können.",
+      "Sauvegarde tes clés de chiffrement avec ton mot de passe pour que tes autres navigateurs puissent lire tes messages chiffrés.",
+      "パスワードで暗号鍵をバックアップすると、他のブラウザでも暗号化されたメッセージを読めるようになります。",
+      "Utwórz kopię kluczy szyfrowania chronioną hasłem, aby inne przeglądarki mogły odczytać twoje zaszyfrowane wiadomości.",
+      "用你的密码备份加密密钥，这样你的其他浏览器也能读取你的加密消息。"
+    ],
+    "End-to-end encryption is unavailable in this client build, so sending in encrypted conversations is turned off.": [
+      "Die Ende-zu-Ende-Verschlüsselung ist in dieser Client-Version nicht verfügbar, daher ist das Senden in verschlüsselten Unterhaltungen deaktiviert.",
+      "Le chiffrement de bout en bout n'est pas disponible dans cette version du client, l'envoi dans les conversations chiffrées est donc désactivé.",
+      "このクライアントのビルドではエンドツーエンド暗号化を利用できないため、暗号化された会話での送信はオフになっています。",
+      "Szyfrowanie end-to-end jest niedostępne w tej wersji klienta, więc wysyłanie w szyfrowanych rozmowach jest wyłączone.",
+      "此客户端版本不支持端到端加密，因此已关闭在加密对话中发送消息。"
+    ],
+    "Encryption is paused because this account set up too many browsers recently. It will try again at {time}.": [
+      "Die Verschlüsselung ist pausiert, weil dieses Konto zuletzt zu viele Browser eingerichtet hat. Um {time} wird es erneut versucht.",
+      "Le chiffrement est en pause, car ce compte a configuré trop de navigateurs récemment. Nouvel essai à {time}.",
+      "このアカウントで最近設定されたブラウザが多すぎるため、暗号化は一時停止しています。{time} に再試行します。",
+      "Szyfrowanie jest wstrzymane, bo na tym koncie skonfigurowano ostatnio zbyt wiele przeglądarek. Kolejna próba o {time}.",
+      "此账号最近设置的浏览器过多，加密已暂停。将在 {time} 重试。"
+    ],
+    "Encryption couldn't reach the server, so sending in encrypted conversations is paused. It will try again shortly.": [
+      "Die Verschlüsselung konnte den Server nicht erreichen, daher ist das Senden in verschlüsselten Unterhaltungen pausiert. Es wird gleich erneut versucht.",
+      "Le chiffrement n'a pas pu joindre le serveur, l'envoi dans les conversations chiffrées est donc en pause. Nouvel essai sous peu.",
+      "暗号化でサーバーに接続できなかったため、暗号化された会話での送信は一時停止しています。まもなく再試行します。",
+      "Szyfrowanie nie mogło połączyć się z serwerem, więc wysyłanie w szyfrowanych rozmowach jest wstrzymane. Za chwilę nastąpi kolejna próba.",
+      "加密无法连接服务器，因此加密对话中的发送已暂停。稍后将重试。"
+    ],
+    "Encryption is unavailable in this client build": [
+      "Verschlüsselung ist in dieser Client-Version nicht verfügbar",
+      "Le chiffrement n'est pas disponible dans cette version du client",
+      "このクライアントのビルドでは暗号化を利用できません",
+      "Szyfrowanie jest niedostępne w tej wersji klienta",
+      "此客户端版本不支持加密"
+    ],
+    "Polls can't be sent in encrypted conversations yet": [
+      "In verschlüsselten Unterhaltungen können noch keine Umfragen gesendet werden",
+      "Les sondages ne peuvent pas encore être envoyés dans les conversations chiffrées",
+      "暗号化された会話ではまだ投票を送信できません",
+      "W szyfrowanych rozmowach nie można jeszcze wysyłać ankiet",
+      "加密对话中暂时无法发送投票"
+    ],
+    "This file couldn't be encrypted": ["Diese Datei konnte nicht verschlüsselt werden", "Ce fichier n'a pas pu être chiffré", "このファイルを暗号化できませんでした", "Nie udało się zaszyfrować tego pliku", "此文件无法加密"],
+    "A file wasn't encrypted before it was uploaded": [
+      "Eine Datei wurde vor dem Hochladen nicht verschlüsselt",
+      "Un fichier n'a pas été chiffré avant d'être envoyé",
+      "アップロード前に暗号化されていないファイルがあります",
+      "Plik nie został zaszyfrowany przed przesłaniem",
+      "有文件在上传前没有加密"
+    ],
+    "This message isn't decrypted in this browser yet": [
+      "Diese Nachricht ist in diesem Browser noch nicht entschlüsselt",
+      "Ce message n'est pas encore déchiffré dans ce navigateur",
+      "このメッセージはこのブラウザでまだ復号されていません",
+      "Ta wiadomość nie jest jeszcze odszyfrowana w tej przeglądarce",
+      "这条消息还没有在此浏览器中解密"
+    ],
+    "Your keys couldn't be backed up. Try again in a moment.": [
+      "Deine Schlüssel konnten nicht gesichert werden. Versuche es gleich noch einmal.",
+      "Tes clés n'ont pas pu être sauvegardées. Réessaie dans un instant.",
+      "鍵をバックアップできませんでした。しばらくしてからもう一度お試しください。",
+      "Nie udało się utworzyć kopii kluczy. Spróbuj ponownie za chwilę.",
+      "无法备份你的密钥。请稍后再试。"
+    ],
+    "Your keys aren't backed up with your password yet.": [
+      "Deine Schlüssel sind noch nicht mit deinem Passwort gesichert.",
+      "Tes clés ne sont pas encore sauvegardées avec ton mot de passe.",
+      "鍵はまだパスワードでバックアップされていません。",
+      "Twoje klucze nie mają jeszcze kopii chronionej hasłem.",
+      "你的密钥还没有用密码备份。"
+    ],
+    "There's no backup to unlock with that": [
+      "Es gibt keine Sicherung, die sich damit entsperren lässt",
+      "Aucune sauvegarde ne peut être déverrouillée avec cela",
+      "これでロックを解除できるバックアップはありません",
+      "Nie ma kopii, którą można tym odblokować",
+      "没有可以用它解锁的备份"
+    ],
+    "That password didn't unlock your keys": [
+      "Dieses Passwort hat deine Schlüssel nicht entsperrt",
+      "Ce mot de passe n'a pas déverrouillé tes clés",
+      "このパスワードでは鍵のロックを解除できませんでした",
+      "To hasło nie odblokowało twoich kluczy",
+      "此密码无法解锁你的密钥"
+    ],
+    "That recovery code didn't work": ["Dieser Wiederherstellungscode hat nicht funktioniert", "Ce code de récupération n'a pas fonctionné", "このリカバリーコードは使えませんでした", "Ten kod odzyskiwania nie zadziałał", "此恢复码无效"],
+    "That key didn't unlock this browser": [
+      "Dieser Schlüssel hat diesen Browser nicht entsperrt",
+      "Cette clé n'a pas déverrouillé ce navigateur",
+      "この鍵ではこのブラウザのロックを解除できませんでした",
+      "Ten klucz nie odblokował tej przeglądarki",
+      "此密钥无法解锁此浏览器"
+    ],
+    "Unlock this browser first": ["Entsperre zuerst diesen Browser", "Déverrouille d'abord ce navigateur", "先にこのブラウザのロックを解除してください", "Najpierw odblokuj tę przeglądarkę", "请先解锁此浏览器"],
+    "There's no backup yet": ["Es gibt noch keine Sicherung", "Il n'y a pas encore de sauvegarde", "まだバックアップがありません", "Nie ma jeszcze kopii", "还没有备份"],
+    "Encryption is still starting up": ["Die Verschlüsselung wird noch gestartet", "Le chiffrement est en cours de démarrage", "暗号化はまだ起動中です", "Szyfrowanie wciąż się uruchamia", "加密仍在启动中"],
+    "This browser isn't unlocked for encrypted messages yet": [
+      "Dieser Browser ist noch nicht für verschlüsselte Nachrichten entsperrt",
+      "Ce navigateur n'est pas encore déverrouillé pour les messages chiffrés",
+      "このブラウザはまだ暗号化されたメッセージ用にロック解除されていません",
+      "Ta przeglądarka nie jest jeszcze odblokowana dla zaszyfrowanych wiadomości",
+      "此浏览器还没有为加密消息解锁"
+    ],
+    "This browser isn't unlocked yet": ["Dieser Browser ist noch nicht entsperrt", "Ce navigateur n'est pas encore déverrouillé", "このブラウザはまだロック解除されていません", "Ta przeglądarka nie jest jeszcze odblokowana", "此浏览器还没有解锁"],
+    "Unknown sender device": ["Unbekanntes Absendergerät", "Appareil expéditeur inconnu", "送信元のデバイスが不明です", "Nieznane urządzenie nadawcy", "未知的发送设备"],
+    "Signature check failed": ["Signaturprüfung fehlgeschlagen", "Échec de la vérification de la signature", "署名の検証に失敗しました", "Weryfikacja podpisu nie powiodła się", "签名校验失败"],
+    "This browser can't approve logins": [
+      "Dieser Browser kann keine Anmeldungen bestätigen",
+      "Ce navigateur ne peut pas approuver de connexions",
+      "このブラウザではログインを承認できません",
+      "Ta przeglądarka nie może zatwierdzać logowań",
+      "此浏览器无法批准登录"
+    ]
+  };
+  var locale = () => document.documentElement.lang || navigator.language || "en-US";
+  var t = (text, vars = {}) => {
+    const lang = locale();
+    const index = LOCALES.findIndex((x) => x === lang || x === lang.split("-")[0]);
+    const translated = (index === -1 ? void 0 : STRINGS[text]?.[index]) ?? text;
+    return translated.replace(/\{(\w+)\}/g, (match, key) => key in vars ? String(vars[key]) : match);
+  };
+  var conjunction = (items) => new Intl.ListFormat(locale(), { type: "conjunction" }).format(items);
+
   // client/e2ee/src/engine.ts
   var FALLBACK_CONTENT = "🔒 Encrypted message";
   var WRAP_INFO = "fosscord-e2ee/v1/wrap";
@@ -2918,7 +3516,7 @@ ${sig}`;
     async backUpWithPassword(password) {
       this.password = { value: password, at: Date.now() };
       await this.refresh();
-      if (this.backupNeedsPassword) throw new E2eeError("BAD_SECRET", "Your keys couldn't be backed up. Try again in a moment.");
+      if (this.backupNeedsPassword) throw new E2eeError("BAD_SECRET", t("Your keys couldn't be backed up. Try again in a moment."));
     }
     rememberPassword(value) {
       this.password = { value, at: Date.now() };
@@ -3179,17 +3777,17 @@ ${sig}`;
     async unlockWith(kind, input) {
       const backup = this.backup = await this.fetchBackup();
       if (kind === "password" && (!backup || backup.mode === "password" && !backup.wrapped_secret))
-        throw new E2eeError("BAD_SECRET", "Your keys aren't backed up with your password yet.");
-      if (!backup?.wrapped_secret || backup.mode !== kind) throw new E2eeError("BAD_SECRET", "There's no backup to unlock with that");
+        throw new E2eeError("BAD_SECRET", t("Your keys aren't backed up with your password yet."));
+      if (!backup?.wrapped_secret || backup.mode !== kind) throw new E2eeError("BAD_SECRET", t("There's no backup to unlock with that"));
       const secret = await unwrapSecret(this.userId, backup, input).catch(() => null);
-      if (!secret) throw new E2eeError("BAD_SECRET", kind === "password" ? "That password didn't unlock your keys" : "That recovery code didn't work");
+      if (!secret) throw new E2eeError("BAD_SECRET", kind === "password" ? t("That password didn't unlock your keys") : t("That recovery code didn't work"));
       await this.unlockWithSecret(secret);
     }
     async unlockWithSecret(secret) {
       await this.store.set("backup-secret", secret);
       this.secret = secret;
       await this.refresh();
-      if (!this.linked) throw new E2eeError("BAD_SECRET", "That key didn't unlock this browser");
+      if (!this.linked) throw new E2eeError("BAD_SECRET", t("That key didn't unlock this browser"));
     }
     exportSecret() {
       return this.secret;
@@ -3200,10 +3798,10 @@ ${sig}`;
       return code;
     }
     async setBackupMode(mode, input) {
-      if (!this.secret) throw new E2eeError("LOCKED", "Unlock this browser first");
+      if (!this.secret) throw new E2eeError("LOCKED", t("Unlock this browser first"));
       await this.serialized(async () => {
         const backup = this.backup = await this.fetchBackup();
-        if (!backup) throw new E2eeError("LOCKED", "There's no backup yet");
+        if (!backup) throw new E2eeError("LOCKED", t("There's no backup yet"));
         this.backup = await this.api.request("patch", "/users/@me/e2ee/backup", {
           version: backup.version,
           ...await wrapSecret(this.userId, mode, input, this.secret)
@@ -3355,8 +3953,8 @@ ${sig}`;
       this.emit();
     }
     async encrypt(channelId, payload, opts) {
-      if (!this.device || !this.userId) throw new E2eeError("NOT_READY", "Encryption is still starting up");
-      if (!this.linked) throw new E2eeError("NOT_LINKED", "This browser isn't unlocked for encrypted messages yet");
+      if (!this.device || !this.userId) throw new E2eeError("NOT_READY", t("Encryption is still starting up"));
+      if (!this.linked) throw new E2eeError("NOT_LINKED", t("This browser isn't unlocked for encrypted messages yet"));
       const members = [this.userId, ...await this.channelMembers(channelId)];
       const entries = await this.keysFor(members);
       const targets2 = [];
@@ -3366,7 +3964,7 @@ ${sig}`;
         if (!active.length) throw new E2eeError("NO_DEVICES", "A member has no encryption keys yet", entry.userId);
         active.forEach((device) => targets2.push({ userId: entry.userId, device }));
       }
-      if (!targets2.some((t) => t.device.deviceId === this.device.deviceId)) {
+      if (!targets2.some((t2) => t2.device.deviceId === this.device.deviceId)) {
         const current = this.currentPrekey();
         targets2.push({
           userId: this.userId,
@@ -3418,7 +4016,7 @@ backup:${e.userId}`) }))
         this.plaintext.set(`${message.id}:${env.sig}`, hit);
         return hit;
       }
-      if (!this.device) throw new E2eeError("NOT_READY", "Encryption is still starting up");
+      if (!this.device) throw new E2eeError("NOT_READY", t("Encryption is still starting up"));
       const senderId = message.author?.id;
       if (!senderId) throw new E2eeError("BAD_ENVELOPE", "Missing author");
       if (env.mid && env.mid !== message.id) throw new E2eeError("BAD_ENVELOPE", "Envelope belongs to another message");
@@ -3430,10 +4028,10 @@ backup:${e.userId}`) }))
         [entry] = await this.keysFor([senderId], true);
         sender = entry.devices.find((d) => d.deviceId === env.sender_device);
       }
-      if (!sender) throw new E2eeError("BAD_SIGNATURE", "Unknown sender device");
+      if (!sender) throw new E2eeError("BAD_SIGNATURE", t("Unknown sender device"));
       const bind = binding(env.mid, nonce);
       const { sig, ...unsigned } = env;
-      if (!await verify(sender.signingKey, signedPayload(message.channel_id, senderId, bind, unsigned), sig)) throw new E2eeError("BAD_SIGNATURE", "Signature check failed");
+      if (!await verify(sender.signingKey, signedPayload(message.channel_id, senderId, bind, unsigned), sig)) throw new E2eeError("BAD_SIGNATURE", t("Signature check failed"));
       const aad = messageAad(message.channel_id, senderId, env.sender_device, bind);
       const mine = env.keys.find((k) => k.device_id === this.device.deviceId);
       const prekey = mine && this.prekeys.find((p) => p.id === mine.prekey_id);
@@ -3450,8 +4048,8 @@ backup:${this.userId}`).catch(() => null);
         if (stored) contentKey = await hpkeOpen(backupKey.keyPair, stored.enc, stored.wrapped, BACKUP_INFO, storedKeyAad(this.userId, message.id, sig)).catch(() => null);
       }
       if (!contentKey) {
-        if (!this.linked || !backupKey) throw new E2eeError("LOCKED", "This browser isn't unlocked yet");
-        throw new E2eeError("NO_KEY", "Sent before this browser was set up");
+        if (!this.linked || !backupKey) throw new E2eeError("LOCKED", t("This browser isn't unlocked yet"));
+        throw new E2eeError("NO_KEY", t("Sent before this browser was set up"));
       }
       const payload = parsePayload(JSON.parse(fromUtf8(await aesDecrypt(contentKey, fromB64u(env.iv), fromB64u(env.ct), aad))));
       if (mine && prekey && backupKey) {
@@ -3558,9 +4156,9 @@ backup:${this.userId}`).catch(() => null);
   };
 
   // client/e2ee/src/hooks.ts
-  var DECRYPTING_CONTENT = "Decrypting…";
-  var MISSING_CONTENT = "Sent before this browser was set up";
-  var LOCKED_CONTENT = "Unlock this browser to read this message";
+  var decryptingContent = () => t("Decrypting…");
+  var missingContent = () => t("Sent before this browser was set up");
+  var lockedContent = () => t("Unlock this browser to read this message");
   var SEARCH_URL = /^\/channels\/(\d+)\/messages\/search(\/tabs)?$/;
   var SEARCH_PAGES = 10;
   var AUTH_URL = /^\/auth\/(login|register)$/;
@@ -3613,12 +4211,12 @@ backup:${this.userId}`).catch(() => null);
       }
       if (!ctx.isReady()) {
         if (ctx.failClosed()) {
-          states2.set(message.id, { state: "failed", reason: "Encryption is unavailable in this client build" });
+          states2.set(message.id, { state: "failed", reason: t("Encryption is unavailable in this client build") });
           message.content = FALLBACK_CONTENT;
         } else {
           retry.set(message.id, clone(message));
           states2.set(message.id, { state: "pending" });
-          message.content = DECRYPTING_CONTENT;
+          message.content = decryptingContent();
         }
         return Promise.resolve();
       }
@@ -3638,7 +4236,7 @@ backup:${this.userId}`).catch(() => null);
               const locked = code === "LOCKED";
               states2.set(message.id, { state: locked ? "locked" : "missing", reason: error instanceof Error ? error.message : String(error) });
               retry.set(message.id, original);
-              message.content = locked ? LOCKED_CONTENT : MISSING_CONTENT;
+              message.content = locked ? lockedContent() : missingContent();
             } else {
               states2.set(message.id, { state: "failed", reason: error instanceof Error ? error.message : String(error) });
               message.content = FALLBACK_CONTENT;
@@ -3652,7 +4250,7 @@ backup:${this.userId}`).catch(() => null);
         const again = engine2.cached(message);
         const state = states2.get(message.id)?.state;
         if (again) show(message, again);
-        else message.content = state === "missing" ? MISSING_CONTENT : state === "locked" ? LOCKED_CONTENT : state === "failed" ? FALLBACK_CONTENT : message.content;
+        else message.content = state === "missing" ? missingContent() : state === "locked" ? lockedContent() : state === "failed" ? FALLBACK_CONTENT : message.content;
         ctx.onState();
       });
     };
@@ -3684,19 +4282,19 @@ backup:${this.userId}`).catch(() => null);
       const [, channelId, messageId] = match;
       if (method === "post" && messageId) return opts;
       if (!engine2.isEncrypted(channelId)) return opts;
-      if (ctx.failClosed()) throw new E2eeError("NOT_READY", "Encryption is unavailable in this client build");
-      if (!await ctx.ready) throw new E2eeError("NOT_READY", "Encryption is unavailable in this client build");
+      if (ctx.failClosed()) throw new E2eeError("NOT_READY", t("Encryption is unavailable in this client build"));
+      if (!await ctx.ready) throw new E2eeError("NOT_READY", t("Encryption is unavailable in this client build"));
       const body = { ...opts.body ?? {} };
       if (method === "patch" && body.content === void 0 && body.attachments === void 0) return opts;
-      if (body.poll) throw new E2eeError("UNSUPPORTED", "Polls can't be sent in encrypted conversations yet");
-      if (opts.attachments?.length) throw new E2eeError("UNSUPPORTED", "This file couldn't be encrypted");
+      if (body.poll) throw new E2eeError("UNSUPPORTED", t("Polls can't be sent in encrypted conversations yet"));
+      if (opts.attachments?.length) throw new E2eeError("UNSUPPORTED", t("This file couldn't be encrypted"));
       const nonce = method === "post" ? String(body.nonce ?? `${Date.now()}${Math.floor(Math.random() * 1e3)}`) : void 0;
       if (nonce) body.nonce = nonce;
       const payload = { content: String(body.content ?? "") };
       const refs = Array.isArray(body.attachments) ? body.attachments : [];
       if (method === "post") {
         const metas = refs.map((ref) => ctx.attachments.metaFor(ref));
-        if (metas.some((meta) => !meta)) throw new E2eeError("UNSUPPORTED", "A file wasn't encrypted before it was uploaded");
+        if (metas.some((meta) => !meta)) throw new E2eeError("UNSUPPORTED", t("A file wasn't encrypted before it was uploaded"));
         if (metas.length) {
           payload.attachments = metas.map((meta) => meta);
           body.attachments = refs.map((ref, i) => ({ id: ref.id, filename: metas[i].name, uploaded_filename: ref.uploaded_filename }));
@@ -3706,7 +4304,7 @@ backup:${this.userId}`).catch(() => null);
         delete body.sticker_ids;
       } else {
         const previous = payloads.get(messageId);
-        if (!previous) throw new E2eeError("NOT_READY", "This message isn't decrypted in this browser yet");
+        if (!previous) throw new E2eeError("NOT_READY", t("This message isn't decrypted in this browser yet"));
         if (body.content === void 0) payload.content = previous.content;
         let kept = previous.attachments;
         if (Array.isArray(body.attachments)) {
@@ -3787,7 +4385,7 @@ backup:${this.userId}`).catch(() => null);
           if (create && engine2.isEncrypted(create[1])) {
             const created = (async () => {
               if (ctx.failClosed() || !await ctx.ready) {
-                const error = new E2eeError("NOT_READY", "Encryption is unavailable in this client build");
+                const error = new E2eeError("NOT_READY", t("Encryption is unavailable in this client build"));
                 ctx.onError(error, create[1]);
                 throw error;
               }
@@ -3918,7 +4516,7 @@ backup:${this.userId}`).catch(() => null);
             continue;
           }
           const copy = clone(message);
-          message.content = DECRYPTING_CONTENT;
+          message.content = decryptingContent();
           decryptOne(copy).then(() => {
             if (states2.get(copy.id)?.state !== "pending") redispatch(copy);
           });
@@ -4040,7 +4638,7 @@ ${approver}`;
         if (stage === "deny") await post({ request_id: requestId, stage, to_device: pending.deviceId });
         else {
           const secret = engine2.exportSecret();
-          if (!secret) throw new Error("This browser can't approve logins");
+          if (!secret) throw new Error(t("This browser can't approve logins"));
           const key = await channelKey(pending.pair, requester, requestId);
           const iv = randomBytes(12);
           const ct = await aesEncrypt(key, iv, secret, channelAad(requestId, requester, pending.publicKey));
@@ -4465,7 +5063,6 @@ ${approver}`;
   var currentChannel = () => /^\/channels\/@me\/(\d+)/.exec(location.pathname)?.[1] ?? null;
   var memberName = (m) => m.global_name || m.username;
   var reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
-  var relative = new Intl.RelativeTimeFormat(void 0, { numeric: "auto" });
   var ago = (iso) => {
     const seconds = (Date.parse(iso) - Date.now()) / 1e3;
     const steps = [
@@ -4478,7 +5075,7 @@ ${approver}`;
     ];
     let value = seconds;
     for (const [size, unit] of steps) {
-      if (Math.abs(value) < size) return relative.format(Math.round(value), unit);
+      if (Math.abs(value) < size) return new Intl.RelativeTimeFormat(locale(), { numeric: "auto" }).format(Math.round(value), unit);
       value /= size;
     }
     return "";
@@ -4569,7 +5166,7 @@ ${approver}`;
       const x = document.createElement("button");
       x.type = "button";
       x.className = "fe2ee-close";
-      x.setAttribute("aria-label", "Close");
+      x.setAttribute("aria-label", t("Close"));
       x.innerHTML = svg(CLOSE_PATH);
       head.append(x);
       const body = document.createElement("div");
@@ -4661,8 +5258,8 @@ ${approver}`;
     const namesOf = async (ids) => {
       const list = await Promise.all(ids.map((id) => engine2.profile(id)));
       const names = list.map(memberName);
-      if (names.length <= 1) return names[0] ?? "Someone here";
-      return `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+      if (names.length <= 1) return names[0] ?? t("Someone here");
+      return conjunction(names);
     };
     const showError = (error, channelId) => {
       const name = (id) => id && members?.channelId === channelId ? members.list.find((m) => m.id === id) ?? null : null;
@@ -4672,32 +5269,32 @@ ${approver}`;
         namesOf(ids).then(
           (who) => flash(channelId, {
             tone: "warning",
-            text: `${who} ${ids.length > 1 ? "haven't" : "hasn't"} set up encryption yet. Ask them to open the app once, then try again.`
+            text: ids.length > 1 ? t("{names} haven't set up encryption yet. Ask them to open the app once, then try again.", { names: who }) : t("{name} hasn't set up encryption yet. Ask them to open the app once, then try again.", { name: who })
           })
         );
         return;
       }
-      let text = "Your message couldn't be encrypted, so it wasn't sent.";
+      let text = t("Your message couldn't be encrypted, so it wasn't sent.");
       let action;
       if (error instanceof E2eeError) {
         const who = name(error.userId);
         if (error.code === "NO_DEVICES")
-          text = `${who ? memberName(who) : "Someone here"} hasn't set up encryption yet, so your message wasn't sent. Ask them to open the app once.`;
-        else if (error.code === "IDENTITY_CHANGED") text = `${who ? memberName(who) : "Someone"}'s safety number changed. Review it before sending more messages.`;
-        else if (error.code === "UNSUPPORTED") text = `${error.message}. Your message wasn't sent.`;
+          text = t("{name} hasn't set up encryption yet, so your message wasn't sent. Ask them to open the app once.", { name: who ? memberName(who) : t("Someone here") });
+        else if (error.code === "IDENTITY_CHANGED") text = t("{name}'s safety number changed. Review it before sending more messages.", { name: who ? memberName(who) : t("Someone") });
+        else if (error.code === "UNSUPPORTED") text = t("{reason}. Your message wasn't sent.", { reason: error.message });
         else if (error.code === "NOT_LINKED") {
-          text = "Unlock this browser to send encrypted messages. Your message wasn't sent.";
-          action = { label: "Unlock", run: showUnlock };
-        } else if (error.code === "NOT_READY") text = "End-to-end encryption is unavailable right now, so your message wasn't sent.";
+          text = t("Unlock this browser to send encrypted messages. Your message wasn't sent.");
+          action = { label: t("Unlock"), run: showUnlock };
+        } else if (error.code === "NOT_READY") text = t("End-to-end encryption is unavailable right now, so your message wasn't sent.");
       }
       flash(channelId, { tone: "danger", text, action });
     };
-    const confirmEnable = (channelId) => dialog("Turn on end-to-end encryption?", (body, actions, { close }) => {
+    const confirmEnable = (channelId) => dialog(t("Turn on end-to-end encryption?"), (body, actions, { close }) => {
       body.insertAdjacentHTML(
         "beforeend",
-        "<p>New messages, files and stickers in this conversation are encrypted in your browser before they're sent, and only the people in it can read them. Encryption can't be turned off later.</p><p>Polls can't be sent in encrypted conversations.</p>"
+        `<p>${escape(t("New messages, files and stickers in this conversation are encrypted in your browser before they're sent, and only the people in it can read them. Encryption can't be turned off later."))}</p><p>${escape(t("Polls can't be sent in encrypted conversations."))}</p>`
       );
-      const confirm = button("Turn on encryption", "primary", async () => {
+      const confirm = button(t("Turn on encryption"), "primary", async () => {
         confirm.disabled = true;
         try {
           await enableChannel(channelId);
@@ -4706,34 +5303,34 @@ ${approver}`;
         }
         close();
       });
-      actions.append(button("Cancel", "secondary", close), confirm);
+      actions.append(button(t("Cancel"), "secondary", close), confirm);
     });
     const showSafety = async (channelId) => {
       const list = await Promise.all((await engine2.channelMembers(channelId)).map((id) => engine2.profile(id)));
-      dialog("Safety numbers", (body, actions, { close }) => {
+      dialog(t("Safety numbers"), (body, actions, { close }) => {
         body.insertAdjacentHTML(
           "beforeend",
-          "<p>Compare these numbers with each person in a call or face to face, or scan the code with their phone. If they match, nobody is intercepting your messages. Mark them as verified so you're warned if they change.</p>"
+          `<p>${escape(t("Compare these numbers with each person in a call or face to face, or scan the code with their phone. If they match, nobody is intercepting your messages. Mark them as verified so you're warned if they change."))}</p>`
         );
         for (const member of list) {
           const block = document.createElement("section");
           block.className = "fe2ee-member";
-          block.innerHTML = `<div class="fe2ee-member-head"><span class="fe2ee-member-name">${escape(memberName(member))}</span><span class="fe2ee-status"></span></div><div class="fe2ee-safety"><div class="fe2ee-digits" aria-label="Safety number for ${escape(memberName(member))}">Calculating…</div></div><div class="fe2ee-member-actions"></div>`;
+          block.innerHTML = `<div class="fe2ee-member-head"><span class="fe2ee-member-name">${escape(memberName(member))}</span><span class="fe2ee-status"></span></div><div class="fe2ee-safety"><div class="fe2ee-digits" aria-label="${escape(t("Safety number for {name}", { name: memberName(member) }))}">${escape(t("Calculating…"))}</div></div><div class="fe2ee-member-actions"></div>`;
           body.append(block);
           const render = async () => {
             const contact = engine2.contacts[member.id];
             const status = block.querySelector(".fe2ee-status");
             status.dataset.verified = String(!!contact?.verified && !contact.pendingKey);
-            status.innerHTML = contact?.pendingKey ? `${svg(OPEN_LOCK_PATH)}Safety number changed` : contact?.verified ? `${svg(VERIFIED_PATH)}Verified` : `${svg(OPEN_LOCK_PATH)}Not verified`;
+            status.innerHTML = contact?.pendingKey ? `${svg(OPEN_LOCK_PATH)}${escape(t("Safety number changed"))}` : contact?.verified ? `${svg(VERIFIED_PATH)}${escape(t("Verified"))}` : `${svg(OPEN_LOCK_PATH)}${escape(t("Not verified"))}`;
             const digits = await engine2.safetyNumber(member.id);
             const grid = block.querySelector(".fe2ee-digits");
-            grid.innerHTML = digits ? (digits.match(/\d{5}/g) ?? []).map((g) => `<span>${g}</span>`).join("") : "This person hasn't set up encryption yet.";
+            grid.innerHTML = digits ? (digits.match(/\d{5}/g) ?? []).map((g) => `<span>${g}</span>`).join("") : escape(t("This person hasn't set up encryption yet."));
             grid.dataset.number = digits ?? "";
             block.querySelector(".fe2ee-qr")?.remove();
             if (digits) {
               const qr = document.createElement("div");
               qr.className = "fe2ee-qr";
-              qr.innerHTML = qrSvg(digits, `QR code of the safety number for ${escape(memberName(member))}`);
+              qr.innerHTML = qrSvg(digits, escape(t("QR code of the safety number for {name}", { name: memberName(member) })));
               grid.after(qr);
             }
             const row = block.querySelector(".fe2ee-member-actions");
@@ -4741,14 +5338,14 @@ ${approver}`;
             if (!contact) return;
             if (contact.pendingKey)
               row.append(
-                button("Accept new safety number", "primary", async () => {
+                button(t("Accept new safety number"), "primary", async () => {
                   await engine2.acceptIdentity(member.id);
                   render();
                 })
               );
             else
               row.append(
-                button(contact.verified ? "Remove verification" : "Mark as verified", contact.verified ? "secondary" : "primary", async () => {
+                button(contact.verified ? t("Remove verification") : t("Mark as verified"), contact.verified ? "secondary" : "primary", async () => {
                   await engine2.setVerified(member.id, !contact.verified);
                   render();
                 })
@@ -4757,24 +5354,24 @@ ${approver}`;
           render();
         }
         actions.append(
-          button("Encryption settings", "secondary", () => {
+          button(t("Encryption settings"), "secondary", () => {
             close();
             showSettings();
           }),
-          button("Done", "primary", close)
+          button(t("Done"), "primary", close)
         );
       });
     };
-    const showReset = (onDone) => dialog("Reset encryption?", (body, actions, { close }) => {
+    const showReset = (onDone) => dialog(t("Reset encryption?"), (body, actions, { close }) => {
       describe2(
         body,
-        "Only do this if you lost your recovery code and no other signed-in browser can approve this one. You get new encryption keys and can keep chatting, but nobody can read the messages sent before the reset anymore, on any device."
+        t("Only do this if you lost your recovery code and no other signed-in browser can approve this one. You get new encryption keys and can keep chatting, but nobody can read the messages sent before the reset anymore, on any device.")
       );
-      describe2(body, "Your other browsers have to be approved again, and the people you talk to are told that your safety number changed.");
-      const { wrap, input, setError } = field("Account password", "password", "current-password");
+      describe2(body, t("Your other browsers have to be approved again, and the people you talk to are told that your safety number changed."));
+      const { wrap, input, setError } = field(t("Account password"), "password", "current-password");
       body.append(wrap);
-      const confirm = button("Reset encryption", "danger", async () => {
-        if (!input.value) return setError("Enter your password.");
+      const confirm = button(t("Reset encryption"), "danger", async () => {
+        if (!input.value) return setError(t("Enter your password."));
         confirm.disabled = true;
         setError(null);
         try {
@@ -4782,23 +5379,23 @@ ${approver}`;
           close();
           onDone?.();
           const channelId = currentChannel();
-          if (channelId) flash(channelId, { tone: "info", text: "Encryption was reset. New messages use your new keys." }, 6e3);
+          if (channelId) flash(channelId, { tone: "info", text: t("Encryption was reset. New messages use your new keys.") }, 6e3);
         } catch (error) {
           const status = error?.status;
-          setError(status === 400 ? "That password isn't right." : error instanceof Error ? error.message : "Couldn't reset encryption. Try again.");
+          setError(status === 400 ? t("That password isn't right.") : error instanceof Error ? error.message : t("Couldn't reset encryption. Try again."));
         } finally {
           confirm.disabled = false;
         }
       });
       input.addEventListener("keydown", (event) => event.key === "Enter" && confirm.click());
-      actions.append(button("Cancel", "secondary", close), confirm);
+      actions.append(button(t("Cancel"), "secondary", close), confirm);
       requestAnimationFrame(() => input.focus());
     });
     const unlockForm = (kind) => {
-      const { wrap, input, row, setError } = kind === "password" ? field("Account password", "password", "current-password") : field("Recovery code", "text", "off");
+      const { wrap, input, row, setError } = kind === "password" ? field(t("Account password"), "password", "current-password") : field(t("Recovery code"), "text", "off");
       if (kind === "recovery") input.placeholder = "XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX";
-      const submit = button("Unlock", "primary", async () => {
-        if (!input.value.trim()) return setError(kind === "password" ? "Enter your password." : "Enter your recovery code.");
+      const submit = button(t("Unlock"), "primary", async () => {
+        if (!input.value.trim()) return setError(kind === "password" ? t("Enter your password.") : t("Enter your recovery code."));
         submit.disabled = true;
         setError(null);
         try {
@@ -4818,48 +5415,48 @@ ${approver}`;
       const current = link2.outgoing();
       if (!current || current.state === "denied" || current.state === "failed") link2.request().catch(() => {
       });
-      dialog("Unlock encrypted messages", (body, actions, { el, close }) => {
+      dialog(t("Unlock encrypted messages"), (body, actions, { el, close }) => {
         const backup = engine2.backup;
-        describe2(body, "This browser can't read your encrypted messages yet. Bring your keys over with one of these.");
+        describe2(body, t("This browser can't read your encrypted messages yet. Bring your keys over with one of these."));
         if (!backup || backup.mode === "password" && !backup.wrapped_secret) {
           const own = section(
-            "Enter your password",
-            "If your keys aren't backed up with your password yet, open the app on a browser you used before. It asks for your password once, and then it works here too."
+            t("Enter your password"),
+            t("If your keys aren't backed up with your password yet, open the app on a browser you used before. It asks for your password once, and then it works here too.")
           );
           own.append(unlockForm("password"));
           body.append(own);
         } else if (backup.wrapped_secret && backup.identity_key === engine2.serverKey) {
           const own = section(
-            backup.mode === "recovery" ? "Enter your recovery code" : "Enter your password",
-            backup.mode === "recovery" ? "Use the code you saved when you switched to a recovery code." : void 0
+            backup.mode === "recovery" ? t("Enter your recovery code") : t("Enter your password"),
+            backup.mode === "recovery" ? t("Use the code you saved when you switched to a recovery code.") : void 0
           );
           own.append(unlockForm(backup.mode));
           body.append(own);
         }
-        const approval = section("Approve from another device");
+        const approval = section(t("Approve from another device"));
         const status = document.createElement("p");
         status.setAttribute("role", "status");
         const code = document.createElement("div");
         code.className = "fe2ee-code";
-        const again = button("Ask for approval", "secondary", () => link2.request().catch(() => {
+        const again = button(t("Ask for approval"), "secondary", () => link2.request().catch(() => {
         }));
         approval.append(status, code, again);
         body.append(approval);
-        const lost = section(backup?.mode === "recovery" ? "Lost your code?" : "Can't unlock this browser?");
-        describe2(lost, "If you can't use any of these, reset encryption to keep chatting. Messages sent before the reset can't be read anymore.");
-        lost.append(button("Reset encryption", "link", () => showReset(done)));
+        const lost = section(backup?.mode === "recovery" ? t("Lost your code?") : t("Can't unlock this browser?"));
+        describe2(lost, t("If you can't use any of these, reset encryption to keep chatting. Messages sent before the reset can't be read anymore."));
+        lost.append(button(t("Reset encryption"), "link", () => showReset(done)));
         body.append(lost);
         const render = () => {
           const state = link2.outgoing();
           code.hidden = state?.state !== "comparing";
           code.textContent = state?.sas ?? "";
           again.hidden = state?.state === "waiting" || state?.state === "comparing" || state?.state === "done";
-          again.textContent = state ? "Ask again" : "Ask for approval";
-          status.textContent = state?.state === "comparing" ? `${state.approverName ?? "Your other device"} is asking you to approve this browser. Check that it shows this code, then approve it there.` : state?.state === "denied" ? "Your other device declined this login." : state?.state === "failed" ? "The approval didn't unlock this browser. Ask again to retry." : state?.state === "waiting" ? "Open the app on a browser where you're already signed in. It asks you to approve this one." : "Ask a browser where you're already signed in to approve this one.";
+          again.textContent = state ? t("Ask again") : t("Ask for approval");
+          status.textContent = state?.state === "comparing" ? t("{name} is asking you to approve this browser. Check that it shows this code, then approve it there.", { name: state.approverName ?? t("Your other device") }) : state?.state === "denied" ? t("Your other device declined this login.") : state?.state === "failed" ? t("The approval didn't unlock this browser. Ask again to retry.") : state?.state === "waiting" ? t("Open the app on a browser where you're already signed in. It asks you to approve this one.") : t("Ask a browser where you're already signed in to approve this one.");
           if (engine2.linked) {
             done();
             const channelId = currentChannel();
-            if (channelId) flash(channelId, { tone: "info", text: "This browser is unlocked. Your encrypted messages are loading." }, 5e3);
+            if (channelId) flash(channelId, { tone: "info", text: t("This browser is unlocked. Your encrypted messages are loading.") }, 5e3);
           }
         };
         const stop = engine2.onChange(render);
@@ -4875,7 +5472,7 @@ ${approver}`;
           if (engine2.locked) snoozeUnlock();
         });
         actions.append(
-          button("Not now", "secondary", () => {
+          button(t("Not now"), "secondary", () => {
             link2.cancel().catch(() => {
             });
             done();
@@ -4886,10 +5483,10 @@ ${approver}`;
     };
     const showApproval = (prompt) => {
       if (approvals.has(prompt.requestId)) return;
-      dialog(`New login on ${prompt.name}`, (body, actions, { el, close }) => {
+      dialog(t("New login on {name}", { name: prompt.name }), (body, actions, { el, close }) => {
         body.insertAdjacentHTML(
           "beforeend",
-          `<p>Approve it only if you just signed in there yourself, because it gets access to your encrypted messages. The other browser should show this code:</p><div class="fe2ee-code">${escape(prompt.sas)}</div>`
+          `<p>${escape(t("Approve it only if you just signed in there yourself, because it gets access to your encrypted messages. The other browser should show this code:"))}</p><div class="fe2ee-code">${escape(prompt.sas)}</div>`
         );
         const error = document.createElement("p");
         error.className = "fe2ee-error";
@@ -4909,25 +5506,25 @@ ${approver}`;
             await action();
             finish();
           } catch (failure3) {
-            error.textContent = `Couldn't answer that login: ${failure3 instanceof Error ? failure3.message : String(failure3)}`;
+            error.textContent = t("Couldn't answer that login: {error}", { error: failure3 instanceof Error ? failure3.message : String(failure3) });
             error.hidden = false;
             approve.disabled = deny.disabled = false;
           }
         };
-        const approve = button("Approve login", "primary", () => run2(prompt.approve));
-        const deny = button("Deny", "secondary", () => run2(prompt.deny));
+        const approve = button(t("Approve login"), "primary", () => run2(prompt.approve));
+        const deny = button(t("Deny"), "secondary", () => run2(prompt.deny));
         actions.append(deny, approve);
       });
     };
     const dismissApproval = (requestId) => approvals.get(requestId)?.();
     const backupPasswordForm = (onDone) => {
-      const { wrap, input, row, setError } = field("Account password", "password", "current-password");
-      const save = button("Back up keys", "primary", async () => {
-        if (!input.value) return setError("Enter your password.");
+      const { wrap, input, row, setError } = field(t("Account password"), "password", "current-password");
+      const save = button(t("Back up keys"), "primary", async () => {
+        if (!input.value) return setError(t("Enter your password."));
         save.disabled = true;
         setError(null);
         try {
-          if (!await verifyPassword2(input.value)) return setError("That password isn't right.");
+          if (!await verifyPassword2(input.value)) return setError(t("That password isn't right."));
           await engine2.backUpWithPassword(input.value);
           onDone();
         } catch (error) {
@@ -4940,33 +5537,33 @@ ${approver}`;
       row.append(save);
       return wrap;
     };
-    const showBackupPassword = () => dialog("Back up your encryption keys", (body, actions, { close }) => {
+    const showBackupPassword = () => dialog(t("Back up your encryption keys"), (body, actions, { close }) => {
       describe2(
         body,
-        "Your encryption keys only exist in this browser right now. Enter your account password to lock a backup of them with it, so any browser you sign in to can read your encrypted messages."
+        t("Your encryption keys only exist in this browser right now. Enter your account password to lock a backup of them with it, so any browser you sign in to can read your encrypted messages.")
       );
       body.append(
         backupPasswordForm(() => {
           close();
           const channelId = currentChannel();
-          if (channelId) flash(channelId, { tone: "info", text: "Your encryption keys are backed up." }, 5e3);
+          if (channelId) flash(channelId, { tone: "info", text: t("Your encryption keys are backed up.") }, 5e3);
         })
       );
-      actions.append(button("Not now", "secondary", close));
+      actions.append(button(t("Not now"), "secondary", close));
     });
-    const showRecoveryCode = () => dialog("Use a recovery code", (body, actions, { close, setDismissable }) => {
+    const showRecoveryCode = () => dialog(t("Use a recovery code"), (body, actions, { close, setDismissable }) => {
       const intro = describe2(
         body,
-        "We'll make a code that locks your key backup instead of your password. You'll need it to set up a new browser when no other device is around to approve it. We only show it once."
+        t("We'll make a code that locks your key backup instead of your password. You'll need it to set up a new browser when no other device is around to approve it. We only show it once.")
       );
       const code = generateRecoveryCode();
-      const create = button("Make recovery code", "primary", () => {
+      const create = button(t("Make recovery code"), "primary", () => {
         setDismissable(false);
-        intro.textContent = "Save this code somewhere safe, like a password manager. Anyone with it and access to your account can read your encrypted messages. It replaces your password lock once you confirm.";
+        intro.textContent = t("Save this code somewhere safe, like a password manager. Anyone with it and access to your account can read your encrypted messages. It replaces your password lock once you confirm.");
         const grid = document.createElement("ol");
         grid.className = "fe2ee-recovery";
         grid.dataset.code = code;
-        grid.setAttribute("aria-label", "Recovery code");
+        grid.setAttribute("aria-label", t("Recovery code"));
         grid.innerHTML = code.split("-").map((group) => `<li>${escape(group)}</li>`).join("");
         const error = document.createElement("p");
         error.className = "fe2ee-error";
@@ -4974,82 +5571,82 @@ ${approver}`;
         error.hidden = true;
         body.append(grid, error);
         let copiedTimer = null;
-        const copy = button("Copy code", "secondary", () => {
+        const copy = button(t("Copy code"), "secondary", () => {
           navigator.clipboard?.writeText(code).then(() => {
-            copy.textContent = "Copied!";
+            copy.textContent = t("Copied!");
             if (copiedTimer) clearTimeout(copiedTimer);
-            copiedTimer = setTimeout(() => copy.textContent = "Copy code", 2e3);
+            copiedTimer = setTimeout(() => copy.textContent = t("Copy code"), 2e3);
           }).catch(() => {
-            copy.textContent = "Couldn't copy";
+            copy.textContent = t("Couldn't copy");
           });
         });
-        const saved = button("I saved it", "primary", async () => {
+        const saved = button(t("I saved it"), "primary", async () => {
           saved.disabled = true;
           error.hidden = true;
           try {
             await engine2.setBackupMode("recovery", code);
             close();
           } catch (failure3) {
-            error.textContent = `Couldn't switch to the recovery code: ${failure3 instanceof Error ? failure3.message : String(failure3)}`;
+            error.textContent = t("Couldn't switch to the recovery code: {error}", { error: failure3 instanceof Error ? failure3.message : String(failure3) });
             error.hidden = false;
             saved.disabled = false;
           }
         });
-        actions.replaceChildren(button("Cancel", "secondary", close), copy, saved);
+        actions.replaceChildren(button(t("Cancel"), "secondary", close), copy, saved);
       });
-      actions.append(button("Cancel", "secondary", close), create);
+      actions.append(button(t("Cancel"), "secondary", close), create);
     });
     const deviceMeta = (device) => {
       const current = device.device_id === engine2.device?.deviceId;
       const session = device.session;
-      const state = current ? "This browser" : device.status === "pending" ? "Waiting for approval" : session && !session.signed_in ? "Signed out" : session?.last_seen && Date.now() - Date.parse(session.last_seen) < 5 * 60 * 1e3 ? "Active now" : session?.last_seen ? `Last active ${ago(session.last_seen)}` : "Can read encrypted messages";
-      const added = device.created_at ? `Added ${new Date(device.created_at).toLocaleString(void 0, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}` : null;
+      const state = current ? t("This browser") : device.status === "pending" ? t("Waiting for approval") : session && !session.signed_in ? t("Signed out") : session?.last_seen && Date.now() - Date.parse(session.last_seen) < 5 * 60 * 1e3 ? t("Active now") : session?.last_seen ? t("Last active {time}", { time: ago(session.last_seen) }) : t("Can read encrypted messages");
+      const added = device.created_at ? t("Added {date}", { date: new Date(device.created_at).toLocaleString(locale(), { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) }) : null;
       return { current, text: [state, session?.location, added].filter(Boolean).join(" · ") };
     };
-    const confirmRemove = (device, onDone) => dialog("Remove this device?", (body, actions, { close }) => {
+    const confirmRemove = (device, onDone) => dialog(t("Remove this device?"), (body, actions, { close }) => {
       describe2(
         body,
-        `${device.name ?? "This browser"} is signed out and can't read new encrypted messages. To read them there again, it needs your recovery code, your password, or approval from another device.`
+        t("{name} is signed out and can't read new encrypted messages. To read them there again, it needs your recovery code, your password, or approval from another device.", { name: device.name ?? t("This browser") })
       );
       const error = document.createElement("p");
       error.className = "fe2ee-error";
       error.setAttribute("role", "alert");
       error.hidden = true;
       body.append(error);
-      const confirm = button("Remove device", "danger", async () => {
+      const confirm = button(t("Remove device"), "danger", async () => {
         confirm.disabled = true;
         try {
           await engine2.removeDevice(device.device_id);
           close();
           onDone();
         } catch (failure3) {
-          error.textContent = `Couldn't remove it: ${failure3 instanceof Error ? failure3.message : String(failure3)}`;
+          error.textContent = t("Couldn't remove it: {error}", { error: failure3 instanceof Error ? failure3.message : String(failure3) });
           error.hidden = false;
           confirm.disabled = false;
         }
       });
-      actions.append(button("Cancel", "secondary", close), confirm);
+      actions.append(button(t("Cancel"), "secondary", close), confirm);
     });
     const buildSettings = (root, close) => {
-      const browser = section("This browser");
-      const backupSection = section("Key backup");
-      const devices = section("Your devices", "Every browser listed here can read your encrypted messages. Remove the ones you don't recognize or don't use anymore.");
+      const browser = section(t("This browser"));
+      const backupSection = section(t("Key backup"));
+      const devices = section(t("Your devices"), t("Every browser listed here can read your encrypted messages. Remove the ones you don't recognize or don't use anymore."));
       const resetSection = section(
-        "Reset encryption",
-        "If you lost your recovery code and no other browser can approve a new one, reset encryption to keep chatting. Messages sent before the reset can't be read anymore."
+        t("Reset encryption"),
+        t("If you lost your recovery code and no other browser can approve a new one, reset encryption to keep chatting. Messages sent before the reset can't be read anymore.")
       );
       const list = document.createElement("div");
       list.className = "fe2ee-devices";
       devices.append(list);
-      resetSection.append(button("Reset encryption", "danger", () => showReset()));
+      resetSection.append(button(t("Reset encryption"), "danger", () => showReset()));
       root.append(browser, backupSection, devices, resetSection);
       const clear = (el) => el.querySelectorAll(":scope > :not(h3)").forEach((child) => child.remove());
       const renderBrowser = () => {
         clear(browser);
-        describe2(browser, engine2.linked ? "Unlocked. This browser can read and send encrypted messages." : "Locked. This browser can't read encrypted messages yet.");
+        describe2(browser, engine2.linked ? t("Unlocked. This browser can read and send encrypted messages.") : t("Locked. This browser can't read encrypted messages yet."));
         if (!engine2.linked)
           browser.append(
-            button("Unlock this browser", "primary", () => {
+            button(t("Unlock this browser"), "primary", () => {
               close?.();
               showUnlock();
             })
@@ -5064,40 +5661,40 @@ ${approver}`;
         clear(backupSection);
         backupSection.dataset.mode = backup?.mode ?? "none";
         if (engine2.backupNeedsPassword) {
-          describe2(backupSection, "Your keys aren't backed up yet, so new browsers can't read your encrypted messages. Enter your account password to back them up.");
+          describe2(backupSection, t("Your keys aren't backed up yet, so new browsers can't read your encrypted messages. Enter your account password to back them up."));
           backupSection.append(backupPasswordForm(() => renderBackup(true)));
           return;
         }
-        if (!backup) return void describe2(backupSection, "Your keys aren't backed up yet. Open the app on a browser that can read your messages to back them up.");
+        if (!backup) return void describe2(backupSection, t("Your keys aren't backed up yet. Open the app on a browser that can read your messages to back them up."));
         if (backup.mode === "recovery")
-          describe2(backupSection, "Your keys are backed up and locked with a recovery code. New browsers ask for that code, and your password can't unlock them.");
+          describe2(backupSection, t("Your keys are backed up and locked with a recovery code. New browsers ask for that code, and your password can't unlock them."));
         else if (backup.wrapped_secret)
           describe2(
             backupSection,
-            "Your keys are backed up and locked with your account password, so new browsers unlock as soon as you sign in. Someone with a copy of the server's database could try to guess a weak password offline."
+            t("Your keys are backed up and locked with your account password, so new browsers unlock as soon as you sign in. Someone with a copy of the server's database could try to guess a weak password offline.")
           );
         else
           describe2(
             backupSection,
-            "Your keys are backed up, but they aren't locked with your password yet. Open the app on a browser that can read your messages to finish the backup."
+            t("Your keys are backed up, but they aren't locked with your password yet. Open the app on a browser that can read your messages to finish the backup.")
           );
         if (!engine2.hasSecret) return;
         if (backup.mode === "password") {
           backupSection.append(
-            button("Use a recovery code instead", "secondary", () => {
+            button(t("Use a recovery code instead"), "secondary", () => {
               close?.();
               showRecoveryCode();
             })
           );
           return;
         }
-        const { wrap, input, row, setError } = field("Account password", "password", "current-password");
-        const save = button("Use my password instead", "secondary", async () => {
-          if (!input.value) return setError("Enter your password.");
+        const { wrap, input, row, setError } = field(t("Account password"), "password", "current-password");
+        const save = button(t("Use my password instead"), "secondary", async () => {
+          if (!input.value) return setError(t("Enter your password."));
           save.disabled = true;
           setError(null);
           try {
-            if (!await verifyPassword2(input.value)) return setError("That password isn't right.");
+            if (!await verifyPassword2(input.value)) return setError(t("That password isn't right."));
             await engine2.setBackupMode("password", input.value);
             renderBackup(true);
           } catch (error) {
@@ -5110,7 +5707,7 @@ ${approver}`;
         row.append(save);
         backupSection.append(
           wrap,
-          button("Make a new recovery code", "secondary", () => {
+          button(t("Make a new recovery code"), "secondary", () => {
             close?.();
             showRecoveryCode();
           })
@@ -5125,8 +5722,8 @@ ${approver}`;
           const row = document.createElement("div");
           row.className = "fe2ee-device";
           const { current, text } = deviceMeta(device);
-          row.innerHTML = `<div class="fe2ee-device-icon">${svg(SCREEN_PATH)}</div><div class="fe2ee-device-text"><span class="fe2ee-device-name">${escape(device.name ?? "Unknown browser")}</span><span class="fe2ee-device-meta" data-current="${current}">${escape(text)}</span></div>`;
-          if (!current) row.append(button("Remove", "secondary", () => confirmRemove(device, renderDevices)));
+          row.innerHTML = `<div class="fe2ee-device-icon">${svg(SCREEN_PATH)}</div><div class="fe2ee-device-text"><span class="fe2ee-device-name">${escape(device.name ?? t("Unknown browser"))}</span><span class="fe2ee-device-meta" data-current="${current}">${escape(text)}</span></div>`;
+          if (!current) row.append(button(t("Remove"), "secondary", () => confirmRemove(device, renderDevices)));
           list.append(row);
         }
       };
@@ -5144,10 +5741,10 @@ ${approver}`;
       });
       return engine2.onChange(render);
     };
-    const showSettings = () => dialog("Encryption settings", (body, actions, { el, close }) => {
+    const showSettings = () => dialog(t("Encryption settings"), (body, actions, { el, close }) => {
       const stop = buildSettings(body, close);
       el.addEventListener("close", () => stop());
-      actions.append(button("Done", "primary", close));
+      actions.append(button(t("Done"), "primary", close));
     });
     const mountSettings = (container) => {
       mount();
@@ -5155,7 +5752,7 @@ ${approver}`;
       root.className = "fe2ee-page";
       container.replaceChildren(root);
       if (!engine2.userId) {
-        describe2(root, failure2 ?? paused ?? "Encryption is still starting up.");
+        describe2(root, failure2 ?? paused ?? t("Encryption is still starting up."));
         return () => {
         };
       }
@@ -5179,8 +5776,8 @@ ${approver}`;
       if (changed) {
         flash(channelId, {
           tone: "warning",
-          text: `${memberName(changed)}'s safety number changed. Review it before sending. Your message is still in the text box.`,
-          action: { label: "Review", run: () => showSafety(channelId) }
+          text: t("{name}'s safety number changed. Review it before sending. Your message is still in the text box.", { name: memberName(changed) }),
+          action: { label: t("Review"), run: () => showSafety(channelId) }
         });
         return true;
       }
@@ -5188,8 +5785,8 @@ ${approver}`;
         showUnlock();
         flash(channelId, {
           tone: "warning",
-          text: "Unlock this browser to send encrypted messages. Your message is still in the text box.",
-          action: { label: "Unlock", run: showUnlock }
+          text: t("Unlock this browser to send encrypted messages. Your message is still in the text box."),
+          action: { label: t("Unlock"), run: showUnlock }
         });
         return true;
       }
@@ -5207,7 +5804,7 @@ ${approver}`;
         const lock = document.createElement("span");
         lock.className = "fe2ee-lock";
         lock.dataset.state = info.state;
-        const label = info.state === "decrypted" ? "End-to-end encrypted" : info.state === "pending" ? "Decrypting" : info.state === "locked" ? "Unlock this browser to read this message" : info.state === "missing" ? "This browser doesn't have the key for this message" : `Couldn't decrypt: ${info.reason ?? "unknown error"}`;
+        const label = info.state === "decrypted" ? t("End-to-end encrypted") : info.state === "pending" ? t("Decrypting") : info.state === "locked" ? t("Unlock this browser to read this message") : info.state === "missing" ? t("This browser doesn't have the key for this message") : t("Couldn't decrypt: {reason}", { reason: info.reason ?? t("unknown error") });
         lock.innerHTML = svg(info.state === "decrypted" || info.state === "pending" ? LOCK_PATH : OPEN_LOCK_PATH, label);
         withTooltip(lock, () => label);
         content.append(lock);
@@ -5215,7 +5812,7 @@ ${approver}`;
           const unlock = document.createElement("button");
           unlock.type = "button";
           unlock.className = "fe2ee-unlock";
-          unlock.textContent = engine2.linked ? "Get keys" : "Unlock";
+          unlock.textContent = engine2.linked ? t("Get keys") : t("Unlock");
           unlock.addEventListener("click", (event) => {
             event.stopPropagation();
             if (engine2.linked && engine2.hasSecret) showSettings();
@@ -5226,17 +5823,17 @@ ${approver}`;
       }
     };
     const headerLabel = (channelId) => {
-      if (!engine2.isEncrypted(channelId)) return "Turn On Encryption";
+      if (!engine2.isEncrypted(channelId)) return t("Turn On Encryption");
       const list = members?.channelId === channelId ? members.list : [];
-      if (list.some((m) => engine2.contacts[m.id]?.pendingKey)) return "Safety Number Changed";
-      if (list.length && list.every((m) => engine2.contacts[m.id]?.verified)) return "Encrypted and Verified";
-      return "End-to-End Encrypted";
+      if (list.some((m) => engine2.contacts[m.id]?.pendingKey)) return t("Safety Number Changed");
+      if (list.length && list.every((m) => engine2.contacts[m.id]?.verified)) return t("Encrypted and Verified");
+      return t("End-to-End Encrypted");
     };
     const decorateHeader = (channelId) => {
       const existing = document.querySelector(".fe2ee-toggle");
       if (!channelId) return existing?.remove();
       const toolbars = [...document.querySelectorAll('[class*="toolbar__"]')];
-      const toolbar = toolbars.find((t) => t.parentElement?.className.includes("upperContainer")) ?? toolbars[0];
+      const toolbar = toolbars.find((t2) => t2.parentElement?.className.includes("upperContainer")) ?? toolbars[0];
       if (!toolbar) return;
       const on = engine2.isEncrypted(channelId);
       const list = members?.channelId === channelId ? members.list : [];
@@ -5261,7 +5858,7 @@ ${approver}`;
       toggle.dataset.key = key;
       toggle.dataset.verified = String(verified);
       toggle.setAttribute("aria-pressed", String(on));
-      toggle.setAttribute("aria-label", on ? `${headerLabel(channelId)}. View safety numbers` : "Turn on end-to-end encryption");
+      toggle.setAttribute("aria-label", on ? t("{label}. View safety numbers", { label: headerLabel(channelId) }) : t("Turn on end-to-end encryption"));
       toggle.innerHTML = svg(verified ? VERIFIED_PATH : on ? LOCK_PATH : OPEN_LOCK_PATH);
     };
     const currentNotice = (channelId) => {
@@ -5274,17 +5871,17 @@ ${approver}`;
       if (changed)
         return {
           tone: "warning",
-          text: `${memberName(changed)}'s safety number changed. Sending is paused until you review it.`,
-          action: { label: "Review", run: () => showSafety(channelId) }
+          text: t("{name}'s safety number changed. Sending is paused until you review it.", { name: memberName(changed) }),
+          action: { label: t("Review"), run: () => showSafety(channelId) }
         };
       if (temporary) return temporary;
-      if (engine2.locked) return { tone: "info", text: "Unlock this browser to read and send encrypted messages here.", action: { label: "Unlock", run: showUnlock } };
+      if (engine2.locked) return { tone: "info", text: t("Unlock this browser to read and send encrypted messages here."), action: { label: t("Unlock"), run: showUnlock } };
       if (engine2.backupNeedsPassword && !backupPromptDismissed)
         return {
           tone: "info",
-          text: "Back up your encryption keys with your password so your other browsers can read your encrypted messages.",
+          text: t("Back up your encryption keys with your password so your other browsers can read your encrypted messages."),
           action: {
-            label: "Back up",
+            label: t("Back up"),
             run: () => {
               backupPromptDismissed = true;
               refresh();
@@ -5432,7 +6029,6 @@ ${approver}`;
 
   // client/e2ee/src/index.ts
   var HOOK_TIMEOUT_MS = 2e4;
-  var UNAVAILABLE = "End-to-end encryption is unavailable in this client build, so sending in encrypted conversations is turned off.";
   var loader = window.__fosscordE2ee ??= { reqs: [] };
   var states = /* @__PURE__ */ new Map();
   var targets = {};
@@ -5536,7 +6132,7 @@ ${approver}`;
     if (failure) return;
     failure = reason;
     console.error(`[e2ee] ${reason}`);
-    ui.fail(UNAVAILABLE);
+    ui.fail(t("End-to-end encryption is unavailable in this client build, so sending in encrypted conversations is turned off."));
     settle(false);
   };
   var readyNow = false;
@@ -5615,9 +6211,10 @@ ${approver}`;
       const delay = limited ? Math.ceil(retryAfter) * 1e3 + 1e3 : Math.min(5e3 * 2 ** startAttempts, 3e5);
       startAttempts++;
       console.warn(`[e2ee] couldn't start (${describeError(error)}), retrying in ${Math.round(delay / 1e3)}s`);
-      const minutes = Math.max(1, Math.round(delay / 6e4));
       ui.pause(
-        limited ? `Encryption is paused because this account set up too many browsers recently. It will try again in about ${minutes} minute${minutes === 1 ? "" : "s"}.` : "Encryption couldn't reach the server, so sending in encrypted conversations is paused. It will try again shortly."
+        limited ? t("Encryption is paused because this account set up too many browsers recently. It will try again at {time}.", {
+          time: new Date(Date.now() + delay).toLocaleTimeString(locale(), { hour: "numeric", minute: "2-digit" })
+        }) : t("Encryption couldn't reach the server, so sending in encrypted conversations is paused. It will try again shortly.")
       );
       setTimeout(() => {
         started = false;

@@ -25,6 +25,7 @@ import { createLink, LinkEvent } from "./link";
 import { createUi } from "./ui";
 import { StickerMeta } from "./files";
 import { findStore, HttpClient, scan, Targets } from "./webpack";
+import { locale, t } from "./i18n";
 
 interface LoaderState {
     reqs: { c?: Record<string, { exports: unknown }> }[];
@@ -43,7 +44,6 @@ declare global {
 }
 
 const HOOK_TIMEOUT_MS = 20000;
-const UNAVAILABLE = "End-to-end encryption is unavailable in this client build, so sending in encrypted conversations is turned off.";
 
 const loader: LoaderState = (window.__fosscordE2ee ??= { reqs: [] });
 const states = new Map<string, { state: MessageState; reason?: string }>();
@@ -161,7 +161,7 @@ const fail = (reason: string) => {
     if (failure) return;
     failure = reason;
     console.error(`[e2ee] ${reason}`);
-    ui.fail(UNAVAILABLE);
+    ui.fail(t("End-to-end encryption is unavailable in this client build, so sending in encrypted conversations is turned off."));
     settle(false);
 };
 
@@ -244,11 +244,12 @@ const start = async (userId: string) => {
         const delay = limited ? Math.ceil(retryAfter) * 1000 + 1000 : Math.min(5000 * 2 ** startAttempts, 300000);
         startAttempts++;
         console.warn(`[e2ee] couldn't start (${describeError(error)}), retrying in ${Math.round(delay / 1000)}s`);
-        const minutes = Math.max(1, Math.round(delay / 60000));
         ui.pause(
             limited
-                ? `Encryption is paused because this account set up too many browsers recently. It will try again in about ${minutes} minute${minutes === 1 ? "" : "s"}.`
-                : "Encryption couldn't reach the server, so sending in encrypted conversations is paused. It will try again shortly.",
+                ? t("Encryption is paused because this account set up too many browsers recently. It will try again at {time}.", {
+                      time: new Date(Date.now() + delay).toLocaleTimeString(locale(), { hour: "numeric", minute: "2-digit" }),
+                  })
+                : t("Encryption couldn't reach the server, so sending in encrypted conversations is paused. It will try again shortly."),
         );
         setTimeout(() => {
             started = false;

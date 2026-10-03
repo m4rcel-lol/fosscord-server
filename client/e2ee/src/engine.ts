@@ -41,6 +41,7 @@ import {
 } from "./crypto";
 import { parsePayload, Payload } from "./files";
 import { Contact, scoped, Store, StoredDevice, StoredIdentity, StoredPrekey } from "./store";
+import { t } from "./i18n";
 
 export const FALLBACK_CONTENT = "🔒 Encrypted message";
 const WRAP_INFO = "fosscord-e2ee/v1/wrap";
@@ -291,7 +292,7 @@ export class Engine {
     async backUpWithPassword(password: string) {
         this.password = { value: password, at: Date.now() };
         await this.refresh();
-        if (this.backupNeedsPassword) throw new E2eeError("BAD_SECRET", "Your keys couldn't be backed up. Try again in a moment.");
+        if (this.backupNeedsPassword) throw new E2eeError("BAD_SECRET", t("Your keys couldn't be backed up. Try again in a moment."));
     }
 
     rememberPassword(value: string) {
@@ -577,10 +578,10 @@ export class Engine {
     async unlockWith(kind: BackupMode, input: string) {
         const backup = (this.backup = await this.fetchBackup());
         if (kind === "password" && (!backup || (backup.mode === "password" && !backup.wrapped_secret)))
-            throw new E2eeError("BAD_SECRET", "Your keys aren't backed up with your password yet.");
-        if (!backup?.wrapped_secret || backup.mode !== kind) throw new E2eeError("BAD_SECRET", "There's no backup to unlock with that");
+            throw new E2eeError("BAD_SECRET", t("Your keys aren't backed up with your password yet."));
+        if (!backup?.wrapped_secret || backup.mode !== kind) throw new E2eeError("BAD_SECRET", t("There's no backup to unlock with that"));
         const secret = await unwrapSecret(this.userId, backup, input).catch(() => null);
-        if (!secret) throw new E2eeError("BAD_SECRET", kind === "password" ? "That password didn't unlock your keys" : "That recovery code didn't work");
+        if (!secret) throw new E2eeError("BAD_SECRET", kind === "password" ? t("That password didn't unlock your keys") : t("That recovery code didn't work"));
         await this.unlockWithSecret(secret);
     }
 
@@ -588,7 +589,7 @@ export class Engine {
         await this.store!.set("backup-secret", secret);
         this.secret = secret;
         await this.refresh();
-        if (!this.linked) throw new E2eeError("BAD_SECRET", "That key didn't unlock this browser");
+        if (!this.linked) throw new E2eeError("BAD_SECRET", t("That key didn't unlock this browser"));
     }
 
     exportSecret() {
@@ -602,10 +603,10 @@ export class Engine {
     }
 
     async setBackupMode(mode: BackupMode, input: string) {
-        if (!this.secret) throw new E2eeError("LOCKED", "Unlock this browser first");
+        if (!this.secret) throw new E2eeError("LOCKED", t("Unlock this browser first"));
         await this.serialized(async () => {
             const backup = (this.backup = await this.fetchBackup());
-            if (!backup) throw new E2eeError("LOCKED", "There's no backup yet");
+            if (!backup) throw new E2eeError("LOCKED", t("There's no backup yet"));
             this.backup = await this.api.request<BackupRecord>("patch", "/users/@me/e2ee/backup", {
                 version: backup.version,
                 ...(await wrapSecret(this.userId, mode, input, this.secret!)),
@@ -776,8 +777,8 @@ export class Engine {
     }
 
     async encrypt(channelId: string, payload: Payload, opts: { nonce?: string; mid?: string }): Promise<Envelope> {
-        if (!this.device || !this.userId) throw new E2eeError("NOT_READY", "Encryption is still starting up");
-        if (!this.linked) throw new E2eeError("NOT_LINKED", "This browser isn't unlocked for encrypted messages yet");
+        if (!this.device || !this.userId) throw new E2eeError("NOT_READY", t("Encryption is still starting up"));
+        if (!this.linked) throw new E2eeError("NOT_LINKED", t("This browser isn't unlocked for encrypted messages yet"));
         const members = [this.userId, ...(await this.channelMembers(channelId))];
         const entries = await this.keysFor(members);
         const targets: { userId: string; device: DirectoryDevice }[] = [];
@@ -840,7 +841,7 @@ export class Engine {
             this.plaintext.set(`${message.id}:${env.sig}`, hit);
             return hit;
         }
-        if (!this.device) throw new E2eeError("NOT_READY", "Encryption is still starting up");
+        if (!this.device) throw new E2eeError("NOT_READY", t("Encryption is still starting up"));
         const senderId = message.author?.id;
         if (!senderId) throw new E2eeError("BAD_ENVELOPE", "Missing author");
         if (env.mid && env.mid !== message.id) throw new E2eeError("BAD_ENVELOPE", "Envelope belongs to another message");
@@ -853,10 +854,10 @@ export class Engine {
             [entry] = await this.keysFor([senderId], true);
             sender = entry.devices.find((d) => d.deviceId === env.sender_device);
         }
-        if (!sender) throw new E2eeError("BAD_SIGNATURE", "Unknown sender device");
+        if (!sender) throw new E2eeError("BAD_SIGNATURE", t("Unknown sender device"));
         const bind = binding(env.mid, nonce);
         const { sig, ...unsigned } = env;
-        if (!(await verify(sender.signingKey, signedPayload(message.channel_id, senderId, bind, unsigned), sig))) throw new E2eeError("BAD_SIGNATURE", "Signature check failed");
+        if (!(await verify(sender.signingKey, signedPayload(message.channel_id, senderId, bind, unsigned), sig))) throw new E2eeError("BAD_SIGNATURE", t("Signature check failed"));
 
         const aad = messageAad(message.channel_id, senderId, env.sender_device, bind);
         const mine = env.keys.find((k) => k.device_id === this.device!.deviceId);
@@ -872,8 +873,8 @@ export class Engine {
             if (stored) contentKey = await hpkeOpen(backupKey.keyPair, stored.enc, stored.wrapped, BACKUP_INFO, storedKeyAad(this.userId, message.id, sig)).catch(() => null);
         }
         if (!contentKey) {
-            if (!this.linked || !backupKey) throw new E2eeError("LOCKED", "This browser isn't unlocked yet");
-            throw new E2eeError("NO_KEY", "Sent before this browser was set up");
+            if (!this.linked || !backupKey) throw new E2eeError("LOCKED", t("This browser isn't unlocked yet"));
+            throw new E2eeError("NO_KEY", t("Sent before this browser was set up"));
         }
         const payload = parsePayload(JSON.parse(fromUtf8(await aesDecrypt(contentKey, fromB64u(env.iv), fromB64u(env.ct), aad))));
         if (mine && prekey && backupKey) {

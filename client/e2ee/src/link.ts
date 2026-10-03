@@ -19,6 +19,7 @@
 import { fromB64u, randomBytes, sha256, toB64u, utf8 } from "./bytes";
 import { aesDecrypt, aesEncrypt, exportPublic, generateAgreementKey, hkdf, x25519 } from "./crypto";
 import { Api, deviceName, Engine } from "./engine";
+import { t } from "./i18n";
 
 export interface LinkEvent {
     request_id: string;
@@ -205,7 +206,7 @@ export const createLink = (engine: Engine, api: Api, hooks: LinkHooks) => {
             if (stage === "deny") await post({ request_id: requestId, stage, to_device: pending.deviceId });
             else {
                 const secret = engine.exportSecret();
-                if (!secret) throw new Error("This browser can't approve logins");
+                if (!secret) throw new Error(t("This browser can't approve logins"));
                 const key = await channelKey(pending.pair, requester, requestId);
                 const iv = randomBytes(12);
                 const ct = await aesEncrypt(key, iv, secret, channelAad(requestId, requester, pending.publicKey));
