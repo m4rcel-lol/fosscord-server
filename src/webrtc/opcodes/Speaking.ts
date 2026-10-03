@@ -26,14 +26,15 @@ export async function relaySpeaking(socket: WebRtcWebSocket, speaking: number) {
         Array.from(mediaServer.getClientsForRtcServer<WebRtcWebSocket>(socket.webRtcClient.voiceRoomId)).map((client) => {
             if (client.user_id === socket.user_id) return Promise.resolve();
 
-            const ssrc = client.getOutgoingStreamSSRCsForUser(socket.user_id);
+            const ssrc = client.getOutgoingStreamSSRCsForUser(socket.user_id).audio_ssrc;
+            if (!ssrc) return Promise.resolve();
 
             return Send(client.websocket, {
                 op: VoiceOPCodes.SPEAKING,
                 d: {
                     user_id: socket.user_id,
                     speaking,
-                    ssrc: ssrc.audio_ssrc ?? 0,
+                    ssrc,
                 },
             });
         }),
@@ -42,7 +43,7 @@ export async function relaySpeaking(socket: WebRtcWebSocket, speaking: number) {
 
 export async function onSpeaking(this: WebRtcWebSocket, data: VoicePayload) {
     if (!this.webRtcClient) return;
-    this.speaking = !!data.d?.speaking;
+    this.speaking = Number(data.d?.speaking) || 0;
     this.lastActivity = Date.now();
     await relaySpeaking(this, this.moderation?.mute ? 0 : data.d.speaking);
 }
