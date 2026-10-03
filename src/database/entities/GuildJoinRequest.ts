@@ -17,6 +17,7 @@
 */
 
 import { Column, Entity, In, Index, IsNull, JoinColumn, ManyToOne } from "typeorm";
+import { Snowflake } from "@spacebar/util/util/Snowflake";
 import { BaseClass } from "./BaseClass";
 import { Guild } from "./Guild";
 import { User } from "./User";
@@ -75,7 +76,7 @@ export class GuildJoinRequest extends BaseClass {
     static activeForUser(user_id: string) {
         return GuildJoinRequest.find({
             where: [
-                { user_id, application_status: In(["SUBMITTED", "REJECTED"]) },
+                { user_id, application_status: In(["STARTED", "SUBMITTED", "REJECTED"]) },
                 { user_id, application_status: "APPROVED", last_seen: IsNull() },
             ],
             order: { created_at: "DESC" },
@@ -83,7 +84,8 @@ export class GuildJoinRequest extends BaseClass {
     }
 
     toJSON(scope: "self" | "moderator" = "self") {
-        const actioned_at = this.actioned_at ? new Date(this.actioned_at).toISOString() : null;
+        const actioned = this.actioned_at ? new Date(this.actioned_at) : null;
+        const reviewed_at = actioned?.toISOString() ?? null;
         const full = scope === "moderator";
         return {
             id: this.id,
@@ -95,10 +97,10 @@ export class GuildJoinRequest extends BaseClass {
             last_seen: this.last_seen ? new Date(this.last_seen).toISOString() : null,
             rejection_reason: this.rejection_reason ?? null,
             interview_channel_id: this.interview_channel_id ?? null,
-            actioned_at,
+            actioned_at: actioned ? ((BigInt(actioned.getTime()) - BigInt(Snowflake.EPOCH)) << 22n).toString() : null,
             form_responses: this.form_responses,
             ...(full && {
-                reviewed_at: actioned_at,
+                reviewed_at,
                 actioned_by_user: this.actioned_by?.toPublicUser() ?? null,
             }),
             ...(this.user && { user: this.user.toPublicUser() }),

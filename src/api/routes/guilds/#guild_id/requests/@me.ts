@@ -63,7 +63,7 @@ router.put("/", route({}), async (req: Request, res: Response) => {
         guild_id,
         form_responses: body.form_fields ?? guild.member_verification?.form_fields ?? [],
         last_seen: null,
-        actioned_at: new Date().toISOString(),
+        actioned_at: id,
         actioned_by_user: null,
         rejection_reason: null,
         user_id: req.user_id,
@@ -77,9 +77,11 @@ router.post("/", route({}), async (req: Request, res: Response) => {
     const existing = await findJoinRequest({ guild_id, user_id: req.user_id });
     if (!existing) throw UNKNOWN_JOIN_REQUEST;
     const guild = await Guild.findOneOrFail({ where: { id: guild_id }, select: { id: true, features: true } });
-    await deleteJoinRequest(existing);
-    if (!isApplyGuild(guild.features)) return res.sendStatus(204);
-    res.json((await startJoinRequest(guild_id, req.user_id)).toJSON("self"));
+    if (!isApplyGuild(guild.features)) {
+        await deleteJoinRequest(existing);
+        return res.sendStatus(204);
+    }
+    res.json((await startJoinRequest(guild_id, req.user_id, true)).toJSON("self"));
 });
 
 router.post("/ack", route({}), async (req: Request, res: Response) => {

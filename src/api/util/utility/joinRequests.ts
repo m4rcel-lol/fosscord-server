@@ -66,13 +66,28 @@ export async function deleteJoinRequest(request: GuildJoinRequest) {
     ]);
 }
 
-export async function startJoinRequest(guild_id: string, user_id: string) {
+export async function startJoinRequest(guild_id: string, user_id: string, reset = false) {
     const existing = await findJoinRequest({ guild_id, user_id });
-    if (existing && existing.application_status !== "APPROVED") return existing;
-    if (existing) await deleteJoinRequest(existing);
-    const request = GuildJoinRequest.create({ guild_id, user_id, application_status: "STARTED", created_at: new Date(), form_responses: [] });
+    if (existing && existing.application_status !== "APPROVED" && !reset) return existing;
+    if (existing && existing.application_status !== "STARTED")
+        await emitEvent({
+            event: "GUILD_JOIN_REQUEST_DELETE",
+            guild_id,
+            data: { guild_id, id: existing.id, user_id },
+        } satisfies GuildJoinRequestDeleteEvent);
+    const request = existing ?? GuildJoinRequest.create({ guild_id, user_id });
+    Object.assign(request, {
+        application_status: "STARTED",
+        created_at: new Date(),
+        form_responses: [],
+        actioned_at: null,
+        actioned_by_id: null,
+        actioned_by: null,
+        rejection_reason: null,
+        last_seen: null,
+    });
     await request.save();
-    request.user = (await User.findOne({ where: { id: user_id } })) ?? undefined;
+    request.user ??= (await User.findOne({ where: { id: user_id } })) ?? undefined;
     await emitJoinRequest("GUILD_JOIN_REQUEST_CREATE", request);
     return request;
 }

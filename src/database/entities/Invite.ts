@@ -176,6 +176,7 @@ export class Invite extends BaseClassWithoutId {
             source_invite_code: invite.code,
             join_source_type: invite.vanity_url ? 6 : 5,
             inviter_id: invite.inviter_id ?? null,
+            ...(invite.flags & 8 && { pending: false }),
         });
         if (invite.uses++ >= invite.max_uses && invite.max_uses !== 0) await Invite.delete({ code });
         else await invite.save();
