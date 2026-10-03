@@ -271,6 +271,13 @@ export default definePlugin({
             },
         },
         {
+            find: ".NEW_TO_APPS,numItems:1",
+            replacement: {
+                match: /function \i\(\i\)\{(?=let\{padding:\i=!1\}=\i,\i=\i\.useCallback\(\(\)=>\{\(0,\i\.\i\)\(\i\.\i\.getAppsSupportURL\()/,
+                replace: "$&if(!$self.helpUrl())return null;",
+            },
+        },
+        {
             find: 'statusColor:"var(--border-subtle)"',
             replacement: {
                 match: /src:null,(?=size:\i,status:\i\?\i\.\i\.ONLINE:void 0,statusColor:"var\(--border-subtle\)")/,
