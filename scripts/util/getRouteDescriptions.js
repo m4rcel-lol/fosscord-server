@@ -86,7 +86,7 @@ function proxy(file, apiMethod, apiPathPrefix, apiPath, ...args) {
 }
 
 express.Router = () => {
-    return Object.fromEntries(methods.map((method) => [method, proxy.bind(null, currentFile, method, currentPath)]));
+    return { ...Object.fromEntries(methods.map((method) => [method, proxy.bind(null, currentFile, method, currentPath)])), use: () => {} };
 };
 
 RouteUtility.route = (opts) => {
