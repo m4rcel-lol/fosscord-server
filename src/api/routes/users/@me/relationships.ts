@@ -20,7 +20,7 @@ import { Request, Response, Router } from "express";
 import { ILike } from "typeorm";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
-import { Member, Relationship, User } from "@spacebar/database";
+import { Member, Relationship, User, UserSettingsProtos } from "@spacebar/database";
 import {
     Config,
     DiscordApiErrors,
@@ -35,6 +35,36 @@ import {
 import { PublicUserProjection, RelationshipType, RelationshipModifySchema, RelationshipListSchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
+
+// the "allow friend requests from" toggles in privacy settings
+const FRIEND_SOURCE_MUTUAL_FRIENDS = 2;
+const FRIEND_SOURCE_MUTUAL_GUILDS = 4;
+const FRIEND_SOURCE_EVERYONE = 8;
+const FRIEND_SOURCE_ALL = 14;
+
+/** Whether the target's privacy settings let the sender send them a friend request. */
+async function acceptsFriendRequestFrom(
+    target: string,
+    sender: string,
+    sharedGuilds: string[],
+    privacy: { friendSourceFlags?: { value: number }; restrictedGuildIds?: bigint[] } | undefined,
+) {
+    const flags = privacy?.friendSourceFlags?.value ?? FRIEND_SOURCE_ALL;
+    if (flags & FRIEND_SOURCE_EVERYONE) return true;
+    // only from servers where they allow direct messages
+    if (flags & FRIEND_SOURCE_MUTUAL_GUILDS) {
+        const restricted = new Set((privacy?.restrictedGuildIds ?? []).map(String));
+        if (sharedGuilds.some((guild) => !restricted.has(guild))) return true;
+    }
+    if (flags & FRIEND_SOURCE_MUTUAL_FRIENDS) {
+        const mutual = await Relationship.query(
+            `SELECT 1 FROM relationships a INNER JOIN relationships b ON a.to_id = b.to_id WHERE a.from_id = $1 AND b.from_id = $2 AND a.type = $3 AND b.type = $3 LIMIT 1`,
+            [sender, target, RelationshipType.FRIEND],
+        );
+        if (mutual.length) return true;
+    }
+    return false;
+}
 
 const userProjection: (keyof User)[] = ["relationships", ...PublicUserProjection];
 const MAX_NOTE_LENGTH = 120;
@@ -318,8 +348,17 @@ async function updateRelationship(req: Request, res: Response, friend: User, typ
     let isStrangerRequest = true;
     const ownMemberships = (await Member.find({ where: { id: req.user_id }, select: { guild_id: true } })).map((x) => x.guild_id);
     const targetMemberships = (await Member.find({ where: { id }, select: { guild_id: true } })).map((x) => x.guild_id);
+    const sharedGuilds = ownMemberships.filter((x) => targetMemberships.includes(x));
 
-    if (ownMemberships.filter((x) => targetMemberships.includes(x)).length > 0) isStrangerRequest = false;
+    if (sharedGuilds.length > 0) isStrangerRequest = false;
+
+    const targetPrivacy = (await UserSettingsProtos.getOrDefault(id)).userSettings?.privacy;
+    // accepting their request is always fine; a new one has to get past their privacy settings
+    const accepting = friendRequest?.type === RelationshipType.OUTGOING_REQUEST;
+    const settled = friendRequest?.type === RelationshipType.BLOCKED || friendRequest?.type === RelationshipType.FRIEND; // refused or rejected below
+    if (!accepting && !settled && !(await acceptsFriendRequestFrom(id, req.user_id, sharedGuilds, targetPrivacy))) throw DiscordApiErrors.INCOMING_FRIEND_REQUESTS_DISABLED;
+    // "show personalized messages" off leaves the note off their side of the request
+    const theirNote = targetPrivacy?.hideFriendRequestNotes?.value ? undefined : note || undefined;
 
     let incoming_relationship = Relationship.create({
         ...(theirRow?.type === RelationshipType.NONE && { id: theirRow.id, user_ignored: theirRow.user_ignored }),
@@ -329,7 +368,7 @@ async function updateRelationship(req: Request, res: Response, friend: User, typ
         from: friend,
         since: new Date(),
         stranger_request: isStrangerRequest,
-        note: note || undefined,
+        note: theirNote,
     });
     let outgoing_relationship = Relationship.create({
         ...(ownRow?.type === RelationshipType.NONE && { id: ownRow.id, user_ignored: ownRow.user_ignored }),

@@ -134,7 +134,11 @@ const parse = (raw: string, effectsRaw?: string): Catalog => {
         product.store_listing_id ??= product.sku_id;
         product.premium_type = 2;
         product.hide_badge = true;
-        if (!products.has(product.sku_id) || product.items?.some((x) => x.asset || x.effects)) products.set(product.sku_id, product);
+        // the same product shows up in several places, some with its items left out (inside bundles, for one); keep a
+        // copy that has them. Frames have no asset or effects, so a copy with layers counts too
+        const known = products.get(product.sku_id);
+        const detailed = (x: CollectibleProduct) => (x.items ?? []).some((item) => item.asset || item.effects || item.layers);
+        if (!known || (detailed(product) && !detailed(known)) || (product.items?.length ?? 0) > (known.items?.length ?? 0)) products.set(product.sku_id, product);
         for (const item of product.items ?? []) {
             const known = items.get(item.sku_id);
             if (!known || Object.keys(item).length > Object.keys(known).length) items.set(item.sku_id, item);

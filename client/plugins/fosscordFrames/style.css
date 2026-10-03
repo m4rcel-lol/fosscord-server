@@ -1,0 +1,25 @@
+/* set by the plugin from the equipped frame's overflow, scaled to the side profile's width; the card keeps its full width */
+.user-profile-sidebar.fosscord-framed-sidebar {
+    position: relative;
+    overflow: visible !important;
+    margin-block: var(--fosscord-frame-top) var(--fosscord-frame-bottom) !important;
+    height: calc(100% - var(--fosscord-frame-top) - var(--fosscord-frame-bottom)) !important;
+    border-radius: 8px;
+}
+
+/* the frame fills the whole card, not the footer it's drawn from */
+.user-profile-sidebar.fosscord-framed-sidebar > [class*="inner_"],
+.user-profile-sidebar.fosscord-framed-sidebar [class*="footerContainer_"] {
+    position: static !important;
+}
+
+.user-profile-sidebar.fosscord-framed-sidebar > [class*="inner_"] {
+    border-radius: 8px;
+}
+
+/* over the profile effect (z-index 2), like the frame sits over everything in discord's own side profile. The frame is
+   drawn from the footer, a flex item with z-index 2 that groups everything in it at that level, below the effect that
+   comes after it; so the footer itself goes above */
+.user-profile-sidebar.fosscord-framed-sidebar [class*="footerContainer_"] {
+    z-index: 3;
+}

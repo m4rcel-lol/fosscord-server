@@ -24,6 +24,7 @@ import { CallCreateEvent, CallDeleteEvent, CallUpdateEvent, ChannelCreateEvent, 
 import { Channel } from "../entities/Channel";
 import { Message } from "../entities/Message";
 import { Recipient } from "../entities/Recipient";
+import { Relationship } from "../entities/Relationship";
 import { VoiceState } from "../entities/VoiceState";
 
 const RING_TIMEOUT = 60_000;
@@ -178,7 +179,10 @@ export class PrivateCalls {
         if (!(await PrivateCalls.activeMessage(channelId))) return;
         const inCall = new Set((await PrivateCalls.voiceStates(channelId)).map((state) => state.user_id));
         const members = (await Recipient.find({ where: { channel_id: channelId } })).map((recipient) => recipient.user_id);
-        const targets = members.filter((id) => id !== ringerId && !inCall.has(id) && (!recipients?.length || recipients.includes(id)));
+        const candidates = members.filter((id) => id !== ringerId && !inCall.has(id) && (!recipients?.length || recipients.includes(id)));
+        // nobody rings someone who blocked them, or someone they blocked
+        const blocked = await Relationship.blockedAmong(ringerId, candidates);
+        const targets = candidates.filter((id) => !blocked.has(id));
         if (!targets.length) return;
 
         let channelRings = rings.get(channelId);

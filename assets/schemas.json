@@ -10606,9 +10606,9 @@
                 ]
             },
             "badge": {
-                "description": "Server tag badge type",
+                "description": "Server tag badge type: one of the client's (0-40) or the instance's own (10000 and up, some staff only)",
                 "minimum": 0,
-                "maximum": 40,
+                "maximum": 99999,
                 "type": "integer"
             },
             "badge_color_primary": {
@@ -22288,10 +22288,15 @@
             "maxName": {
                 "type": "integer",
                 "default": 100
+            },
+            "maxGroupDmRecipients": {
+                "type": "integer",
+                "default": 25
             }
         },
         "additionalProperties": false,
         "required": [
+            "maxGroupDmRecipients",
             "maxName",
             "maxPins",
             "maxTopic",

@@ -20,7 +20,7 @@ import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { HTTPError } from "lambert-server/HTTPError";
 import { Channel, Guild, Recipient, Relationship } from "@spacebar/database";
-import { Config, DmChannelDTO, FieldErrors, getPermission } from "@spacebar/util";
+import { Config, DiscordApiErrors, DmChannelDTO, FieldErrors, getPermission } from "@spacebar/util";
 import { ChannelType, DmChannelCreateSchema, RelationshipType } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
@@ -71,6 +71,9 @@ router.post(
         const maxOthers = Config.get().limits.channel.maxGroupDmRecipients - 1;
         if (new Set(targets.filter((id) => id !== req.user_id)).size > maxOthers)
             throw FieldErrors({ recipients: { code: "BASE_TYPE_MAX_LENGTH", message: `Must be ${maxOthers} or fewer in length.` } });
+        // nobody can start a group with someone who blocked them or whom they blocked
+        const others = [...new Set(targets.filter((id) => id !== req.user_id))];
+        if (others.length > 1 && (await Relationship.blockedAmong(req.user_id, others)).size) throw DiscordApiErrors.CANNOT_MESSAGE_USER;
         const other = targets.length === 1 && targets[0] !== req.user_id ? targets[0] : null;
         if (other && !req.user_bot) {
             const [friends, existing, paused] = await Promise.all([

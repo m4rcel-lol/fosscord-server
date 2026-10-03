@@ -2592,17 +2592,30 @@ async function openGuild(id, reload) {
         for (const img of $$("[data-badge] img", tagForm)) img.src = previewUrl(img.closest("[data-badge]").dataset.badge, 48);
         for (const btn of $$("[data-badge]", tagForm)) btn.classList.toggle("active", Number(btn.dataset.badge) === badge);
     };
-    fetch("/clan-badges/preview")
+    // revalidated, since browsers may still hold a copy from when the list was cached for hours
+    fetch("/clan-badges/preview", { cache: "no-cache" })
         .then((r) => r.json())
         .then((list) => {
+            // grouped by pack, in the order the packs first appear: discord's free badges and packs, then the instance's own
+            const packs = new Map();
+            for (const b of list) packs.set(b.pack ?? "Discord", [...(packs.get(b.pack ?? "Discord") ?? []), b]);
             mount(
                 $("#badge-picker"),
                 list.length
-                    ? list.map(
-                          (b) =>
-                              html`<button type="button" class="badge-option" data-badge="${b.id}" title="${b.name.toLowerCase().replace(/_/g, " ")}"
-                                  ><img src="${previewUrl(b.id, 48)}" alt="${b.name}"
-                              /></button>`,
+                    ? [...packs].map(
+                          ([pack, badges]) =>
+                              html`<div class="badge-pack-title">${pack}<span class="muted">${badges.length}</span></div>
+                                  ${badges.map(
+                                      (b) =>
+                                          html`<button
+                                              type="button"
+                                              class="badge-option ${b.staff_only ? "staff-only" : ""}"
+                                              data-badge="${b.id}"
+                                              title="${b.name.toLowerCase().replace(/_/g, " ")}${b.staff_only ? " (staff only: server owners can't pick it)" : ""}"
+                                          >
+                                              <img src="${previewUrl(b.id, 48)}" alt="${b.name}" />
+                                          </button>`,
+                                  )}`,
                       )
                     : html`<span class="muted">Badge artwork isn't available. Run <code>npm run generate:client</code> on the server.</span>`,
             );

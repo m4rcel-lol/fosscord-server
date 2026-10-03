@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Channel, Guild, Member, Recipient, VoiceChannels, VoiceState } from "@spacebar/database";
+import { Channel, Guild, Member, Recipient, Relationship, VoiceChannels, VoiceState } from "@spacebar/database";
 import { Payload, WebSocket, genVoiceToken } from "@spacebar/gateway";
 import { Config, emitEvent, getPermission, VoiceServerUpdateEvent, VoiceStateUpdateEvent } from "@spacebar/util";
 import { ChannelType, ConfigVoiceRegion, VoiceStateUpdateSchema } from "@spacebar/schemas";
@@ -27,7 +27,14 @@ const VOICE_TYPES = [ChannelType.GUILD_VOICE, ChannelType.GUILD_STAGE_VOICE, Cha
 async function canJoin(userId: string, guildId: string | undefined, channelId: string, currentChannelId?: string) {
     const channel = await Channel.findOne({ where: { id: channelId }, select: { id: true, type: true, guild_id: true, user_limit: true, permission_overwrites: true } });
     if (!channel || !VOICE_TYPES.includes(channel.type)) return null;
-    if (!channel.guild_id) return (await Recipient.exists({ where: { channel_id: channelId, user_id: userId } })) ? channel : null;
+    if (!channel.guild_id) {
+        const recipients = await Recipient.find({ where: { channel_id: channelId }, select: { user_id: true } });
+        if (!recipients.some((x) => x.user_id === userId)) return null;
+        // no calls in a dm between people where one blocked the other
+        const other = channel.type === ChannelType.DM ? recipients.find((x) => x.user_id !== userId)?.user_id : undefined;
+        if (other && (await Relationship.isBlockedBetween(userId, other))) return null;
+        return channel;
+    }
     if (channel.guild_id !== guildId) return null;
 
     const permissions = await getPermission(userId, channel.guild_id, channelId);

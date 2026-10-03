@@ -18,7 +18,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { ASSETS_FOLDER } from "@spacebar/util";
+import { ASSETS_FOLDER, clanBadgePack, CUSTOM_CLAN_BADGES, customClanBadge, discordClanBadgePack } from "@spacebar/util";
 
 // Server tag badges, rendered from templates scripts/clan-badges.js extracts from the downloaded web client.
 // A shaded colour is stored as { ch, c0, c1, def }: the guild's primary (P) or secondary (S) colour moved to
@@ -89,11 +89,37 @@ const toHex = (rgb: Rgb) =>
 const ATTRIBUTE_NAMES: Record<string, string> = { clipPath: "clip-path", clipRule: "clip-rule", fillRule: "fill-rule", stopColor: "stop-color" };
 const escape = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
 
-// [{ id, name }] for every badge with a template, empty when the client cache hasn't been generated
+// [{ id, name, pack, staff_only }] for the client's badges with a template (none until the client cache is generated) and the instance's own
 export function listClanBadges() {
-    return Object.entries(loadTemplates() ?? {})
-        .map(([id, { name }]) => ({ id: Number(id), name }))
-        .sort((a, b) => a.id - b.id);
+    return [
+        ...Object.entries(loadTemplates() ?? {}).map(([id, { name }]) => ({ id: Number(id), name, pack: discordClanBadgePack(Number(id)), staff_only: false })),
+        ...CUSTOM_CLAN_BADGES.map((badge) => ({ id: badge.id, name: badge.name, pack: clanBadgePack(badge), staff_only: badge.staff_only })),
+    ].sort((a, b) => a.id - b.id);
+}
+
+// the instance's own badges, turned from their pixel grids into the same shape the extracted templates have: a path per run
+// of same-coloured pixels in a row
+const customTemplates = new Map<number, { name: string; svg: BadgeNode }>();
+
+function customTemplate(id: number) {
+    const badge = customClanBadge(id);
+    if (!badge) return undefined;
+    if (!customTemplates.has(id)) {
+        const paths: BadgeNode[] = [];
+        badge.grid.forEach((row, y) => {
+            for (let x = 0; x < row.length;) {
+                const key = row[x];
+                let end = x + 1;
+                while (end < row.length && row[end] === key) end++;
+                const fill = badge.palette[key];
+                if (fill) paths.push({ t: "path", a: { d: `M${x} ${y}H${end}V${y + 1}H${x}Z`, fill }, c: [] });
+                x = end;
+            }
+        });
+        const svgAttributes = { width: 24, height: 24, viewBox: "0 0 16 16", fill: "none", xmlns: "http://www.w3.org/2000/svg", "shape-rendering": "crispEdges" };
+        customTemplates.set(id, { name: badge.name, svg: { t: "svg", a: svgAttributes, c: paths } });
+    }
+    return customTemplates.get(id);
 }
 
 /**
@@ -101,7 +127,7 @@ export function listClanBadges() {
  * cache hasn't been generated) or the badge type is unknown.
  */
 export function renderClanBadge(badge: number | string | null | undefined, primary: string | null | undefined, secondary: string | null | undefined, size = 64): string | null {
-    const template = loadTemplates()?.[String(badge ?? 0)];
+    const template = customTemplate(Number(badge)) ?? loadTemplates()?.[String(badge ?? 0)];
     if (!template) return null;
 
     const tints = { P: primary ? parseHex(primary) : null, S: secondary ? parseHex(secondary) : null };

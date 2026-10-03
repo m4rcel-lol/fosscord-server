@@ -897,6 +897,9 @@ export const DiscordApiErrors = {
     get TWO_FACTOR_REQUIRED() {
         return new ApiError("Two factor is required for this operation", 60003);
     },
+    get INCOMING_FRIEND_REQUESTS_DISABLED() {
+        return new ApiError("Incoming friend requests disabled.", 80000);
+    },
     get FRIEND_REQUEST_BLOCKED() {
         return new ApiError("Friend request blocked", 80001);
     },

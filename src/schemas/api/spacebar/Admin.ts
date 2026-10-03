@@ -263,9 +263,9 @@ export interface AdminGuildUpdateSchema {
      */
     tag?: string | null;
     /**
-     * Server tag badge type
+     * Server tag badge type: one of the client's (0-40) or the instance's own (10000 and up, some staff only)
      * @minimum 0
-     * @maximum 40
+     * @maximum 99999
      */
     badge?: number;
     /**

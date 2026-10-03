@@ -20,6 +20,7 @@ import crypto from "node:crypto";
 import { Raw } from "typeorm";
 import { HTTPError } from "lambert-server/HTTPError";
 import { Guild, User } from "@spacebar/database";
+import { isStaffOnlyClanBadge } from "@spacebar/util";
 
 export interface GuildTagChanges {
     tag?: string | null;
@@ -39,7 +40,11 @@ export function applyGuildTag(guild: Guild, changes: GuildTagChanges, { unrestri
         if (changes.tag !== null && !unrestricted && !/^[\p{L}\p{N}]{2,4}$/u.test(changes.tag)) throw new HTTPError("Tag must be 2 to 4 letters or numbers", 400);
         profile.tag = changes.tag;
     }
-    if (changes.badge !== undefined) profile.badge = changes.badge as typeof profile.badge;
+    if (changes.badge !== undefined) {
+        // staff-only badges come from the admin panel; a server that has one keeps it through its owner's other edits
+        if (!unrestricted && changes.badge !== profile.badge && isStaffOnlyClanBadge(changes.badge)) throw new HTTPError("Only instance staff can give a server this badge", 403);
+        profile.badge = changes.badge as typeof profile.badge;
+    }
     // "" and null both mean the badge's own colours; store null so clients never get an invalid colour back
     if (changes.badge_color_primary !== undefined) profile.badge_color_primary = (changes.badge_color_primary || null) as string;
     if (changes.badge_color_secondary !== undefined) profile.badge_color_secondary = (changes.badge_color_secondary || null) as string;

@@ -894,6 +894,22 @@ tbody tr:last-child td {
     gap: 6px;
 }
 
+.badge-pack-title {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-top: 6px;
+}
+
+.badge-pack-title:first-child {
+    margin-top: 0;
+}
+
 .badge-option {
     aspect-ratio: 1;
     border-radius: 8px;
@@ -1027,3 +1043,21 @@ td {
         outline-color: rgba(0, 0, 0, 0.08);
     }
 }
+
+/* server tag badges only staff can give a server */
+.badge-option.staff-only {
+    position: relative;
+}
+
+.badge-option.staff-only::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px var(--bg, #111);
+}
+

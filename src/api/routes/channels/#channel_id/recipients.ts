@@ -18,7 +18,7 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { Channel, Recipient, User } from "@spacebar/database";
+import { Channel, Recipient, Relationship, User } from "@spacebar/database";
 import { ChannelDeleteEvent, ChannelRecipientAddEvent, ChannelUpdateEvent, Config, DiscordApiErrors, DmChannelDTO, emitEvent } from "@spacebar/util";
 import { ChannelType, MessageType, PublicUserProjection } from "@spacebar/schemas";
 
@@ -125,6 +125,7 @@ router.put(
             if (channel.recipients?.map((r) => r.user_id).includes(user_id)) {
                 throw DiscordApiErrors.INVALID_RECIPIENT; //TODO is this the right error?
             }
+            if (await Relationship.isBlockedBetween(req.user_id, user_id)) throw DiscordApiErrors.CANNOT_MESSAGE_USER;
             if ((channel.recipients?.length ?? 0) >= Config.get().limits.channel.maxGroupDmRecipients)
                 throw DiscordApiErrors.MAXIMUM_NUMBER_OF_RECIPIENTS_REACHED.withDefaultParams();
 
