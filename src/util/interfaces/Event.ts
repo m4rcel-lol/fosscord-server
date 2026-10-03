@@ -94,7 +94,7 @@ export interface ReadyEventData {
     ][];
     guild_join_requests?: unknown[]; // ? what is this? this is new
     shard?: [number, number];
-    user_settings?: UserSettings;
+    user_settings?: ReturnType<UserSettings["toLegacy"]>;
     user_settings_proto?: string;
     user_settings_proto_json?: JsonValue;
     relationships?: RelationshipSchema[]; // TODO

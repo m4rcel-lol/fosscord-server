@@ -63,13 +63,13 @@ export interface UserSettingsSchema {
 }
 
 export interface CustomStatus {
-    emoji_id?: string;
-    emoji_name?: string;
-    expires_at?: number;
+    emoji_id?: string | null;
+    emoji_name?: string | null;
+    expires_at?: string | number | null;
     /**
      * @maxLength 128
      */
-    text?: string;
+    text?: string | null;
 }
 
 export interface GuildFolder {

@@ -18,7 +18,9 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { Session, User, UserSettings } from "@spacebar/database";
+import { Session, User, UserSettings, UserSettingsProtos } from "@spacebar/database";
+import { PreloadedUserSettings } from "discord-protos";
+import { JsonObject } from "@protobuf-ts/runtime";
 import { broadcastPresence } from "@spacebar/util";
 import { Not } from "typeorm";
 import { UserSettingsUpdateSchema } from "@spacebar/schemas";
@@ -38,8 +40,8 @@ router.get(
         },
     }),
     async (req: Request, res: Response) => {
-        const settings = await UserSettings.getOrDefault(req.user_id);
-        return res.json(settings);
+        const [settings, protos] = await Promise.all([UserSettings.getOrDefault(req.user_id), UserSettingsProtos.getOrDefault(req.user_id)]);
+        return res.json(settings.toLegacy(protos.userSettings));
     },
 );
 
@@ -80,12 +82,21 @@ router.patch(
 
         await user.settings.save();
         await user.save();
+
+        const categories = Object.entries(UserSettings.toProtoCategories(body));
+        const proto = await UserSettingsProtos.withLock(req.user_id, async () => {
+            const protos = await UserSettingsProtos.getOrDefault(req.user_id);
+            if (!categories.length) return protos.userSettings;
+            const current = PreloadedUserSettings.toJson(protos.userSettings!) as JsonObject;
+            for (const [category, values] of categories) current[category] = { ...(current[category] as JsonObject | undefined), ...values };
+            return protos.commitUserSettings(PreloadedUserSettings.fromJson(current));
+        });
         if (body.status && ["online", "idle", "dnd", "invisible"].includes(body.status)) {
             await Session.update({ user_id: user.id, status: Not("offline") }, { status: body.status });
             await broadcastPresence(user.id, user.toPublicUser());
         }
 
-        res.json({ ...user.settings, index: undefined });
+        res.json(user.settings.toLegacy(proto));
     },
 );
 

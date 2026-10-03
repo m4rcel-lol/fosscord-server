@@ -19,7 +19,7 @@
 import zlib from "node:zlib";
 import { In, LessThan } from "typeorm";
 import { storage } from "@spacebar/cdn/util/Storage";
-import { Channel, ConnectedAccount, Guild, HarvestRecord, Member, Message, Relationship, User } from "@spacebar/database";
+import { Channel, ConnectedAccount, Guild, HarvestRecord, Member, Message, Relationship, User, UserSettings, UserSettingsProtos } from "@spacebar/database";
 import { Config, Email, Snowflake } from "@spacebar/util";
 import { PrivateUserProjection } from "@spacebar/schemas";
 import { signTicket } from "./mfa";
@@ -116,16 +116,17 @@ async function buildPackage(user_id: string, backends: string[]) {
             select: Object.fromEntries([...PrivateUserProjection, "created_at"].map((x) => [x, true])),
             relations: { settings: true },
         });
-        const [connections, relationships] = await Promise.all([
+        const [connections, relationships, protos] = await Promise.all([
             ConnectedAccount.find({ where: { user_id } }),
             Relationship.find({ where: { from_id: user_id }, relations: { to: true } }),
+            UserSettingsProtos.getOrDefault(user_id),
         ]);
         zip.add(
             "Account/user.json",
             json({
                 ...user.toPrivateUser(),
                 created_at: user.created_at,
-                settings: user.settings,
+                settings: (user.settings ?? new UserSettings()).toLegacy(protos.userSettings),
                 connections: connections.map((x) => ({ type: x.type, id: x.external_id, name: x.name })),
                 relationships: relationships.map((x) => ({ id: x.to_id, type: x.type, nickname: x.nickname ?? null, user: x.to?.toPublicUser() })),
             }),
