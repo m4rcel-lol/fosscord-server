@@ -21,13 +21,14 @@ import type { Duplex } from "node:stream";
 import ws from "ws";
 import { green, yellow } from "picocolors";
 import { initDatabase } from "@spacebar/database";
-import { Config, initEvent, JwtKeypairManager } from "@spacebar/util";
+import { Config, initEvent, JwtKeypairManager, VoiceHealth } from "@spacebar/util";
 import { ProcessLifecycle, SystemdLifecycle } from "../util/util/ProcessLifecycle";
 import { Monitoring } from "../util/monitoring/Monitoring";
 import { Connection } from "./events/Connection";
 import { DaveSession } from "./dave/DaveSession";
 import { AfkMover } from "./util/AfkMover";
 import { loadWebRtcLibrary, mediaServer, WRTC_PORT_MAX, WRTC_PORT_MIN, WRTC_PUBLIC_IP } from "./util";
+import { PionMediaServer } from "./pion/PionMediaServer";
 
 export class WebrtcServer {
     public ws: ws.Server;
@@ -90,8 +91,21 @@ export class WebrtcServer {
             });
         } catch (e) {
             console.log(`[WebRTC] ${yellow("WEBRTC disabled")}`);
+            const reason = e instanceof Error ? e.message : "No WebRTC library is configured, or it failed to load or connect";
+            VoiceHealth.register(async () => ({ enabled: false, library: process.env.WRTC_LIBRARY ?? null, reason }));
             return;
         }
+
+        const startedAt = new Date().toISOString();
+        const library = mediaServer instanceof PionMediaServer ? "pion" : (process.env.WRTC_LIBRARY ?? "unknown");
+        VoiceHealth.register(async () => ({
+            enabled: true,
+            library,
+            started_at: startedAt,
+            listen: this.noServer ? "/voice on the main port" : `0.0.0.0:${this.port}`,
+            ...(mediaServer instanceof PionMediaServer ? await mediaServer.health() : {}),
+            dave_sessions: DaveSession.count(),
+        }));
 
         if (!this.noServer && !this.server.listening) {
             this.server.listen(this.port);

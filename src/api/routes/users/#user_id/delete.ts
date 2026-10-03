@@ -20,7 +20,8 @@ import { Request, Response, Router } from "express";
 import { Not } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
 import { Channel, Emoji, Guild, InstanceBan, Member, Recipient, Sticker, User, UserSettingsProtos } from "@spacebar/database";
-import { ChannelDeleteEvent, ChannelRecipientRemoveEvent, emitEvent, UserDeleteEvent } from "@spacebar/util";
+import { HTTPError } from "lambert-server/HTTPError";
+import { ChannelDeleteEvent, ChannelRecipientRemoveEvent, emitEvent, Rights, UserDeleteEvent } from "@spacebar/util";
 import { ChannelType, InstanceUserDeleteSchema, PrivateUserProjection } from "@spacebar/schemas";
 import { Stopwatch } from "@spacebar/extensions";
 
@@ -46,8 +47,10 @@ router.post(
         const body = req.body as InstanceUserDeleteSchema | undefined;
         const user = await User.findOneOrFail({
             where: { id: req.params.user_id as string },
-            select: Object.fromEntries([...PrivateUserProjection, "data"].map((i) => [i, true])), // TODO: clean up
+            select: Object.fromEntries([...PrivateUserProjection, "data", "rights"].map((i) => [i, true])), // TODO: clean up
         });
+        if (user.id !== req.user_id && new Rights(user.rights).has("OPERATOR") && !req.rights.has("OPERATOR"))
+            throw new HTTPError("Only operators can delete other operators", 403);
 
         if ((body?.persistInstanceBan ?? true) && !(await InstanceBan.findOne({ where: { user_id: user.id } })))
             await InstanceBan.create({ user_id: user.id, reason: body?.reason ?? "<legacy instance ban API - no reason specified>" }).save();

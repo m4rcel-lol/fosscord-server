@@ -925,13 +925,45 @@ details > summary::-webkit-details-marker {
     white-space: pre-wrap;
 }
 
-.report-message {
-    margin: 0;
+nav a {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.nav-count {
+    margin-left: auto;
+    min-width: 18px;
+    padding: 0 6px;
+    border-radius: 9px;
+    background: var(--danger);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.file-list {
+    margin: 6px 0 0;
+    padding: 8px 10px;
+    max-height: 220px;
+    overflow: auto;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
     white-space: pre-wrap;
-    overflow-wrap: break-word;
-    padding: 10px 12px;
-    background: var(--panel-2);
-    border-radius: 8px;
+    overflow-wrap: anywhere;
+}
+
+.stat .value,
+td {
+    font-variant-numeric: tabular-nums;
 }
 
 .report-attachments {

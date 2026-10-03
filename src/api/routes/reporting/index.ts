@@ -22,9 +22,8 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
 import { ReportMenuTypeNames, ReportMenuType, type CreateReportSchema, ReportMenuTypeNameArray } from "@spacebar/schemas";
-import { DiscordApiErrors, FieldErrors, getPermission } from "@spacebar/util";
-import { Guild, Message, User, UserReport } from "@spacebar/database";
-import { MoreThan } from "typeorm";
+import { FieldErrors } from "@spacebar/util";
+import { createReport } from "@spacebar/api/util";
 
 const router = Router({ mergeParams: true });
 if (process.env.LOG_ROUTES !== "false") console.log("[Server] Registering reporting menu routes...");
@@ -70,11 +69,11 @@ for (const type of Object.values(ReportMenuTypeNames)) {
     router.post(
         `/${type}`,
         route({
-            description: `Get reporting menu options for ${type} reports.`,
+            description: `Submit a ${type} report to the instance staff.`,
             requestBody: "CreateReportSchema",
             responses: {
                 200: {
-                    body: "ReportingMenuResponse",
+                    body: "CreateReportResponse",
                 },
                 204: {},
             },
@@ -170,7 +169,7 @@ for (const type of Object.values(ReportMenuTypeNames)) {
                     requireFields(body, ["guild_id", "channel_id"]);
                     break;
                 case ReportMenuType.GUILD_SCHEDULED_EVENT:
-                    requireFields(body, ["guild_id", "scheduled_event_id"]);
+                    requireFields(body, ["guild_id", "guild_scheduled_event_id"]);
                     break;
                 case ReportMenuType.MESSAGE:
                     requireFields(body, ["channel_id", "message_id"]);
@@ -180,10 +179,10 @@ for (const type of Object.values(ReportMenuTypeNames)) {
                     requireFields(body, ["channel_id", "guild_id", "stage_instance_id"]);
                     break;
                 case ReportMenuType.FIRST_DM:
-                    requireFields(body, ["user_id", "channel_id"]);
+                    requireFields(body, ["channel_id", "message_id"]);
                     break;
                 case ReportMenuType.USER:
-                    requireFields(body, ["reported_user_id"]);
+                    if (!body.user_id && !body.reported_user_id) requireFields(body, ["user_id"]);
                     break;
                 case ReportMenuType.APPLICATION:
                     requireFields(body, ["application_id"]);
@@ -195,44 +194,7 @@ for (const type of Object.values(ReportMenuTypeNames)) {
                     throw new HTTPError("Unknown report menu type", 400);
             }
 
-            const recent = await UserReport.count({ where: { reporter_id: req.user_id, created_at: MoreThan(new Date(Date.now() - 60 * 60 * 1000)) } });
-            if (recent >= 30) throw new HTTPError("You are sending too many reports. Try again later.", 429);
-
-            const snowflake = (value?: string) => (value && /^\d{1,20}$/.test(value) ? value : null);
-            const report = UserReport.create({
-                type,
-                reporter_id: req.user_id,
-                guild_id: snowflake(body.guild_id),
-                channel_id: snowflake(body.channel_id),
-                message_id: snowflake(body.message_id),
-                reported_user_id: snowflake(body.reported_user_id ?? body.user_id),
-                breadcrumbs: body.breadcrumbs,
-                elements: body.elements ?? {},
-            });
-
-            if (type === ReportMenuType.MESSAGE && report.message_id && report.channel_id) {
-                const message = await Message.findOne({ where: { id: report.message_id, channel_id: report.channel_id }, relations: { attachments: true } });
-                if (!message) throw DiscordApiErrors.UNKNOWN_MESSAGE;
-                const permission = await getPermission(req.user_id, message.guild_id ?? undefined, report.channel_id);
-                if (!permission.has("VIEW_CHANNEL")) throw DiscordApiErrors.UNKNOWN_MESSAGE;
-                report.guild_id = message.guild_id ?? null;
-                report.reported_user_id = message.author_id ?? null;
-                report.snapshot = {
-                    content: message.content ?? "",
-                    author_id: message.author_id,
-                    attachments: (message.attachments ?? []).map((a) => ({ id: a.id, url: a.toJSON().url, filename: a.filename, content_type: a.content_type ?? null })),
-                    embeds: message.embeds?.length ?? 0,
-                    timestamp: message.timestamp?.toISOString(),
-                };
-            } else if (type === ReportMenuType.GUILD || type === ReportMenuType.GUILD_DISCOVERY) {
-                const guild = report.guild_id ? await Guild.findOne({ where: { id: report.guild_id }, select: { id: true, owner_id: true } }) : null;
-                if (!guild) throw DiscordApiErrors.UNKNOWN_GUILD;
-                report.reported_user_id ??= guild.owner_id ?? null;
-            }
-            if (report.reported_user_id && !(await User.exists({ where: { id: report.reported_user_id } }))) throw DiscordApiErrors.UNKNOWN_USER;
-            if (report.reported_user_id === req.user_id) throw new HTTPError("You can't report yourself.", 400);
-
-            await report.save();
+            const report = await createReport(type, body, req.user_id, menuData);
             res.json({ report_id: report.id, id: report.id });
         },
     );

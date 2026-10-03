@@ -16,21 +16,26 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// TODO: check
 export interface CreateReportSchema {
     version: string;
     variant: string;
     name: string;
     language: string;
     breadcrumbs: number[];
-    elements?: { [key: string]: string[] };
+    elements?: { [key: string]: string[] | string };
     channel_id?: string; // snowflake
     message_id?: string; // snowflake
     guild_id?: string; // snowflake
     stage_instance_id?: string; // snowflake
     guild_scheduled_event_id?: string; // snowflake
     reported_user_id?: string; // snowflake
+    entrypoint?: string;
     application_id?: string; // snowflake
     user_id?: string; // snowflake
     widget_id?: string; // snowflake
+}
+
+export interface CreateReportResponse {
+    report_id: string;
+    id: string;
 }

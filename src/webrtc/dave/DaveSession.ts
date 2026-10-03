@@ -75,6 +75,10 @@ export class DaveSession {
         return roomId ? sessions.get(roomId) : undefined;
     }
 
+    static count() {
+        return sessions.size;
+    }
+
     private log(message: string) {
         console.log(`[DAVE/${this.roomId}] ${message}`);
     }

@@ -27,9 +27,7 @@ import rateLimit from "../../middlewares/RateLimit";
 
 export const E2EE_FALLBACK_CONTENT = "🔒 Encrypted message";
 export const E2EE_ALGORITHM = "x25519-hpke-aes256gcm-ed25519";
-export const E2EE_MAX_ENVELOPE_BYTES = 64 * 1024;
-export const E2EE_MAX_DEVICES = 256;
-export const E2EE_PENDING_TTL_MS = 7 * 24 * 3600 * 1000;
+export const e2eeLimits = () => Config.get().limits.e2ee;
 
 export const E2eeErrors = {
     DEVICE_MISMATCH: new ApiError("E2EE_DEVICE_MISMATCH", 90001, 409),
@@ -50,9 +48,12 @@ export const E2eeErrors = {
     PLAINTEXT_ATTACHMENT: new ApiError("E2EE_PLAINTEXT_ATTACHMENT", 90016, 400),
 };
 
-export const e2eeRateLimit = (bucket: string, count: number, window: number) => {
-    const limiter = rateLimit({ bucket, count, window });
-    return (req: Request, res: Response, next: NextFunction) => (Config.get().limits.rate.enabled ? limiter(req, res, next) : next());
+export const e2eeRateLimit = (bucket: string, count: number | (() => number), window: number) => {
+    const fixed = typeof count === "number" ? rateLimit({ bucket, count, window }) : null;
+    return (req: Request, res: Response, next: NextFunction) => {
+        if (!Config.get().limits.rate.enabled) return next();
+        return (fixed ?? rateLimit({ bucket, count: (count as () => number)(), window }))(req, res, next);
+    };
 };
 
 const b64url = /^[A-Za-z0-9_-]+$/;
@@ -110,7 +111,7 @@ export async function pruneE2eeDevices(userId: string) {
     if (!pending.length) return false;
     const sessions = await Session.find({ where: { user_id: userId }, select: { session_id: true } });
     const live = new Set(sessions.map((s) => s.session_id));
-    const cutoff = Date.now() - E2EE_PENDING_TTL_MS;
+    const cutoff = Date.now() - e2eeLimits().pendingDeviceTtlHours * 3600 * 1000;
     const stale = pending.filter((d) => (d.session_id && !live.has(d.session_id)) || d.created_at.getTime() < cutoff);
     await revokeE2eeDevices(stale);
     return stale.length > 0;
@@ -199,11 +200,11 @@ const isEnvelope = (value: unknown): value is E2eeEnvelope => {
     if (!value || typeof value !== "object") return false;
     const env = value as E2eeEnvelope;
     if (env.v !== 1 || env.alg !== E2EE_ALGORITHM) return false;
-    if (typeof env.sender_device !== "string" || !Array.isArray(env.keys) || !env.keys.length || env.keys.length > E2EE_MAX_DEVICES) return false;
+    if (typeof env.sender_device !== "string" || !Array.isArray(env.keys) || !env.keys.length || env.keys.length > e2eeLimits().maxEnvelopeDevices) return false;
     if (!decodeKey(env.iv, 12) || typeof env.ct !== "string" || !b64url.test(env.ct) || !decodeKey(env.sig, 64)) return false;
     if (env.mid !== undefined && (typeof env.mid !== "string" || !/^\d+$/.test(env.mid))) return false;
     if (env.backup !== undefined) {
-        if (!Array.isArray(env.backup) || env.backup.length > E2EE_MAX_DEVICES) return false;
+        if (!Array.isArray(env.backup) || env.backup.length > e2eeLimits().maxEnvelopeDevices) return false;
         const users = new Set<string>();
         const valid = env.backup.every((entry) => {
             if (!entry || typeof entry.user_id !== "string" || users.has(entry.user_id)) return false;
@@ -267,7 +268,7 @@ export async function applyE2eeToMessage(opts: MessageOptions, channel: Channel,
     }
     if (!encryptedChannel) throw E2eeErrors.NOT_ENABLED;
     if (!userMessage) throw E2eeErrors.UNSUPPORTED;
-    if (Buffer.byteLength(JSON.stringify(envelope)) > E2EE_MAX_ENVELOPE_BYTES || !isEnvelope(envelope)) throw E2eeErrors.INVALID_ENVELOPE;
+    if (Buffer.byteLength(JSON.stringify(envelope)) > e2eeLimits().maxEnvelopeBytes || !isEnvelope(envelope)) throw E2eeErrors.INVALID_ENVELOPE;
 
     const content = opts.content?.trim();
     if (content && content !== E2EE_FALLBACK_CONTENT) throw E2eeErrors.REQUIRED;

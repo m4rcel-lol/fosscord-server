@@ -4495,12 +4495,16 @@
                     },
                     "absoluteRate": {
                         "$ref": "#/components/schemas/GlobalRateLimits"
+                    },
+                    "e2ee": {
+                        "$ref": "#/components/schemas/E2eeLimits"
                     }
                 },
                 "required": [
                     "absoluteRate",
                     "application",
                     "channel",
+                    "e2ee",
                     "guild",
                     "message",
                     "rate",
@@ -8967,10 +8971,17 @@
                     "elements": {
                         "type": "object",
                         "additionalProperties": {
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            }
+                            "anyOf": [
+                                {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                },
+                                {
+                                    "type": "string"
+                                }
+                            ]
                         }
                     },
                     "channel_id": {
@@ -8991,6 +9002,9 @@
                     "reported_user_id": {
                         "type": "string"
                     },
+                    "entrypoint": {
+                        "type": "string"
+                    },
                     "application_id": {
                         "type": "string"
                     },
@@ -9007,6 +9021,21 @@
                     "name",
                     "variant",
                     "version"
+                ]
+            },
+            "CreateReportResponse": {
+                "type": "object",
+                "properties": {
+                    "report_id": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "id",
+                    "report_id"
                 ]
             },
             "ReportMenuTypeNameArray": {
@@ -9123,6 +9152,40 @@
                         },
                         "additionalProperties": false
                     },
+                    "client": {
+                        "type": "object",
+                        "properties": {
+                            "instanceName": {
+                                "maxLength": 100,
+                                "type": "string"
+                            },
+                            "icon": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            },
+                            "logo": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            },
+                            "helpUrl": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            },
+                            "activityApplicationHost": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            }
+                        },
+                        "additionalProperties": false
+                    },
                     "register": {
                         "type": "object",
                         "properties": {
@@ -9135,16 +9198,199 @@
                             "requireInvite": {
                                 "type": "boolean"
                             },
+                            "guestsRequireInvite": {
+                                "type": "boolean"
+                            },
                             "requireCaptcha": {
                                 "type": "boolean"
                             },
                             "allowMultipleAccounts": {
                                 "type": "boolean"
+                            },
+                            "incrementingDiscriminators": {
+                                "type": "boolean"
+                            },
+                            "email": {
+                                "type": "object",
+                                "properties": {
+                                    "required": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "additionalProperties": false
+                            },
+                            "dateOfBirth": {
+                                "type": "object",
+                                "properties": {
+                                    "minimum": {
+                                        "minimum": 0,
+                                        "maximum": 100,
+                                        "type": "integer"
+                                    }
+                                },
+                                "additionalProperties": false
+                            },
+                            "password": {
+                                "type": "object",
+                                "properties": {
+                                    "minLength": {
+                                        "minimum": 1,
+                                        "maximum": 72,
+                                        "type": "integer"
+                                    },
+                                    "minNumbers": {
+                                        "minimum": 0,
+                                        "type": "integer"
+                                    },
+                                    "minUpperCase": {
+                                        "minimum": 0,
+                                        "type": "integer"
+                                    },
+                                    "minSymbols": {
+                                        "minimum": 0,
+                                        "type": "integer"
+                                    }
+                                },
+                                "additionalProperties": false
+                            }
+                        },
+                        "additionalProperties": false
+                    },
+                    "login": {
+                        "type": "object",
+                        "properties": {
+                            "requireCaptcha": {
+                                "type": "boolean"
+                            }
+                        },
+                        "additionalProperties": false
+                    },
+                    "passwordReset": {
+                        "type": "object",
+                        "properties": {
+                            "requireCaptcha": {
+                                "type": "boolean"
+                            }
+                        },
+                        "additionalProperties": false
+                    },
+                    "captcha": {
+                        "type": "object",
+                        "properties": {
+                            "enabled": {
+                                "type": "boolean"
+                            },
+                            "service": {
+                                "anyOf": [
+                                    {
+                                        "enum": [
+                                            "cap",
+                                            "hcaptcha",
+                                            "recaptcha"
+                                        ],
+                                        "type": "string"
+                                    },
+                                    {
+                                        "type": "null"
+                                    }
+                                ]
+                            },
+                            "sitekey": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            },
+                            "secret": {
+                                "description": "Write only. An empty string keeps the current secret.",
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            },
+                            "instance": {
+                                "description": "Base URL of a Cap Standalone server",
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            }
+                        },
+                        "additionalProperties": false
+                    },
+                    "rate": {
+                        "type": "object",
+                        "properties": {
+                            "enabled": {
+                                "type": "boolean"
+                            },
+                            "ip": {
+                                "$ref": "#/components/schemas/AdminRateLimitSchema"
+                            },
+                            "global": {
+                                "$ref": "#/components/schemas/AdminRateLimitSchema"
+                            },
+                            "error": {
+                                "$ref": "#/components/schemas/AdminRateLimitSchema"
+                            },
+                            "login": {
+                                "$ref": "#/components/schemas/AdminRateLimitSchema"
+                            },
+                            "register": {
+                                "$ref": "#/components/schemas/AdminRateLimitSchema"
+                            }
+                        },
+                        "additionalProperties": false
+                    },
+                    "e2ee": {
+                        "type": "object",
+                        "properties": {
+                            "maxEnvelopeBytes": {
+                                "minimum": 1024,
+                                "type": "integer"
+                            },
+                            "maxEnvelopeDevices": {
+                                "minimum": 1,
+                                "type": "integer"
+                            },
+                            "pendingDeviceTtlHours": {
+                                "minimum": 1,
+                                "type": "integer"
+                            },
+                            "deviceRegistrationsPerHour": {
+                                "minimum": 1,
+                                "type": "integer"
+                            },
+                            "deviceUpdatesPerHour": {
+                                "minimum": 1,
+                                "type": "integer"
+                            },
+                            "keyQueriesPerMinute": {
+                                "minimum": 1,
+                                "type": "integer"
                             }
                         },
                         "additionalProperties": false
                     }
                 }
+            },
+            "AdminRateLimitSchema": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "window": {
+                        "description": "Seconds",
+                        "minimum": 1,
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "count",
+                    "window"
+                ]
             },
             "AdminUserUpdateSchema": {
                 "type": "object",
@@ -9563,6 +9809,53 @@
                     "body",
                     "title"
                 ]
+            },
+            "AdminReportUpdateSchema": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "enum": [
+                            "dismissed",
+                            "open",
+                            "resolved"
+                        ],
+                        "type": "string"
+                    },
+                    "resolution_note": {
+                        "maxLength": 2000,
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "delete_message": {
+                        "description": "Also delete the reported message. Needs the MANAGE_MESSAGES right.",
+                        "type": "boolean"
+                    }
+                }
+            },
+            "AdminPasswordResetSchema": {
+                "type": "object",
+                "properties": {
+                    "send_email": {
+                        "description": "Also email the link, when the user has an email address and the instance can send email",
+                        "type": "boolean"
+                    },
+                    "revoke_sessions": {
+                        "description": "Sign the user out of every session",
+                        "type": "boolean"
+                    }
+                }
+            },
+            "AdminSessionsRevokeSchema": {
+                "type": "object",
+                "properties": {
+                    "session_ids": {
+                        "description": "The sessions to end; omit to end all of them",
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
             },
             "AttachmentListResponse": {
                 "type": "object",
@@ -20071,6 +20364,41 @@
                     "window"
                 ]
             },
+            "E2eeLimits": {
+                "type": "object",
+                "properties": {
+                    "maxEnvelopeBytes": {
+                        "type": "integer"
+                    },
+                    "maxEnvelopeDevices": {
+                        "type": "integer",
+                        "default": 256
+                    },
+                    "pendingDeviceTtlHours": {
+                        "type": "integer"
+                    },
+                    "deviceRegistrationsPerHour": {
+                        "type": "integer",
+                        "default": 30
+                    },
+                    "deviceUpdatesPerHour": {
+                        "type": "integer",
+                        "default": 60
+                    },
+                    "keyQueriesPerMinute": {
+                        "type": "integer",
+                        "default": 60
+                    }
+                },
+                "required": [
+                    "deviceRegistrationsPerHour",
+                    "deviceUpdatesPerHour",
+                    "keyQueriesPerMinute",
+                    "maxEnvelopeBytes",
+                    "maxEnvelopeDevices",
+                    "pendingDeviceTtlHours"
+                ]
+            },
             "ProfileEffect": {
                 "type": "object",
                 "properties": {
@@ -21412,6 +21740,9 @@
         },
         {
             "name": "readyz"
+        },
+        {
+            "name": "reporting"
         },
         {
             "name": "safety-hub"
@@ -24584,801 +24915,6 @@
                     {}
                 ],
                 "responses": {
-                    "204": {
-                        "description": "No description available"
-                    }
-                },
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/reporting/": {
-            "get": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "description": "[EXT] Get available reporting menu types.",
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ReportMenuTypeNames"
-                                }
-                            }
-                        }
-                    }
-                },
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/reporting/menu/guild": {
-            "get": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "description": "Get reporting menu options for guild reports.",
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ReportingMenuResponse"
-                                }
-                            }
-                        }
-                    },
-                    "204": {
-                        "description": "No description available"
-                    }
-                },
-                "parameters": [
-                    {
-                        "name": "variant",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Version variant of the menu to retrieve (max 256 characters, default active)"
-                    }
-                ],
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/reporting/guild": {
-            "post": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "description": "Get reporting menu options for guild reports.",
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/CreateReportSchema"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ReportingMenuResponse"
-                                }
-                            }
-                        }
-                    },
-                    "204": {
-                        "description": "No description available"
-                    }
-                },
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/reporting/menu/guild_discovery": {
-            "get": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "description": "Get reporting menu options for guild_discovery reports.",
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ReportingMenuResponse"
-                                }
-                            }
-                        }
-                    },
-                    "204": {
-                        "description": "No description available"
-                    }
-                },
-                "parameters": [
-                    {
-                        "name": "variant",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Version variant of the menu to retrieve (max 256 characters, default active)"
-                    }
-                ],
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/reporting/guild_discovery": {
-            "post": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "description": "Get reporting menu options for guild_discovery reports.",
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/CreateReportSchema"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ReportingMenuResponse"
-                                }
-                            }
-                        }
-                    },
-                    "204": {
-                        "description": "No description available"
-                    }
-                },
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/reporting/menu/guild_directory_entry": {
-            "get": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "description": "Get reporting menu options for guild_directory_entry reports.",
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ReportingMenuResponse"
-                                }
-                            }
-                        }
-                    },
-                    "204": {
-                        "description": "No description available"
-                    }
-                },
-                "parameters": [
-                    {
-                        "name": "variant",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Version variant of the menu to retrieve (max 256 characters, default active)"
-                    }
-                ],
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/reporting/guild_directory_entry": {
-            "post": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "description": "Get reporting menu options for guild_directory_entry reports.",
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/CreateReportSchema"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ReportingMenuResponse"
-                                }
-                            }
-                        }
-                    },
-                    "204": {
-                        "description": "No description available"
-                    }
-                },
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/reporting/menu/guild_scheduled_event": {
-            "get": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "description": "Get reporting menu options for guild_scheduled_event reports.",
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ReportingMenuResponse"
-                                }
-                            }
-                        }
-                    },
-                    "204": {
-                        "description": "No description available"
-                    }
-                },
-                "parameters": [
-                    {
-                        "name": "variant",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Version variant of the menu to retrieve (max 256 characters, default active)"
-                    }
-                ],
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/reporting/guild_scheduled_event": {
-            "post": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "description": "Get reporting menu options for guild_scheduled_event reports.",
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/CreateReportSchema"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ReportingMenuResponse"
-                                }
-                            }
-                        }
-                    },
-                    "204": {
-                        "description": "No description available"
-                    }
-                },
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/reporting/menu/message": {
-            "get": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "description": "Get reporting menu options for message reports.",
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ReportingMenuResponse"
-                                }
-                            }
-                        }
-                    },
-                    "204": {
-                        "description": "No description available"
-                    }
-                },
-                "parameters": [
-                    {
-                        "name": "variant",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Version variant of the menu to retrieve (max 256 characters, default active)"
-                    }
-                ],
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/reporting/message": {
-            "post": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "description": "Get reporting menu options for message reports.",
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/CreateReportSchema"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ReportingMenuResponse"
-                                }
-                            }
-                        }
-                    },
-                    "204": {
-                        "description": "No description available"
-                    }
-                },
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/reporting/menu/stage_channel": {
-            "get": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "description": "Get reporting menu options for stage_channel reports.",
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ReportingMenuResponse"
-                                }
-                            }
-                        }
-                    },
-                    "204": {
-                        "description": "No description available"
-                    }
-                },
-                "parameters": [
-                    {
-                        "name": "variant",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Version variant of the menu to retrieve (max 256 characters, default active)"
-                    }
-                ],
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/reporting/stage_channel": {
-            "post": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "description": "Get reporting menu options for stage_channel reports.",
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/CreateReportSchema"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ReportingMenuResponse"
-                                }
-                            }
-                        }
-                    },
-                    "204": {
-                        "description": "No description available"
-                    }
-                },
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/reporting/menu/first_dm": {
-            "get": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "description": "Get reporting menu options for first_dm reports.",
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ReportingMenuResponse"
-                                }
-                            }
-                        }
-                    },
-                    "204": {
-                        "description": "No description available"
-                    }
-                },
-                "parameters": [
-                    {
-                        "name": "variant",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Version variant of the menu to retrieve (max 256 characters, default active)"
-                    }
-                ],
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/reporting/first_dm": {
-            "post": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "description": "Get reporting menu options for first_dm reports.",
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/CreateReportSchema"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ReportingMenuResponse"
-                                }
-                            }
-                        }
-                    },
-                    "204": {
-                        "description": "No description available"
-                    }
-                },
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/reporting/menu/user": {
-            "get": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "description": "Get reporting menu options for user reports.",
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ReportingMenuResponse"
-                                }
-                            }
-                        }
-                    },
-                    "204": {
-                        "description": "No description available"
-                    }
-                },
-                "parameters": [
-                    {
-                        "name": "variant",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Version variant of the menu to retrieve (max 256 characters, default active)"
-                    }
-                ],
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/reporting/user": {
-            "post": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "description": "Get reporting menu options for user reports.",
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/CreateReportSchema"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ReportingMenuResponse"
-                                }
-                            }
-                        }
-                    },
-                    "204": {
-                        "description": "No description available"
-                    }
-                },
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/reporting/menu/application": {
-            "get": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "description": "Get reporting menu options for application reports.",
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ReportingMenuResponse"
-                                }
-                            }
-                        }
-                    },
-                    "204": {
-                        "description": "No description available"
-                    }
-                },
-                "parameters": [
-                    {
-                        "name": "variant",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Version variant of the menu to retrieve (max 256 characters, default active)"
-                    }
-                ],
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/reporting/application": {
-            "post": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "description": "Get reporting menu options for application reports.",
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/CreateReportSchema"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ReportingMenuResponse"
-                                }
-                            }
-                        }
-                    },
-                    "204": {
-                        "description": "No description available"
-                    }
-                },
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/reporting/menu/widget": {
-            "get": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "description": "Get reporting menu options for widget reports.",
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ReportingMenuResponse"
-                                }
-                            }
-                        }
-                    },
-                    "204": {
-                        "description": "No description available"
-                    }
-                },
-                "parameters": [
-                    {
-                        "name": "variant",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Version variant of the menu to retrieve (max 256 characters, default active)"
-                    }
-                ],
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/reporting/widget": {
-            "post": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "description": "Get reporting menu options for widget reports.",
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/CreateReportSchema"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ReportingMenuResponse"
-                                }
-                            }
-                        }
-                    },
                     "204": {
                         "description": "No description available"
                     }
@@ -35990,7 +35526,7 @@
                 ]
             }
         },
-        "/api/admin/settings/": {
+        "/api/admin/system/voice/": {
             "get": {
                 "x-right-required": "OPERATOR",
                 "security": [
@@ -35998,7 +35534,7 @@
                         "bearer": []
                     }
                 ],
-                "description": "Get the instance settings editable from the admin dashboard",
+                "description": "Voice server and SFU health",
                 "responses": {
                     "default": {
                         "description": "No description available"
@@ -36013,25 +35549,67 @@
                         "color": "red"
                     }
                 ]
-            },
-            "patch": {
+            }
+        },
+        "/api/admin/system/collectibles/": {
+            "get": {
                 "x-right-required": "OPERATOR",
                 "security": [
                     {
                         "bearer": []
                     }
                 ],
-                "description": "Update instance information and registration settings",
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/AdminSettingsUpdateSchema"
-                            }
-                        }
+                "description": "Where the Shop catalogue comes from and when it was last refreshed",
+                "responses": {
+                    "default": {
+                        "description": "No description available"
                     }
                 },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/admin/system/collectibles/refresh": {
+            "post": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Download the collectibles catalogue and profile effects again and reload the Shop",
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/admin/system/client/": {
+            "get": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Client cache, Vencord build and patch check status",
                 "responses": {
                     "default": {
                         "description": "No description available"

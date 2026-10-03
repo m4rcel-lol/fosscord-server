@@ -1,6 +1,6 @@
 /*
 	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
-	Copyright (C) 2023 Spacebar and Spacebar Contributors
+	Copyright (C) 2026 Spacebar and Spacebar Contributors
 	
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU Affero General Public License as published
@@ -16,15 +16,11 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { ApplicationLimits, ChannelLimits, E2eeLimits, GlobalRateLimits, GuildLimits, MessageLimits, RateLimits, UserLimits } from "./subconfigurations/limits";
-
-export class LimitsConfiguration {
-    application: ApplicationLimits = new ApplicationLimits();
-    user: UserLimits = new UserLimits();
-    guild: GuildLimits = new GuildLimits();
-    message: MessageLimits = new MessageLimits();
-    channel: ChannelLimits = new ChannelLimits();
-    rate: RateLimits = new RateLimits();
-    absoluteRate: GlobalRateLimits = new GlobalRateLimits();
-    e2ee: E2eeLimits = new E2eeLimits();
+export class E2eeLimits {
+    maxEnvelopeBytes: number = 64 * 1024;
+    maxEnvelopeDevices: number = 256;
+    pendingDeviceTtlHours: number = 7 * 24;
+    deviceRegistrationsPerHour: number = 30;
+    deviceUpdatesPerHour: number = 60;
+    keyQueriesPerMinute: number = 60;
 }

@@ -28,13 +28,113 @@ export interface AdminSettingsUpdateSchema {
         correspondenceEmail?: string | null;
         correspondenceUserID?: string | null;
     };
+    client?: {
+        /**
+         * @maxLength 100
+         */
+        instanceName?: string;
+        icon?: string | null;
+        logo?: string | null;
+        helpUrl?: string | null;
+        activityApplicationHost?: string | null;
+    };
     register?: {
         disabled?: boolean;
         allowNewRegistration?: boolean;
         requireInvite?: boolean;
+        guestsRequireInvite?: boolean;
         requireCaptcha?: boolean;
         allowMultipleAccounts?: boolean;
+        incrementingDiscriminators?: boolean;
+        email?: { required?: boolean };
+        dateOfBirth?: {
+            /**
+             * @minimum 0
+             * @maximum 100
+             */
+            minimum?: number;
+        };
+        password?: {
+            /**
+             * @minimum 1
+             * @maximum 72
+             */
+            minLength?: number;
+            /**
+             * @minimum 0
+             */
+            minNumbers?: number;
+            /**
+             * @minimum 0
+             */
+            minUpperCase?: number;
+            /**
+             * @minimum 0
+             */
+            minSymbols?: number;
+        };
     };
+    login?: { requireCaptcha?: boolean };
+    passwordReset?: { requireCaptcha?: boolean };
+    captcha?: {
+        enabled?: boolean;
+        service?: "cap" | "hcaptcha" | "recaptcha" | null;
+        sitekey?: string | null;
+        /**
+         * Write only. An empty string keeps the current secret.
+         */
+        secret?: string | null;
+        /**
+         * Base URL of a Cap Standalone server
+         */
+        instance?: string | null;
+    };
+    rate?: {
+        enabled?: boolean;
+        ip?: AdminRateLimitSchema;
+        global?: AdminRateLimitSchema;
+        error?: AdminRateLimitSchema;
+        login?: AdminRateLimitSchema;
+        register?: AdminRateLimitSchema;
+    };
+    e2ee?: {
+        /**
+         * @minimum 1024
+         */
+        maxEnvelopeBytes?: number;
+        /**
+         * @minimum 1
+         */
+        maxEnvelopeDevices?: number;
+        /**
+         * @minimum 1
+         */
+        pendingDeviceTtlHours?: number;
+        /**
+         * @minimum 1
+         */
+        deviceRegistrationsPerHour?: number;
+        /**
+         * @minimum 1
+         */
+        deviceUpdatesPerHour?: number;
+        /**
+         * @minimum 1
+         */
+        keyQueriesPerMinute?: number;
+    };
+}
+
+export interface AdminRateLimitSchema {
+    /**
+     * @minimum 1
+     */
+    count: number;
+    /**
+     * Seconds
+     * @minimum 1
+     */
+    window: number;
 }
 
 export interface AdminUserUpdateSchema {
@@ -254,4 +354,34 @@ export interface AdminAnnouncementCreateSchema {
      * everyone: every user on the instance; staff: only people with admin panel access
      */
     audience: "everyone" | "staff";
+}
+
+export interface AdminReportUpdateSchema {
+    status?: "open" | "resolved" | "dismissed";
+    /**
+     * @maxLength 2000
+     */
+    resolution_note?: string | null;
+    /**
+     * Also delete the reported message. Needs the MANAGE_MESSAGES right.
+     */
+    delete_message?: boolean;
+}
+
+export interface AdminPasswordResetSchema {
+    /**
+     * Also email the link, when the user has an email address and the instance can send email
+     */
+    send_email?: boolean;
+    /**
+     * Sign the user out of every session
+     */
+    revoke_sessions?: boolean;
+}
+
+export interface AdminSessionsRevokeSchema {
+    /**
+     * The sessions to end; omit to end all of them
+     */
+    session_ids?: string[];
 }

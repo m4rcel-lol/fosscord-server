@@ -166,12 +166,30 @@ const read = async (source: Source) => {
     return { raw: await fs.readFile(source.file, "utf8"), stale: Date.now() - stat.mtimeMs > REFRESH_MS };
 };
 
+let lastRefresh: { at: string; ok: boolean; categories?: number; products?: number; error?: string } | null = null;
+
 const refresh = async () => {
     const [raw, effectsRaw] = await Promise.all([download(SOURCES.catalog), download(SOURCES.effects)]);
-    if (!raw) return;
+    if (!raw) {
+        lastRefresh = { at: new Date().toISOString(), ok: false, error: `Could not download ${SOURCES.catalog.url}` };
+        return lastRefresh;
+    }
     const next = parse(raw, effectsRaw ?? (await fs.readFile(SOURCES.effects.file, "utf8").catch(() => undefined)));
     catalog = Promise.resolve(next);
     console.log(`[Collectibles] refreshed catalog: ${next.categories.length} categories, ${next.products.size} products`);
+    lastRefresh = {
+        at: new Date().toISOString(),
+        ok: true,
+        categories: next.categories.length,
+        products: next.products.size,
+        ...(effectsRaw ? {} : { error: `Kept the cached profile effects, ${SOURCES.effects.url} could not be downloaded` }),
+    };
+    return lastRefresh;
+};
+
+const sourceStatus = async ({ url, file }: Source) => {
+    const stat = await fs.stat(file).catch(() => undefined);
+    return { url, file: path.basename(file), size: stat?.size ?? null, updated_at: stat?.mtime.toISOString() ?? null };
 };
 
 const load = async (): Promise<Catalog> => {
@@ -191,6 +209,18 @@ export const Collectibles = {
     get: () => (catalog ??= load()),
 
     refresh,
+
+    async status() {
+        const [catalogSource, effectsSource] = await Promise.all([sourceStatus(SOURCES.catalog), sourceStatus(SOURCES.effects)]);
+        const loaded = catalog ? await catalog : null;
+        return {
+            catalog: catalogSource,
+            effects: effectsSource,
+            refresh_interval_hours: REFRESH_MS / 3_600_000,
+            loaded: loaded ? { categories: loaded.categories.length, products: loaded.products.size, items: loaded.items.size } : null,
+            last_refresh: lastRefresh,
+        };
+    },
 
     async categories() {
         return (await Collectibles.get()).categories;
