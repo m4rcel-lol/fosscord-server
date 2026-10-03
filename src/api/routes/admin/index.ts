@@ -63,6 +63,7 @@ router.get(
                 users: rights.has("MANAGE_USERS"),
                 guilds: rights.has("MANAGE_GUILDS"),
                 reports: rights.has("MANAGE_USERS"),
+                messages: rights.has("MANAGE_MESSAGES"),
                 system: rights.has("OPERATOR"),
             },
         });

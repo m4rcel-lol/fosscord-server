@@ -411,6 +411,7 @@ async function boot() {
     if (state.overview.instance.image) $("#brand-icon").src = state.overview.instance.image;
     mount($("#me"), html`${avatar(state.me)}<div class="ident"><div><strong>${userName(state.me)}</strong><span class="muted">${userTag(state.me)}</span></div></div>`);
     for (const link of $$("#nav a")) link.hidden = link.dataset.access ? !state.overview.access[link.dataset.access] : false;
+    syncNavCounts();
     route();
 }
 
@@ -464,7 +465,9 @@ const TABS = {
     badges: renderBadges,
     announcements: renderAnnouncements,
     guilds: renderGuilds,
+    reports: renderReports,
     status: renderStatus,
+    system: renderSystem,
 };
 
 function route() {
@@ -506,6 +509,7 @@ document.addEventListener("keydown", (e) => {
 async function renderOverview(view) {
     const o = await api("/admin");
     state.overview = o;
+    syncNavCounts();
     const status = await api("/status/summary.json", { auth: false }).catch(() => null);
     const stat = (label, value, href) => html`
         <a class="card stat" ${href ? raw(`href="${escapeHtml(href)}"`) : ""} style="text-decoration:none;color:inherit">
@@ -532,6 +536,7 @@ async function renderOverview(view) {
                     ${stat("Memberships", fmtNumber(o.counts.members))}
                     ${stat("Disabled accounts", fmtNumber(o.counts.disabled_users), o.access.users ? "#/users" : null)}
                     ${stat("Open incidents", fmtNumber(o.counts.open_incidents), o.access.status ? "#/status" : null)}
+                    ${o.access.reports ? stat("Open reports", fmtNumber(o.counts.open_reports), "#/reports") : ""}
                 </div>
                 <div class="card">
                     <h3>Instance</h3>
@@ -552,12 +557,54 @@ async function renderOverview(view) {
 
 /* ---------- settings ---------- */
 
+const CAPTCHA_SERVICES = [
+    ["", "None"],
+    ["cap", "Cap (self-hosted)"],
+    ["hcaptcha", "hCaptcha"],
+    ["recaptcha", "reCAPTCHA"],
+];
+
+const RATE_LIMITS = [
+    ["ip", "Per IP, signed out", "Every request from an IP without an account"],
+    ["global", "Per account", "Every request from a signed-in account"],
+    ["error", "Failed requests per IP", "Requests answered with 401, 403 or 429"],
+    ["login", "Sign-in attempts", "Also covers two-factor, password reset and verification"],
+    ["register", "Registrations per IP", "Only successful sign-ups count"],
+];
+
+const E2EE_LIMITS = [
+    ["maxEnvelopeBytes", "Largest encrypted message", "Bytes. Discord-sized messages fit in the default 65536.", 1024],
+    ["maxEnvelopeDevices", "Devices per encrypted message", "How many recipient devices one message can be encrypted for.", 1],
+    ["pendingDeviceTtlHours", "Unapproved device lifetime", "Hours before a browser that was never approved is revoked.", 1],
+    ["deviceRegistrationsPerHour", "New devices per hour", "Per account. Re-signing a known device doesn't count.", 1],
+    ["deviceUpdatesPerHour", "Device updates per hour", "Per account, for re-signing devices that already exist.", 1],
+    ["keyQueriesPerMinute", "Key lookups per minute", "Per account, for fetching other people's device keys.", 1],
+];
+
+const getPath = (obj, path) => path.split(".").reduce((o, k) => o?.[k], obj);
+const setPath = (obj, path, value) => {
+    const keys = path.split(".");
+    const last = keys.pop();
+    keys.reduce((o, k) => (o[k] ??= {}), obj)[last] = value;
+};
+
 async function renderSettings(view) {
     const s = await api("/admin/settings");
-    const text = (section, key, label, hint, type = "text") =>
-        html`<label>${label}${hint ? html`<span class="hint">${hint}</span>` : ""}<input type="${type}" name="${section}.${key}" value="${s[section][key] ?? ""}" /></label>`;
-    const toggle = (key, label, hint) =>
-        html`<label class="toggle"><input type="checkbox" name="register.${key}" ${s.register[key] ? raw("checked") : ""} /><span>${label}<span class="hint">${hint}</span></span></label>`;
+    const text = (path, label, hint, type = "text", placeholder = "") =>
+        html`<label
+            >${label}${hint ? html`<span class="hint">${hint}</span>` : ""}<input type="${type}" name="${path}" value="${getPath(s, path) ?? ""}" placeholder="${placeholder}"
+        /></label>`;
+    const number = (path, label, hint, min = 0) =>
+        html`<label>${label}${hint ? html`<span class="hint">${hint}</span>` : ""}<input type="number" data-number name="${path}" min="${min}" step="1" value="${getPath(s, path) ?? ""}" required /></label>`;
+    const toggle = (path, label, hint) =>
+        html`<label class="toggle"
+            ><input type="checkbox" name="${path}" ${getPath(s, path) ? raw("checked") : ""} /><span>${label}${hint ? html`<span class="hint">${hint}</span>` : ""}</span></label
+        >`;
+    const captchaState = s.captcha.active
+        ? html`<span class="badge ok"><span class="dot"></span>Active</span>`
+        : s.captcha.enabled
+          ? html`<span class="badge warn"><span class="dot"></span>Enabled but incomplete</span>`
+          : html`<span class="badge"><span class="dot"></span>Off</span>`;
 
     mount(
         view,
@@ -565,7 +612,7 @@ async function renderSettings(view) {
             <div class="page-head">
                 <div>
                     <h1>Site settings</h1>
-                    <p class="muted">Instance information shown to users and clients, and who can sign up.</p>
+                    <p class="muted">Instance information, how the web client is branded, who can sign up, and the limits that protect the instance.</p>
                 </div>
             </div>
             <form id="settings-form" class="stack">
@@ -573,27 +620,90 @@ async function renderSettings(view) {
                     <h2>Instance information</h2>
                     <div class="form-grid">
                         <label>Instance name<input name="general.instanceName" value="${s.general.instanceName}" required maxlength="100" /></label>
-                        ${text("general", "image", "Icon URL", "Square image shown in the dashboard and to clients", "url")}
+                        ${text("general.image", "Icon URL", "Fallback icon when the client icon below is empty", "url")}
                         <label class="span"
                             >Description<textarea name="general.instanceDescription" maxlength="1000">${s.general.instanceDescription ?? ""}</textarea></label
                         >
-                        ${text("general", "frontPage", "Homepage URL", "Linked from the status page", "url")}
-                        ${text("general", "tosPage", "Terms of service URL", "Opened from every Terms of Service link in the client", "url")}
-                        ${text("general", "privacyPage", "Privacy policy URL", "Falls back to the terms of service URL", "url")}
-                        ${text("general", "guidelinesPage", "Community guidelines URL", "Falls back to the terms of service URL", "url")}
-                        ${text("general", "correspondenceEmail", "Contact email", "", "email")}
-                        ${text("general", "correspondenceUserID", "Contact user ID", "The account users can message for help")}
+                        ${text("general.frontPage", "Homepage URL", "Linked from the status page", "url")}
+                        ${text("general.tosPage", "Terms of service URL", "Opened from every Terms of Service link in the client", "url")}
+                        ${text("general.privacyPage", "Privacy policy URL", "Falls back to the terms of service URL", "url")}
+                        ${text("general.guidelinesPage", "Community guidelines URL", "Falls back to the terms of service URL", "url")}
+                        ${text("general.correspondenceEmail", "Contact email", "", "email")}
+                        ${text("general.correspondenceUserID", "Contact user ID", "The account users can message for help")}
+                    </div>
+                </div>
+                <div class="card">
+                    <h2>Web client branding</h2>
+                    <p class="muted" style="margin:0 0 14px">What the bundled web client shows instead of Discord's name and artwork. Open clients pick it up on their next reload.</p>
+                    <div class="form-grid">
+                        <label>Name in the client<span class="hint">Replaces "Discord" in titles and text</span><input name="client.instanceName" value="${s.client.instanceName}" required maxlength="100" /></label>
+                        ${text("client.icon", "Square icon", "A URL, or a file path relative to the server folder. Used for the favicon, avatars and the app icon.", "text", "assets/icon.png")}
+                        ${text("client.logo", "Wordmark logo", "A URL or file path. Shown where Discord shows its wordmark; empty draws the name next to the icon.", "text")}
+                        ${text("client.helpUrl", "Help center URL", "Where help links go. Empty hides them.", "url", "https://")}
+                        ${text("client.activityApplicationHost", "Activity host", "Host that serves embedded activities. Empty uses this instance.", "text", "activities.example.com")}
                     </div>
                 </div>
                 <div class="card">
                     <h2>Registration</h2>
                     <div class="stack">
-                        ${toggle("disabled", "Disable registration entirely", "Nobody can create an account, including with an invite.")}
-                        ${toggle("allowNewRegistration", "Allow new registrations", "Turn off to stop new sign-ups while keeping invite-based registration rules.")}
-                        ${toggle("requireInvite", "Require an invite to register", "New accounts must join through an invite link.")}
-                        ${toggle("requireCaptcha", "Require a captcha", "Only applies when a captcha service is configured.")}
-                        ${toggle("allowMultipleAccounts", "Allow multiple accounts per person", "When off, sign-ups from known devices/IPs are refused.")}
+                        ${toggle("register.disabled", "Disable registration entirely", "Nobody can create an account, including with an invite.")}
+                        ${toggle("register.allowNewRegistration", "Allow new registrations", "Turn off to stop new sign-ups while keeping invite-based registration rules.")}
+                        ${toggle("register.requireInvite", "Require an invite to register", "New accounts must join through an invite link.")}
+                        ${toggle("register.guestsRequireInvite", "Require an invite for guest accounts", "Guest accounts are created without a password.")}
+                        ${toggle("register.email.required", "Require an email address", "Off lets people sign up with only a username and password.")}
+                        ${toggle("register.allowMultipleAccounts", "Allow multiple accounts per person", "When off, sign-ups from known devices or IPs are refused.")}
+                        ${toggle("register.incrementingDiscriminators", "Give out discriminators in order", "Off picks a random free one for legacy usernames.")}
                     </div>
+                    <div class="form-grid" style="margin-top:16px">
+                        ${number("register.dateOfBirth.minimum", "Minimum age", "Years. Set to 0 to accept any date of birth.")}
+                        ${number("register.password.minLength", "Minimum password length", "", 1)}
+                        ${number("register.password.minNumbers", "Digits a password needs")}
+                        ${number("register.password.minUpperCase", "Capital letters a password needs")}
+                        ${number("register.password.minSymbols", "Symbols a password needs")}
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="row" style="justify-content:space-between;margin-bottom:12px"><h2 style="margin:0">Captcha</h2>${captchaState}</div>
+                    <div class="stack">
+                        ${toggle("captcha.enabled", "Use a captcha", "Needs a service, a site key and a secret. Cap also needs its server URL.")}
+                        <div class="form-grid">
+                            <label>Service<select name="captcha.service">${options(CAPTCHA_SERVICES, s.captcha.service ?? "")}</select></label>
+                            ${text("captcha.instance", "Cap server URL", "Cap Standalone base URL. Browsers have to reach it too.", "url", "https://cap.example.com")}
+                            ${text("captcha.sitekey", "Site key", "")}
+                            <label
+                                >Secret<span class="hint">${s.captcha.secret_set ? "A secret is saved. Leave empty to keep it." : "No secret saved yet."}</span
+                                ><input type="password" name="captcha.secret" autocomplete="new-password" placeholder="${s.captcha.secret_set ? "••••••••" : ""}"
+                            /></label>
+                        </div>
+                        ${toggle("register.requireCaptcha", "Ask for a captcha when registering", "")}
+                        ${toggle("login.requireCaptcha", "Ask for a captcha when signing in", "")}
+                        ${toggle("passwordReset.requireCaptcha", "Ask for a captcha when requesting a password reset", "")}
+                    </div>
+                </div>
+                <div class="card">
+                    <h2>Rate limits</h2>
+                    <p class="muted" style="margin:0 0 14px">Requests allowed per window of seconds. Changes apply after the server restarts.</p>
+                    <div class="stack">
+                        ${toggle("rate.enabled", "Rate limit requests", "Accounts with the BYPASS_RATE_LIMITS right are never limited.")}
+                        <div class="form-grid">
+                            ${RATE_LIMITS.map(
+                                ([key, label, hint]) => html`<div class="stack" style="gap:6px">
+                                    <strong style="font-size:13px">${label}</strong><span class="hint muted" style="font-size:12px">${hint}</span>
+                                    <div class="row" style="flex-wrap:nowrap">
+                                        <input type="number" data-number name="rate.${key}.count" min="1" step="1" value="${s.rate[key].count}" aria-label="${label}: requests" required />
+                                        <span class="muted">per</span>
+                                        <input type="number" data-number name="rate.${key}.window" min="1" step="1" value="${s.rate[key].window}" aria-label="${label}: seconds" required />
+                                        <span class="muted">s</span>
+                                    </div>
+                                </div>`,
+                            )}
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h2>Encrypted DMs</h2>
+                    <p class="muted" style="margin:0 0 14px">Limits for end-to-end encrypted conversations. They apply right away.</p>
+                    <div class="form-grid">${E2EE_LIMITS.map(([key, label, hint, min]) => number(`e2ee.${key}`, label, hint, min))}</div>
                 </div>
                 <div class="form-actions">
                     <button class="btn" type="reset">Discard changes</button>
@@ -606,15 +716,18 @@ async function renderSettings(view) {
     $("#settings-form").addEventListener("submit", async (e) => {
         e.preventDefault();
         const form = e.currentTarget;
-        const body = { general: {}, register: {} };
-        for (const el of $$("input, textarea", form)) {
-            const [section, key] = el.name.split(".");
-            body[section][key] = el.type === "checkbox" ? el.checked : el.value;
+        const body = {};
+        for (const el of $$("input, textarea, select", form)) {
+            if (!el.name) continue;
+            if (el.name === "captcha.secret" && !el.value) continue;
+            const value = el.type === "checkbox" ? el.checked : "number" in el.dataset ? Number(el.value) : el.name === "captcha.service" ? el.value || null : el.value;
+            setPath(body, el.name, value);
         }
         const saved = await act($("button[type=submit]", form), () => api("/admin/settings", { method: "PATCH", body }), "Settings saved");
         if (saved) {
-            $("#brand-name").textContent = saved.general.instanceName;
-            if (saved.general.image) $("#brand-icon").src = saved.general.image;
+            state.overview = await api("/admin");
+            $("#brand-name").textContent = state.overview.instance.name;
+            if (state.overview.instance.image) $("#brand-icon").src = state.overview.instance.image;
             renderSettings(view);
         }
     });
@@ -837,6 +950,8 @@ async function openUser(id, reload) {
             </form>
 
             <div class="card stack" id="standing-card"></div>
+            <div class="card stack" id="security-card"></div>
+            <div class="card stack" id="sessions-card"></div>
 
             ${u.guilds.length
                 ? html`<div class="card">
@@ -858,9 +973,13 @@ async function openUser(id, reload) {
                 ? html`<div class="card danger-zone stack">
                       <h3>Danger zone</h3>
                       <p class="muted" style="margin:0">
-                          Permanently deletes the account, its DMs and memberships, hands owned servers to the next-highest member, and bans them from registering again.
-                          This can't be undone.
+                          Permanently deletes the account, its DMs and memberships, and hands owned servers to the next-highest member. This can't be undone.
                       </p>
+                      <label class="toggle"
+                          ><input type="checkbox" id="ban-persist" checked /><span
+                              >Ban them from registering again<span class="hint">Adds them to the instance ban list with the reason below.</span></span
+                          ></label
+                      >
                       <label>Reason<input id="ban-reason" placeholder="Shown in the instance ban list" /></label>
                       <div><button class="btn danger" id="ban-user" type="button">Delete & ban user</button></div>
                   </div>`
@@ -1042,16 +1161,409 @@ async function openUser(id, reload) {
         });
     };
     renderStanding();
+    renderUserSecurity(u);
+    renderUserSessions(u);
 
+    $("#ban-persist")?.addEventListener("change", (e) => {
+        $("#ban-user").textContent = e.target.checked ? "Delete & ban user" : "Delete user";
+    });
     $("#ban-user")?.addEventListener("click", async (e) => {
-        if (!confirm(`Permanently delete and ban ${userName(u)}? This can't be undone.`)) return;
-        const reason = $("#ban-reason").value.trim() || `Banned from the admin dashboard by ${state.me.username}`;
-        const done = await act(e.currentTarget, () => api(`/users/${u.id}/delete`, { method: "POST", body: { reason, persistInstanceBan: true } }), `${userName(u)} was deleted and banned`);
+        const ban = $("#ban-persist").checked;
+        if (!confirm(`Permanently delete${ban ? " and ban" : ""} ${userName(u)}? This can't be undone.`)) return;
+        const reason = $("#ban-reason").value.trim() || `${ban ? "Banned" : "Deleted"} from the admin dashboard by ${state.me.username}`;
+        const done = await act(
+            e.currentTarget,
+            () => api(`/users/${u.id}/delete`, { method: "POST", body: { reason, persistInstanceBan: ban } }),
+            `${userName(u)} was deleted${ban ? " and banned" : ""}`,
+        );
         if (done !== undefined) {
             closeDrawer();
             reload?.();
         }
     });
+}
+
+const describeClient = (session) => {
+    const info = session.client_info ?? {};
+    const parts = [info.browser ?? info.client ?? info.platform, info.os].filter(Boolean);
+    return parts.length ? parts.join(" on ") : "Unknown client";
+};
+
+async function renderUserSecurity(u) {
+    const card = $("#security-card");
+    if (!card) return;
+    const isSelf = u.id === state.me.id;
+    let mfa;
+    try {
+        mfa = await api(`/admin/users/${u.id}/mfa`);
+    } catch (e) {
+        return mount(card, html`<h3>Sign-in & security</h3><p class="form-error">${e.message}</p>`);
+    }
+    const methods = [mfa.totp ? "an authenticator app" : null, mfa.security_keys ? `${mfa.security_keys} security ${mfa.security_keys === 1 ? "key" : "keys"}` : null].filter(Boolean);
+    mount(
+        card,
+        html`
+            <h3>Sign-in & security</h3>
+            <div class="list">
+                <div class="list-item">
+                    <div class="grow">
+                        <strong>Two-factor authentication</strong>
+                        <div class="muted">
+                            ${mfa.mfa_enabled
+                                ? html`On with ${methods.join(" and ") || "a method this page can't name"}${mfa.backup_codes ? html`, ${fmtNumber(mfa.backup_codes)} backup codes left` : ""}`
+                                : "Off"}
+                        </div>
+                    </div>
+                    ${mfa.mfa_enabled && !isSelf ? html`<button class="btn small" id="mfa-reset" type="button">Turn off 2FA</button>` : ""}
+                </div>
+                <div class="list-item">
+                    <div class="grow">
+                        <strong>Password</strong>
+                        <div class="muted">Make a reset link that works for one hour. ${u.email ? "It can also be emailed to them." : "They have no email, so send them the link yourself."}</div>
+                    </div>
+                    ${!isSelf ? html`<button class="btn small" id="password-reset" type="button">Make reset link</button>` : ""}
+                </div>
+            </div>
+            <div id="reset-result" hidden></div>
+        `,
+    );
+
+    $("#mfa-reset", card)?.addEventListener("click", async (e) => {
+        if (!confirm(`Turn off two-factor for ${userName(u)}? Their authenticator app, security keys and backup codes stop working, and they can sign in with only their password.`)) return;
+        const done = await act(e.currentTarget, () => api(`/admin/users/${u.id}/mfa`, { method: "DELETE" }), "Two-factor turned off");
+        if (done !== undefined) renderUserSecurity(u);
+    });
+    $("#password-reset", card)?.addEventListener("click", (e) => {
+        e.currentTarget.hidden = true;
+        const result = $("#reset-result", card);
+        result.hidden = false;
+        mount(
+            result,
+            html`<form id="reset-form" class="stack" style="gap:10px">
+                ${u.email
+                    ? html`<label class="toggle"
+                          ><input type="checkbox" name="send_email" checked /><span>Email the link to ${u.email}<span class="hint">Only sent when the instance has email set up.</span></span></label
+                      >`
+                    : ""}
+                <label class="toggle"
+                    ><input type="checkbox" name="revoke_sessions" /><span>Sign them out everywhere<span class="hint">Use this when the account might be compromised.</span></span></label
+                >
+                <div class="form-actions" style="margin-top:0"><button class="btn primary small" type="submit">Make reset link</button></div>
+            </form>`,
+        );
+        $("#reset-form", result).addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const form = e.currentTarget;
+            const body = { send_email: !!form.send_email?.checked, revoke_sessions: form.revoke_sessions.checked };
+            const out = await act($("button[type=submit]", form), () => api(`/admin/users/${u.id}/password-reset`, { method: "POST", body }));
+            if (!out) return;
+            mount(
+                result,
+                html`<div class="stack" style="gap:8px">
+                    <label
+                        >Reset link<span class="hint">Works once, for one hour, and stops working if they change their password another way.</span
+                        ><input id="reset-link" readonly value="${out.link}"
+                    /></label>
+                    <div class="row">
+                        <button class="btn small" id="copy-reset" type="button">Copy link</button>
+                        <span class="muted"
+                            >${out.emailed ? `Also emailed to ${u.email}.` : body.send_email ? "Email isn't set up on this instance, so nothing was sent." : ""}${body.revoke_sessions
+                                ? " Their sessions were ended."
+                                : ""}</span
+                        >
+                    </div>
+                </div>`,
+            );
+            $("#copy-reset", result).addEventListener("click", () =>
+                navigator.clipboard.writeText(out.link).then(
+                    () => toast("Link copied"),
+                    () => $("#reset-link", result).select(),
+                ),
+            );
+            if (body.revoke_sessions) renderUserSessions(u);
+        });
+    });
+}
+
+async function renderUserSessions(u) {
+    const card = $("#sessions-card");
+    if (!card) return;
+    let sessions;
+    try {
+        sessions = await api(`/admin/users/${u.id}/sessions`);
+    } catch (e) {
+        return mount(card, html`<h3>Sessions</h3><p class="form-error">${e.message}</p>`);
+    }
+    mount(
+        card,
+        html`
+            <div class="row" style="justify-content:space-between">
+                <h3>Sessions (${sessions.length})</h3>
+                ${sessions.length ? html`<button class="btn small" id="sessions-end-all" type="button">Sign out everywhere</button>` : ""}
+            </div>
+            ${sessions.length
+                ? html`<div class="list">
+                      ${sessions.map(
+                          (s) => html`<div class="list-item" data-session="${s.id}">
+                              <div class="grow">
+                                  <strong>${describeClient(s)}</strong>
+                                  <div class="muted">
+                                      Last active ${fmtDate(s.last_seen ?? s.created_at)}${s.last_seen_location ? html` · ${s.last_seen_location}` : ""}${s.last_seen_ip
+                                          ? html` · <code>${s.last_seen_ip}</code>`
+                                          : ""}
+                                      · signed in ${fmtDay(s.created_at)}
+                                  </div>
+                              </div>
+                              <button class="btn small ghost" type="button" data-end>Sign out</button>
+                          </div>`,
+                      )}
+                  </div>`
+                : html`<p class="muted" style="margin:0">Not signed in anywhere.</p>`}
+        `,
+    );
+    const end = async (button, sessionIds) => {
+        const done = await act(
+            button,
+            () => api(`/admin/users/${u.id}/sessions/logout`, { method: "POST", body: sessionIds ? { session_ids: sessionIds } : {} }),
+            sessionIds ? "Session ended" : "Signed out everywhere",
+        );
+        if (done !== undefined) renderUserSessions(u);
+    };
+    for (const row of $$("[data-session]", card)) $("[data-end]", row).addEventListener("click", (e) => end(e.currentTarget, [row.dataset.session]));
+    $("#sessions-end-all", card)?.addEventListener("click", (e) => {
+        if (confirm(`Sign ${userName(u)} out of every session? They'll have to sign in again everywhere.`)) end(e.currentTarget);
+    });
+}
+
+/* ---------- reports ---------- */
+
+const REPORT_TYPES = {
+    message: "Message",
+    first_dm: "First DM",
+    user: "User",
+    guild: "Server",
+    guild_discovery: "Server in Discovery",
+    guild_directory_entry: "Directory entry",
+    guild_scheduled_event: "Event",
+    stage_channel: "Stage",
+    application: "App",
+    widget: "Profile widget",
+};
+const REPORT_STATUSES = [
+    ["open", "Open", "warn"],
+    ["resolved", "Resolved", "ok"],
+    ["dismissed", "Dismissed", ""],
+];
+const reportStatus = (key) => REPORT_STATUSES.find(([k]) => k === key) ?? REPORT_STATUSES[0];
+
+const reportsState = { status: "open", offset: 0, limit: 50 };
+
+async function renderReports(view) {
+    mount(
+        view,
+        html`
+            <div class="page-head">
+                <div>
+                    <h1>Reports</h1>
+                    <p class="muted">Everything people reported from the client's Report menus. Click a report to review it and act on it.</p>
+                </div>
+            </div>
+            <div class="row" id="report-tabs" style="margin-bottom:12px"></div>
+            <div id="report-results"><div class="spinner">Loading…</div></div>
+        `,
+    );
+
+    const load = async () => {
+        const params = new URLSearchParams({ status: reportsState.status, limit: reportsState.limit, offset: reportsState.offset });
+        const { reports, total, counts } = await api(`/admin/reports?${params}`);
+        const tabs = $("#report-tabs");
+        const results = $("#report-results");
+        if (!results) return;
+        mount(
+            tabs,
+            [...REPORT_STATUSES, ["all", "All"]].map(
+                ([key, label]) =>
+                    html`<button class="btn small ${reportsState.status === key ? "primary" : ""}" type="button" data-status="${key}">
+                        ${label}${key !== "all" ? html` <span class="muted" style="${reportsState.status === key ? "color:inherit" : ""}">${fmtNumber(counts[key])}</span>` : ""}
+                    </button>`,
+            ),
+        );
+        mount(
+            results,
+            reports.length
+                ? html`
+                      <div class="table-wrap">
+                          <table>
+                              <thead>
+                                  <tr>
+                                      <th>Report</th>
+                                      <th>Reported</th>
+                                      <th class="hide-sm">By</th>
+                                      <th class="hide-sm">When</th>
+                                      <th>Status</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  ${reports.map(
+                                      (r) => html`
+                                          <tr data-id="${r.id}">
+                                              <td>
+                                                  <strong>${REPORT_TYPES[r.type] ?? r.type}</strong>
+                                                  <div class="muted">${r.reason || "No reason picked"}</div>
+                                              </td>
+                                              <td>${reportTarget(r)}</td>
+                                              <td class="hide-sm">${r.reporter ? html`<div class="ident">${avatar(r.reporter)}<span>${userName(r.reporter)}</span></div>` : "—"}</td>
+                                              <td class="hide-sm">${fmtDate(r.created_at)}</td>
+                                              <td><span class="badge ${reportStatus(r.status)[2]}">${reportStatus(r.status)[1]}</span></td>
+                                          </tr>
+                                      `,
+                                  )}
+                              </tbody>
+                          </table>
+                      </div>
+                      ${pager(total, reportsState)}
+                  `
+                : html`<div class="card empty">${reportsState.status === "open" ? "No open reports. Reports people send from the client show up here." : "No reports here."}</div>`,
+        );
+        for (const btn of $$("[data-status]", tabs))
+            btn.addEventListener("click", () => {
+                reportsState.status = btn.dataset.status;
+                reportsState.offset = 0;
+                load();
+            });
+        for (const row of $$("tbody tr", results)) row.addEventListener("click", () => openReport(reports.find((r) => r.id === row.dataset.id), load));
+        bindPager(results, total, reportsState, load);
+    };
+    await load();
+}
+
+const reportTarget = (r) => {
+    if (r.reported_user) return html`<div class="ident">${avatar(r.reported_user)}<span>${userName(r.reported_user)}</span></div>`;
+    if (r.guild) return html`<div class="ident">${guildIcon(r.guild)}<span>${r.guild.name ?? r.guild.id}</span></div>`;
+    if (r.application_id) return html`<span class="muted">App <code>${r.application_id}</code></span>`;
+    return html`<span class="muted">—</span>`;
+};
+
+function openReport(r, reload) {
+    const access = state.overview.access;
+    const snap = r.snapshot ?? {};
+    const answers = Object.entries(r.elements ?? {}).filter(([, v]) => (Array.isArray(v) ? v.length : v));
+    const body = openDrawer(
+        `${REPORT_TYPES[r.type] ?? r.type} report`,
+        html`
+            <div class="row" style="justify-content:space-between">
+                <div>
+                    <h2>${r.reason || "No reason picked"}</h2>
+                    <span class="muted">Reported ${fmtDate(r.created_at)}</span>
+                </div>
+                <span class="badge ${reportStatus(r.status)[2]}" style="font-size:12px;padding:3px 10px"><span class="dot"></span>${reportStatus(r.status)[1]}</span>
+            </div>
+
+            ${snap.content !== undefined
+                ? html`<div class="card stack" style="gap:8px">
+                      <div class="row" style="justify-content:space-between">
+                          <h3 style="margin:0">Reported message</h3>
+                          ${r.message_exists ? html`<span class="badge">Still posted</span>` : html`<span class="badge danger">Deleted</span>`}
+                      </div>
+                      ${snap.author ? html`<div class="ident">${avatar(snap.author)}<div><strong>${userName(snap.author)}</strong><span class="muted">${fmtDate(snap.sent_at)}</span></div></div>` : ""}
+                      <p style="margin:0;white-space:pre-wrap;overflow-wrap:anywhere">${snap.content || html`<span class="muted">No text</span>`}</p>
+                      ${snap.attachments?.length
+                          ? html`<div class="list">${snap.attachments.map((a) => html`<div class="list-item"><a href="${a.url}" target="_blank" rel="noopener" class="grow">${a.filename}</a><span class="muted">${a.content_type ?? ""}</span></div>`)}</div>`
+                          : ""}
+                      ${snap.embeds ? html`<span class="muted">${fmtNumber(snap.embeds)} ${snap.embeds === 1 ? "embed" : "embeds"} not shown</span>` : ""}
+                      <span class="muted">This is how the message looked when it was reported.</span>
+                  </div>`
+                : ""}
+
+            <div class="card">
+                <div class="list">
+                    ${r.reported_user
+                        ? html`<div class="list-item">
+                              <span class="grow muted">Reported user</span>
+                              <span class="ident">${avatar(r.reported_user)}<span>${userName(r.reported_user)}</span></span>
+                              ${r.reported_user.disabled ? html`<span class="badge danger">Disabled</span>` : ""}
+                              ${access.users ? html`<button class="btn small ghost" type="button" data-open-user="${r.reported_user.id}">Open</button>` : ""}
+                          </div>`
+                        : ""}
+                    ${r.guild
+                        ? html`<div class="list-item">
+                              <span class="grow muted">Server</span>
+                              <span class="ident">${guildIcon(r.guild)}<span>${r.guild.name ?? r.guild.id}</span></span>
+                              ${access.guilds && r.guild.name ? html`<button class="btn small ghost" type="button" data-open-guild="${r.guild.id}">Open</button>` : ""}
+                          </div>`
+                        : ""}
+                    ${r.channel ? html`<div class="list-item"><span class="grow muted">Channel</span><span>${r.channel.name ? `#${r.channel.name}` : html`<code>${r.channel.id}</code>`}</span></div>` : ""}
+                    ${r.application_id ? html`<div class="list-item"><span class="grow muted">App</span><code>${r.application_id}</code></div>` : ""}
+                    ${r.guild_scheduled_event_id ? html`<div class="list-item"><span class="grow muted">Event</span><code>${r.guild_scheduled_event_id}</code></div>` : ""}
+                    <div class="list-item">
+                        <span class="grow muted">Reported by</span>
+                        ${r.reporter ? html`<span class="ident">${avatar(r.reporter)}<span>${userName(r.reporter)}</span></span>` : "—"}
+                        ${r.reporter && access.users ? html`<button class="btn small ghost" type="button" data-open-user="${r.reporter.id}">Open</button>` : ""}
+                    </div>
+                    ${answers.map(
+                        ([key, value]) =>
+                            html`<div class="list-item"><span class="grow muted">${key.replace(/_/g, " ")}</span><span style="white-space:pre-wrap;text-align:right">${Array.isArray(value) ? value.join(", ") : value}</span></div>`,
+                    )}
+                </div>
+            </div>
+
+            ${r.status !== "open"
+                ? html`<div class="card">
+                      <div class="list">
+                          <div class="list-item"><span class="grow muted">${reportStatus(r.status)[1]} by</span><span>${r.resolved_by ? userName(r.resolved_by) : "—"}</span></div>
+                          <div class="list-item"><span class="grow muted">On</span><span>${fmtDate(r.resolved_at)}</span></div>
+                          ${r.resolution_note ? html`<div class="list-item"><span class="grow muted">Note</span><span style="white-space:pre-wrap">${r.resolution_note}</span></div>` : ""}
+                      </div>
+                  </div>`
+                : ""}
+
+            <form id="report-form" class="card stack">
+                <h3>${r.status === "open" ? "Close this report" : "Change the outcome"}</h3>
+                <label>Note<span class="hint">For staff only. The reporter isn't told.</span><textarea name="note" maxlength="2000">${r.resolution_note ?? ""}</textarea></label>
+                ${r.message_exists && access.messages
+                    ? html`<label class="toggle"><input type="checkbox" name="delete_message" /><span>Delete the reported message<span class="hint">Removes it for everyone.</span></span></label>`
+                    : ""}
+                <div class="form-actions">
+                    ${r.status !== "open" ? html`<button class="btn" type="submit" value="open">Reopen</button>` : ""}
+                    ${r.status !== "dismissed" ? html`<button class="btn" type="submit" value="dismissed">Dismiss</button>` : ""}
+                    ${r.status !== "resolved" ? html`<button class="btn primary" type="submit" value="resolved">Mark resolved</button>` : ""}
+                </div>
+            </form>
+        `,
+    );
+
+    for (const btn of $$("[data-open-user]", body)) btn.addEventListener("click", () => openUser(btn.dataset.openUser, reload));
+    for (const btn of $$("[data-open-guild]", body)) btn.addEventListener("click", () => openGuild(btn.dataset.openGuild, reload));
+
+    $("#report-form", body).addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const form = e.currentTarget;
+        const status = e.submitter?.value ?? "resolved";
+        const deleting = !!form.delete_message?.checked;
+        if (deleting && !confirm("Delete the reported message for everyone?")) return;
+        const next = await act(
+            e.submitter,
+            () => api(`/admin/reports/${r.id}`, { method: "PATCH", body: { status, resolution_note: form.note.value, ...(deleting ? { delete_message: true } : {}) } }),
+            { open: "Report reopened", dismissed: "Report dismissed", resolved: "Report resolved" }[status],
+        );
+        if (next) {
+            reload?.();
+            refreshOverviewCounts();
+            openReport(next, reload);
+        }
+    });
+}
+
+async function refreshOverviewCounts() {
+    state.overview = await api("/admin").catch(() => state.overview);
+    syncNavCounts();
+}
+
+function syncNavCounts() {
+    const link = $('#nav a[data-tab="reports"]');
+    if (!link) return;
+    const open = state.overview?.counts?.open_reports ?? 0;
+    mount(link, html`Reports${open ? html`<span class="nav-count">${fmtNumber(open)}</span>` : ""}`);
 }
 
 /* ---------- announcements ---------- */
@@ -1551,6 +2063,284 @@ async function openGuild(id, reload) {
             closeDrawer();
             reload?.();
         }
+    });
+}
+
+/* ---------- system ---------- */
+
+const fmtBytes = (n) => (n == null ? "—" : n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`);
+const fmtAgo = (value) => {
+    if (!value) return "never";
+    const seconds = (Date.now() - new Date(value).getTime()) / 1000;
+    return seconds < 60 ? "just now" : `${fmtDuration(seconds)} ago`;
+};
+const item = (label, value) => html`<div class="list-item"><span class="grow muted">${label}</span><span style="text-align:right">${value}</span></div>`;
+const PATCH_GROUPS = [
+    ["fosscord", "Fosscord plugins", "danger"],
+    ["enabled", "Upstream plugins enabled by default", "warn"],
+    ["upstream", "Other upstream plugins", ""],
+];
+
+async function renderSystem(view) {
+    mount(
+        view,
+        html`
+            <div class="page-head">
+                <div>
+                    <h1>System</h1>
+                    <p class="muted">The bundled web client, its Vencord mods, the Shop catalogue and voice.</p>
+                </div>
+                <button class="btn" id="system-refresh" type="button">Check again</button>
+            </div>
+            <div class="stack">
+                <div id="system-client" class="stack"><div class="card spinner">Loading client status…</div></div>
+                <div class="card stack" id="system-voice"><div class="spinner">Loading voice status…</div></div>
+                <div class="card stack" id="system-collectibles"><div class="spinner">Loading Shop catalogue…</div></div>
+            </div>
+        `,
+    );
+    $("#system-refresh").addEventListener("click", () => renderSystem(view));
+
+    const fail = (el, title) => (e) => {
+        if (e.status !== 401) mount(el, html`<h2>${title}</h2><p class="form-error">${e.message}</p>`);
+    };
+    await Promise.all([
+        api("/admin/system/client").then(renderClientStatus, fail($("#system-client"), "Web client")),
+        api("/admin/system/voice").then(renderVoiceStatus, fail($("#system-voice"), "Voice")),
+        api("/admin/system/collectibles").then(renderCollectiblesStatus, fail($("#system-collectibles"), "Shop catalogue")),
+    ]);
+}
+
+function renderClientStatus({ client, vencord, patch_check: check }) {
+    const el = $("#system-client");
+    if (!el) return;
+    const stale = check && client.build_number && check.build_number !== client.build_number;
+    const outdated = check && vencord.built_at && new Date(check.checked_at) < new Date(vencord.built_at);
+    const groups = check
+        ? PATCH_GROUPS.map(([key, label, tone]) => ({
+              label,
+              tone,
+              items: [
+                  ...check.bad_patches.filter((p) => p.group === key).map((p) => ({ plugin: p.plugin, text: `Patch ${p.type}`, detail: p.error ?? p.match })),
+                  ...check.bad_starts.filter((p) => p.group === key).map((p) => ({ plugin: p.plugin, text: "Failed to start", detail: p.error })),
+                  ...(key === "fosscord" ? check.unmatched_all_patches.map((p) => ({ plugin: p.plugin, text: "Patch found no module", detail: p.find })) : []),
+                  ...(key === "upstream" ? check.bad_finds.map((find) => ({ plugin: "Webpack", text: "Find failed", detail: find })) : []),
+              ],
+          }))
+        : [];
+    const problems = groups.slice(0, 2).reduce((n, g) => n + g.items.length, 0);
+
+    mount(
+        el,
+        html`
+            <div class="card">
+                <div class="row" style="justify-content:space-between;margin-bottom:8px">
+                    <h2 style="margin:0">Web client</h2>
+                    ${!client.enabled
+                        ? html`<span class="badge"><span class="dot"></span>Not served</span>`
+                        : client.present
+                          ? html`<span class="badge ok"><span class="dot"></span>Build ${client.build_number ?? "unknown"}</span>`
+                          : html`<span class="badge danger"><span class="dot"></span>Missing</span>`}
+                </div>
+                ${client.present
+                    ? html`<div class="list">
+                          ${item("Build number", client.build_number ?? "—")}
+                          ${item("Version hash", html`<code>${client.version_hash?.slice(0, 12) ?? "—"}</code>`)}
+                          ${item("Downloaded", html`${fmtDate(client.generated_at)} <span class="muted">(${fmtAgo(client.generated_at)})</span>`)}
+                          ${item("Cached files", `${fmtNumber(client.files)} files, ${client.compressed_files == null ? "not precompressed" : `${fmtNumber(client.compressed_files)} precompressed`}`)}
+                          ${item("Client patches", client.patches.length ? html`<span class="badges" style="justify-content:flex-end">${client.patches.map((p) => html`<span class="badge">${p.replace(/\.js$/, "")}</span>`)}</span>` : "None")}
+                          ${item(
+                              "Failed downloads",
+                              client.failures.count ? html`<span class="badge warn">${fmtNumber(client.failures.count)}</span>` : html`<span class="badge ok">None</span>`,
+                          )}
+                          ${item(
+                              "Assets missing from the cache",
+                              client.misses.count ? html`<span class="badge warn">${fmtNumber(client.misses.count)} files</span>` : html`<span class="badge ok">None</span>`,
+                          )}
+                      </div>`
+                    : html`<p class="muted" style="margin:0">There's no client in <code>assets/cache</code>. Run <code>npm run generate:client</code> on the server.</p>`}
+                ${client.failures.count || client.misses.count
+                    ? html`<details style="margin-top:12px">
+                          <summary class="btn small" style="width:max-content">Show files</summary>
+                          <div class="stack" style="margin-top:10px;gap:10px">
+                              ${client.failures.count ? html`<div><strong>Failed during download</strong><pre class="file-list">${client.failures.items.join("\n")}</pre></div>` : ""}
+                              ${client.misses.count
+                                  ? html`<div>
+                                        <strong>Not in the cache, fetched from Discord when asked for</strong>
+                                        <pre class="file-list">${client.misses.items.join("\n")}</pre>
+                                        <span class="muted">Running <code>npm run generate:client</code> again adds them to the cache.</span>
+                                    </div>`
+                                  : ""}
+                          </div>
+                      </details>`
+                    : ""}
+            </div>
+            <div class="card">
+                <div class="row" style="justify-content:space-between;margin-bottom:8px">
+                    <h2 style="margin:0">Vencord</h2>
+                    ${vencord.present ? html`<span class="badge ok"><span class="dot"></span>v${vencord.version ?? "?"}</span>` : html`<span class="badge danger"><span class="dot"></span>Not built</span>`}
+                </div>
+                ${vencord.present
+                    ? html`<div class="list">
+                          ${item("Built", html`${fmtDate(vencord.built_at)} <span class="muted">(${fmtAgo(vencord.built_at)})</span>`)}
+                          ${item("Commit", vencord.commit ? html`<code>${vencord.commit.slice(0, 10)}</code>` : "—")}
+                          ${item("Bundle size", fmtBytes(vencord.size))}
+                          ${item("Fosscord plugins", html`<span class="badges" style="justify-content:flex-end">${vencord.plugins.map((p) => html`<span class="badge accent">${p.replace(/^fosscord/, "")}</span>`)}</span>`)}
+                      </div>`
+                    : html`<p class="muted" style="margin:0">The client runs without its mods. Run <code>npm run build:vencord</code> on the server.</p>`}
+            </div>
+            <div class="card">
+                <div class="row" style="justify-content:space-between;margin-bottom:8px">
+                    <h2 style="margin:0">Patch check</h2>
+                    ${!check
+                        ? html`<span class="badge"><span class="dot"></span>Never run</span>`
+                        : check.outcome !== "done"
+                          ? html`<span class="badge danger"><span class="dot"></span>Didn't finish (${check.outcome})</span>`
+                          : problems
+                            ? html`<span class="badge danger"><span class="dot"></span>${fmtNumber(problems)} ${problems === 1 ? "problem" : "problems"}</span>`
+                            : html`<span class="badge ok"><span class="dot"></span>Passing</span>`}
+                </div>
+                ${check
+                    ? html`<div class="list">
+                              ${item("Checked", html`${fmtDate(check.checked_at)} <span class="muted">(${fmtAgo(check.checked_at)}, took ${check.seconds}s)</span>`)}
+                              ${item(
+                                  "Against build",
+                                  html`${check.build_number ?? "unknown"}${stale ? html` <span class="badge warn">The client is now ${client.build_number}</span>` : ""}`,
+                              )}
+                              ${outdated ? item("Vencord", html`<span class="badge warn">Rebuilt since this check</span>`) : ""}
+                              ${check.errors.length ? item("Page errors", html`<span class="badge danger">${fmtNumber(check.errors.length)}</span>`) : ""}
+                          </div>
+                          <div class="stack" style="margin-top:14px;gap:12px">
+                              ${groups.map(
+                                  (g) => html`<div class="stack" style="gap:6px">
+                                      <div class="row"><strong class="grow">${g.label}</strong>${g.items.length ? html`<span class="badge ${g.tone}">${fmtNumber(g.items.length)}</span>` : html`<span class="badge ok">OK</span>`}</div>
+                                      ${g.items.length
+                                          ? html`<div class="list">
+                                                ${g.items.map(
+                                                    (i) => html`<div class="list-item" style="align-items:flex-start">
+                                                        <div class="grow" style="min-width:0">
+                                                            <strong>${i.plugin}</strong> <span class="muted">${i.text}</span>
+                                                            <pre class="file-list" style="margin:4px 0 0">${i.detail}</pre>
+                                                        </div>
+                                                    </div>`,
+                                                )}
+                                            </div>`
+                                          : ""}
+                                  </div>`,
+                              )}
+                              ${check.errors.length ? html`<div><strong>Page errors</strong><pre class="file-list">${check.errors.join("\n")}</pre></div>` : ""}
+                          </div>`
+                    : ""}
+                <p class="muted" style="margin:12px 0 0">Run <code>npm run check:client</code> on the server after updating the client or the plugins to refresh this.</p>
+            </div>
+        `,
+    );
+}
+
+function renderVoiceStatus(v) {
+    const el = $("#system-voice");
+    if (!el) return;
+    const server = v.server;
+    const sfu = server?.sfu;
+    const healthy = server?.enabled && (!sfu || (sfu.connected && sfu.ping_ms !== null));
+    mount(
+        el,
+        html`
+            <div class="row" style="justify-content:space-between">
+                <h2 style="margin:0">Voice</h2>
+                ${!server
+                    ? html`<span class="badge"><span class="dot"></span>Runs in another process</span>`
+                    : !server.enabled
+                      ? html`<span class="badge danger"><span class="dot"></span>Off</span>`
+                      : healthy
+                        ? html`<span class="badge ok"><span class="dot"></span>Healthy</span>`
+                        : html`<span class="badge danger"><span class="dot"></span>Unhealthy</span>`}
+            </div>
+            ${!server
+                ? html`<p class="muted" style="margin:0">The voice server doesn't run in the same process as the API, so only the database numbers below are available here.</p>`
+                : !server.enabled
+                  ? html`<p class="form-error">${server.reason ?? "Voice is disabled."}</p>`
+                  : html`<div class="list">
+                        ${item("Media server", server.library === "pion" ? "Built-in pion SFU" : (server.library ?? "—"))}
+                        ${item("Voice gateway", server.listen ?? "—")}
+                        ${item("Running since", html`${fmtDate(server.started_at)} <span class="muted">(${fmtAgo(server.started_at)})</span>`)}
+                        ${server.reason ? item("Problem", html`<span class="form-error">${server.reason}</span>`) : ""}
+                        ${sfu
+                            ? html`
+                                  ${item(
+                                      "SFU connection",
+                                      sfu.connected
+                                          ? html`<span class="badge ok">Connected</span> <span class="muted">${sfu.ping_ms !== null ? `${sfu.ping_ms} ms ping` : sfu.ping_error}</span>`
+                                          : html`<span class="badge danger">Disconnected</span>`,
+                                  )}
+                                  ${item("SFU process", sfu.managed ? (sfu.pid ? html`Started by the server, pid <code>${sfu.pid}</code>` : "Started by the server, not running") : "Runs on its own")}
+                                  ${item("Media address", html`<code>${sfu.public_ip}:${sfu.udp_port}</code> <span class="muted">UDP</span>`)}
+                                  ${item("Restarts", sfu.restarts ? html`<span class="badge warn">${fmtNumber(sfu.restarts)}</span>${sfu.last_exit_at ? html` <span class="muted">last exit code ${sfu.last_exit_code ?? "?"}, ${fmtAgo(sfu.last_exit_at)}</span>` : ""}` : "None")}
+                                  ${item("Connected media clients", `${fmtNumber(sfu.connected ? server.connected_clients : 0)} of ${fmtNumber(server.clients)} in ${fmtNumber(server.rooms)} ${server.rooms === 1 ? "room" : "rooms"}`)}
+                              `
+                            : ""}
+                        ${item("DAVE sessions", fmtNumber(server.dave_sessions ?? 0))}
+                    </div>`}
+            <div class="stats">
+                <div class="card stat"><div class="muted">In voice</div><div class="value">${fmtNumber(v.voice_states.users)}</div></div>
+                <div class="card stat"><div class="muted">Active channels</div><div class="value">${fmtNumber(v.voice_states.channels)}</div></div>
+                <div class="card stat"><div class="muted">DM calls</div><div class="value">${fmtNumber(v.voice_states.dm_calls)}</div></div>
+                <div class="card stat"><div class="muted">Cameras on</div><div class="value">${fmtNumber(v.voice_states.video)}</div></div>
+                <div class="card stat"><div class="muted">Go Live streams</div><div class="value">${fmtNumber(v.voice_states.streams)}</div></div>
+            </div>
+            <div class="stack" style="gap:6px">
+                <strong>Voice regions</strong>
+                <div class="list">
+                    ${v.regions.available.map(
+                        (r) => html`<div class="list-item">
+                            <span class="grow">${r.name}${r.id === v.regions.default ? html` <span class="badge accent">Default</span>` : ""}${r.deprecated ? html` <span class="badge">Deprecated</span>` : ""}</span>
+                            <code>${r.endpoint ?? "—"}</code>
+                        </div>`,
+                    )}
+                </div>
+            </div>
+        `,
+    );
+}
+
+function renderCollectiblesStatus(c) {
+    const el = $("#system-collectibles");
+    if (!el) return;
+    const source = (label, s) =>
+        item(label, s.updated_at ? html`${fmtDate(s.updated_at)} <span class="muted">(${fmtAgo(s.updated_at)}, ${fmtBytes(s.size)})</span>` : html`<span class="badge warn">Not downloaded</span>`);
+    mount(
+        el,
+        html`
+            <div class="row" style="justify-content:space-between">
+                <h2 style="margin:0">Shop catalogue</h2>
+                <button class="btn small" id="collectibles-refresh" type="button">Refresh catalogue</button>
+            </div>
+            <p class="muted" style="margin:0">
+                Decorations, effects, nameplates and bundles in the free Shop come from a public copy of Discord's catalogue, re-downloaded every ${c.refresh_interval_hours} hours.
+            </p>
+            <div class="list">
+                ${source("Catalogue", c.catalog)} ${source("Profile effects", c.effects)}
+                ${item(
+                    "Loaded in the Shop",
+                    c.loaded ? `${fmtNumber(c.loaded.categories)} categories, ${fmtNumber(c.loaded.products)} products, ${fmtNumber(c.loaded.items)} items` : html`<span class="muted">Loads the first time someone opens the Shop</span>`,
+                )}
+                ${c.last_refresh
+                    ? item(
+                          "Last refresh",
+                          c.last_refresh.ok
+                              ? html`<span class="badge ok">OK</span> <span class="muted">${fmtAgo(c.last_refresh.at)}</span>`
+                              : html`<span class="badge danger">Failed</span> <span class="muted">${fmtAgo(c.last_refresh.at)}</span>`,
+                      )
+                    : ""}
+                ${c.last_refresh?.error ? item("Problem", html`<span class="form-error">${c.last_refresh.error}</span>`) : ""}
+            </div>
+        `,
+    );
+    $("#collectibles-refresh", el).addEventListener("click", async (e) => {
+        const next = await act(e.currentTarget, () => api("/admin/system/collectibles/refresh", { method: "POST" }));
+        if (!next) return;
+        toast(next.last_refresh?.ok ? `Catalogue refreshed: ${fmtNumber(next.last_refresh.products)} products` : "Couldn't refresh the catalogue", next.last_refresh?.ok ? "ok" : "error");
+        renderCollectiblesStatus(next);
     });
 }
 
