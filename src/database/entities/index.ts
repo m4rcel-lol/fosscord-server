@@ -80,3 +80,5 @@ export * from "./GuildScheduledEvent";
 export * from "./EmbeddedActivity";
 export * from "./SavedMessage";
 export * from "./ScheduledMessage";
+export * from "./PushDevice";
+export * from "./MentionDismissal";

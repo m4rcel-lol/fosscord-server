@@ -21,7 +21,7 @@ import { In, Raw } from "typeorm";
 // noinspection ES6PreferShortImport -- Causes a circular reference...
 import { fillMessageUrlEmbeds } from "../utility/EmbedHandlers";
 import { resolveSoundmoji } from "../utility/Soundboard";
-import { getDatabase, Application, Attachment, Channel, CloudAttachment, Guild, Member, Message, ReadState, Role, Session, Sticker, User, Webhook } from "@spacebar/database";
+import { getDatabase, Application, Attachment, Channel, CloudAttachment, Guild, Member, Message, ReadState, Role, Sticker, User, Webhook } from "@spacebar/database";
 import { mathLogBase, arrayDistributeSequentially, Stopwatch, Random } from "@spacebar/extensions";
 import {
     ApiError,
@@ -67,6 +67,7 @@ import {
 } from "@spacebar/schemas";
 import { addPendingPoll } from "../utility/polls";
 import { applyE2eeToMessage } from "../utility/e2ee";
+import { getMentionedUsers } from "../utility/notifications";
 import { MessageOptionAttachment, MessageOptions } from "@spacebar/util/dtos/MessageOptions";
 
 const allow_empty = false;
@@ -986,50 +987,24 @@ async function handleMessageMentionsAsync(message: Message, allowed?: AllowedMen
             }
         }
         trace.calls.push("ephemeralPinged", { micros: sw.getElapsedAndReset().totalMicroseconds });
-    } else if (mention_everyone) {
-        if (channel.type === ChannelType.DM || channel.type === ChannelType.GROUP_DM) {
-            if (channel.recipients) {
-                await fillInMissingIDs(
-                    channel.recipients.map((r) => r.user_id),
-                    trace,
-                );
-            }
-        } else {
-            await fillInMissingIDs(
-                (await Member.find({ where: { guild_id: channel.guild_id }, select: { id: true } })).map((m) => m.id),
-                trace,
-            );
-        }
-        const repository = ReadState.getRepository();
-        await repository.increment({ channel_id: channel.id, read_state_type: ReadStateType.CHANNEL }, "mention_count", 1);
-        trace.calls.push("mentionEveryone", { micros: sw.getElapsedAndReset().totalMicroseconds });
     } else {
-        const users = new Set<string>([
-            ...(message.mention_roles.length
-                ? await Member.find({
-                      where: [...message.mention_roles.map((role) => ({ roles: { id: role.id } }))],
-                  })
-                : []
-            ).map((member) => member.id),
-            ...message.mentions.map((user) => user.id),
-            ...(channel.type === ChannelType.DM || channel.type === ChannelType.GROUP_DM
-                ? (channel.recipients ?? []).map((r) => r.user_id).filter((id) => id !== permissionTargetId)
-                : []),
-        ]);
-        trace.calls.push("getUsers", { micros: sw.getElapsedAndReset().totalMicroseconds });
-
-        if (mention_here) {
-            // TODO: incorporate sessions
-            const ids = (await Member.find({ where: { guild_id: channel.guild_id } })).map((m) => m.id);
-            (await Session.find({ where: { user_id: In(ids) } })).forEach((s) => users.add(s.user_id));
-            trace.calls.push("mentionHere", { micros: sw.getElapsedAndReset().totalMicroseconds });
-        }
+        const users = await getMentionedUsers({
+            channel,
+            author_id: message.author_id ?? message.author?.id,
+            user_ids: message.mentions.map((user) => user.id),
+            role_ids: message.mention_roles.map((role) => role.id),
+            everyone: mention_everyone,
+            here: mention_here,
+        });
+        trace.calls.push("getMentionedUsers", { micros: sw.getElapsedAndReset().totalMicroseconds });
 
         if (users.size) {
-            const repository = ReadState.getRepository();
-
             await fillInMissingIDs([...users], trace);
-            await repository.increment({ user_id: In(users.values().toArray()), channel_id: channel.id, read_state_type: ReadStateType.CHANNEL }, "mention_count", 1);
+            await ReadState.query(`UPDATE read_states SET mention_count = mention_count + 1 WHERE channel_id = $1 AND read_state_type = $2 AND user_id = ANY($3::bigint[])`, [
+                channel.id,
+                ReadStateType.CHANNEL,
+                [...users],
+            ]);
             trace.calls.push("updateMentionedUserReadStates", { micros: sw.getElapsedAndReset().totalMicroseconds });
         }
     }

@@ -39,6 +39,7 @@ import {
     ScheduledEvents,
     UserSettings,
     UserSettingsProtos,
+    userGuildSettingsEntry,
     VoiceState,
     PrivateCalls,
     ActivityInstances,
@@ -606,12 +607,9 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     const generateGuildsListTime = taskSw.getElapsedAndReset();
 
     // Generate user_guild_settings
-    const user_guild_settings_entries: ReadyUserGuildSettingsEntries[] = members.map((x) => ({
-        ...DefaultUserGuildSettings,
-        ...x.settings,
-        guild_id: x.guild_id,
-        channel_overrides: x.settings.channel_overrides ? Object.entries(x.settings.channel_overrides).map(([k, v]) => ({ ...v, channel_id: k })) : [],
-    }));
+    const user_guild_settings_entries: ReadyUserGuildSettingsEntries[] = members
+        .filter((x) => (x.settings?.version ?? 0) > 0)
+        .map((x) => userGuildSettingsEntry(x.settings, x.guild_id, x.guild?.default_message_notifications));
     const generateUserGuildSettingsTime = taskSw.getElapsedAndReset();
 
     // Populated with users from private channels, relationships.
@@ -713,7 +711,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
 
     const [authenticator_types, preferences] = await Promise.all([
         SecurityKey.authenticatorTypes(this.user_id),
-        User.findOne({ where: { id: this.user_id }, select: { id: true, account_preferences: true } }),
+        User.findOne({ where: { id: this.user_id }, select: { id: true, account_preferences: true, private_channel_settings: true } }),
     ]);
 
     // const d: ReadyEventData = {
@@ -734,7 +732,9 @@ export async function onIdentify(this: WebSocket, data: Payload) {
                     version: 0, // TODO
                 },
                 user_guild_settings: {
-                    entries: user_guild_settings_entries,
+                    entries: preferences?.private_channel_settings
+                        ? [...user_guild_settings_entries, userGuildSettingsEntry(preferences.private_channel_settings, null)]
+                        : user_guild_settings_entries,
                     partial: false,
                     version: 0, // TODO
                 },

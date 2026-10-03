@@ -1798,23 +1798,26 @@
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "ChannelPermissionOverwriteSchema": {
-        "additionalProperties": false,
         "type": "object",
         "properties": {
-            "type": {
-                "$ref": "#/definitions/ChannelPermissionOverwriteType"
-            },
             "allow": {
+                "type": "string"
+            },
+            "deny": {
                 "type": "string"
             },
             "id": {
                 "type": "string"
             },
-            "deny": {
-                "type": "string"
+            "type": {
+                "$ref": "#/definitions/ChannelPermissionOverwriteType"
             }
         },
+        "additionalProperties": false,
         "required": [
+            "allow",
+            "deny",
+            "id",
             "type"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
@@ -6692,38 +6695,7 @@
             "channel_overrides": {
                 "type": "object",
                 "additionalProperties": {
-                    "additionalProperties": false,
-                    "type": "object",
-                    "properties": {
-                        "message_notifications": {
-                            "type": "integer"
-                        },
-                        "muted": {
-                            "type": "boolean"
-                        },
-                        "channel_id": {
-                            "type": [
-                                "null",
-                                "string"
-                            ]
-                        },
-                        "mute_config": {
-                            "anyOf": [
-                                {
-                                    "$ref": "#/definitions/MuteConfig"
-                                },
-                                {
-                                    "type": "null"
-                                }
-                            ]
-                        },
-                        "collapsed": {
-                            "type": "boolean"
-                        },
-                        "flags": {
-                            "type": "integer"
-                        }
-                    }
+                    "$ref": "#/definitions/ChannelOverrideSchema"
                 }
             },
             "version": {
@@ -6772,6 +6744,41 @@
             "notify_highlights": {
                 "const": 0,
                 "type": "number"
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "ChannelOverrideSchema": {
+        "type": "object",
+        "properties": {
+            "message_notifications": {
+                "type": "integer"
+            },
+            "mute_config": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/MuteConfig"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "muted": {
+                "type": "boolean"
+            },
+            "channel_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "collapsed": {
+                "type": "boolean"
+            },
+            "flags": {
+                "type": "integer"
             }
         },
         "additionalProperties": false,
@@ -7811,218 +7818,42 @@
         "additionalProperties": false,
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
-    "GuildChannelCreateSchema": {
-        "additionalProperties": false,
+    "PushDeviceSchema": {
         "type": "object",
         "properties": {
-            "name": {
+            "provider": {
                 "type": "string"
             },
-            "type": {
-                "enum": [
-                    0,
-                    1,
-                    10,
-                    11,
-                    12,
-                    13,
-                    14,
-                    15,
-                    16,
-                    17,
-                    18,
-                    2,
-                    255,
-                    3,
-                    4,
-                    5,
-                    6,
-                    7,
-                    8,
-                    9
-                ],
-                "type": "number"
-            },
-            "id": {
+            "token": {
                 "type": "string"
             },
-            "flags": {
-                "type": "integer"
-            },
-            "icon": {
+            "voip_provider": {
                 "type": [
                     "null",
                     "string"
                 ]
             },
-            "template": {
+            "voip_token": {
                 "type": [
                     "null",
                     "string"
                 ]
             },
-            "nsfw": {
+            "bypass_server_throttling_supported": {
                 "type": "boolean"
             },
-            "applied_tags": {
-                "type": "array",
-                "items": {
-                    "type": "string"
-                }
-            },
-            "topic": {
+            "bundle_id": {
                 "type": [
                     "null",
                     "string"
                 ]
-            },
-            "bitrate": {
-                "type": "integer"
-            },
-            "user_limit": {
-                "type": "integer"
-            },
-            "rate_limit_per_user": {
-                "type": "integer"
-            },
-            "position": {
-                "type": "integer"
-            },
-            "invitable": {
-                "type": "boolean"
-            },
-            "permission_overwrites": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "id": {
-                            "type": "string"
-                        },
-                        "type": {
-                            "$ref": "#/definitions/ChannelPermissionOverwriteType"
-                        },
-                        "allow": {
-                            "type": "string"
-                        },
-                        "deny": {
-                            "type": "string"
-                        }
-                    },
-                    "additionalProperties": false,
-                    "required": [
-                        "allow",
-                        "deny",
-                        "id",
-                        "type"
-                    ]
-                }
-            },
-            "parent_id": {
-                "type": [
-                    "null",
-                    "string"
-                ]
-            },
-            "rtc_region": {
-                "type": [
-                    "null",
-                    "string"
-                ]
-            },
-            "default_auto_archive_duration": {
-                "type": [
-                    "null",
-                    "integer"
-                ]
-            },
-            "default_reaction_emoji": {
-                "anyOf": [
-                    {
-                        "$ref": "#/definitions/DefaultReaction"
-                    },
-                    {
-                        "type": "null"
-                    }
-                ]
-            },
-            "default_sort_order": {
-                "type": [
-                    "null",
-                    "integer"
-                ]
-            },
-            "default_forum_layout": {
-                "type": [
-                    "null",
-                    "integer"
-                ]
-            },
-            "default_tag_setting": {
-                "type": [
-                    "null",
-                    "string"
-                ]
-            },
-            "default_thread_rate_limit_per_user": {
-                "type": "integer"
-            },
-            "video_quality_mode": {
-                "type": "integer"
-            },
-            "auto_archive_duration": {
-                "type": "integer"
-            },
-            "archived": {
-                "type": "boolean"
-            },
-            "locked": {
-                "type": "boolean"
-            },
-            "icon_emoji": {
-                "anyOf": [
-                    {
-                        "type": "object",
-                        "properties": {
-                            "id": {
-                                "type": [
-                                    "null",
-                                    "string"
-                                ]
-                            },
-                            "name": {
-                                "type": [
-                                    "null",
-                                    "string"
-                                ]
-                            }
-                        },
-                        "additionalProperties": false
-                    },
-                    {
-                        "type": "null"
-                    }
-                ]
-            },
-            "theme_color": {
-                "type": [
-                    "null",
-                    "integer"
-                ]
-            },
-            "application_id": {
-                "type": [
-                    "null",
-                    "string"
-                ]
-            },
-            "available_tags": {
-                "type": "array",
-                "items": {
-                    "$ref": "#/definitions/TagCreateSchema"
-                }
             }
         },
+        "additionalProperties": false,
+        "required": [
+            "provider",
+            "token"
+        ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "PublicMessageListResponse": {
@@ -13517,6 +13348,16 @@
                     }
                 ]
             },
+            "private_channel_settings": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/UserGuildSettings"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
             "profile_widgets": {
                 "anyOf": [
                     {
@@ -14300,6 +14141,149 @@
             "status",
             "updated_at",
             "user_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "UserGuildSettings": {
+        "type": "object",
+        "properties": {
+            "channel_overrides": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "additionalProperties": {
+                            "$ref": "#/definitions/ChannelOverride"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "message_notifications": {
+                "type": "integer"
+            },
+            "mobile_push": {
+                "type": "boolean"
+            },
+            "mute_config": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/MuteConfig"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "muted": {
+                "type": "boolean"
+            },
+            "suppress_everyone": {
+                "type": "boolean"
+            },
+            "suppress_roles": {
+                "type": "boolean"
+            },
+            "version": {
+                "type": "integer"
+            },
+            "guild_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "flags": {
+                "type": "integer"
+            },
+            "mute_scheduled_events": {
+                "type": "boolean"
+            },
+            "hide_muted_channels": {
+                "type": "boolean"
+            },
+            "notify_highlights": {
+                "type": "integer",
+                "const": 0
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "channel_overrides",
+            "flags",
+            "guild_id",
+            "hide_muted_channels",
+            "message_notifications",
+            "mobile_push",
+            "mute_config",
+            "mute_scheduled_events",
+            "muted",
+            "notify_highlights",
+            "suppress_everyone",
+            "suppress_roles",
+            "version"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "ChannelOverride": {
+        "type": "object",
+        "properties": {
+            "message_notifications": {
+                "type": "integer"
+            },
+            "mute_config": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/MuteConfig"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "muted": {
+                "type": "boolean"
+            },
+            "channel_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "collapsed": {
+                "type": "boolean"
+            },
+            "flags": {
+                "type": "integer"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "channel_id",
+            "message_notifications",
+            "mute_config",
+            "muted"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "MuteConfig": {
+        "type": "object",
+        "properties": {
+            "end_time": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "selected_time_window": {
+                "type": "integer"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "end_time",
+            "selected_time_window"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -16582,133 +16566,6 @@
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
-    "UserGuildSettings": {
-        "type": "object",
-        "properties": {
-            "channel_overrides": {
-                "anyOf": [
-                    {
-                        "type": "object",
-                        "additionalProperties": {
-                            "$ref": "#/definitions/ChannelOverride"
-                        }
-                    },
-                    {
-                        "type": "null"
-                    }
-                ]
-            },
-            "message_notifications": {
-                "type": "integer"
-            },
-            "mobile_push": {
-                "type": "boolean"
-            },
-            "mute_config": {
-                "anyOf": [
-                    {
-                        "$ref": "#/definitions/MuteConfig"
-                    },
-                    {
-                        "type": "null"
-                    }
-                ]
-            },
-            "muted": {
-                "type": "boolean"
-            },
-            "suppress_everyone": {
-                "type": "boolean"
-            },
-            "suppress_roles": {
-                "type": "boolean"
-            },
-            "version": {
-                "type": "integer"
-            },
-            "guild_id": {
-                "type": [
-                    "null",
-                    "string"
-                ]
-            },
-            "flags": {
-                "type": "integer"
-            },
-            "mute_scheduled_events": {
-                "type": "boolean"
-            },
-            "hide_muted_channels": {
-                "type": "boolean"
-            },
-            "notify_highlights": {
-                "type": "integer",
-                "const": 0
-            }
-        },
-        "additionalProperties": false,
-        "required": [
-            "channel_overrides",
-            "flags",
-            "guild_id",
-            "hide_muted_channels",
-            "message_notifications",
-            "mobile_push",
-            "mute_config",
-            "mute_scheduled_events",
-            "muted",
-            "notify_highlights",
-            "suppress_everyone",
-            "suppress_roles",
-            "version"
-        ],
-        "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "ChannelOverride": {
-        "type": "object",
-        "properties": {
-            "message_notifications": {
-                "type": "integer"
-            },
-            "mute_config": {
-                "$ref": "#/definitions/MuteConfig"
-            },
-            "muted": {
-                "type": "boolean"
-            },
-            "channel_id": {
-                "type": [
-                    "null",
-                    "string"
-                ]
-            }
-        },
-        "additionalProperties": false,
-        "required": [
-            "channel_id",
-            "message_notifications",
-            "mute_config",
-            "muted"
-        ],
-        "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "MuteConfig": {
-        "type": "object",
-        "properties": {
-            "end_time": {
-                "type": "integer"
-            },
-            "selected_time_window": {
-                "type": "integer"
-            }
-        },
-        "additionalProperties": false,
-        "required": [
-            "end_time",
-            "selected_time_window"
-        ],
-        "$schema": "http://json-schema.org/draft-07/schema#"
-    },
     "Message": {
         "type": "object",
         "properties": {
@@ -16969,19 +16826,6 @@
                 "anyOf": [
                     {
                         "$ref": "#/definitions/E2eeEnvelope"
-                    },
-                    {
-                        "type": "null"
-                    }
-                ]
-            },
-            "soundboard_sounds": {
-                "anyOf": [
-                    {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/definitions/MessageSoundboardSound"
-                        }
                     },
                     {
                         "type": "null"
@@ -18568,51 +18412,6 @@
             "enc",
             "user_id",
             "wrapped"
-        ],
-        "$schema": "http://json-schema.org/draft-07/schema#"
-    },
-    "MessageSoundboardSound": {
-        "type": "object",
-        "properties": {
-            "sound_id": {
-                "type": "string"
-            },
-            "name": {
-                "type": "string"
-            },
-            "volume": {
-                "type": "integer"
-            },
-            "emoji_id": {
-                "type": [
-                    "null",
-                    "string"
-                ]
-            },
-            "emoji_name": {
-                "type": [
-                    "null",
-                    "string"
-                ]
-            },
-            "guild_id": {
-                "type": "string"
-            },
-            "user_id": {
-                "type": "string"
-            },
-            "available": {
-                "type": "boolean"
-            }
-        },
-        "additionalProperties": false,
-        "required": [
-            "available",
-            "emoji_id",
-            "emoji_name",
-            "name",
-            "sound_id",
-            "volume"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -20770,12 +20569,6 @@
             },
             "encrypted": {
                 "$ref": "#/definitions/E2eeEnvelope"
-            },
-            "soundboard_sounds": {
-                "type": "array",
-                "items": {
-                    "$ref": "#/definitions/MessageSoundboardSound"
-                }
             }
         },
         "additionalProperties": false,

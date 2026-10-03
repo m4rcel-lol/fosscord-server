@@ -413,7 +413,7 @@ export class Member extends BaseClassWithoutId {
                 hide_muted_channels: false,
                 notify_highlights: 0,
                 channel_overrides: {},
-                message_notifications: guild.default_message_notifications,
+                message_notifications: 3,
                 mobile_push: true,
                 muted: false,
                 suppress_everyone: false,
@@ -539,28 +539,37 @@ export class Member extends BaseClassWithoutId {
         return member as PublicMember;
     }
 
-    static async updateGuildSettings(user_id: string, guild_id: string, body: Partial<UserGuildSettings>) {
-        const member = await Member.findOneOrFail({
-            where: { id: user_id, guild_id },
-            select: { settings: true, index: true, id: true, guild_id: true },
+    static async updateGuildSettings(user_id: string, guild_id: string | null, body: Partial<UserGuildSettings>) {
+        const settings = await Member.getRepository().manager.transaction(async (manager) => {
+            const member = guild_id
+                ? await manager.findOneOrFail(Member, { where: { id: user_id, guild_id }, select: { settings: true, index: true }, lock: { mode: "pessimistic_write" } })
+                : null;
+            const current = member
+                ? member.settings
+                : (await manager.findOne(User, { where: { id: user_id }, select: { id: true, private_channel_settings: true }, lock: { mode: "pessimistic_write" } }))
+                      ?.private_channel_settings;
+            const next = { ...DefaultUserGuildSettings, ...(current ?? {}) };
+            const { channel_overrides, ...rest } = body;
+            Object.assign(next, rest);
+            if (channel_overrides) {
+                next.channel_overrides = { ...(next.channel_overrides ?? {}) };
+                for (const [channel_id, override] of Object.entries(channel_overrides))
+                    next.channel_overrides[channel_id] = Object.assign(
+                        { message_notifications: 3, mute_config: null, muted: false, collapsed: false, flags: 0 },
+                        next.channel_overrides[channel_id],
+                        override,
+                        { channel_id },
+                    ) as ChannelOverride;
+            }
+            next.version = (next.version ?? 0) + 1;
+            next.guild_id = guild_id;
+            if (member) await manager.update(Member, { index: member.index }, { settings: next });
+            else await manager.update(User, { id: user_id }, { private_channel_settings: next });
+            return next;
         });
-        const settings = { ...DefaultUserGuildSettings, ...(member.settings ?? {}) };
-        const { channel_overrides, ...rest } = body;
-        Object.assign(settings, rest);
-        if (channel_overrides) {
-            settings.channel_overrides = { ...(settings.channel_overrides ?? {}) };
-            for (const [channel_id, override] of Object.entries(channel_overrides))
-                settings.channel_overrides[channel_id] = { ...(settings.channel_overrides[channel_id] ?? {}), ...override, channel_id } as ChannelOverride;
-        }
-        settings.version = (settings.version ?? 0) + 1;
-        settings.guild_id = guild_id;
-        member.settings = settings;
-        await member.save();
 
-        const entry = {
-            ...settings,
-            channel_overrides: Object.entries(settings.channel_overrides ?? {}).map(([channel_id, override]) => ({ ...override, channel_id })),
-        };
+        const guild = guild_id ? await Guild.findOne({ where: { id: guild_id }, select: { id: true, default_message_notifications: true } }) : null;
+        const entry = userGuildSettingsEntry(settings, guild_id, guild?.default_message_notifications);
         await emitEvent({ event: "USER_GUILD_SETTINGS_UPDATE", user_id, data: entry });
         return entry;
     }
@@ -575,3 +584,12 @@ export class Member extends BaseClassWithoutId {
         };
     }
 }
+
+export const userGuildSettingsEntry = (settings: UserGuildSettings, guild_id = settings.guild_id, guild_default_level?: number) => {
+    const entry = { ...DefaultUserGuildSettings, ...settings, guild_id };
+    return {
+        ...entry,
+        message_notifications: guild_id && entry.message_notifications === 3 ? (guild_default_level ?? 1) : entry.message_notifications,
+        channel_overrides: Object.entries(settings.channel_overrides ?? {}).map(([channel_id, override]) => ({ ...override, channel_id })),
+    };
+};

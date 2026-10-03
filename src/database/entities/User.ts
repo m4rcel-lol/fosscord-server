@@ -41,6 +41,7 @@ import {
     RecentAvatar,
     PublicUser,
     PublicUserProjection,
+    UserGuildSettings,
     UserPrivate,
 } from "@spacebar/schemas";
 import { JsonNumber } from "@spacebar/util/util/Decorators";
@@ -245,6 +246,9 @@ export class User extends BaseClass {
 
     @Column({ type: "jsonb", nullable: true, select: false })
     account_preferences?: AccountPreferences | null;
+
+    @Column({ type: "jsonb", nullable: true, select: false })
+    private_channel_settings?: UserGuildSettings | null;
 
     @Column({ type: "jsonb", nullable: true })
     profile_widgets?: ProfileWidget[] | null;

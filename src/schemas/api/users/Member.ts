@@ -22,9 +22,11 @@ import { PublicUser } from "@spacebar/schemas";
 
 export interface ChannelOverride {
     message_notifications: number;
-    mute_config: MuteConfig;
+    mute_config: MuteConfig | null;
     muted: boolean;
     channel_id: string | null;
+    collapsed?: boolean;
+    flags?: number;
 }
 
 export interface UserGuildSettings {
@@ -54,7 +56,7 @@ export interface UserGuildSettings {
 
 export const DefaultUserGuildSettings: UserGuildSettings = {
     channel_overrides: null,
-    message_notifications: 1,
+    message_notifications: 3,
     flags: 0,
     hide_muted_channels: false,
     mobile_push: true,
@@ -69,7 +71,7 @@ export const DefaultUserGuildSettings: UserGuildSettings = {
 };
 
 export interface MuteConfig {
-    end_time: number;
+    end_time: string | null;
     selected_time_window: number;
 }
 

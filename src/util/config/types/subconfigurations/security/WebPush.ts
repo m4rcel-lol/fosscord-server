@@ -1,35 +1,38 @@
 /*
 	Spacebar: A FOSS re-implementation and extension of the Discord.com backend.
-	Copyright (C) 2023 Spacebar and Spacebar Contributors
-	
+	Copyright (C) 2026 Spacebar and Spacebar Contributors
+
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU Affero General Public License as published
 	by the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
-	
+
 	This program is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU Affero General Public License for more details.
-	
+
 	You should have received a copy of the GNU Affero General Public License
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { MuteConfig, UserGuildSettings } from "@spacebar/schemas";
+import crypto from "node:crypto";
 
-// This sucks. I would use a DeepPartial, my own or typeorms, but they both generate inncorect schema
-export interface UserGuildSettingsSchema extends Partial<Omit<UserGuildSettings, "channel_overrides">> {
-    channel_overrides?: {
-        [channel_id: string]: ChannelOverrideSchema;
-    };
-}
+const vapidKeys = () => {
+    const ecdh = crypto.createECDH("prime256v1");
+    ecdh.generateKeys();
+    return { publicKey: ecdh.getPublicKey().toString("base64url"), privateKey: ecdh.getPrivateKey().toString("base64url") };
+};
 
-export interface ChannelOverrideSchema {
-    message_notifications?: number;
-    mute_config?: MuteConfig | null;
-    muted?: boolean;
-    channel_id?: string | null;
-    collapsed?: boolean;
-    flags?: number;
+export class WebPushConfiguration {
+    enabled: boolean = true;
+    subject: string | null = null;
+    vapidPublicKey: string;
+    vapidPrivateKey: string;
+
+    constructor() {
+        const keys = vapidKeys();
+        this.vapidPublicKey = keys.publicKey;
+        this.vapidPrivateKey = keys.privateKey;
+    }
 }
