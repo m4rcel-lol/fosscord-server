@@ -112,7 +112,13 @@ export class IpcClient {
         if (message.payload) this.onEvent(message.payload);
     }
 
-    request(payload: IpcPayload, timeoutMs = 10000) {
+    async ping(timeoutMs = 2000) {
+        const started = performance.now();
+        await this.request({ type: "ping", clientId: "" }, timeoutMs, "ping");
+        return performance.now() - started;
+    }
+
+    request(payload: IpcPayload, timeoutMs = 10000, type: IpcMessage["type"] = "request") {
         return new Promise<IpcPayload>((resolve, reject) => {
             if (!this.connected) {
                 reject(new Error("SFU IPC socket is not connected"));
@@ -124,7 +130,7 @@ export class IpcClient {
                 reject(new Error(`SFU IPC request ${payload.type} timed out`));
             }, timeoutMs);
             this.pending.set(id, { resolve, reject, timeout });
-            this.write(payload, id);
+            this.write(payload, id, type);
         });
     }
 

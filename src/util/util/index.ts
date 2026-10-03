@@ -50,3 +50,4 @@ export * from "./Version";
 export * from "./Presence";
 export * from "./MediaProxy";
 export * from "./VideoFrame";
+export * from "./VoiceHealth";

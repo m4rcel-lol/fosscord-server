@@ -136,6 +136,8 @@ export class PionMediaServer implements SignalingDelegate {
     private stopping = false;
     private _ip = "127.0.0.1";
     private _port = 0;
+    private restarts = 0;
+    private lastExit: { code: number | null; at: Date } | null = null;
     ipc!: IpcClient;
 
     get ip() {
@@ -176,10 +178,12 @@ export class PionMediaServer implements SignalingDelegate {
         child.stderr?.on("data", log);
         child.once("exit", (code) => {
             console.log(`[WebRTC] pion SFU exited with code ${code}`);
+            this.lastExit = { code, at: new Date() };
             this.ipc.close();
             this.dropClients();
             if (this.stopping) return;
             setTimeout(() => {
+                this.restarts++;
                 this.spawn(socketPath);
                 this.ipc.connect().catch((error) => console.error("[WebRTC] could not reconnect to pion SFU", error));
             }, 1000);
@@ -213,6 +217,34 @@ export class PionMediaServer implements SignalingDelegate {
                     client.webrtcConnected = true;
                     client.emitter.emit("connected");
                 }
+    }
+
+    async health() {
+        const clients = [...this.rooms.values()].flatMap((room) => [...room.clients.values()]);
+        const ping = this.ipc?.connected
+            ? await this.ipc.ping().then(
+                  (ms) => ({ ms, error: null }),
+                  (e: Error) => ({ ms: null, error: e.message }),
+              )
+            : { ms: null, error: "not connected" };
+        return {
+            sfu: {
+                connected: !!this.ipc?.connected,
+                socket: this.ipc?.socketPath ?? "",
+                managed: !!process.env.PION_SFU_BIN,
+                pid: this.process?.exitCode === null ? (this.process.pid ?? null) : null,
+                restarts: this.restarts,
+                last_exit_code: this.lastExit?.code ?? null,
+                last_exit_at: this.lastExit?.at.toISOString() ?? null,
+                ping_ms: ping.ms === null ? null : Math.round(ping.ms * 10) / 10,
+                ping_error: ping.error,
+                public_ip: this._ip,
+                udp_port: this._port,
+            },
+            rooms: this.rooms.size,
+            clients: clients.length,
+            connected_clients: clients.filter((c) => c.webrtcConnected).length,
+        };
     }
 
     findClient(roomId: string, userId: string) {
