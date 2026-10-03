@@ -70,6 +70,7 @@ import {
     SessionsReplace,
     TraceNode,
     TraceRoot,
+    getApexExperiments,
 } from "@spacebar/util";
 import {
     ChannelType,
@@ -759,6 +760,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
                 guild_join_requests: [],
                 connected_accounts: [],
                 guild_experiments: [],
+                apex_experiments: getApexExperiments(this.user_id),
                 geo_ordered_rtc_regions: [],
                 api_code_version: 1,
                 friend_suggestion_count: 0,

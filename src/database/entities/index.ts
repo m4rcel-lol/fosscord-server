@@ -78,3 +78,5 @@ export * from "./UserViolation";
 export * from "./Announcement";
 export * from "./GuildScheduledEvent";
 export * from "./EmbeddedActivity";
+export * from "./SavedMessage";
+export * from "./ScheduledMessage";

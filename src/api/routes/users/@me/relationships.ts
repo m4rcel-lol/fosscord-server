@@ -150,6 +150,35 @@ router.post(
         ),
 );
 
+router.put("/:user_id/ignore", route({ responses: { 204: {}, 400: { body: "APIErrorResponse" }, 404: { body: "APIErrorResponse" } } }), async (req: Request, res: Response) => {
+    const { user_id } = req.params as { [key: string]: string };
+    if (user_id === req.user_id) throw new HTTPError("You can't ignore yourself");
+    const target = await User.findOneOrFail({ where: { id: user_id }, select: { id: true } });
+    const existing = await Relationship.findOne({ where: { from_id: req.user_id, to_id: target.id }, relations: { to: true } });
+    const relationship = existing ?? Relationship.create({ from_id: req.user_id, to_id: target.id, type: RelationshipType.NONE, since: new Date() });
+    relationship.user_ignored = true;
+    await relationship.save();
+    const saved = existing ?? (await Relationship.findOneOrFail({ where: { id: relationship.id }, relations: { to: true } }));
+    if (existing) await emitEvent({ event: "RELATIONSHIP_UPDATE", data: saved.toPublicRelationship(), user_id: req.user_id } satisfies RelationshipUpdateEvent);
+    else await emitEvent({ event: "RELATIONSHIP_ADD", data: { ...saved.toPublicRelationship(), should_notify: false }, user_id: req.user_id } satisfies RelationshipAddEvent);
+    res.sendStatus(204);
+});
+
+router.delete("/:user_id/ignore", route({ responses: { 204: {}, 404: { body: "APIErrorResponse" } } }), async (req: Request, res: Response) => {
+    const { user_id } = req.params as { [key: string]: string };
+    const relationship = await Relationship.findOne({ where: { from_id: req.user_id, to_id: user_id }, relations: { to: true } });
+    if (!relationship?.user_ignored) return res.sendStatus(204);
+    relationship.user_ignored = false;
+    if (relationship.type === RelationshipType.NONE) {
+        await Relationship.delete({ id: relationship.id });
+        await emitEvent({ event: "RELATIONSHIP_REMOVE", data: relationship.toPartialRelationship(), user_id: req.user_id } satisfies RelationshipRemoveEvent);
+    } else {
+        await relationship.save();
+        await emitEvent({ event: "RELATIONSHIP_UPDATE", data: relationship.toPublicRelationship(), user_id: req.user_id } satisfies RelationshipUpdateEvent);
+    }
+    res.sendStatus(204);
+});
+
 router.delete(
     "/:user_id",
     route({
@@ -229,8 +258,10 @@ async function updateRelationship(req: Request, res: Response, friend: User, typ
         select: Object.fromEntries(userProjection.map((i) => [i, true])), //TODO: cleanup
     });
 
-    let relationship = user.relationships.find((x) => x.to_id === id);
-    const friendRequest = friend.relationships.find((x) => x.to_id === req.user_id);
+    const ownRow = user.relationships.find((x) => x.to_id === id);
+    const theirRow = friend.relationships.find((x) => x.to_id === req.user_id);
+    let relationship = ownRow?.type === RelationshipType.NONE && type !== RelationshipType.BLOCKED ? undefined : ownRow;
+    const friendRequest = theirRow?.type === RelationshipType.NONE ? undefined : theirRow;
 
     // TODO: you can add infinitely many blocked users (should this be prevented?)
     if (type === RelationshipType.BLOCKED) {
@@ -277,6 +308,7 @@ async function updateRelationship(req: Request, res: Response, friend: User, typ
     if (ownMemberships.filter((x) => targetMemberships.includes(x)).length > 0) isStrangerRequest = false;
 
     let incoming_relationship = Relationship.create({
+        ...(theirRow?.type === RelationshipType.NONE && { id: theirRow.id, user_ignored: theirRow.user_ignored }),
         nickname: undefined,
         type: RelationshipType.INCOMING_REQUEST,
         to: user,
@@ -285,6 +317,7 @@ async function updateRelationship(req: Request, res: Response, friend: User, typ
         stranger_request: isStrangerRequest,
     });
     let outgoing_relationship = Relationship.create({
+        ...(ownRow?.type === RelationshipType.NONE && { id: ownRow.id, user_ignored: ownRow.user_ignored }),
         nickname: undefined,
         type: RelationshipType.OUTGOING_REQUEST,
         to: friend,

@@ -66,8 +66,8 @@ router.put(
             };
             channel.permission_overwrites?.push(overwrite);
         }
-        overwrite.allow = String((req.permission?.bitfield || 0n) & (BigInt(body.allow) || BigInt("0")));
-        overwrite.deny = String((req.permission?.bitfield || 0n) & (BigInt(body.deny) || BigInt("0")));
+        overwrite.allow = String((req.permission?.bitfield || 0n) & BigInt(body.allow || "0"));
+        overwrite.deny = String((req.permission?.bitfield || 0n) & BigInt(body.deny || "0"));
 
         await Promise.all([
             channel.save(),

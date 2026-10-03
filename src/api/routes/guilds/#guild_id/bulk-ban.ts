@@ -81,14 +81,15 @@ router.post(
             const ban = Ban.create({
                 user_id: banned_user_id,
                 guild_id: guild_id,
-                ip: req.ip,
                 executor_id: req.user_id,
                 reason: req.body.reason, // || otherwise empty
             });
 
             try {
                 await Promise.all([
-                    Member.removeFromGuild(banned_user_id, guild_id),
+                    Member.exists({ where: { id: banned_user_id, guild_id } }).then(async (isMember) => {
+                        if (isMember) await Member.removeFromGuild(banned_user_id, guild_id);
+                    }),
                     ban.save(),
                     emitEvent({
                         event: "GUILD_BAN_ADD",

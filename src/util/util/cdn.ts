@@ -48,6 +48,45 @@ export async function uploadFile(
     return result;
 }
 
+type DeclaredAttachment = {
+    id?: string | number;
+    filename?: string;
+    title?: string;
+    description?: string;
+    duration_secs?: number;
+    waveform?: string;
+    is_spoiler?: boolean;
+};
+
+export async function uploadMessageFiles<T extends object>(
+    path: string,
+    files: Pick<Express.Multer.File, "fieldname" | "mimetype" | "originalname" | "buffer">[],
+    declared: T[] = [],
+) {
+    const isStub = (attachment: object) => !("url" in attachment) && !("uploaded_filename" in attachment);
+    const stubs = declared.filter(isStub) as DeclaredAttachment[];
+    const uploaded: (InternalCdnAttachment & Omit<DeclaredAttachment, "id" | "is_spoiler"> & { flags?: number })[] = [];
+    for (const [index, file] of files.entries()) {
+        const slot = /(\d+)\]?$/.exec(file.fieldname)?.[1] ?? String(index);
+        const meta = stubs.find((stub) => String(stub.id) === slot);
+        const result = await uploadFile(path, file);
+        if (!meta) {
+            uploaded.push(result);
+            continue;
+        }
+        uploaded.push({
+            ...result,
+            filename: meta.filename || result.filename,
+            title: meta.title,
+            description: meta.description,
+            duration_secs: meta.duration_secs,
+            waveform: meta.waveform,
+            flags: meta.is_spoiler || (meta.filename || result.filename).startsWith("SPOILER_") ? 1 << 3 : undefined,
+        });
+    }
+    return [...declared.filter((attachment) => !isStub(attachment)), ...uploaded];
+}
+
 export async function handleFile(path: string, body?: string): Promise<string | undefined> {
     if (!body || !body.startsWith("data:")) return undefined;
     try {

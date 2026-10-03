@@ -20,9 +20,9 @@ import { Request, Response, Router } from "express";
 import { ArrayContains, ArrayOverlap, FindOptionsWhere, ILike, In, LessThan } from "typeorm";
 import { createThread, handleMessage, postHandleMessage, sendMessage, THREAD_TYPES, threadSearchExtras } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
-import { Attachment, Channel, Member, ReadState, ThreadMember } from "@spacebar/database";
-import { ChannelFlags, emitEvent, FieldErrors, MessageCreateEvent, uploadFile } from "@spacebar/util";
-import { AttachmentFlags, ChannelType, MessageCreateAttachment, MessageCreateCloudAttachment, MessageType, ThreadCreationSchema } from "@spacebar/schemas";
+import { Channel, Member, ReadState, ThreadMember } from "@spacebar/database";
+import { ChannelFlags, emitEvent, FieldErrors, MessageCreateEvent, uploadMessageFiles } from "@spacebar/util";
+import { AttachmentFlags, ChannelType, MessageType, ThreadCreationSchema } from "@spacebar/schemas";
 import { messageUpload } from "./messages";
 
 const router = Router({ mergeParams: true });
@@ -101,8 +101,7 @@ router.post(
         if (!body.message) return res.status(201).json({ ...thread.toJSON(), member: member.toJSON() });
 
         const files = (req.files as Express.Multer.File[]) ?? [];
-        const attachments: (Attachment | MessageCreateAttachment | MessageCreateCloudAttachment)[] = body.message.attachments ?? [];
-        for (const currFile of files) attachments.push(await uploadFile(`/attachments/${thread.id}/${thread.id}`, currFile));
+        const attachments = await uploadMessageFiles(`/attachments/${thread.id}/${thread.id}`, files, body.message.attachments ?? []);
 
         const message = await handleMessage({
             ...body.message,
