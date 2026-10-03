@@ -46,6 +46,11 @@ export interface AdminSettingsUpdateSchema {
         requireCaptcha?: boolean;
         allowMultipleAccounts?: boolean;
         incrementingDiscriminators?: boolean;
+        /**
+         * Usernames nobody can register or change to, case-insensitive. `*` matches any run of characters
+         * @maxItems 1000
+         */
+        blacklistedUsernames?: string[];
         email?: { required?: boolean };
         dateOfBirth?: {
             /**

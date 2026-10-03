@@ -36,4 +36,5 @@ export class RegisterConfiguration {
     defaultRights: string = "875069521787904"; // See `npm run generate:rights`
     enableAbuseIpDb: boolean = false;
     enableIpData: boolean = false;
+    blacklistedUsernames: string[] = []; // nobody can register or rename to these; `*` matches any run of characters
 }

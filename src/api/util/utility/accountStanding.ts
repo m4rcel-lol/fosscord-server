@@ -42,12 +42,41 @@ export const accountStanding = (user: Pick<User, "disabled" | "account_standing"
 
 export const getUserViolations = (user_id: string) => UserViolation.find({ where: { user_id }, order: { created_at: "DESC" } });
 
+export const VIOLATION_TYPE_LABELS: Record<number, string> = {
+    1: "Other",
+    100: "Unsolicited adult content",
+    200: "Non-consensual adult content",
+    210: "Glorifying violence",
+    220: "Hate speech",
+    230: "Cracked accounts",
+    240: "Illicit goods",
+    250: "Social engineering",
+    280: "Child safety",
+    290: "Harassment and bullying",
+    310: "Harassment and bullying",
+    320: "Hateful conduct",
+    390: "Harassment and bullying",
+    711: "Impersonation",
+    720: "Ban evasion",
+    3010: "Malicious conduct",
+    3030: "Spam",
+    4000: "Non-consensual adult content",
+    4010: "Fraud",
+    5090: "Self-harm",
+    5305: "Doxxing",
+    5411: "Underage user",
+    5440: "Copyright infringement",
+};
+
 // the shape discord's client renders on the account standing page
 export function toClassification(violation: UserViolation): Classification {
     return {
         id: violation.id,
         classification_type: violation.classification_type,
-        description: violation.description,
+        // the client puts this after "You broke the rules for", so it's the rule; the staff's own words go in staff_message,
+        // which the patched client shows under that heading in the violation's popup
+        description: VIOLATION_TYPE_LABELS[violation.classification_type] ?? VIOLATION_TYPE_LABELS[1],
+        staff_message: violation.description,
         explainer_link: Config.get().general.tosPage ?? "",
         actions: violation.actions.map((action, i) => ({ id: `${violation.id}${i}`, action_type: action.action_type, descriptions: action.descriptions })),
         max_expiration_time: violation.expires_at.toISOString(),

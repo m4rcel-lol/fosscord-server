@@ -10171,6 +10171,14 @@
                     "incrementingDiscriminators": {
                         "type": "boolean"
                     },
+                    "blacklistedUsernames": {
+                        "description": "Usernames nobody can register or change to, case-insensitive. `*` matches any run of characters",
+                        "maxItems": 1000,
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
                     "email": {
                         "type": "object",
                         "properties": {
@@ -19839,6 +19847,10 @@
             },
             "appeal_ingestion_type": {
                 "$ref": "#/definitions/AppealIngestionType"
+            },
+            "staff_message": {
+                "description": "spacebar-only: what the staff member who issued it wrote, shown under the rule in the patched client",
+                "type": "string"
             }
         },
         "additionalProperties": false,
@@ -20021,6 +20033,10 @@
             },
             "appeal_ingestion_type": {
                 "$ref": "#/definitions/AppealIngestionType"
+            },
+            "staff_message": {
+                "description": "spacebar-only: what the staff member who issued it wrote, shown under the rule in the patched client",
+                "type": "string"
             }
         },
         "additionalProperties": false,

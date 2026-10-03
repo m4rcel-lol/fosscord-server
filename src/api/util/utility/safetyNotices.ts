@@ -19,37 +19,12 @@
 import { Message, User, UserViolation } from "@spacebar/database";
 import { Config, emitEvent, getRights, MessageUpdateEvent } from "@spacebar/util";
 import { AccountStandingState, AdminViolationCreateSchema, AppealStatusValue, Embed, EmbedType } from "@spacebar/schemas";
-import { accountStanding, getUserViolations } from "./accountStanding";
+import { accountStanding, getUserViolations, VIOLATION_TYPE_LABELS } from "./accountStanding";
 import { getSystemAccount, sendSystemDM } from "./systemAccounts";
 
 // What users and staff hear about violations: the official account DMs users (violation notices, standing drops,
 // appeal outcomes) using the client's own safety embeds, and the appeals account sends staff a review per appeal.
 
-export const VIOLATION_TYPE_LABELS: Record<number, string> = {
-    1: "Other",
-    100: "Unsolicited adult content",
-    200: "Non-consensual adult content",
-    210: "Glorifying violence",
-    220: "Hate speech",
-    230: "Cracked accounts",
-    240: "Illicit goods",
-    250: "Social engineering",
-    280: "Child safety",
-    290: "Harassment and bullying",
-    310: "Harassment and bullying",
-    320: "Hateful conduct",
-    390: "Harassment and bullying",
-    711: "Impersonation",
-    720: "Ban evasion",
-    3010: "Malicious conduct",
-    3030: "Spam",
-    4000: "Non-consensual adult content",
-    4010: "Fraud",
-    5090: "Self-harm",
-    5305: "Doxxing",
-    5411: "Underage user",
-    5440: "Copyright infringement",
-};
 const APPEAL_REASONS = ["They didn't break the rules", "The decision was too strict or unfair", "They disagree with the penalty", "Something else"];
 const STANDING_NAMES: Partial<Record<AccountStandingState, string>> = {
     [AccountStandingState.LIMITED]: "limited",

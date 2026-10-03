@@ -47,8 +47,14 @@ regions.default ??= "spacebar";
 regions.available = regions.available?.length ? regions.available : [{ id: regions.default, name: regions.default, vip: false, custom: false, deprecated: false }];
 for (const region of regions.available) if (region.id === regions.default) region.endpoint = `${domain}/voice`;
 
+// INSTANCE_NAME names a new instance, and changing it in .env renames the instance on the next start. Otherwise the
+// name set in the admin panel stays: the last value taken from .env is remembered next to the config file
 const instanceName = env("INSTANCE_NAME");
-if (instanceName) {
+const appliedNameFile = path.join(path.dirname(file), ".instance-name");
+const appliedName = fs.existsSync(appliedNameFile) ? fs.readFileSync(appliedNameFile, "utf8") : null;
+// before this was remembered, INSTANCE_NAME was applied on every start, so an existing config already carries it or a newer admin panel name
+const firstRemembered = appliedName === null && !!config.general?.instanceName;
+if (instanceName && instanceName !== appliedName && !firstRemembered) {
     section("general").instanceName = instanceName;
     section("client").instanceName = instanceName;
 }
@@ -74,4 +80,5 @@ if (smtpHost) {
 
 fs.mkdirSync(path.dirname(file), { recursive: true });
 fs.writeFileSync(file, JSON.stringify(config, null, 4), { mode: 0o600 });
+if (instanceName && instanceName !== appliedName) fs.writeFileSync(appliedNameFile, instanceName);
 console.log(`[configure] ${file} points at ${origin}`);

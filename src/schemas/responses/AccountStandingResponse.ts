@@ -128,6 +128,10 @@ export interface Classification {
     is_coppa: boolean;
     is_spam: boolean;
     appeal_ingestion_type: AppealIngestionType;
+    /**
+     * spacebar-only: what the staff member who issued it wrote, shown under the rule in the patched client
+     */
+    staff_message?: string;
 }
 
 export enum GuildMemberType {

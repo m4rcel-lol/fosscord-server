@@ -391,6 +391,27 @@ export class User extends BaseClass {
         return [{ phone: login }, { email: login }, { username: ILike((tag?.[1] ?? login).replace(/[\\%_]/g, "\\$&")), discriminator: tag?.[2] ?? "0", bot: false }];
     }
 
+    static isUsernameBlacklisted(username: string) {
+        const name = username.trim().toLowerCase();
+        return (Config.get().register.blacklistedUsernames ?? []).some((entry) => {
+            const pattern = entry.trim().toLowerCase();
+            if (!pattern) return false;
+            if (!pattern.includes("*")) return pattern === name;
+            return new RegExp(
+                `^${pattern
+                    .split("*")
+                    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+                    .join(".*")}$`,
+            ).test(name);
+        });
+    }
+
+    /** Throws the error the client shows under the username field when the instance has blacklisted the name. */
+    static assertUsernameAllowed(username: string) {
+        if (User.isUsernameBlacklisted(username))
+            throw FieldErrors({ username: { code: "USERNAME_BLACKLISTED", message: `Cannot use '${username.trim()}'. This username is blacklisted from registering.` } });
+    }
+
     static async isUsernameTaken(username: string, exceptUserId?: string) {
         const query = User.createQueryBuilder("u").where("LOWER(u.username) = LOWER(:username)", { username }).andWhere("u.bot = false");
         if (exceptUserId) query.andWhere("u.id != :id", { id: exceptUserId });
@@ -446,6 +467,7 @@ export class User extends BaseClass {
         // trim special utf8 control characters -> Backspace, Newline, ...
         username = trimSpecial(username);
 
+        if (!bot) User.assertUsernameAllowed(username);
         if (!bot && (await User.isUsernameTaken(username)))
             throw FieldErrors({
                 username: {

@@ -161,6 +161,7 @@ router.patch(
                         message: `Must be between 2 and ${maxUsername} in length.`,
                     },
                 });
+            if (!user.bot) User.assertUsernameAllowed(username);
             await checkPassword();
 
             if (user.discriminator === "0") {

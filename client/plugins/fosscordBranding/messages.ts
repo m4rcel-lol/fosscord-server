@@ -20,7 +20,8 @@ const TAG = 8;
 const SELECT = 5;
 const PLURAL = 6;
 
-const CANDIDATE = /discord|discrod|nitr|ディスコード|ไนโตร/i;
+// fosscord too: client files downloaded before branding moved into this plugin already had Discord rewritten to Fosscord
+const CANDIDATE = /discord|discrod|fosscord|nitr|ディスコード|ไนโตร/i;
 
 const FINNISH_CASES = new Set(["n", "a", "ssa", "sta", "lla", "lta", "lle", "ksi", "na", "si", "ni", "mme", "nne", "kin"]);
 
@@ -51,7 +52,8 @@ const brandText = (text: string, name: string) => {
         .replace(/https?:\/\/(?:www\.)?discord\.com(?![\w.-])/g, () => location.origin)
         .replace(/(?<![\w@./-])discord\.com(?![\w.-])/g, () => host)
         .replace(/DISCORD/g, (match) => (/741741/.test(text) ? match : name.toUpperCase()))
-        .replace(/Discord|Discrod|ディスコード/g, () => name)
+        .replace(/FOSSCORD/g, () => name.toUpperCase())
+        .replace(/Discord|Discrod|Fosscord|ディスコード/g, () => name)
         .replace(/(?<![\p{L}\w.@/-])discord(?![\p{L}\w.@/-])/gu, () => name)
         .replace(/NITRO/g, "PREMIUM")
         .replace(/ไนโตร/g, "Premium")

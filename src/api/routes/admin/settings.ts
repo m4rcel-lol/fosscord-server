@@ -56,6 +56,7 @@ const pickSettings = () => {
             requireCaptcha: register.requireCaptcha,
             allowMultipleAccounts: register.allowMultipleAccounts,
             incrementingDiscriminators: register.incrementingDiscriminators,
+            blacklistedUsernames: register.blacklistedUsernames ?? [],
             email: { required: register.email.required },
             dateOfBirth: { minimum: register.dateOfBirth.minimum },
             password: {
@@ -133,10 +134,14 @@ router.patch(
 
         const { login, register: registerRate, ...rate } = body.rate ?? {};
 
+        // a list replaces the old one; merging would keep entries that were taken off it
+        const { blacklistedUsernames, ...register } = body.register ?? {};
+        if (blacklistedUsernames) Config.get().register.blacklistedUsernames = [...new Set(blacklistedUsernames.map((name) => name.trim().toLowerCase()).filter(Boolean))];
+
         await Config.set({
             general,
             client,
-            register: body.register ?? {},
+            register,
             login: body.login ?? {},
             passwordReset: body.passwordReset ?? {},
             security: { captcha },

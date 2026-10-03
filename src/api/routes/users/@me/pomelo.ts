@@ -28,6 +28,7 @@ router.post("/", route({}), async (req: Request, res: Response) => {
     const username = String(req.body?.username ?? "");
     if (!User.isValidPomeloUsername(username))
         throw FieldErrors({ username: { code: "USERNAME_INVALID_CHARACTERS", message: "Usernames can only contain letters, numbers, underscores and periods." } });
+    User.assertUsernameAllowed(username);
     if (await User.isUsernameTaken(username, req.user_id))
         throw FieldErrors({ username: { code: "USERNAME_ALREADY_TAKEN", message: "Username is unavailable. Try adding numbers, letters, underscores _ , or periods." } });
 

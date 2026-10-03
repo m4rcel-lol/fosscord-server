@@ -669,6 +669,12 @@ async function renderSettings(view) {
                         ${toggle("register.allowMultipleAccounts", "Allow multiple accounts per person", "When off, sign-ups from known devices or IPs are refused.")}
                         ${toggle("register.incrementingDiscriminators", "Give out discriminators in order", "Off picks a random free one for legacy usernames.")}
                     </div>
+                    <label style="margin-top:16px"
+                        >Blacklisted usernames<span class="hint"
+                            >One per line, not case-sensitive. Nobody can register with these or change their username to one, and the sign-up page says so as they type.
+                            <code>*</code> matches anything, so <code>*admin*</code> blocks every name containing "admin". Accounts that already have one keep it.</span
+                        ><textarea name="register.blacklistedUsernames" data-lines rows="5" placeholder="admin&#10;moderator&#10;*official*">${(s.register.blacklistedUsernames ?? []).join("\n")}</textarea></label
+                    >
                     <div class="form-grid" style="margin-top:16px">
                         ${number("register.dateOfBirth.minimum", "Minimum age", "Years. Set to 0 to accept any date of birth.")}
                         ${number("register.password.minLength", "Minimum password length", "", 1)}
@@ -735,7 +741,19 @@ async function renderSettings(view) {
         for (const el of $$("input, textarea, select", form)) {
             if (!el.name) continue;
             if (el.name === "captcha.secret" && !el.value) continue;
-            const value = el.type === "checkbox" ? el.checked : "number" in el.dataset ? Number(el.value) : el.name === "captcha.service" ? el.value || null : el.value;
+            const value =
+                el.type === "checkbox"
+                    ? el.checked
+                    : "number" in el.dataset
+                      ? Number(el.value)
+                      : "lines" in el.dataset
+                        ? el.value
+                              .split("\n")
+                              .map((line) => line.trim())
+                              .filter(Boolean)
+                        : el.name === "captcha.service"
+                          ? el.value || null
+                          : el.value;
             setPath(body, el.name, value);
         }
         const saved = await act($("button[type=submit]", form), () => api("/admin/settings", { method: "PATCH", body }), "Settings saved");
