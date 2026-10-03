@@ -228,6 +228,33 @@ export interface GuildBanAddEvent extends Event {
     };
 }
 
+export interface AutoModerationRuleEvent extends Event {
+    event: "AUTO_MODERATION_RULE_CREATE" | "AUTO_MODERATION_RULE_UPDATE" | "AUTO_MODERATION_RULE_DELETE";
+    data: Record<string, unknown>;
+}
+
+export interface AutoModerationActionExecutionEvent extends Event {
+    event: "AUTO_MODERATION_ACTION_EXECUTION";
+    data: {
+        guild_id: string;
+        action: { type: number; metadata: Record<string, unknown> };
+        rule_id: string;
+        rule_trigger_type: number;
+        user_id: string;
+        channel_id?: string;
+        message_id?: string;
+        alert_system_message_id?: string;
+        content: string;
+        matched_keyword: string | null;
+        matched_content: string | null;
+    };
+}
+
+export interface AutoModerationMentionRaidDetectionEvent extends Event {
+    event: "AUTO_MODERATION_MENTION_RAID_DETECTION";
+    data: { guild_id: string; decision_id: string; suspicious_mention_activity_until: string };
+}
+
 export interface GuildBanRemoveEvent extends Event {
     event: "GUILD_BAN_REMOVE";
     data: {
@@ -792,6 +819,9 @@ export type EventData =
     | GuildDeleteEvent
     | GuildBanAddEvent
     | GuildBanRemoveEvent
+    | AutoModerationRuleEvent
+    | AutoModerationActionExecutionEvent
+    | AutoModerationMentionRaidDetectionEvent
     | GuildEmojisUpdateEvent
     | GuildIntegrationUpdateEvent
     | GuildMemberAddEvent
@@ -1003,6 +1033,11 @@ export type EVENT =
     | "STAGE_INSTANCE_CREATE"
     | "STAGE_INSTANCE_UPDATE"
     | "STAGE_INSTANCE_DELETE"
+    | "AUTO_MODERATION_RULE_CREATE"
+    | "AUTO_MODERATION_RULE_UPDATE"
+    | "AUTO_MODERATION_RULE_DELETE"
+    | "AUTO_MODERATION_ACTION_EXECUTION"
+    | "AUTO_MODERATION_MENTION_RAID_DETECTION"
     | CUSTOMEVENTS;
 
 export type CUSTOMEVENTS =
