@@ -81,6 +81,9 @@ router.post(
                 where: { id: data.creator_id },
             }),
             ...data,
+            enabled: data.enabled ?? false,
+            exempt_channels: data.exempt_channels ?? [],
+            exempt_roles: data.exempt_roles ?? [],
         });
 
         const savedRule = await AutomodRule.save(created);
