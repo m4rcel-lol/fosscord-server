@@ -30,7 +30,7 @@ const defaults: Record<string, { variant: number; config?: object }> = {
     "2026-08-mark-channel-unread": { variant: 1 },
     "2026-03-soundmoji-rendering": { variant: 1 },
     "2026-03-soundmoji-sending": { variant: 2 },
-    "2026-09-soundboard-favorites": { variant: 1 },
+    "2026-09-soundboard-favorites": { variant: 2 },
     "2026-03-friend-request-message": { variant: 1 },
     "2026-09-connected-thread-sidebar": { variant: 1 },
 };
