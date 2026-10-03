@@ -124,5 +124,52 @@ export const placeholderAvatarSvg = (size: number, background: string, foregroun
             : `<path fill="${foreground}" transform="translate(62 62) scale(5.5)" d="${INSTANCE_ICON_PATH}"/>`
     }</svg>`;
 
+export const APP_THEME_COLOR = "#121214";
+
+const appIcons = new Map<string, Promise<Buffer | null>>();
+
+const renderAppIcon = async (image: BrandImage, size: number) => {
+    const { Jimp } = await import("jimp");
+    const source =
+        "file" in image ? image.file : await fetch(image.url, { signal: AbortSignal.timeout(5000) }).then(async (res) => (res.ok ? Buffer.from(await res.arrayBuffer()) : null));
+    if (!source) return null;
+    const icon = await Jimp.read(source);
+    const inner = Math.round(size * 0.62);
+    icon.scaleToFit({ w: inner, h: inner });
+    const canvas = new Jimp({ width: size, height: size, color: parseInt(`${APP_THEME_COLOR.slice(1)}ff`, 16) });
+    canvas.composite(icon, Math.round((size - icon.bitmap.width) / 2), Math.round((size - icon.bitmap.height) / 2));
+    return canvas.getBuffer("image/png");
+};
+
+export const appIconPng = (size: number) => {
+    const image = instanceIcon() ?? { file: DEFAULT_ICON_FILE };
+    const key = `${version(image)}:${size}`;
+    let pending = appIcons.get(key);
+    if (!pending) {
+        if (appIcons.size > 16) appIcons.clear();
+        pending = renderAppIcon(image, size).catch(() => null);
+        appIcons.set(key, pending);
+        void pending.then((png) => png ?? appIcons.delete(key));
+    }
+    return pending.then((png) => png ?? renderAppIcon({ file: DEFAULT_ICON_FILE }, size).catch(() => null));
+};
+
+export const appIconUrl = (size: number) => `/assets/pwa/icon-${size}.png?v=${version(instanceIcon() ?? { file: DEFAULT_ICON_FILE })}`;
+
+export const appManifest = () => {
+    const name = instanceName();
+    return {
+        id: "/app",
+        name,
+        short_name: name,
+        start_url: "/app",
+        scope: "/",
+        display: "standalone",
+        background_color: APP_THEME_COLOR,
+        theme_color: APP_THEME_COLOR,
+        icons: [192, 512].flatMap((size) => ["any", "maskable"].map((purpose) => ({ src: appIconUrl(size), sizes: `${size}x${size}`, type: "image/png", purpose }))),
+    };
+};
+
 export const defaultAvatarSvg = (index: number) =>
     `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><rect width="256" height="256" fill="${DEFAULT_AVATAR_COLORS[index % DEFAULT_AVATAR_COLORS.length]}"/><path fill="#fff" transform="translate(53 54) scale(6.25)" d="${INSTANCE_ICON_PATH}"/></svg>`;
