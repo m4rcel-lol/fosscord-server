@@ -167,6 +167,27 @@ The compression script only recompresses files whose source changed, so rerunnin
 
 With `NODE_ENV=production`, hashed asset names are served with `Cache-Control: public, max-age=31536000, immutable` and the HTML page with `no-cache` and an ETag. In development everything is `no-cache`.
 
+## Phones and tablets
+
+The official Discord apps for Android and iOS can't be pointed at another server, so on a phone people use the instance in the browser. The web client has a phone layout of its own and switches to it when the user agent belongs to a phone or tablet. The server and channel lists sit in a drawer behind the menu button, settings open full screen, and the message box has a send button. On Android it's a plain text area and on iOS the usual rich editor. Login, registration, invites and server templates all fit the screen.
+
+We checked build 627798 in a 390 by 844 touch viewport with Android Chrome, Samsung Internet and iOS Safari user agents. A tap on the message box focused it, typed text went in and the send button posted it. The drawer, settings and the friends list opened, a voice channel joined and connected, a signed-in user accepted an invite and stayed in the browser, and a signed-out user got the register form on the invite page.
+
+The stock client sent phones to the Discord app in two places, and `FosscordMobileWeb` (`client/plugins/fosscordMobileWeb`) fixes both:
+
+- Invite and template links rendered a page whose only button opened `discordapp.onelink.me`, which hands off to the Discord app or the app store. The plugin renders the invite and template pages desktop browsers get, so the invite is accepted and the server is created right in the browser. Below 486 pixels it also stacks the two columns of the template page.
+- Discord enables voice only for browsers its browser detection names Chrome, Firefox, Opera, Safari or Microsoft Edge. On Android that library reports `Chrome Mobile`, `Firefox Mobile`, `Opera Mobile` or `Samsung Internet`, so a tap on a voice channel did nothing. The plugin drops the ` Mobile` suffix and treats Samsung Internet as the Chrome version in its user agent. iOS Safari already passed.
+
+`FosscordNoAppUpsells` removes the download prompts on every platform, phones included.
+
+The server also rewrites Discord's viewport tag to add `interactive-widget=resizes-content`. With it, Chrome and Firefox on Android shrink the page when the on-screen keyboard opens instead of sliding it up, so the channel header stays visible above the message box. Safari ignores the key. Headless browsers have no on-screen keyboard, so we haven't tested this part.
+
+### Installing to the home screen
+
+The client page links `/manifest.webmanifest`, which has the instance name from `client.instanceName`, `/app` as the start page, `display: standalone` and icons at 192 and 512 pixels. `/assets/pwa/icon-180.png`, `icon-192.png` and `icon-512.png` draw the instance icon (`client.icon`, then `general.image`, then `assets/icon.png`) at 62% of the width on `#121214`, the colour of the client's title bar. The margin keeps the icon inside the circle Android crops maskable icons to, so the manifest offers the same images for both the `any` and `maskable` purposes. iOS takes the 180 pixel version from the `apple-touch-icon` link and the name from `apple-mobile-web-app-title`. The server draws the icons with jimp, an optional dependency, and keeps them in memory per icon and size. An icon jimp can't read, such as an SVG or WebP file, falls back to `assets/icon.png`.
+
+Browsers only offer to install a site served over HTTPS or from localhost. Chrome's DevTools protocol reported no installability errors for this manifest. In Chrome or Samsung Internet on Android, open the browser menu and choose "Add to Home screen" or "Install app". On iOS, tap Share in Safari and choose "Add to Home Screen". The installed app opens without browser chrome and needs a connection, because there's no service worker cache for offline use.
+
 ## HTTPS and HTTP/2 without a proxy
 
 Set `TLS_CERT` and `TLS_KEY` to PEM files to serve HTTPS with HTTP/2. By default HTTPS shares `PORT` with plain HTTP, and the server tells the two apart by the first byte of each connection. Set `HTTPS_PORT` to listen on a separate port instead. Gateway websockets keep working over both, because browsers open them as HTTP/1.1 upgrades.
