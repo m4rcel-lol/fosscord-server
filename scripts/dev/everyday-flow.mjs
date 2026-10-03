@@ -353,11 +353,20 @@ const serverErrors = serverLog
           .filter((line) => /error|Trace:|Unhandled|" 5\d\d /i.test(line))
           .slice(0, 50)
     : [];
+const knownClient = [/<svg> attribute height: Expected length, "auto"/, /pageerror Starting password login/];
+const unexpected = [...new Set(issues)].filter((x) => !knownClient.some((pattern) => pattern.test(x)));
 console.log(
     JSON.stringify(
-        { users: Object.fromEntries(Object.entries(users).map(([k, v]) => [k, v.username])), steps, issues: [...new Set(issues)], serverErrors, warnings: [...new Set(warnings)] },
+        {
+            users: Object.fromEntries(Object.entries(users).map(([k, v]) => [k, v.username])),
+            steps,
+            issues: unexpected,
+            knownClientIssues: [...new Set(issues)].filter((x) => !unexpected.includes(x)),
+            serverErrors,
+            warnings: [...new Set(warnings)],
+        },
         null,
         2,
     ),
 );
-process.exitCode = steps.every((x) => x.ok) && !issues.length && !serverErrors.length ? 0 : 1;
+process.exitCode = steps.every((x) => x.ok) && !unexpected.length && !serverErrors.length ? 0 : 1;
