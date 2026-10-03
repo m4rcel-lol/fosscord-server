@@ -16,7 +16,17 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { assertCanSendDirectMessage, checkAutomod, handleMessage, onThreadMessage, postHandleMessage, reopenDirectMessage } from "@spacebar/api/util";
+import {
+    assertCanSendDirectMessage,
+    assertGuildVerification,
+    assertNoHarmfulLinks,
+    checkAutomod,
+    handleMessage,
+    onThreadMessage,
+    postHandleMessage,
+    recordGuildMemberDm,
+    reopenDirectMessage,
+} from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
 import { Attachment, Channel, Member, Message, ReadState, User } from "@spacebar/database";
 import {
@@ -306,7 +316,8 @@ router.post(
             throw DiscordApiErrors.POLL_INVALID_CHANNEL_TYPE;
         }
 
-        await assertCanSendDirectMessage(channel, req.user_id);
+        const dmViaGuilds = await assertCanSendDirectMessage(channel, req.user_id);
+        if (channel.guild_id) await assertGuildVerification(channel.guild_id, req.user_id);
 
         if (body.nonce) {
             const existing = await Message.findOne({
@@ -344,7 +355,9 @@ router.post(
             }
         }
 
-        if (channel.guild_id) await checkAutomod({ guild_id: channel.guild_id, channel, user_id: req.user_id, content: body.content, permission: req.permission });
+        assertNoHarmfulLinks(body.content);
+        if (channel.guild_id)
+            await checkAutomod({ guild_id: channel.guild_id, channel, user_id: req.user_id, content: body.content, permission: req.permission, message_id: messageId });
 
         const files = (req.files as Express.Multer.File[]) ?? [];
         for (const currFile of files) {
@@ -374,6 +387,10 @@ router.post(
         message.edited_timestamp = null;
 
         await reopenDirectMessage(channel, req.user_id);
+        if (dmViaGuilds.length) {
+            const recipient = channel.recipients?.find((r) => r.user_id !== req.user_id)?.user_id;
+            if (recipient) recordGuildMemberDm(dmViaGuilds, req.user_id, recipient).catch((e) => console.error("[Safety] dm raid check failed", e));
+        }
 
         if (channel.isThread())
             await onThreadMessage(

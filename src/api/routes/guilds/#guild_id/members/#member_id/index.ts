@@ -33,8 +33,10 @@ import {
     GuildMemberUpdateEvent,
     handleFile,
     hashOAuth2Token,
+    Permissions,
     ReadyGuildDTO,
 } from "@spacebar/util";
+import { checkMemberProfile, onGuildMemberJoin } from "@spacebar/api/util";
 import { AuditLogEvents, MemberChangeSchema, PublicMemberProjection, PublicUserProjection } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
@@ -78,6 +80,7 @@ const addMemberWithAccessToken = async (req: Request, res: Response, guild_id: s
     }
 
     await Member.addToGuild(member_id, guild_id, false, { join_source_type: 1, inviter_id: req.user_id });
+    await onGuildMemberJoin(guild_id, member_id);
     if (body.mute === true || body.deaf === true) await Member.update({ id: member_id, guild_id }, { mute: body.mute === true, deaf: body.deaf === true });
     for (const role of roles) await Member.addRole(member_id, guild_id, role);
     if (nick) await Member.changeNickname(member_id, guild_id, nick);
@@ -258,12 +261,27 @@ router.patch(
 
         if ("communication_disabled_until" in body) {
             permission.hasThrow("MODERATE_MEMBERS");
-            member.communication_disabled_until = body.communication_disabled_until == null ? null : new Date(body.communication_disabled_until);
+            const until = body.communication_disabled_until == null ? null : new Date(body.communication_disabled_until);
+            if (until && (Number.isNaN(until.getTime()) || until.getTime() > Date.now() + 28 * 24 * 60 * 60 * 1000 + 60_000))
+                throw FieldErrors({ communication_disabled_until: { code: "BASE_TYPE_BAD_DATETIME", message: "Timeouts can last at most 28 days." } });
+            if (until && until.getTime() > Date.now()) {
+                const guild = await Guild.findOneOrFail({ where: { id: guild_id }, select: { id: true, owner_id: true } });
+                const targetPermission = Permissions.rolePermission(member.roles);
+                if (guild.owner_id === member_id || (targetPermission & Permissions.FLAGS.ADMINISTRATOR) === Permissions.FLAGS.ADMINISTRATOR)
+                    throw DiscordApiErrors.MISSING_PERMISSIONS.withParams("MODERATE_MEMBERS");
+                if (guild.owner_id !== req.user_id) {
+                    const actor = await Member.findOneOrFail({ where: { id: req.user_id, guild_id }, relations: { roles: true } });
+                    const highest = (roles: Role[]) => Math.max(0, ...roles.filter((role) => role.id !== guild_id).map((role) => role.position));
+                    if (highest(actor.roles) <= highest(member.roles)) throw DiscordApiErrors.MISSING_PERMISSIONS.withParams("MODERATE_MEMBERS");
+                }
+            }
+            member.communication_disabled_until = until && until.getTime() > Date.now() ? until : null;
         }
 
         await member.save();
         if ("mute" in body || "deaf" in body) await VoiceChannels.setServerMute(guild_id, member_id, { mute: body.mute, deaf: body.deaf });
         if ("channel_id" in body) await VoiceChannels.move(guild_id, member_id, voiceChannelId ?? null);
+        else if (member.communication_disabled_until) await VoiceChannels.move(guild_id, member_id, null).catch(() => undefined);
 
         member.roles = member.roles.filter((x) => x.id !== guild_id);
         const data = { ...member.toPublicMember(), guild_id, user: member.user.toPublicUser(), roles: member.roles.map((x) => x.id) };
@@ -296,6 +314,8 @@ router.patch(
                 reason,
             });
         }
+
+        if ("nick" in body) await checkMemberProfile(guild_id, member_id, "username_update").catch((e) => console.error("[AutoMod] profile check failed", e));
 
         res.json(data);
     },
@@ -379,7 +399,10 @@ router.put(
             return res.send({ ...guild, emojis: emoji, roles: roles, stickers: stickers, approximate_presence_count: await Guild.countOnlineMembers(guild_id) });
         }
 
-        if (!alreadyMember) await Member.addToGuild(member_id, guild_id);
+        if (!alreadyMember) {
+            await Member.addToGuild(member_id, guild_id);
+            await onGuildMemberJoin(guild_id, member_id);
+        }
         res.send({ ...guild, emojis: emoji, roles: roles, stickers: stickers });
     },
 );
