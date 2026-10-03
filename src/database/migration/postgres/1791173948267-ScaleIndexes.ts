@@ -48,7 +48,10 @@ export class ScaleIndexes1791173948267 implements MigrationInterface {
     name = "ScaleIndexes1791173948267";
 
     public async up(queryRunner: QueryRunner): Promise<void> {
-        for (const [name, on] of added) await queryRunner.query(`CREATE INDEX IF NOT EXISTS "${name}" ON ${on}`);
+        for (const [name, on] of added) {
+            const [{ exists }] = await queryRunner.query(`SELECT to_regclass($1) IS NOT NULL AS "exists"`, [on.slice(0, on.indexOf(" "))]);
+            if (exists) await queryRunner.query(`CREATE INDEX IF NOT EXISTS "${name}" ON ${on}`);
+        }
         for (const [name] of redundant) await queryRunner.query(`DROP INDEX IF EXISTS "${name}"`);
     }
 
