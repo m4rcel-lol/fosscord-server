@@ -662,13 +662,11 @@ export async function getOrUpdateEmbedCache(urls: string[], cb?: (url: string, e
         }),
     );
     embeds.push(...cachedEmbeds);
-    cb?.(
-        "cached",
-        cachedEmbeds
-            .map((e) => e.embeds)
-            .flat()
-            .filter((e) => e !== undefined),
-    );
+    for (const cached of cachedEmbeds)
+        await cb?.(
+            urls.find((url) => normalizeUrl(url) === cached.url) ?? cached.url,
+            (cached.embeds ?? []).filter((e) => e !== undefined),
+        );
 
     const urlsToGenerate = urls.filter((url) => !cachedEmbeds.some((e) => e.url == normalizeUrl(url)));
 
@@ -736,12 +734,15 @@ export async function fillMessageUrlEmbeds(message: Message) {
         return message;
     }
 
+    const rich = message.embeds;
+    const order = uniqueLinks.map(normalizeUrl);
+    const found = new Map<string, Embed[]>();
+
     // avoid a race condition updating the same row
     let messageUpdateLock = saveAndEmitMessageUpdate(message);
     await getOrUpdateEmbedCache(uniqueLinks, async (url, embeds) => {
-        if (url !== "cached" && message.embeds.length + embeds.length > Config.get().limits.message.maxEmbeds) return;
-        message.embeds.push(...embeds);
-        if (message.embeds.length > Config.get().limits.message.maxEmbeds) message.embeds = message.embeds.slice(0, Config.get().limits.message.maxEmbeds);
+        found.set(normalizeUrl(url), embeds);
+        message.embeds = [...rich, ...order.flatMap((key) => found.get(key) ?? [])].slice(0, Config.get().limits.message.maxEmbeds);
 
         try {
             await messageUpdateLock;

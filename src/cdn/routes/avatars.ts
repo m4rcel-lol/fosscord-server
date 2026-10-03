@@ -17,9 +17,11 @@
 */
 
 import crypto from "node:crypto";
+import fs from "node:fs/promises";
+import { join } from "node:path";
 import { Router, Response, Request } from "express";
 import { fileTypeFromBuffer } from "file-type";
-import { Config } from "@spacebar/util";
+import { Config, DEFAULT_AVATARS_FOLDER, defaultAvatarSvg } from "@spacebar/util";
 import { HTTPError } from "lambert-server/HTTPError";
 import { storage, multer, setCacheControl } from "../util";
 
@@ -31,6 +33,8 @@ import { storage, multer, setCacheControl } from "../util";
 const ANIMATED_MIME_TYPES = ["image/apng", "image/gif", "image/gifv"];
 const STATIC_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/svg+xml", "image/svg"];
 const ALLOWED_MIME_TYPES = [...ANIMATED_MIME_TYPES, ...STATIC_MIME_TYPES];
+
+const CLIENT_WUMPUS_USER_ID = "47835198259242069";
 
 const router = Router({ mergeParams: true });
 
@@ -80,6 +84,11 @@ export const getAvatar = async (req: Request, res: Response) => {
     const path = `avatars/${user_id}/${hash}`;
 
     const file = await storage.get(path);
+    if (!file && user_id === CLIENT_WUMPUS_USER_ID) {
+        const fallback = join(DEFAULT_AVATARS_FOLDER, "0.png");
+        if (await fs.stat(fallback).catch(() => null)) return res.type("png").sendFile(fallback, { cacheControl: false, dotfiles: "allow" });
+        return res.type("image/svg+xml").send(defaultAvatarSvg(0));
+    }
     if (!file) throw new HTTPError("not found", 404);
     const type = await fileTypeFromBuffer(file);
 

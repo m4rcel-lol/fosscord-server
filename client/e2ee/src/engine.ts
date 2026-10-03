@@ -488,6 +488,13 @@ export class Engine {
             state = await this.api.request<ServerState>("put", "/users/@me/e2ee/identity", { public_key: identityJwk.x });
             this.secret = null;
             this.backupKeyPair = null;
+        } else if (!this.backup && !state.channels.length && this.identity?.publicKey !== state.identity_key && this.passwordValue()) {
+            const password = this.passwordValue()!;
+            identityJwk = await generateExportable("Ed25519");
+            state = await this.api.request<ServerState>("post", "/users/@me/e2ee/reset", { password, public_key: identityJwk.x });
+            await this.wipeLocal(false);
+            await this.adoptIdentity(identityJwk);
+            this.directory.clear();
         }
         const serverKey = state.identity_key!;
         this.serverKey = serverKey;

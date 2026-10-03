@@ -20,6 +20,7 @@ import { HTTPError } from "lambert-server/HTTPError";
 import { Brackets, In } from "typeorm";
 import { Channel, Message, Recipient, ThreadMember } from "@spacebar/database";
 import { FieldErrors, getPermission } from "@spacebar/util";
+import { MessageType } from "@spacebar/schemas";
 
 export type MessageSearchQuery = Record<string, unknown>;
 
@@ -35,6 +36,8 @@ const HAS_FILTERS: Record<string, string> = {
     forward: `m.message_reference->>'type' = '1'`,
     snapshot: `jsonb_array_length(m.message_snapshots) > 0`,
 };
+
+const SEARCHABLE_TYPES = [MessageType.DEFAULT, MessageType.REPLY, MessageType.APPLICATION_COMMAND, MessageType.CONTEXT_MENU_COMMAND];
 
 const list = (value: unknown): string[] => (value === undefined || value === null ? [] : (Array.isArray(value) ? value : [value]).map(String).filter((x) => x.length));
 
@@ -75,7 +78,10 @@ export async function searchMessages(userId: string, channels: Channel[], query:
     const channelIds = channels.filter((channel) => includeNsfw || !channel.nsfw).map((channel) => channel.id);
     if (!channelIds.length) return { messages: [] as Message[], total_results: 0 };
 
-    const qb = Message.createQueryBuilder("m").select("m.id", "id").where("m.channel_id IN (:...channelIds)", { channelIds });
+    const qb = Message.createQueryBuilder("m")
+        .select("m.id", "id")
+        .where("m.channel_id IN (:...channelIds)", { channelIds })
+        .andWhere("m.type IN (:...types)", { types: SEARCHABLE_TYPES });
 
     const words = `${query.content ?? ""}`
         .trim()

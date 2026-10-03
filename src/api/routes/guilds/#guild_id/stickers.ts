@@ -20,9 +20,11 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import multer from "multer";
 import { route } from "@spacebar/api/middlewares";
-import { Member, Sticker } from "@spacebar/database";
+import { AuditLog, Member, Sticker } from "@spacebar/database";
 import { GuildStickersUpdateEvent, Snowflake, emitEvent, uploadFile, deleteFile, Config, DiscordApiErrors } from "@spacebar/util";
-import { ModifyGuildStickerSchema, StickerFormatType, StickerType } from "@spacebar/schemas";
+import { AuditLogEvents, ModifyGuildStickerSchema, StickerFormatType, StickerType } from "@spacebar/schemas";
+
+const stickerAuditKeys = ["name", "description", "tags", "format_type", "available"];
 
 const router = Router({ mergeParams: true });
 
@@ -89,7 +91,7 @@ router.post(
 
         const { content_type } = await uploadFile(`/stickers/${id}`, req.file);
 
-        await Sticker.create({
+        const sticker = await Sticker.create({
             name: body.name,
             description: body.description,
             tags: body.tags,
@@ -100,6 +102,14 @@ router.post(
             available: true,
             user_id: req.user_id,
         }).save();
+        await AuditLog.log({
+            guild_id,
+            user_id: req.user_id,
+            action_type: AuditLogEvents.STICKER_CREATE,
+            target_id: id,
+            changes: AuditLog.diff({}, sticker, stickerAuditKeys),
+            reason: req.headers["x-audit-log-reason"],
+        });
 
         await sendStickerUpdateEvent(guild_id);
 
@@ -169,10 +179,21 @@ router.patch(
         const sticker = await Sticker.findOne({ where: { guild_id, id: sticker_id }, relations: { user: true } });
         if (!sticker) throw DiscordApiErrors.UNKNOWN_STICKER;
 
+        const auditBefore = { name: sticker.name, description: sticker.description, tags: sticker.tags };
         if (body.name !== undefined) sticker.name = body.name;
         if (body.description !== undefined) sticker.description = body.description;
         if (body.tags !== undefined) sticker.tags = body.tags;
         await sticker.save();
+        const changes = AuditLog.diff(auditBefore, sticker, ["name", "description", "tags"]);
+        if (changes.length)
+            await AuditLog.log({
+                guild_id,
+                user_id: req.user_id,
+                action_type: AuditLogEvents.STICKER_UPDATE,
+                target_id: sticker_id,
+                changes,
+                reason: req.headers["x-audit-log-reason"],
+            });
         await sendStickerUpdateEvent(guild_id);
 
         return res.json(sticker);
@@ -208,6 +229,14 @@ router.delete(
         if (!sticker) throw DiscordApiErrors.UNKNOWN_STICKER;
 
         await Sticker.delete({ guild_id, id: sticker_id });
+        await AuditLog.log({
+            guild_id,
+            user_id: req.user_id,
+            action_type: AuditLogEvents.STICKER_DELETE,
+            target_id: sticker_id,
+            changes: AuditLog.diff(sticker, {}, stickerAuditKeys),
+            reason: req.headers["x-audit-log-reason"],
+        });
         await deleteFile(`/stickers/${sticker_id}`).catch(() => undefined);
         await sendStickerUpdateEvent(guild_id);
 

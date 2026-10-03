@@ -20,7 +20,7 @@ import { Request, Response, Router } from "express";
 import { Not } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
 import { AUTO_ARCHIVE_DURATION_ERROR, AUTO_ARCHIVE_DURATIONS, emitThreadUpdate, sendMessage, setThreadArchived } from "@spacebar/api/util";
-import { Channel, Recipient, Tag, ThreadMember, VoiceChannels } from "@spacebar/database";
+import { AuditLog, Channel, Recipient, Tag, ThreadMember, VoiceChannels } from "@spacebar/database";
 import {
     ChannelDeleteEvent,
     ChannelFlags,
@@ -36,7 +36,7 @@ import {
     Snowflake,
     ThreadDeleteEvent,
 } from "@spacebar/util";
-import { ChannelModifySchema, ChannelType, MessageType } from "@spacebar/schemas";
+import { AuditLogEvents, ChannelModifySchema, ChannelType, MessageType } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
 
@@ -119,6 +119,14 @@ router.delete(
             const data = { id: channel_id, guild_id: channel.guild_id, parent_id: channel.parent_id, type: channel.type };
             const transaction_id = Snowflake.generate();
             await Channel.delete({ id: channel_id });
+            await AuditLog.log({
+                guild_id: channel.guild_id!,
+                user_id: req.user_id,
+                action_type: AuditLogEvents.THREAD_DELETE,
+                target_id: channel_id,
+                changes: AuditLog.diff(threadAuditState(channel), {}, AuditLog.threadKeys),
+                reason: req.headers["x-audit-log-reason"],
+            });
             await emitEvent({ event: "THREAD_DELETE", data, channel_id, transaction_id } satisfies ThreadDeleteEvent);
             if (!channel.isPrivateThread()) await emitEvent({ event: "THREAD_DELETE", data, channel_id: channel.parent_id!, transaction_id } satisfies ThreadDeleteEvent);
         } else {
@@ -143,6 +151,15 @@ router.delete(
 
             if (channel.guild_id && [ChannelType.GUILD_VOICE, ChannelType.GUILD_STAGE_VOICE].includes(channel.type)) await VoiceChannels.evict(channel.guild_id, channel_id);
             await Channel.deleteChannel(channel);
+            if (channel.guild_id)
+                await AuditLog.log({
+                    guild_id: channel.guild_id,
+                    user_id: req.user_id,
+                    action_type: AuditLogEvents.CHANNEL_DELETE,
+                    target_id: channel_id,
+                    changes: AuditLog.diff(channel, {}, AuditLog.channelKeys),
+                    reason: req.headers["x-audit-log-reason"],
+                });
             await emitEvent({
                 event: "CHANNEL_DELETE",
                 data: channel.toJSON(),
@@ -155,6 +172,18 @@ router.delete(
 );
 
 const THREAD_FIELDS = ["archived", "locked", "auto_archive_duration", "invitable"] as const;
+
+const threadAuditState = (channel: Channel) => ({
+    name: channel.name,
+    type: channel.type,
+    archived: channel.thread_metadata?.archived,
+    locked: channel.thread_metadata?.locked,
+    auto_archive_duration: channel.thread_metadata?.auto_archive_duration,
+    invitable: channel.thread_metadata?.invitable,
+    rate_limit_per_user: channel.rate_limit_per_user,
+    flags: channel.flags,
+    applied_tags: channel.applied_tags,
+});
 
 router.patch(
     "/",
@@ -192,6 +221,7 @@ router.patch(
         if (Object.keys(errors).length) throw new FieldError(50035, "Invalid Form Body", errors);
 
         if (channel.isThread()) {
+            const auditBefore = threadAuditState(channel);
             const meta = channel.thread_metadata!;
             const perms = req.permission!;
             const isOwner = channel.owner_id === req.user_id;
@@ -249,6 +279,16 @@ router.patch(
             await Channel.update({ id: channel.id }, { ...changes, thread_metadata: newMeta });
             if (payload.archived !== undefined && payload.archived !== meta.archived) await setThreadArchived(channel, payload.archived);
 
+            const threadChanges = AuditLog.diff(auditBefore, threadAuditState(channel), AuditLog.threadKeys);
+            if (threadChanges.length && channel.guild_id)
+                await AuditLog.log({
+                    guild_id: channel.guild_id,
+                    user_id: req.user_id,
+                    action_type: AuditLogEvents.THREAD_UPDATE,
+                    target_id: channel.id,
+                    changes: threadChanges,
+                    reason: req.headers["x-audit-log-reason"],
+                });
             await emitThreadUpdate(channel);
             if (renamed)
                 await sendMessage({
@@ -309,6 +349,7 @@ router.patch(
         const columns = new Set(Channel.getRepository().metadata.columns.map((c) => c.propertyName));
         const update = Object.fromEntries(Object.entries(payload).filter(([key, value]) => columns.has(key) && key !== "id" && value !== undefined));
         const before = { name: channel.name ?? null, icon: channel.icon ?? null };
+        const auditBefore = Object.fromEntries(AuditLog.channelKeys.map((key) => [key, (channel as unknown as Record<string, unknown>)[key]]));
         Object.assign(channel, update);
         if (Object.keys(update).length) await Channel.update({ id: channel.id }, update);
 
@@ -320,6 +361,17 @@ router.patch(
             if ((channel.icon ?? null) !== before.icon) await Channel.sendSystemMessage(channel, req.user_id, MessageType.CHANNEL_ICON_CHANGE);
             return res.send(await DmChannelDTO.from(channel, [req.user_id]));
         }
+
+        const changes = AuditLog.diff(auditBefore, channel, AuditLog.channelKeys).filter((change) => change.key !== "permission_overwrites");
+        if (changes.length && channel.guild_id)
+            await AuditLog.log({
+                guild_id: channel.guild_id,
+                user_id: req.user_id,
+                action_type: AuditLogEvents.CHANNEL_UPDATE,
+                target_id: channel_id,
+                changes,
+                reason: req.headers["x-audit-log-reason"],
+            });
 
         await emitEvent({
             event: "CHANNEL_UPDATE",

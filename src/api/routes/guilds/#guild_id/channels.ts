@@ -18,10 +18,10 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { Channel, Guild } from "@spacebar/database";
+import { AuditLog, Channel, Guild } from "@spacebar/database";
 import { ChannelUpdateEvent, Config, DiscordApiErrors, emitEvent, FieldErrors } from "@spacebar/util";
 import { THREAD_TYPES } from "@spacebar/api/util";
-import { ChannelCreateSchema, ChannelReorderSchema, ChannelType } from "@spacebar/schemas";
+import { AuditLogEvents, ChannelCreateSchema, ChannelReorderSchema, ChannelType } from "@spacebar/schemas";
 import { In, Not } from "typeorm";
 
 const router = Router({ mergeParams: true });
@@ -77,8 +77,16 @@ router.post(
         if (body.name !== undefined && (body.name.length < 1 || body.name.length > maxName))
             throw FieldErrors({ name: { code: "BASE_TYPE_BAD_LENGTH", message: `Must be between 1 and ${maxName} in length.` } });
 
-        const channel = await Channel.createChannel({ ...body, guild_id }, req.user_id);
+        const channel = await Channel.createChannel({ ...body, type: body.type ?? ChannelType.GUILD_TEXT, guild_id }, req.user_id);
         channel.position = await Channel.calculatePosition(channel.id, guild_id, channel.guild);
+        await AuditLog.log({
+            guild_id,
+            user_id: req.user_id,
+            action_type: AuditLogEvents.CHANNEL_CREATE,
+            target_id: channel.id,
+            changes: AuditLog.diff({}, channel, AuditLog.channelKeys),
+            reason: req.headers["x-audit-log-reason"],
+        });
 
         res.status(201).json(channel);
     },

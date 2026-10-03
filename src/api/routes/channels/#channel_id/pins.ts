@@ -19,8 +19,9 @@
 import { Request, Response, Router } from "express";
 import { IsNull, Not } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
+import { AuditLogEvents } from "@spacebar/schemas";
 import { ChannelPinsUpdateEvent, Config, DiscordApiErrors, emitEvent, MessageCreateEvent, MessageUpdateEvent } from "@spacebar/util";
-import { Message, ReadState, User } from "@spacebar/database";
+import { AuditLog, Message, ReadState, User } from "@spacebar/database";
 
 const router: Router = Router({ mergeParams: true });
 
@@ -119,6 +120,18 @@ router.put(
                 },
             } satisfies ChannelPinsUpdateEvent),
             systemPinMessage.save(),
+            ...(message.guild_id
+                ? [
+                      AuditLog.log({
+                          guild_id: message.guild_id,
+                          user_id: req.user_id,
+                          action_type: AuditLogEvents.MESSAGE_PIN,
+                          target_id: message.author_id,
+                          options: { channel_id, message_id },
+                          reason: req.headers["x-audit-log-reason"],
+                      }),
+                  ]
+                : []),
             emitEvent({
                 event: "MESSAGE_CREATE",
                 channel_id: message.channel_id,
@@ -172,6 +185,18 @@ router.delete(
                     last_pin_timestamp: undefined,
                 },
             } satisfies ChannelPinsUpdateEvent),
+            ...(message.guild_id
+                ? [
+                      AuditLog.log({
+                          guild_id: message.guild_id,
+                          user_id: req.user_id,
+                          action_type: AuditLogEvents.MESSAGE_UNPIN,
+                          target_id: message.author_id,
+                          options: { channel_id, message_id },
+                          reason: req.headers["x-audit-log-reason"],
+                      }),
+                  ]
+                : []),
         ]);
 
         res.sendStatus(204);

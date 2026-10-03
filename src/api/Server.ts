@@ -84,7 +84,7 @@ export class SpacebarServer extends Server {
         ScheduledEvents.startSweeper();
 
         const logRequests = process.env["LOG_REQUESTS"] != undefined;
-        if (logRequests) {
+        if (logRequests && !this.options.app) {
             this.app.use(
                 morgan("combined", {
                     skip: (req, res) => {

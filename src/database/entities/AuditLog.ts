@@ -18,6 +18,7 @@
 
 import { Column, Entity, Index, JoinColumn, ManyToOne } from "typeorm";
 import { BaseClass } from "./BaseClass";
+import { Snowflake } from "@spacebar/util/util/Snowflake";
 import { User } from "./User";
 import { AuditLogChange, AuditLogEntry, AuditLogEvents } from "@spacebar/schemas";
 
@@ -48,6 +49,7 @@ export class AuditLog extends BaseClass {
         members_removed?: string;
         channel_id?: string;
         messaged_id?: string;
+        message_id?: string;
         count?: string;
         id?: string;
         type?: string;
@@ -60,6 +62,25 @@ export class AuditLog extends BaseClass {
 
     @Column({ nullable: true })
     reason?: string;
+
+    static readonly channelKeys = [
+        "name",
+        "type",
+        "topic",
+        "nsfw",
+        "rate_limit_per_user",
+        "bitrate",
+        "user_limit",
+        "rtc_region",
+        "video_quality_mode",
+        "default_auto_archive_duration",
+        "default_thread_rate_limit_per_user",
+        "permission_overwrites",
+        "flags",
+        "icon",
+    ];
+
+    static readonly threadKeys = ["name", "type", "archived", "locked", "auto_archive_duration", "invitable", "rate_limit_per_user", "flags", "applied_tags"];
 
     static diff(before: object, after: object, keys: string[]): AuditLogChange[] {
         const old = before as Record<string, unknown>;
@@ -90,6 +111,20 @@ export class AuditLog extends BaseClass {
         })
             .save()
             .catch((e) => console.error("[AuditLog] failed to write entry", e));
+    }
+
+    static async logMessageDelete(guild_id: string, user_id: string, author_id: string, channel_id: string, reason?: string | string[]) {
+        const previous = await AuditLog.findOne({ where: { guild_id, user_id }, order: { id: "DESC" } });
+        if (
+            previous?.action_type === AuditLogEvents.MESSAGE_DELETE &&
+            previous.target_id === author_id &&
+            previous.options?.channel_id === channel_id &&
+            Date.now() - Snowflake.deconstruct(previous.id).timestamp < 5 * 60 * 1000
+        ) {
+            previous.options = { ...previous.options, count: `${Number(previous.options.count ?? 1) + 1}` };
+            return previous.save().catch((e) => console.error("[AuditLog] failed to write entry", e));
+        }
+        return AuditLog.log({ guild_id, user_id, action_type: AuditLogEvents.MESSAGE_DELETE, target_id: author_id, options: { channel_id, count: "1" }, reason });
     }
 
     toAuditLogEntry(): AuditLogEntry {

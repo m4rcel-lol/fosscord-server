@@ -48,6 +48,7 @@ This is the default. The client patch hooks `POST /auth/login`, `POST /auth/regi
 - After the first login, the device creates the identity and the backup in one go.
 - A device that holds the identity but never saw the password, such as a session from before the backup existed or a QR login, doesn't create a backup without a sealed secret. It shows a notice above the composer in encrypted conversations and a field in Settings > Encryption that ask for the password, checks it with `POST /users/@me/e2ee/password`, and then creates or seals the backup.
 - On a new browser, logging in fetches the backup, unseals the secret, restores the identity key, signs the new device and decrypts the history. There are no prompts.
+- If the identity was made on a browser that never saw the password and no backup exists yet, a password login on another browser can't restore it. When the user has no encrypted conversations there is nothing to lose, so that browser resets encryption with the password it just saw, becomes the identity holder and creates the backup. The old browser finds its device revoked and later unlocks from the backup like any other.
 - A password change reseals the backup secret under the new password with a fresh salt. The backup keypair stays, so no content key needs resealing. If the browser doing the change doesn't hold the secret, it unseals it with the old password first.
 - If a device holds the secret and logs in with a password that doesn't open the backup, it reseals the backup with that password, since the login just proved it's correct.
 
@@ -81,7 +82,7 @@ The settings are in User Settings, under Encryption, next to Data & Privacy, and
 
 ### What the user sees
 
-Messages that are waiting for keys show "Decrypting…" and fill in on their own through a local `MESSAGE_UPDATE` once the keys arrive. On a locked browser a message shows "Unlock this browser to read this message", and on an unlocked browser that lacks the key it shows "Sent before this browser was set up". Both have a button that opens the unlock dialog: the password or recovery code field, the approval status and code, and the reset link. A locked browser never sends plaintext into an encrypted conversation. Pressing Enter keeps the text in the composer, opens the unlock dialog and shows a notice above the composer. Notices sit in one bar above the composer, the way Discord shows slowmode, and only one shows at a time. Closing the unlock dialog with Not now or Escape stops it from opening on its own in that browser for seven days. The Unlock buttons, the composer notice and the Unlock this browser button in the encryption settings still open it.
+Messages that are waiting for keys show "Decrypting…" and fill in on their own through a local `MESSAGE_UPDATE` once the keys arrive. On a locked browser a message shows "Unlock this browser to read this message", and on an unlocked browser that lacks the key it shows "Sent before this browser was set up". Both have a button that opens the unlock dialog: the password or recovery code field, the approval status and code, and the reset link. A locked browser never sends plaintext into an encrypted conversation. Pressing Enter keeps the text in the composer, opens the unlock dialog and shows a notice above the composer. Notices sit in one bar above the composer, the way Discord shows slowmode, and only one shows at a time. The unlock dialog only opens on its own when the user has at least one encrypted conversation. Closing the unlock dialog with Not now or Escape stops it from opening on its own in that browser for seven days. The Unlock buttons, the composer notice and the Unlock this browser button in the encryption settings still open it.
 
 ## Message format
 
@@ -136,6 +137,8 @@ A small loader in `assets/client_patches/10-e2ee-loader.js` pushes a fake chunk 
 The heavy code is bundled with esbuild into `assets/public/e2ee/e2ee.js`. The `fosscordE2ee` Vencord plugin connects it to Discord's own UI: a pre-send hook that keeps a refused message in the composer, the attach menu changes, a message re-render hook for decrypted messages, and the Encryption page in User Settings. When the loader can't find a hook it shows an "E2EE unavailable in this client build" banner and refuses to send in encrypted channels. It never falls back to plaintext. `scripts/e2ee-anchors.js` checks the anchor strings after every `npm run generate:client`.
 
 The UI adds a lock after each decrypted message, a lock button in the DM header that turns encryption on (one way, so it can't be downgraded) and shows a check once every member is verified, safety numbers with a QR code and a verify button, key-change notices, and an Encryption page in User Settings for the key backup, the recovery code and the device list.
+
+If the server rate limits device registration, the browser doesn't fail closed for good. Encrypted conversations show a notice that names the wait, and setup retries by itself once the limit expires.
 
 ## Server work
 

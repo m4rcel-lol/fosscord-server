@@ -27,7 +27,17 @@ cat > config.json <<JSON
   "general": { "serverName": "http://localhost:$port" },
   "api": { "endpointPublic": "http://localhost:$port/api/v9" },
   "cdn": { "endpointPublic": "http://localhost:$port/", "endpointPrivate": "http://localhost:$port/" },
-  "gateway": { "endpointPublic": "ws://localhost:$port/" }
+  "gateway": { "endpointPublic": "ws://localhost:$port/" },
+  "limits": {
+    "rate": {
+      "routes": {
+        "auth": {
+          "login": { "count": 1000, "window": 60 },
+          "register": { "count": 1000, "window": 60 }
+        }
+      }
+    }
+  }
 }
 JSON
 pids=$(lsof -tiTCP:$port -sTCP:LISTEN || true)
