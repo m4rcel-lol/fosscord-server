@@ -21,9 +21,11 @@ import { Snowflake } from "@spacebar/util";
 export class GeneralConfiguration {
     instanceName: string = "Fosscord";
     serverName: string | null = null;
-    instanceDescription: string | null = "This is a Spacebar instance made in the pre-release days";
+    instanceDescription: string | null = null;
     frontPage: string | null = null;
     tosPage: string | null = null;
+    privacyPage: string | null = null;
+    guidelinesPage: string | null = null;
     correspondenceEmail: string | null = null;
     correspondenceUserID: string | null = null;
     image: string | null = null;

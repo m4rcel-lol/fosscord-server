@@ -22,7 +22,7 @@ import { FosscordAuthor } from "./shared";
 
 export default definePlugin({
     name: "Fosscord",
-    description: "Points the client at this instance instead of Discord's CDN and status page.",
+    description: "Points the client at this instance instead of Discord's CDN, status page and GIF placeholders.",
     authors: [FosscordAuthor],
     required: true,
 
@@ -41,6 +41,14 @@ export default definePlugin({
             replacement: {
                 match: /https:\/\/cdn\.discordapp\.com\/assets\/krisp_browser_models\//g,
                 replace: () => `${location.protocol}//${(window as any).GLOBAL_ENV?.CDN_HOST || location.host}/krisp_browser_models/`,
+            },
+        },
+        {
+            find: "media.giphy.com/media/1TOSaJsWtnhe0/giphy.gif",
+            all: true,
+            replacement: {
+                match: /"https:\/\/media\.giphy\.com\/media\/1TOSaJsWtnhe0\/giphy\.gif"/,
+                replace: '"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"',
             },
         },
         {

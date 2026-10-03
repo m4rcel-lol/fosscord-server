@@ -1,0 +1,13 @@
+diff --git a/src/plugins/whoReacted/index.tsx b/src/plugins/whoReacted/index.tsx
+index 38bd421..07d14a1 100644
+--- a/src/plugins/whoReacted/index.tsx
++++ b/src/plugins/whoReacted/index.tsx
+@@ -77,7 +77,7 @@ function fetchReactions(msg: Message, emoji: ReactionEmoji, type: number) {
+ function getReactionsWithQueue(msg: Message, e: ReactionEmoji, type: number) {
+     const key = `${msg.id}:${e.name}:${e.id ?? ""}:${type}`;
+     const cache = reactions[key] ??= { fetched: false, users: new Map() };
+-    if (!cache.fetched) {
++    if (!cache.fetched && ChannelStore.getChannel(msg.channel_id)) {
+         queue.unshift(() => fetchReactions(msg, e, type));
+         cache.fetched = true;
+     }

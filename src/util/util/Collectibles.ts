@@ -108,6 +108,25 @@ const parse = (raw: string): Catalog => {
         category.products.forEach(index);
     }
 
+    const hydrated = new Set<CollectibleProduct>();
+    const usable = (product: CollectibleProduct): boolean => {
+        if (!hydrated.has(product)) {
+            hydrated.add(product);
+            product.items = (product.items ?? []).map((item) => items.get(item.sku_id) ?? item);
+        }
+        return (
+            product.items.every((item) => item.type !== CollectibleItemType.PROFILE_EFFECT || Array.isArray(item.effects)) &&
+            (product.bundled_products ?? []).every(usable) &&
+            (product.variants ?? []).every(usable)
+        );
+    };
+    for (const [sku_id, product] of products) if (!usable(product)) products.delete(sku_id);
+    for (const [sku_id, item] of items) if (item.type === CollectibleItemType.PROFILE_EFFECT && !Array.isArray(item.effects)) items.delete(sku_id);
+    for (const category of categories) {
+        category.products = category.products.filter(usable);
+        if (Array.isArray(category.hero_ranking)) category.hero_ranking = category.hero_ranking.filter((sku_id) => products.has(sku_id));
+    }
+
     return { categories, products, items };
 };
 

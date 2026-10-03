@@ -264,7 +264,6 @@ const start = async (userId: string) => {
             link.devicesChanged();
         });
         ui.refresh();
-        if (engine.locked && engine.encryptedChannels.size && !ui.unlockSnoozed()) ui.showUnlock();
     } catch (error) {
         const response = error as { status?: number; body?: { message?: string; retry_after?: number } } | null;
         if (response?.status === 429) {

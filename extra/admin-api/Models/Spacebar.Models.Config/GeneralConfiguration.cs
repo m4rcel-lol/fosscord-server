@@ -10,7 +10,7 @@ public class GeneralConfiguration {
     public string? ServerName { get; set; } = null;
 
     [JsonPropertyName("instanceDescription")]
-    public string InstanceDescription { get; set; } = "This is a Spacebar instance made in the pre-release days";
+    public string? InstanceDescription { get; set; }
 
     [JsonPropertyName("frontPage")]
     public string? FrontPage { get; set; } = null;

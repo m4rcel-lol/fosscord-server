@@ -92,10 +92,20 @@ const initials = (name) =>
         .slice(0, 2)
         .toUpperCase();
 
+const defaultAvatarIndex = (u) => {
+    try {
+        return u.discriminator && u.discriminator !== "0" ? Number(u.discriminator) % 5 : Number((BigInt(u.id) >> 22n) % 6n);
+    } catch {
+        return 0;
+    }
+};
+
 const avatar = (u, cls = "") =>
-    u?.avatar
-        ? html`<img class="avatar ${cls}" src="/avatars/${u.id}/${u.avatar}.${u.avatar.startsWith("a_") ? "gif" : "png"}?size=128" alt="" loading="lazy" />`
-        : html`<span class="avatar ${cls}">${initials(userName(u))}</span>`;
+    !u
+        ? html`<span class="avatar ${cls}">${initials(userName(u))}</span>`
+        : u.avatar
+          ? html`<img class="avatar ${cls}" src="/avatars/${u.id}/${u.avatar}.${u.avatar.startsWith("a_") ? "gif" : "png"}?size=128" alt="" loading="lazy" />`
+          : html`<img class="avatar ${cls}" src="/embed/avatars/${defaultAvatarIndex(u)}.png" alt="" loading="lazy" />`;
 
 // a server tag the way it looks next to a name: badge icon + tag text
 const tagChip = (guildId, tag, badgeHash) =>
@@ -397,6 +407,7 @@ async function boot() {
     $("#login").hidden = true;
     $("#app").hidden = false;
     $("#brand-name").textContent = state.overview.instance.name;
+    document.title = `${state.overview.instance.name} Admin`;
     if (state.overview.instance.image) $("#brand-icon").src = state.overview.instance.image;
     mount($("#me"), html`${avatar(state.me)}<div class="ident"><div><strong>${userName(state.me)}</strong><span class="muted">${userTag(state.me)}</span></div></div>`);
     for (const link of $$("#nav a")) link.hidden = link.dataset.access ? !state.overview.access[link.dataset.access] : false;
@@ -567,7 +578,9 @@ async function renderSettings(view) {
                             >Description<textarea name="general.instanceDescription" maxlength="1000">${s.general.instanceDescription ?? ""}</textarea></label
                         >
                         ${text("general", "frontPage", "Homepage URL", "Linked from the status page", "url")}
-                        ${text("general", "tosPage", "Terms of service URL", "", "url")}
+                        ${text("general", "tosPage", "Terms of service URL", "Opened from every Terms of Service link in the client", "url")}
+                        ${text("general", "privacyPage", "Privacy policy URL", "Falls back to the terms of service URL", "url")}
+                        ${text("general", "guidelinesPage", "Community guidelines URL", "Falls back to the terms of service URL", "url")}
                         ${text("general", "correspondenceEmail", "Contact email", "", "email")}
                         ${text("general", "correspondenceUserID", "Contact user ID", "The account users can message for help")}
                     </div>
@@ -1175,7 +1188,7 @@ async function renderBadges(view) {
                           </tbody>
                       </table>
                   </div>`
-                : html`<div class="card empty">No badges yet. Create one, or start from one of Discord's.</div>`}
+                : html`<div class="card empty">No badges yet. Create one with your own icon or a preset.</div>`}
         `,
     );
     const refresh = () => renderBadges(view);
@@ -1202,7 +1215,7 @@ function openBadge(badge, refresh) {
                 <div class="stack">
                     <h3>Icon</h3>
                     <label>Upload an image<span class="hint">Square PNG, WebP or GIF. Shown at about 22px.</span><input name="file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" /></label>
-                    <span class="muted">or use one of Discord's</span>
+                    <span class="muted">or pick a preset</span>
                     <div class="preset-grid">
                         ${BADGE_PRESETS.map(
                             ([hash, name]) =>

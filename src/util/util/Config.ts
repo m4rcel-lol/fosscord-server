@@ -121,6 +121,7 @@ const StaleDefaults: [string, JsonValue, JsonValue][] = [
     ["limits.message.maxEmbeds", 20, 10],
     ["limits.channel.maxName", 32, 100],
     ["limits.user.maxGuilds", 1048576, 200],
+    ["general.instanceDescription", "This is a Spacebar instance made in the pre-release days", null],
 ];
 
 function replaceStaleDefaults(config: ConfigValue) {

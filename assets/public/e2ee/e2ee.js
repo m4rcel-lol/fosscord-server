@@ -5943,7 +5943,6 @@ ${approver}`;
         link.devicesChanged();
       });
       ui.refresh();
-      if (engine.locked && engine.encryptedChannels.size && !ui.unlockSnoozed()) ui.showUnlock();
     } catch (error) {
       const response = error;
       if (response?.status === 429) {

@@ -117,5 +117,12 @@ export const wordmarkSvg = (box?: [number, number], iconUri: string | null = nul
 export const qrLogoSvg = (iconUri: string | null = null) =>
     `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="#000"/>${iconMarkup(23, 23, 54, iconUri)}</svg>`;
 
+export const placeholderAvatarSvg = (size: number, background: string, foreground: string, iconUri: string | null = null) =>
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 256 256"><circle cx="128" cy="128" r="128" fill="${background}"/>${
+        iconUri
+            ? `<image href="${escapeXml(iconUri)}" x="62" y="62" width="132" height="132" preserveAspectRatio="xMidYMid meet" opacity="0.6"/>`
+            : `<path fill="${foreground}" transform="translate(62 62) scale(5.5)" d="${INSTANCE_ICON_PATH}"/>`
+    }</svg>`;
+
 export const defaultAvatarSvg = (index: number) =>
     `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><rect width="256" height="256" fill="${DEFAULT_AVATAR_COLORS[index % DEFAULT_AVATAR_COLORS.length]}"/><path fill="#fff" transform="translate(53 54) scale(6.25)" d="${INSTANCE_ICON_PATH}"/></svg>`;

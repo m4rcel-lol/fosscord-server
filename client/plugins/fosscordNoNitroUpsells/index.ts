@@ -24,9 +24,13 @@ const NITRO_WHEEL_PATH = "M16.23 12c0 1.29-.95 2.25-2.22 2.25A2.18 2.18 0 0 1 11
 
 const MAKE_IT_YOURS_ONLY_WITH_PREMIUM = "#{intl::np0X/u::raw}";
 
+const INCLUDED_WITH_PREMIUM = "#{intl::rt69oo::raw}";
+
+const WISHLIST = "#{intl::7lZ31J::raw}";
+
 export default definePlugin({
     name: "FosscordNoNitroUpsells",
-    description: "Everyone already has Nitro here, so this removes every Nitro advert, trial, gift prompt and billing page.",
+    description: "Everyone already has Nitro here, so this removes every Nitro advert, trial, gift prompt, wishlist and billing page.",
     authors: [FosscordAuthor],
     required: true,
 
@@ -123,6 +127,58 @@ export default definePlugin({
                     replace: "",
                 },
             ],
+        },
+        {
+            find: new RegExp(String.raw`${INCLUDED_WITH_PREMIUM}\)\}\),!\i&&`),
+            replacement: {
+                match: new RegExp(
+                    String.raw`(\i\?)\(0,\i\.jsxs\)\("div",\{className:\i\.\i,children:\[\(0,\i\.jsx\)\(\i\.\i,\{variant:"text-md\/semibold",children:\i\.intl\.string\(\i\.t${INCLUDED_WITH_PREMIUM}\)\}\),!\i&&\(0,\i\.jsx\)\(\i\.\i,\{[^{}]*?children:\i\.intl\.string\(\i\.t#{intl::nKdAlO::raw}\)\}\)\]\}\)`,
+                ),
+                replace: "$1null",
+            },
+        },
+        {
+            find: /color:"text-muted",children:\i\.intl\.string\(\i\.t#{intl::nKdAlO::raw}\)/,
+            replacement: {
+                match: /\i(?=&&\(0,\i\.jsx\)\(\i\.\i,\{variant:"text-xxs\/normal",color:"text-muted",children:\i\.intl\.string\(\i\.t#{intl::nKdAlO::raw}\)\}\))/,
+                replace: "!1",
+            },
+        },
+        {
+            find: '"WishlistButton"',
+            all: true,
+            replacement: {
+                match: /function \i\(\i\)\{(?=let\{skuId:\i,productName:\i,className:\i,disabled:)/,
+                replace: "$&return null;",
+            },
+        },
+        {
+            find: new RegExp(String.raw`HeartIcon,\{size:"xs",color:"currentColor"\}\),onClick:\i,ariaLabel:\i\.intl\.string\(\i\.t${WISHLIST}\)`),
+            all: true,
+            replacement: {
+                match: new RegExp(
+                    String.raw`\(0,\i\.jsx\)\(\i,\{content:\(0,\i\.jsx\)\(\i\.HeartIcon,\{size:"xs",color:"currentColor"\}\),onClick:\i,ariaLabel:\i\.intl\.string\(\i\.t${WISHLIST}\)`,
+                ),
+                replace: "null&&$&",
+            },
+        },
+        {
+            find: new RegExp(String.raw`"aria-label":\i\.intl\.string\(\i\.t${WISHLIST}\),children:\(0,\i\.jsx\)\(\i\.HeartIcon`),
+            all: true,
+            replacement: {
+                match: new RegExp(
+                    String.raw`\(0,\i\.jsx\)\(\i\.\i,\{className:\i\.\i,onClick:\i,"aria-label":\i\.intl\.string\(\i\.t${WISHLIST}\),children:\(0,\i\.jsx\)\(\i\.HeartIcon,\{size:"xs",color:"currentColor"\}\)\}\)`,
+                ),
+                replace: "null&&$&",
+            },
+        },
+        {
+            find: /section:\i\.\i\.WISHLIST,showNewContentDot:/,
+            all: true,
+            replacement: {
+                match: new RegExp(String.raw`\(\i\|\|!\i&&\i\)&&(?=\i\.push\(\{text:\i\.intl\.string\(\i\.t${WISHLIST}\),section:\i\.\i\.WISHLIST)`),
+                replace: "!1&&",
+            },
         },
         {
             find: "queryInAppNavigations(",
