@@ -20,7 +20,8 @@ import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { decodeKey, e2eeBackupKeyMessage, E2eeErrors, e2eeRateLimit, verifyEd25519 } from "@spacebar/api/util";
 import { E2eeIdentity, E2eeKeyBackup } from "@spacebar/database";
-import { E2eeBackupKdf, E2eeBackupSchema, E2eeBackupSecretSchema } from "@spacebar/schemas";
+import { E2eeBackupKdf, E2eeBackupSchema, E2eeBackupSecretSchema, E2eeTrustSchema } from "@spacebar/schemas";
+import { emitEvent } from "@spacebar/util";
 
 const router: Router = Router({ mergeParams: true });
 
@@ -109,6 +110,26 @@ router.patch(
         checkSecret(body, false);
         if (!(await E2eeKeyBackup.findOne({ where: { user_id: req.user_id }, select: { user_id: true } }))) throw E2eeErrors.NO_BACKUP;
         res.json(await save(req.user_id, body.version, { mode: body.mode, kdf: body.kdf, salt: body.salt, wrapped_secret: body.wrapped_secret }));
+    },
+);
+
+router.put(
+    "/trust",
+    e2eeRateLimit("e2ee_trust", 60, 600),
+    route({
+        spacebarOnly: true,
+        requestBody: "E2eeTrustSchema",
+        responses: { 200: { body: "E2eeTrustResponse" }, 400: { body: "APIErrorResponse" }, 404: { body: "APIErrorResponse" }, 409: { body: "APIErrorResponse" } },
+    }),
+    async (req: Request, res: Response) => {
+        const body = req.body as E2eeTrustSchema;
+        if (!Number.isInteger(body.version) || body.version < 0 || !blob(body.data, 65536)) throw E2eeErrors.INVALID_BACKUP;
+        if (!(await E2eeKeyBackup.findOne({ where: { user_id: req.user_id }, select: { user_id: true } }))) throw E2eeErrors.NO_BACKUP;
+        const result = await E2eeKeyBackup.update({ user_id: req.user_id, trust_version: body.version }, { trust: body.data, trust_version: body.version + 1 });
+        if (!result.affected) throw E2eeErrors.BACKUP_CONFLICT;
+        const trust = { version: body.version + 1, data: body.data };
+        await emitEvent({ event: "E2EE_TRUST_UPDATE", user_id: req.user_id, data: { version: trust.version } });
+        res.json(trust);
     },
 );
 

@@ -8080,11 +8080,45 @@
                     "wrapped_secret"
                 ]
             },
+            "E2eeTrustSchema": {
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "integer"
+                    },
+                    "data": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "data",
+                    "version"
+                ]
+            },
+            "E2eeTrustResponse": {
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "integer"
+                    },
+                    "data": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "data",
+                    "version"
+                ]
+            },
             "E2eeBackupResponse": {
                 "type": "object",
                 "properties": {
                     "updated_at": {
                         "type": "string"
+                    },
+                    "trust": {
+                        "$ref": "#/components/schemas/E2eeTrustResponse"
                     },
                     "identity_key": {
                         "type": "string"
@@ -8125,6 +8159,7 @@
                     "kdf",
                     "mode",
                     "salt",
+                    "trust",
                     "updated_at",
                     "version",
                     "wrapped_backup_key",
@@ -25545,6 +25580,76 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/E2eeBackupResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/APIErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/users/@me/e2ee/backup/trust": {
+            "put": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/E2eeTrustSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/E2eeTrustResponse"
                                 }
                             }
                         }
