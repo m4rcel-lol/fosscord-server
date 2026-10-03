@@ -18,7 +18,7 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { e2eeRateLimit, e2eeUserKeys, sharesE2eeContext } from "@spacebar/api/util";
+import { e2eeLimits, e2eeRateLimit, e2eeUserKeys, sharesE2eeContext } from "@spacebar/api/util";
 import { Recipient } from "@spacebar/database";
 import { E2eeKeysQueryResponse, E2eeKeysQuerySchema } from "@spacebar/schemas";
 import { DiscordApiErrors, FieldErrors } from "@spacebar/util";
@@ -27,7 +27,7 @@ const router: Router = Router({ mergeParams: true });
 
 router.post(
     "/",
-    e2eeRateLimit("e2ee_keys_query", 60, 60),
+    e2eeRateLimit("e2ee_keys_query", () => e2eeLimits().keyQueriesPerMinute, 60),
     route({
         spacebarOnly: true,
         requestBody: "E2eeKeysQuerySchema",

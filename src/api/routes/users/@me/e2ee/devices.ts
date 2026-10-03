@@ -24,6 +24,7 @@ import {
     e2eeDeviceId,
     e2eeDeviceMessage,
     E2eeErrors,
+    e2eeLimits,
     e2eePrekeyMessage,
     e2eeRateLimit,
     e2eeUserKeys,
@@ -37,8 +38,8 @@ import { emitEvent, Event } from "@spacebar/util";
 
 const router: Router = Router({ mergeParams: true });
 
-const registrationLimit = e2eeRateLimit("e2ee_devices", 30, 3600);
-const updateLimit = e2eeRateLimit("e2ee_device_updates", 60, 3600);
+const registrationLimit = e2eeRateLimit("e2ee_devices", () => e2eeLimits().deviceRegistrationsPerHour, 3600);
+const updateLimit = e2eeRateLimit("e2ee_device_updates", () => e2eeLimits().deviceUpdatesPerHour, 3600);
 
 const limitNewDevices = async (req: Request, res: Response, next: NextFunction) => {
     const deviceId = (req.body as { device_id?: unknown } | undefined)?.device_id;
