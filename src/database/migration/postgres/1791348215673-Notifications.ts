@@ -28,9 +28,11 @@ export class Notifications1791348215673 implements MigrationInterface {
         );
         await queryRunner.query(`CREATE UNIQUE INDEX IF NOT EXISTS "UQ_push_devices_provider_token" ON "push_devices" ("provider", "token")`);
         await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_push_devices_user_id" ON "push_devices" ("user_id")`);
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_push_devices_session_id" ON "push_devices" ("session_id")`);
         await queryRunner.query(
             `CREATE TABLE IF NOT EXISTS "mention_dismissals" ("user_id" bigint NOT NULL, "message_id" bigint NOT NULL, CONSTRAINT "PK_mention_dismissals" PRIMARY KEY ("user_id", "message_id"), CONSTRAINT "FK_mention_dismissal_user_id" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION, CONSTRAINT "FK_mention_dismissal_message_id" FOREIGN KEY ("message_id") REFERENCES "messages"("id") ON DELETE CASCADE ON UPDATE NO ACTION)`,
         );
+        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_mention_dismissals_message_id" ON "mention_dismissals" ("message_id")`);
         await queryRunner.query(
             `UPDATE "members" m SET "settings" = jsonb_set(m."settings", '{message_notifications}', '3') FROM "guilds" g WHERE g."id" = m."guild_id" AND COALESCE((m."settings"->>'version')::int, 0) = 0 AND (m."settings"->>'message_notifications')::int = g."default_message_notifications"`,
         );
