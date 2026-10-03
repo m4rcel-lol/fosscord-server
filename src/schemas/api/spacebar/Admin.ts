@@ -159,7 +159,7 @@ export interface AdminUserUpdateSchema {
      */
     rights?: string;
     /**
-     * The tag shown next to the user's name. BOT tags only render for bot accounts; AI tags render for anyone.
+     * The tag shown next to the user's name. BOT tags only render for bot accounts; AI, OFFICIAL and SYSTEM tags render for anyone.
      */
     tag?: AdminUserTag;
     /**
@@ -213,7 +213,7 @@ export interface AdminViolationUpdateSchema {
     expires_at?: string;
 }
 
-export type AdminUserTag = "none" | "verified_bot" | "ai" | "verified_ai";
+export type AdminUserTag = "none" | "verified_bot" | "ai" | "verified_ai" | "official" | "system";
 
 export interface AdminBadgeCreateSchema {
     /**

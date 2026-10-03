@@ -831,7 +831,7 @@ tbody tr:last-child td {
     outline-offset: -2px;
 }
 
-/* matches the web client's BOT tag; .ai is the patched green AI variant */
+/* matches the web client's BOT tag (and OFFICIAL and SYSTEM, which share its look); .ai is the patched green AI variant */
 .name-tag {
     display: inline-flex;
     align-items: center;

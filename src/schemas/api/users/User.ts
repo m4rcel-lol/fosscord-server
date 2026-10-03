@@ -209,7 +209,10 @@ export class UserFlags extends BitField {
         ACTIVE_DEVELOPER: 1n << 22n,
         PROVISIONAL_ACCOUNT: 1n << 23n,
         // Where did 24-32 go???
-        // spacebar-only: shows the green AI tag instead of BOT (patched client). Kept under bit 31 so 32-bit flag checks in clients still see it
+        // spacebar-only: name tags drawn by the patched client, kept under bit 31 so 32-bit flag checks in clients still see them.
+        // OFFICIAL_TAG and SYSTEM_TAG show the ✓ OFFICIAL and ✓ SYSTEM tags, AI_ACCOUNT the green AI tag instead of BOT
+        OFFICIAL_TAG: 1n << 28n,
+        SYSTEM_TAG: 1n << 29n,
         AI_ACCOUNT: 1n << 30n,
         HIGH_GLOBAL_RATE_LIMIT: 1n << 33n,
         DELETED: 1n << 34n,

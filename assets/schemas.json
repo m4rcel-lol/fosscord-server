@@ -10390,10 +10390,12 @@
                 "type": "string"
             },
             "tag": {
-                "description": "The tag shown next to the user's name. BOT tags only render for bot accounts; AI tags render for anyone.",
+                "description": "The tag shown next to the user's name. BOT tags only render for bot accounts; AI, OFFICIAL and SYSTEM tags render for anyone.",
                 "enum": [
                     "ai",
                     "none",
+                    "official",
+                    "system",
                     "verified_ai",
                     "verified_bot"
                 ],
@@ -11323,7 +11325,9 @@
                 "additionalProperties": false
             },
             "intents": {
-                "type": "bigint"
+                "type": "number",
+                "properties": {},
+                "additionalProperties": false
             },
             "presence": {
                 "$ref": "#/definitions/ActivitySchema"
@@ -11342,7 +11346,9 @@
                 "maxItems": 2,
                 "type": "array",
                 "items": {
-                    "type": "bigint"
+                    "type": "number",
+                    "properties": {},
+                    "additionalProperties": false
                 }
             },
             "guild_subscriptions": {

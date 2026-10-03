@@ -270,10 +270,14 @@ const USER_TAGS = [
     ["verified_bot", "Verified Bot", "The blurple ✓ BOT tag. Only shows on bot accounts."],
     ["ai", "AI", "The green AI tag, for any account."],
     ["verified_ai", "Verified AI", "The green ✓ AI tag, for any account."],
+    ["official", "Official", "The blurple ✓ OFFICIAL tag that Discord puts on its own messages, for any account."],
+    ["system", "System", "The blurple ✓ SYSTEM tag, for any account."],
 ];
 
 // mirrors how the patched web client draws the tag next to a name
 const nameTag = (tag, isBot) => {
+    if (tag === "official" || tag === "system")
+        return html`<span class="name-tag" title="Official message">${raw(CHECK_ICON)}${tag === "official" ? "OFFICIAL" : "SYSTEM"}</span>`;
     const verified = tag === "verified_bot" || tag === "verified_ai";
     const ai = tag === "ai" || tag === "verified_ai";
     if (!ai && !isBot) return html`<span class="muted">no tag</span>`;

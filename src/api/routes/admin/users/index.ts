@@ -55,10 +55,17 @@ export const assertCanManage = (req: Request, target: Pick<User, "id" | "rights"
         throw new HTTPError("Only operators can manage other operators", 403);
 };
 
-const TAG_FLAGS = { verified: Number(UserFlags.FLAGS.VERIFIED_BOT), ai: Number(UserFlags.FLAGS.AI_ACCOUNT) };
+const TAG_FLAGS = {
+    verified: Number(UserFlags.FLAGS.VERIFIED_BOT),
+    ai: Number(UserFlags.FLAGS.AI_ACCOUNT),
+    official: Number(UserFlags.FLAGS.OFFICIAL_TAG),
+    system: Number(UserFlags.FLAGS.SYSTEM_TAG),
+};
 
 export const userTag = (user: Pick<User, "public_flags">): AdminUserTag => {
     const flags = Number(user.public_flags ?? 0);
+    if (flags & TAG_FLAGS.official) return "official";
+    if (flags & TAG_FLAGS.system) return "system";
     const verified = (flags & TAG_FLAGS.verified) !== 0;
     if (flags & TAG_FLAGS.ai) return verified ? "verified_ai" : "ai";
     return verified ? "verified_bot" : "none";
@@ -66,8 +73,12 @@ export const userTag = (user: Pick<User, "public_flags">): AdminUserTag => {
 
 // public_flags is what other clients see; flags is what the user's own client sees, so both carry the tag
 export const applyUserTag = (user: User, tag: AdminUserTag) => {
-    const wanted = (tag === "verified_bot" || tag === "verified_ai" ? TAG_FLAGS.verified : 0) | (tag === "ai" || tag === "verified_ai" ? TAG_FLAGS.ai : 0);
-    const mask = TAG_FLAGS.verified | TAG_FLAGS.ai;
+    const wanted =
+        (tag === "verified_bot" || tag === "verified_ai" ? TAG_FLAGS.verified : 0) |
+        (tag === "ai" || tag === "verified_ai" ? TAG_FLAGS.ai : 0) |
+        (tag === "official" ? TAG_FLAGS.official : 0) |
+        (tag === "system" ? TAG_FLAGS.system : 0);
+    const mask = TAG_FLAGS.verified | TAG_FLAGS.ai | TAG_FLAGS.official | TAG_FLAGS.system;
     user.public_flags = (Number(user.public_flags ?? 0) & ~mask) | wanted;
     user.flags = Number((BigInt(user.flags ?? 0) & ~BigInt(mask)) | BigInt(wanted));
 };
