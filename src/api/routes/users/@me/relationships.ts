@@ -21,12 +21,23 @@ import { ILike } from "typeorm";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
 import { Member, Relationship, User } from "@spacebar/database";
-import { Config, DiscordApiErrors, PresenceUpdateEvent, RelationshipAddEvent, RelationshipRemoveEvent, RelationshipUpdateEvent, emitEvent, getUserPresence } from "@spacebar/util";
+import {
+    Config,
+    DiscordApiErrors,
+    FieldErrors,
+    PresenceUpdateEvent,
+    RelationshipAddEvent,
+    RelationshipRemoveEvent,
+    RelationshipUpdateEvent,
+    emitEvent,
+    getUserPresence,
+} from "@spacebar/util";
 import { PublicUserProjection, RelationshipType, RelationshipModifySchema, RelationshipListSchema } from "@spacebar/schemas";
 
 const router = Router({ mergeParams: true });
 
 const userProjection: (keyof User)[] = ["relationships", ...PublicUserProjection];
+const MAX_NOTE_LENGTH = 120;
 
 router.get(
     "/",
@@ -258,6 +269,9 @@ async function updateRelationship(req: Request, res: Response, friend: User, typ
         select: Object.fromEntries(userProjection.map((i) => [i, true])), //TODO: cleanup
     });
 
+    const note = typeof req.body?.note === "string" ? req.body.note.replace(/\n/g, " ").trim() : "";
+    if (note.length > MAX_NOTE_LENGTH) throw FieldErrors({ note: { code: "BASE_TYPE_MAX_LENGTH", message: `Must be ${MAX_NOTE_LENGTH} or fewer in length.` } });
+
     const ownRow = user.relationships.find((x) => x.to_id === id);
     const theirRow = friend.relationships.find((x) => x.to_id === req.user_id);
     let relationship = ownRow?.type === RelationshipType.NONE && type !== RelationshipType.BLOCKED ? undefined : ownRow;
@@ -315,6 +329,7 @@ async function updateRelationship(req: Request, res: Response, friend: User, typ
         from: friend,
         since: new Date(),
         stranger_request: isStrangerRequest,
+        note: note || undefined,
     });
     let outgoing_relationship = Relationship.create({
         ...(ownRow?.type === RelationshipType.NONE && { id: ownRow.id, user_ignored: ownRow.user_ignored }),
@@ -323,6 +338,7 @@ async function updateRelationship(req: Request, res: Response, friend: User, typ
         to: friend,
         from: user,
         since: new Date(),
+        note: note || undefined,
     });
 
     if (friendRequest) {
@@ -331,6 +347,7 @@ async function updateRelationship(req: Request, res: Response, friend: User, typ
         // accept friend request
         incoming_relationship = friendRequest;
         incoming_relationship.type = RelationshipType.FRIEND;
+        incoming_relationship.note = null;
     }
 
     if (relationship) {
@@ -339,6 +356,7 @@ async function updateRelationship(req: Request, res: Response, friend: User, typ
         if (relationship.type === RelationshipType.FRIEND) throw DiscordApiErrors.ALREADY_FRIENDS;
         outgoing_relationship = relationship;
         outgoing_relationship.type = RelationshipType.FRIEND;
+        outgoing_relationship.note = null;
     }
 
     await Promise.all([

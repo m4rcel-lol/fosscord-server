@@ -54,8 +54,8 @@ export class Relationship extends BaseClass {
     @Column()
     user_ignored: boolean;
 
-    @Column({ nullable: true })
-    note?: string;
+    @Column({ type: "varchar", nullable: true })
+    note?: string | null;
 
     @Column({ nullable: true })
     stranger_request?: boolean;
@@ -73,7 +73,7 @@ export class Relationship extends BaseClass {
             nickname: this.nickname ?? null,
             user: this.to?.toPartialUser(),
             user_ignored: this.user_ignored,
-            note: this.note,
+            note: this.note ?? undefined,
             stranger_request: this.stranger_request,
             is_spam_request: this.is_spam_request,
             origin_application_id: undefined, // we dont support this oauth behavior yet
