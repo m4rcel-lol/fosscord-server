@@ -234,7 +234,8 @@ export class GuildInsights {
             const rows: Row[] = [];
             const computed = await GuildInsights.computeRange(day, addDays(day, 1));
             for (const [guild_id, metrics] of computed)
-                for (const [metric, keys] of Object.entries(metrics)) for (const [key, value] of Object.entries(keys)) rows.push({ guild_id, day, metric, key, value });
+                for (const [metric, keys] of Object.entries(metrics))
+                    for (const [key, value] of Object.entries(keys)) if (value > 0) rows.push({ guild_id, day, metric, key, value });
 
             for (const [guild_id, value] of await GuildInsights.membership(day)) if (value > 0) rows.push({ guild_id, day, metric: "members", key: "", value });
 
