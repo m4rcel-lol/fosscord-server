@@ -334,6 +334,8 @@ export class Message extends BaseClass {
         for (const message of ms) {
             message.referenced_message = curMs.get(message.message_reference!.message_id as string) || null;
         }
+        const starterParents = ms.filter((m) => m.type === MessageType.THREAD_STARTER_MESSAGE && m.referenced_message).map((m) => m.referenced_message!);
+        if (starterParents.length) await Message.fillReplies(starterParents);
     }
 
     static publicReactions(reactions: Reaction[] | undefined, userId?: string): PublicReaction[] {
@@ -424,7 +426,7 @@ export class Message extends BaseClass {
             embeds: (this.embeds ?? []).map((embed) => proxyEmbedMedia({ ...embed, type: embed.type || EmbedType.rich })),
             pinned: this.pinned,
             thread: this.thread ? this.thread.toJSON() : this.thread,
-            referenced_message: shallow ? undefined : this.referenced_message === null ? null : this.referenced_message?.toJSON(true),
+            referenced_message: shallow ? undefined : this.referenced_message === null ? null : this.referenced_message?.toJSON(this.type !== MessageType.THREAD_STARTER_MESSAGE),
             encrypted: this.encrypted ?? undefined,
             soundboard_sounds: this.soundboard_sounds?.length ? this.soundboard_sounds : undefined,
         } satisfies PublicMessage;
