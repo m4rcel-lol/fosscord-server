@@ -43,8 +43,13 @@ router.get(
         authentication: "never",
     }),
     async (req: Request, res: Response) => {
-        const { client, cdn } = Config.get();
-        const config = JSON.stringify({ instanceName: client.instanceName, cdn: cdn.endpointPublic?.replace(/\/+$/, "") ?? "" }).replace(/</g, "\\u003c");
+        const { client, cdn, general } = Config.get();
+        const config = JSON.stringify({
+            instanceName: client.instanceName,
+            icon: general.image || "/static/logo.png",
+            cdn: cdn.endpointPublic?.replace(/\/+$/, "") ?? "",
+            activityHost: (client.activityApplicationHost ?? "").replace(/^(https?:)?\/\//, "").replace(/\/.*$/, ""),
+        }).replace(/</g, "\\u003c");
         const page = (await fs.readFile(path.join(PAGE_FOLDER, "index.html"), "utf8"))
             .replace("{{CONFIG}}", config)
             .replace("{{TITLE}}", `${client.instanceName.replace(/[<>&"]/g, "")} Developer Portal`);

@@ -131,6 +131,16 @@ p {
     line-height: 1.25;
 }
 
+.brand-icon {
+    flex: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    object-fit: cover;
+    outline: 1px solid hsl(0 0% 100% / 0.08);
+    outline-offset: -1px;
+}
+
 .brand .muted {
     font-size: 13px;
 }
@@ -315,6 +325,7 @@ label,
 
 input[type="text"],
 input[type="url"],
+select,
 textarea {
     width: 100%;
     min-height: 40px;
@@ -337,6 +348,7 @@ input[readonly] {
 }
 
 input[aria-invalid="true"],
+select[aria-invalid="true"],
 textarea[aria-invalid="true"] {
     border-color: var(--color-danger-text);
 }
@@ -465,6 +477,8 @@ input[type="radio"] {
     font-weight: 500;
     color: var(--color-text-primary);
     cursor: pointer;
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .radio-list {
@@ -539,6 +553,165 @@ dialog .actions {
     color: var(--color-text-secondary);
 }
 
+select {
+    appearance: none;
+    padding-right: 36px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%23a3a3ad' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.tag-list:empty {
+    display: none;
+}
+
+.tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    min-height: 28px;
+    padding-left: 10px;
+    border-radius: 6px;
+    background: var(--color-bg-hover);
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.tag-remove {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--color-text-secondary);
+    font: inherit;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.media-row.compact {
+    gap: 12px;
+    min-height: 40px;
+}
+
+.file-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cover-preview {
+    display: grid;
+    place-items: center;
+    width: min(100%, 384px);
+    aspect-ratio: 16 / 9;
+    border-radius: 12px;
+    background: var(--color-bg-input);
+    overflow: hidden;
+}
+
+.cover-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    outline: 1px solid hsl(0 0% 100% / 0.08);
+    outline-offset: -1px;
+    border-radius: inherit;
+}
+
+.asset-item img {
+    width: 80px;
+    height: 80px;
+    border-radius: 8px;
+    object-fit: cover;
+    outline: 1px solid hsl(0 0% 100% / 0.08);
+    outline-offset: -1px;
+}
+
+.member-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 20px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.member {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 8px 8px 12px;
+    border-radius: 12px;
+    background: var(--color-bg-input);
+}
+
+.avatar {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--color-accent-solid);
+    color: var(--color-accent-text);
+    font-weight: 700;
+    object-fit: cover;
+    outline: 1px solid hsl(0 0% 100% / 0.08);
+    outline-offset: -1px;
+}
+
+.member-name {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    line-height: 1.25;
+}
+
+.member-name > * {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.member-name .muted {
+    font-size: 13px;
+}
+
+.mapping-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) 88px;
+    align-items: end;
+    gap: 12px;
+}
+
+.mapping-row .btn,
+.mapping-spacer {
+    width: 88px;
+}
+
+.card > .status {
+    margin-top: 12px;
+}
+
 @media (hover: hover) {
     nav a:hover,
     .app-card:hover {
@@ -560,6 +733,11 @@ dialog .actions {
 
     .btn.danger:hover {
         background: var(--color-danger-solid-hover);
+    }
+
+    .tag-remove:hover {
+        background: #3a3a42;
+        color: var(--color-text-primary);
     }
 }
 
@@ -607,6 +785,20 @@ dialog .actions {
 
     .field-row {
         grid-template-columns: minmax(0, 1fr);
+    }
+
+    .mapping-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .mapping-row > .field:nth-child(2) {
+        grid-row: 2;
+    }
+
+    .mapping-row .btn,
+    .mapping-spacer {
+        grid-row: 1 / 3;
+        grid-column: 2;
     }
 
     .page-head {

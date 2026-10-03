@@ -170,7 +170,7 @@ router.patch(
 
         const enablesActivity = body.flags !== undefined && !!(body.flags & APPLICATION_EMBEDDED) && !(app.flags & APPLICATION_EMBEDDED);
         if (body.flags !== undefined) {
-            const editable = (1 << 13) | (1 << 15) | (1 << 19) | APPLICATION_EMBEDDED | APPLICATION_EMBEDDED_RELEASED;
+            const editable = (1 << 8) | (1 << 13) | (1 << 15) | (1 << 19) | APPLICATION_EMBEDDED | APPLICATION_EMBEDDED_RELEASED;
             const flags = body.flags & APPLICATION_EMBEDDED ? body.flags : body.flags & ~APPLICATION_EMBEDDED_RELEASED;
             body.flags = (app.flags & ~editable) | (flags & editable);
         }
