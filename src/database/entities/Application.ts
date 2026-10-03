@@ -23,6 +23,12 @@ import { User } from "./User";
 import { Guild } from "./Guild";
 import { Emoji } from "./Emoji";
 
+export interface ApplicationAsset {
+    id: string;
+    name: string;
+    type: number;
+}
+
 @Entity({
     name: "applications",
 })
@@ -129,6 +135,9 @@ export class Application extends BaseClass {
 
     @Column({ nullable: true })
     custom_install_url?: string;
+
+    @Column({ type: "jsonb", default: [] })
+    assets: ApplicationAsset[];
 
     //just for us
 

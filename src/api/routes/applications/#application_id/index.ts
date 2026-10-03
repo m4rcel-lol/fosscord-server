@@ -20,6 +20,8 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { verifyToken } from "node-2fa";
 import { route } from "@spacebar/api/middlewares";
+import { APPLICATION_EMBEDDED, APPLICATION_EMBEDDED_RELEASED, enableApplicationActivity } from "@spacebar/api/activities";
+import { forgetActivityLookup } from "@spacebar/api/activities/ActivityHost";
 import { ensureInteractionKeys, toOwnedApplication, verifyInteractionsEndpoint } from "@spacebar/api/util/handlers/Application";
 import { Application, Guild, User } from "@spacebar/database";
 import { DiscordApiErrors, FieldErrors, handleFile } from "@spacebar/util";
@@ -148,14 +150,36 @@ router.patch(
             }
         }
 
-        if (body.flags !== undefined) {
-            const editable = (1 << 13) | (1 << 15) | (1 << 19);
-            body.flags = (app.flags & ~editable) | (body.flags & editable);
+        for (const key of ["terms_of_service_url", "privacy_policy_url"] as const) {
+            const value = body[key];
+            if (value === undefined) continue;
+            if (!value?.trim()) {
+                body[key] = null;
+                continue;
+            }
+            if (!/^https?:$/.test(URL.canParse(value.trim()) ? new URL(value.trim()).protocol : ""))
+                throw FieldErrors({ [key]: { code: "URL_TYPE_INVALID_URL", message: "Not a well formed URL." } });
+            body[key] = value.trim();
         }
 
-        app.assign(body);
+        if (body.tags) {
+            body.tags = [...new Set(body.tags.map((tag) => tag.trim()).filter(Boolean))];
+            const invalid = body.tags.findIndex((tag) => tag.length > 20);
+            if (invalid !== -1) throw FieldErrors({ [`tags.${invalid}`]: { code: "BASE_TYPE_MAX_LENGTH", message: "Tags can be up to 20 characters long." } });
+        }
+
+        const enablesActivity = body.flags !== undefined && !!(body.flags & APPLICATION_EMBEDDED) && !(app.flags & APPLICATION_EMBEDDED);
+        if (body.flags !== undefined) {
+            const editable = (1 << 13) | (1 << 15) | (1 << 19) | APPLICATION_EMBEDDED | APPLICATION_EMBEDDED_RELEASED;
+            const flags = body.flags & APPLICATION_EMBEDDED ? body.flags : body.flags & ~APPLICATION_EMBEDDED_RELEASED;
+            body.flags = (app.flags & ~editable) | (flags & editable);
+        }
+
+        app.assign(body as Partial<Application>);
 
         await app.save();
+        if (enablesActivity) await enableApplicationActivity(app);
+        if (body.flags !== undefined) forgetActivityLookup(app.id);
 
         return res.json(toOwnedApplication(app));
     },
