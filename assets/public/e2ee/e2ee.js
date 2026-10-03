@@ -2801,6 +2801,54 @@ ${userId}`)));
       del: (name) => run("readwrite", (s) => s.delete(key(name)))
     };
   };
+  var grab = (name) => {
+    try {
+      return window[name] ?? null;
+    } catch {
+      return null;
+    }
+  };
+  var browserStorage = grab("localStorage");
+  var tabStorage = grab("sessionStorage");
+  var PENDING_KEY = "fe2ee-pending-password";
+  var pendingKey = async () => {
+    const existing = await run("readonly", (s) => s.get("pending-password-key"));
+    if (existing) return existing;
+    const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+    await run("readwrite", (s) => s.put(key, "pending-password-key"));
+    return key;
+  };
+  var holdPendingPassword = async (userId, value) => {
+    const iv = randomBytes(12);
+    const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await pendingKey(), utf8(value)));
+    try {
+      tabStorage?.setItem(PENDING_KEY, JSON.stringify({ userId, at: Date.now(), iv: toB64u(iv), ct: toB64u(ct) }));
+    } catch {
+      return;
+    }
+  };
+  var takePendingPassword = async (userId, ttl) => {
+    let pending = null;
+    try {
+      pending = JSON.parse(tabStorage?.getItem(PENDING_KEY) ?? "null");
+    } catch {
+      return null;
+    }
+    if (!pending || pending.userId && pending.userId !== userId || Date.now() - pending.at > ttl) return null;
+    try {
+      const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromB64u(pending.iv) }, await pendingKey(), fromB64u(pending.ct));
+      return { value: fromUtf8(plain), at: pending.at };
+    } catch {
+      return null;
+    }
+  };
+  var dropPendingPassword = () => {
+    try {
+      tabStorage?.removeItem(PENDING_KEY);
+    } catch {
+      return;
+    }
+  };
 
   // client/e2ee/src/engine.ts
   var FALLBACK_CONTENT = "🔒 Encrypted message";
@@ -2818,6 +2866,26 @@ ${userId}`)));
     }
     code;
     userId;
+  };
+  var errorText = (error) => {
+    if (error instanceof Error) return error.message;
+    const failure2 = error;
+    if (failure2 && typeof failure2 === "object") {
+      if (failure2.status === 429) {
+        const minutes = Math.max(1, Math.ceil(Number(failure2.body?.retry_after ?? 60) / 60));
+        return `Too many attempts. Try again in ${minutes === 1 ? "a minute" : `${minutes} minutes`}.`;
+      }
+      if (typeof failure2.body?.message === "string") return failure2.body.message;
+      if (failure2.status) return `The server answered with an error (${failure2.status}).`;
+    }
+    return String(error);
+  };
+  var snowflakeTime = (id) => {
+    try {
+      return Number((BigInt(id) >> 22n) + 1420070400000n);
+    } catch {
+      return 0;
+    }
   };
   var binding = (mid, nonce) => mid ? `m:${mid}` : `n:${nonce ?? ""}`;
   var messageAad = (channelId, senderId, senderDevice, bind) => `fosscord-e2ee/v1/msg
@@ -2857,6 +2925,19 @@ ${sig}`;
     const os = /Windows/.test(ua) ? "Windows" : /Mac OS X|Macintosh/.test(ua) ? "macOS" : /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iOS" : /Linux/.test(ua) ? "Linux" : "";
     return os ? `${browser} on ${os}` : browser;
   };
+  var addedAt = (iso, seconds) => new Date(iso).toLocaleString(void 0, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", ...seconds && { second: "2-digit" } });
+  var deviceAdded = (devices, device) => {
+    if (!device.created_at) return null;
+    const minutes = devices.filter((d) => d.status !== "revoked" && d.created_at).map((d) => addedAt(d.created_at, false));
+    return addedAt(device.created_at, new Set(minutes).size < minutes.length);
+  };
+  var deviceLabel = (devices, deviceId, fallback) => {
+    const device = devices.find((d) => d.device_id === deviceId);
+    if (!device?.name) return fallback;
+    const twins = devices.filter((d) => d.status !== "revoked" && d.name === device.name);
+    const added = twins.length > 1 ? deviceAdded(twins, device) : null;
+    return added ? `${device.name}, added ${added}` : device.name;
+  };
   var Engine = class {
     constructor(api2) {
       this.api = api2;
@@ -2868,6 +2949,8 @@ ${sig}`;
     identity = null;
     trustedKey = null;
     serverKey = null;
+    identityCreatedAt = null;
+    previousIdentities = [];
     device = null;
     devices = [];
     prekeys = [];
@@ -2885,12 +2968,14 @@ ${sig}`;
     plaintext = /* @__PURE__ */ new Map();
     listeners = /* @__PURE__ */ new Set();
     unlockListeners = /* @__PURE__ */ new Set();
+    wipeListeners = /* @__PURE__ */ new Set();
     uploads = /* @__PURE__ */ new Map();
     uploadTimer = null;
     lookups = /* @__PURE__ */ new Map();
     lookupTimer = null;
     storedKeys = /* @__PURE__ */ new Map();
     backfilling = false;
+    wiped = false;
     freshIdentity = null;
     onChange(listener) {
       this.listeners.add(listener);
@@ -2899,6 +2984,18 @@ ${sig}`;
     onUnlock(listener) {
       this.unlockListeners.add(listener);
       return () => this.unlockListeners.delete(listener);
+    }
+    onWipe(listener) {
+      this.wipeListeners.add(listener);
+      return () => this.wipeListeners.delete(listener);
+    }
+    holdPassword(value, persist = false) {
+      this.password = { value, at: Date.now() };
+      if (persist) holdPendingPassword(this.userId, value).catch((error) => console.error("[e2ee] couldn't keep the password for a reload", error));
+    }
+    dropPassword() {
+      this.password = null;
+      dropPendingPassword();
     }
     emit() {
       this.listeners.forEach((listener) => listener());
@@ -2916,12 +3013,13 @@ ${sig}`;
       return backup.mode === "password" && !backup.wrapped_secret && !!this.secret;
     }
     async backUpWithPassword(password) {
-      this.password = { value: password, at: Date.now() };
+      this.holdPassword(password);
       await this.refresh();
       if (this.backupNeedsPassword) throw new E2eeError("BAD_SECRET", "Your keys couldn't be backed up. Try again in a moment.");
     }
-    rememberPassword(value) {
+    rememberPassword(value, userId) {
       this.password = { value, at: Date.now() };
+      holdPendingPassword(userId ?? this.userId, value).catch((error) => console.error("[e2ee] couldn't keep the password for a reload", error));
       if (this.userId) this.refresh().catch((error) => console.error("[e2ee] password refresh failed", error));
     }
     async passwordChanged(previous, next, api2 = this.api) {
@@ -2932,14 +3030,14 @@ ${sig}`;
         let secret = this.secret;
         if (!secret && previous && backup.wrapped_secret) secret = await unwrapSecret(this.userId, backup, previous).catch(() => null);
         if (!secret) {
-          this.password = { value: next, at: Date.now() };
+          this.holdPassword(next, true);
           return;
         }
         this.backup = await api2.request("patch", "/users/@me/e2ee/backup", {
           version: backup.version,
           ...await wrapSecret(this.userId, "password", next, secret)
         });
-        this.password = null;
+        this.dropPassword();
       });
       this.emit();
     }
@@ -2947,6 +3045,9 @@ ${sig}`;
       this.userId = userId;
       this.store = scoped(userId);
       this.contacts = await this.store.get("contacts") ?? {};
+      this.previousIdentities = await this.store.get("previous-identities") ?? [];
+      const pending = await takePendingPassword(userId, PASSWORD_TTL_MS);
+      if (pending && !this.password) this.password = pending;
       await this.refresh();
     }
     serialized(task) {
@@ -2959,10 +3060,17 @@ ${sig}`;
       );
       return run2;
     }
+    exclusive(task) {
+      return navigator.locks ? navigator.locks.request(`fosscord-e2ee-keys:${this.userId}`, task) : task();
+    }
     async refresh() {
       const wasLinked = this.linked;
       const hadBackupKey = !!this.backupKeyPair;
-      await this.serialized(() => this.ensureKeys());
+      await this.serialized(() => this.exclusive(() => this.ensureKeys()));
+      if (this.wiped) {
+        this.wiped = false;
+        this.wipeListeners.forEach((listener) => listener());
+      }
       this.emit();
       if (!wasLinked && this.linked || !hadBackupKey && this.backupKeyPair) this.unlockListeners.forEach((listener) => listener());
       if (this.linked && this.backupKeyPair) this.backfill().catch((error) => console.error("[e2ee] backfill failed", error));
@@ -2994,8 +3102,14 @@ ${sig}`;
       this.identity = identity;
       return identity;
     }
+    async rememberIdentity(key) {
+      if (!key || this.previousIdentities.includes(key)) return;
+      this.previousIdentities = [...this.previousIdentities, key].slice(-16);
+      await this.store.set("previous-identities", this.previousIdentities);
+    }
     async trust(key) {
       if (this.trustedKey === key) return;
+      await this.rememberIdentity(this.trustedKey);
       this.trustedKey = key;
       await this.store.set("trusted-identity", key);
     }
@@ -3046,7 +3160,7 @@ ${sig}`;
         backup_key_signature: await sign(identity.privateKey, backupKeyMessage(userId, backupJwk.x)),
         wrapped_backup_key: await sealJwk(secret, "backup-key", userId, backupJwk)
       });
-      this.password = null;
+      this.dropPassword();
       this.secret = secret;
       await this.store.set("backup-secret", secret);
       this.backupKeyPair = { publicKey: backupJwk.x, keyPair: await importAgreementJwk(backupJwk) };
@@ -3056,7 +3170,7 @@ ${sig}`;
       const backup = this.backup;
       if (!password || !this.secret || !backup) return;
       if (backup.mode !== "password") {
-        this.password = null;
+        this.dropPassword();
         return;
       }
       const current = backup.wrapped_secret ? await unwrapSecret(this.userId, backup, password).catch(() => null) : null;
@@ -3065,10 +3179,11 @@ ${sig}`;
           version: backup.version,
           ...await wrapSecret(this.userId, "password", password, this.secret)
         });
-      this.password = null;
+      this.dropPassword();
     }
     async wipeLocal(keepTrust) {
       const store = this.store;
+      if (!keepTrust) await this.rememberIdentity(this.trustedKey);
       for (const name of ["identity", "device", "prekeys", "backup-secret", ...keepTrust ? [] : ["trusted-identity"]]) await store.del(name);
       this.identity = null;
       this.device = null;
@@ -3076,7 +3191,22 @@ ${sig}`;
       this.secret = null;
       this.backupKeyPair = null;
       this.linked = false;
+      this.deviceStatus = "unregistered";
       if (!keepTrust) this.trustedKey = null;
+      this.wiped = true;
+    }
+    async forget() {
+      this.dropPassword();
+      if (!this.store) return;
+      await this.serialized(() => this.wipeLocal(true));
+      this.wiped = false;
+      this.userId = "";
+      this.backup = null;
+      this.devices = [];
+      this.plaintext.clear();
+      this.directory.clear();
+      this.members.clear();
+      this.emit();
     }
     async ensureKeys() {
       const store = this.store;
@@ -3090,6 +3220,7 @@ ${sig}`;
       this.trustedKey = await store.get("trusted-identity") ?? null;
       this.prekeys = await store.get("prekeys") ?? [];
       this.secret = await store.get("backup-secret") ?? null;
+      if (!this.secret) this.backupKeyPair = null;
       this.backup = await this.fetchBackup();
       let identityJwk = this.freshIdentity;
       this.freshIdentity = null;
@@ -3109,6 +3240,7 @@ ${sig}`;
       }
       const serverKey = state.identity_key;
       this.serverKey = serverKey;
+      this.identityCreatedAt = state.identity_created_at ? Date.parse(state.identity_created_at) : null;
       if (this.identity && this.identity.publicKey !== serverKey) {
         const previous = state.previous_identity;
         const rotated = previous?.public_key === this.identity.publicKey && await verify(previous.public_key, rotationMessage(userId, previous.public_key, serverKey), previous.signature);
@@ -3187,16 +3319,16 @@ ${sig}`;
       const backup = this.backup = await this.fetchBackup();
       if (kind === "password" && (!backup || backup.mode === "password" && !backup.wrapped_secret))
         throw new E2eeError("BAD_SECRET", "Your keys aren't backed up with your password yet.");
-      if (!backup?.wrapped_secret || backup.mode !== kind) throw new E2eeError("BAD_SECRET", "There's no backup to unlock with that");
+      if (!backup?.wrapped_secret || backup.mode !== kind) throw new E2eeError("BAD_SECRET", "There's no backup to unlock with that.");
       const secret = await unwrapSecret(this.userId, backup, input).catch(() => null);
-      if (!secret) throw new E2eeError("BAD_SECRET", kind === "password" ? "That password didn't unlock your keys" : "That recovery code didn't work");
+      if (!secret) throw new E2eeError("BAD_SECRET", kind === "password" ? "That password didn't unlock your keys." : "That recovery code didn't work.");
       await this.unlockWithSecret(secret);
     }
     async unlockWithSecret(secret) {
       await this.store.set("backup-secret", secret);
       this.secret = secret;
       await this.refresh();
-      if (!this.linked) throw new E2eeError("BAD_SECRET", "That key didn't unlock this browser");
+      if (!this.linked) throw new E2eeError("BAD_SECRET", "That key didn't unlock this browser.");
     }
     exportSecret() {
       return this.secret;
@@ -3219,16 +3351,18 @@ ${sig}`;
       this.emit();
     }
     async reset(password) {
-      await this.serialized(async () => {
-        const identityJwk = await generateExportable("Ed25519");
-        await this.api.request("post", "/users/@me/e2ee/reset", { password, public_key: identityJwk.x });
-        await this.wipeLocal(false);
-        await this.adoptIdentity(identityJwk);
-        this.freshIdentity = identityJwk;
-        this.backup = null;
-        this.password = { value: password, at: Date.now() };
-        this.directory.clear();
-      });
+      await this.serialized(
+        () => this.exclusive(async () => {
+          const identityJwk = await generateExportable("Ed25519");
+          await this.api.request("post", "/users/@me/e2ee/reset", { password, public_key: identityJwk.x });
+          await this.wipeLocal(false);
+          await this.adoptIdentity(identityJwk);
+          this.freshIdentity = identityJwk;
+          this.backup = null;
+          this.holdPassword(password);
+          this.directory.clear();
+        })
+      );
       await this.refresh();
     }
     async removeDevice(deviceId) {
@@ -3309,6 +3443,7 @@ ${sig}`;
           this.contacts[userId] = { identityKey, verified: false, pendingKey: null, firstSeen: Date.now() };
           await this.saveContacts();
         } else if (contact.identityKey !== identityKey && previous?.public_key === contact.identityKey && await verify(previous.public_key, rotationMessage(userId, previous.public_key, identityKey), previous.signature)) {
+          contact.previousKeys = [.../* @__PURE__ */ new Set([...contact.previousKeys ?? [], contact.identityKey])].slice(-16);
           contact.identityKey = identityKey;
           contact.pendingKey = null;
           await this.saveContacts();
@@ -3325,10 +3460,15 @@ ${sig}`;
       const devices = [];
       let backupKey = null;
       if (identityKey) {
+        const known = this.knownKeys(userId, identityKey);
         for (const device of keys.devices) {
           if (!device.identity_signature) continue;
           if (await deviceIdFor(device.signing_key) !== device.device_id) continue;
-          if (!await verify(identityKey, deviceMessage(userId, device.device_id, device.signing_key), device.identity_signature)) continue;
+          const message = deviceMessage(userId, device.device_id, device.signing_key);
+          const signers = device.status === "revoked" ? known : [identityKey];
+          let signed = false;
+          for (const key of signers) if (!signed) signed = await verify(key, message, device.identity_signature);
+          if (!signed) continue;
           if (!await verify(device.signing_key, prekeyMessage(device.device_id, device.prekey.id, device.prekey.public_key), device.prekey.signature)) continue;
           devices.push({
             deviceId: device.device_id,
@@ -3336,17 +3476,25 @@ ${sig}`;
             status: device.status,
             name: device.name,
             prekeyId: device.prekey.id,
-            prekeyPublic: device.prekey.public_key
+            prekeyPublic: device.prekey.public_key,
+            revokedAt: device.revoked_at ? Date.parse(device.revoked_at) : null
           });
         }
         const backup = keys.backup_key;
         if (backup && await verify(identityKey, backupKeyMessage(userId, backup.public_key), backup.signature)) backupKey = backup.public_key;
       }
-      return { userId, identityKey, identityChanged, backupKey, devices, fetchedAt: Date.now() };
+      const identityCreatedAt = keys.identity_created_at ? Date.parse(keys.identity_created_at) : null;
+      return { userId, identityKey, identityCreatedAt, identityChanged, backupKey, devices, fetchedAt: Date.now() };
+    }
+    knownKeys(userId, current) {
+      if (userId === this.userId) return [current, this.trustedKey, ...this.previousIdentities].filter((key) => !!key);
+      const contact = this.contacts[userId];
+      return [current, contact?.identityKey, ...contact?.previousKeys ?? []].filter((key) => !!key);
     }
     async acceptIdentity(userId) {
       const contact = this.contacts[userId];
       if (!contact?.pendingKey) return;
+      contact.previousKeys = [.../* @__PURE__ */ new Set([...contact.previousKeys ?? [], contact.identityKey])].slice(-16);
       contact.identityKey = contact.pendingKey;
       contact.pendingKey = null;
       contact.verified = false;
@@ -3377,7 +3525,15 @@ ${sig}`;
         const current = this.currentPrekey();
         targets2.push({
           userId: this.userId,
-          device: { deviceId: this.device.deviceId, signingKey: this.device.signingKey, status: "active", name: null, prekeyId: current.id, prekeyPublic: current.publicKey }
+          device: {
+            deviceId: this.device.deviceId,
+            signingKey: this.device.signingKey,
+            status: "active",
+            name: null,
+            prekeyId: current.id,
+            prekeyPublic: current.publicKey,
+            revokedAt: null
+          }
         });
       }
       const bind = binding(opts.mid, opts.nonce);
@@ -3433,11 +3589,16 @@ backup:${e.userId}`) }))
       if (!env.mid && !nonce) throw new E2eeError("BAD_ENVELOPE", "Missing nonce");
       let [entry] = await this.keysFor([senderId]);
       let sender = entry.devices.find((d) => d.deviceId === env.sender_device);
-      if (!sender) {
+      if (!sender && Date.now() - entry.fetchedAt > 3e3) {
         [entry] = await this.keysFor([senderId], true);
         sender = entry.devices.find((d) => d.deviceId === env.sender_device);
       }
-      if (!sender) throw new E2eeError("BAD_SIGNATURE", "Unknown sender device");
+      const sentAt = snowflakeTime(message.id);
+      if (!sender) {
+        if (entry.identityCreatedAt && sentAt < entry.identityCreatedAt) throw new E2eeError("RESET", "Sent before encryption was reset");
+        throw new E2eeError("BAD_SIGNATURE", "The sender's device couldn't be verified");
+      }
+      if (sender.status === "revoked" && (!sender.revokedAt || sentAt >= sender.revokedAt)) throw new E2eeError("BAD_SIGNATURE", "Sent from a device that was removed");
       const bind = binding(env.mid, nonce);
       const { sig, ...unsigned } = env;
       if (!await verify(sender.signingKey, signedPayload(message.channel_id, senderId, bind, unsigned), sig)) throw new E2eeError("BAD_SIGNATURE", "Signature check failed");
@@ -3458,6 +3619,7 @@ backup:${this.userId}`).catch(() => null);
       }
       if (!contentKey) {
         if (!this.linked || !backupKey) throw new E2eeError("LOCKED", "This browser isn't unlocked yet");
+        if (this.identityCreatedAt && sentAt < this.identityCreatedAt) throw new E2eeError("RESET", "Sent before encryption was reset");
         throw new E2eeError("NO_KEY", "Sent before this browser was set up");
       }
       const payload = parsePayload(JSON.parse(fromUtf8(await aesDecrypt(contentKey, fromB64u(env.iv), fromB64u(env.ct), aad))));
@@ -3568,6 +3730,9 @@ backup:${this.userId}`).catch(() => null);
   var DECRYPTING_CONTENT = "Decrypting…";
   var MISSING_CONTENT = "Sent before this browser was set up";
   var LOCKED_CONTENT = "Unlock this browser to read this message";
+  var RESET_CONTENT = "Sent before encryption was reset";
+  var FAILED_CONTENT = "This message couldn't be decrypted";
+  var contentFor = (state, fallback) => state === "missing" ? MISSING_CONTENT : state === "locked" ? LOCKED_CONTENT : state === "reset" ? RESET_CONTENT : state === "failed" ? FAILED_CONTENT : fallback;
   var SEARCH_URL = /^\/channels\/(\d+)\/messages\/search(\/tabs)?$/;
   var SEARCH_PAGES = 10;
   var AUTH_URL = /^\/auth\/(login|register)$/;
@@ -3621,7 +3786,7 @@ backup:${this.userId}`).catch(() => null);
       if (!ctx.isReady()) {
         if (ctx.failClosed()) {
           states2.set(message.id, { state: "failed", reason: "Encryption is unavailable in this client build" });
-          message.content = FALLBACK_CONTENT;
+          message.content = FAILED_CONTENT;
         } else {
           retry.set(message.id, clone(message));
           states2.set(message.id, { state: "pending" });
@@ -3641,15 +3806,10 @@ backup:${this.userId}`).catch(() => null);
             remember(message);
           } catch (error) {
             const code = error instanceof E2eeError ? error.code : null;
-            if (code === "LOCKED" || code === "NO_KEY") {
-              const locked = code === "LOCKED";
-              states2.set(message.id, { state: locked ? "locked" : "missing", reason: error instanceof Error ? error.message : String(error) });
-              retry.set(message.id, original);
-              message.content = locked ? LOCKED_CONTENT : MISSING_CONTENT;
-            } else {
-              states2.set(message.id, { state: "failed", reason: error instanceof Error ? error.message : String(error) });
-              message.content = FALLBACK_CONTENT;
-            }
+            const state = code === "LOCKED" ? "locked" : code === "NO_KEY" ? "missing" : code === "RESET" ? "reset" : "failed";
+            states2.set(message.id, { state, reason: errorText(error) });
+            if (state === "locked" || state === "missing") retry.set(message.id, original);
+            message.content = contentFor(state);
           }
         })().finally(() => inflight.delete(key));
         inflight.set(key, pending);
@@ -3659,7 +3819,7 @@ backup:${this.userId}`).catch(() => null);
         const again = engine2.cached(message);
         const state = states2.get(message.id)?.state;
         if (again) show(message, again);
-        else message.content = state === "missing" ? MISSING_CONTENT : state === "locked" ? LOCKED_CONTENT : state === "failed" ? FALLBACK_CONTENT : message.content;
+        else message.content = contentFor(state, message.content);
         ctx.onState();
       });
     };
@@ -3769,6 +3929,7 @@ backup:${this.userId}`).catch(() => null);
           const opts = typeof input === "string" ? { url: input, rejectWithError: false } : input;
           const url = typeof opts?.url === "string" ? opts.url : "";
           const path = url.split("?")[0];
+          if (method === "post" && path === "/auth/logout") ctx.onLogout();
           if (method === "post" && AUTH_URL.test(path) || method === "patch" && path === "/users/@me") {
             const body = opts.body ?? {};
             const result = original(input, callback);
@@ -3937,6 +4098,8 @@ backup:${this.userId}`).catch(() => null);
   };
 
   // client/e2ee/src/link.ts
+  var OFFER_WINDOW_MS = 1200;
+  var MAX_APPROVERS = 4;
   var sasFor = async (requestId, requester, approver) => {
     const digest = await sha256(utf8(`fosscord-e2ee/v1/sas
 ${requestId}
@@ -3957,13 +4120,20 @@ ${approver}`;
     let requesting = null;
     let leader = false;
     let wanted = false;
+    let stopped = false;
+    let release = null;
     let channel = null;
     const incoming = /* @__PURE__ */ new Map();
     const prompts = /* @__PURE__ */ new Map();
     const remotePrompts = /* @__PURE__ */ new Set();
     const responders = /* @__PURE__ */ new Map();
     const send = (message) => channel?.postMessage(message);
-    const snapshot = () => outgoing ? { requestId: outgoing.requestId, state: outgoing.state, sas: outgoing.sas, approverName: outgoing.approverName } : null;
+    const snapshot = () => outgoing ? {
+      requestId: outgoing.requestId,
+      state: outgoing.state,
+      approvers: [...outgoing.offers.values()].flatMap(({ name, sas }) => sas ? [{ name, sas }] : []),
+      error: outgoing.error
+    } : null;
     const changed = () => {
       if (leader) send({ type: "outgoing", value: snapshot() });
       hooks2.onChange();
@@ -3977,16 +4147,15 @@ ${approver}`;
     const begin = async () => {
       const pair = await generateAgreementKey();
       const publicKey = await exportPublic(pair.publicKey);
-      if (!engine2.device || engine2.linked) return;
+      if (!engine2.device || engine2.linked || stopped) return;
       const current = {
         requestId: toB64u(randomBytes(16)),
         state: "waiting",
-        sas: null,
-        approverName: null,
+        error: null,
         pair,
         publicKey,
-        approver: null,
-        approverKey: null,
+        offers: /* @__PURE__ */ new Map(),
+        revealed: false,
         approved: false
       };
       outgoing = current;
@@ -3995,13 +4164,14 @@ ${approver}`;
       await post(body);
       let attempts = 0;
       const timer = setInterval(() => {
-        if (outgoing !== current || current.state !== "waiting" || engine2.linked || ++attempts > 30) return clearInterval(timer);
+        if (outgoing !== current || current.state !== "waiting" || current.offers.size || engine2.linked || stopped || ++attempts > 30) return clearInterval(timer);
         post(body).catch(() => {
         });
       }, 1e4);
     };
     const request = () => {
       wanted = true;
+      if (stopped) return Promise.resolve();
       if (!leader) {
         send({ type: "request" });
         return Promise.resolve();
@@ -4023,6 +4193,19 @@ ${approver}`;
       changed();
       if (current.state !== "done" && !current.approved && engine2.device) await post({ request_id: current.requestId, stage: "cancel" }).catch(() => {
       });
+    };
+    const forgetOutgoing = () => {
+      outgoing = null;
+      remote = null;
+      changed();
+    };
+    const reveal = async (current) => {
+      if (outgoing !== current || current.revealed || current.state !== "waiting") return;
+      current.revealed = true;
+      for (const offer of current.offers.values()) offer.sas = await sasFor(current.requestId, current.publicKey, offer.key);
+      current.state = "comparing";
+      changed();
+      await Promise.all([...current.offers.keys()].map((to) => post({ request_id: current.requestId, stage: "reveal", to_device: to, public_key: current.publicKey })));
     };
     const onRequest = async (event) => {
       if (!engine2.device || event.device_id === engine2.device.deviceId || !engine2.linked || !engine2.exportSecret() || !event.commit) return;
@@ -4055,22 +4238,28 @@ ${approver}`;
         }
         dismiss(requestId);
       } catch (error) {
-        dismiss(requestId, error instanceof Error ? error.message : String(error));
+        dismiss(requestId, errorText(error));
         throw error;
       }
     };
     const onResponse = async (event) => {
       const mine = engine2.device?.deviceId;
-      if (!mine || event.to_device !== mine) return;
+      if (!mine) return;
+      if ((event.stage === "approve" || event.stage === "deny") && event.device_id !== mine && event.to_device !== mine && incoming.has(event.request_id)) {
+        incoming.delete(event.request_id);
+        if (prompts.has(event.request_id)) dismiss(event.request_id);
+        return;
+      }
+      if (event.to_device !== mine) return;
+      if (event.stage === "invite") {
+        if (engine2.locked) request().catch((error) => console.error("[e2ee] link request failed", error));
+        return;
+      }
       const current = outgoing?.requestId === event.request_id ? outgoing : null;
-      if (event.stage === "offer" && current && !current.approver && event.public_key) {
-        current.approver = event.device_id;
-        current.approverKey = event.public_key;
-        current.approverName = engine2.devices.find((d) => d.device_id === event.device_id)?.name ?? null;
-        current.sas = await sasFor(current.requestId, current.publicKey, event.public_key);
-        current.state = "comparing";
-        changed();
-        await post({ request_id: current.requestId, stage: "reveal", to_device: event.device_id, public_key: current.publicKey });
+      if (event.stage === "offer" && current && !current.revealed && event.public_key && !current.offers.has(event.device_id) && current.offers.size < MAX_APPROVERS) {
+        const first = !current.offers.size;
+        current.offers.set(event.device_id, { key: event.public_key, name: deviceLabel(engine2.devices, event.device_id, "Your other browser"), sas: null });
+        if (first) setTimeout(() => reveal(current).catch((error) => console.error("[e2ee] link", error)), OFFER_WINDOW_MS);
         return;
       }
       if (event.stage === "reveal" && event.public_key) {
@@ -4087,22 +4276,27 @@ ${approver}`;
         hooks2.onPrompt({ ...info, approve: () => respond(info.requestId, "approve"), deny: () => respond(info.requestId, "deny") });
         return;
       }
-      if (!current || event.device_id !== current.approver) return;
+      const offer = current?.revealed ? current.offers.get(event.device_id) : void 0;
+      if (!current || !offer || current.approved) return;
       if (event.stage === "deny") {
         current.state = "denied";
         changed();
         return;
       }
-      if (event.stage === "approve" && event.iv && event.ct && current.approverKey) {
+      if (event.stage === "approve" && event.iv && event.ct) {
         try {
-          const key = await channelKey(current.pair, current.approverKey, current.requestId);
-          const secret = await aesDecrypt(key, fromB64u(event.iv), fromB64u(event.ct), channelAad(current.requestId, current.publicKey, current.approverKey));
+          const key = await channelKey(current.pair, offer.key, current.requestId);
+          const secret = await aesDecrypt(key, fromB64u(event.iv), fromB64u(event.ct), channelAad(current.requestId, current.publicKey, offer.key));
           current.approved = true;
+          current.error = null;
           await engine2.unlockWithSecret(secret);
           current.state = "done";
+          post({ request_id: current.requestId, stage: "cancel" }).catch(() => {
+          });
         } catch (error) {
           console.error("[e2ee] approval didn't unlock this browser", error);
           current.state = "failed";
+          current.error = errorText(error);
         }
         changed();
       }
@@ -4125,6 +4319,7 @@ ${approver}`;
       send({ type: "respond", requestId, stage });
     });
     const onTab = (message) => {
+      if (stopped) return;
       if (message.type === "dismiss") {
         remotePrompts.delete(message.requestId);
         hooks2.onDismiss(message.requestId);
@@ -4135,6 +4330,10 @@ ${approver}`;
         return;
       }
       if (message.type === "unlocked") return hooks2.onPeerUnlock();
+      if (message.type === "reset") {
+        forgetOutgoing();
+        return hooks2.onPeerReset();
+      }
       if (!leader) {
         if (message.type === "outgoing") {
           remote = message.value;
@@ -4149,11 +4348,13 @@ ${approver}`;
       if (message.type === "hello") {
         send({ type: "outgoing", value: snapshot() });
         prompts.forEach((prompt) => send({ type: "prompt", prompt }));
-      } else if (message.type === "request") request().catch((error) => console.error("[e2ee] link request failed", error));
+      } else if (message.type === "request")
+        engine2.refresh().catch((error) => console.error("[e2ee] refresh failed", error)).then(() => engine2.linked ? send({ type: "unlocked" }) : request()).catch((error) => console.error("[e2ee] link request failed", error));
       else if (message.type === "cancel") cancel();
       else if (message.type === "respond") respond(message.requestId, message.stage).catch((error) => console.error("[e2ee] link", error));
     };
     const becomeLeader = () => {
+      if (stopped) return;
       leader = true;
       remotePrompts.forEach((id) => hooks2.onDismiss(id));
       remotePrompts.clear();
@@ -4164,7 +4365,7 @@ ${approver}`;
       changed();
     };
     const start2 = (userId) => {
-      if (channel || leader) return;
+      if (channel || leader || stopped) return;
       if (typeof BroadcastChannel === "function") {
         channel = new BroadcastChannel(`fosscord-e2ee-link:${userId}`);
         channel.addEventListener("message", (event) => onTab(event.data));
@@ -4176,18 +4377,58 @@ ${approver}`;
       });
       if (!navigator.locks || !channel) return becomeLeader();
       navigator.locks.request(`fosscord-e2ee-link:${userId}`, () => {
+        if (stopped) return;
         becomeLeader();
-        return new Promise(() => {
+        return new Promise((resolve) => {
+          release = resolve;
         });
       });
       send({ type: "hello" });
     };
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      leader = false;
+      outgoing = null;
+      remote = null;
+      for (const id of [...prompts.keys(), ...remotePrompts]) hooks2.onDismiss(id);
+      prompts.clear();
+      remotePrompts.clear();
+      incoming.clear();
+      channel?.close();
+      channel = null;
+      release?.();
+      release = null;
+      hooks2.onChange();
+    };
+    const devicesChanged = () => {
+      const current = outgoing;
+      if (!leader || !current || current.state !== "comparing" || current.approved || !engine2.locked) return;
+      if ([...current.offers.keys()].some((id) => engine2.devices.some((d) => d.device_id === id && d.status === "active"))) return;
+      outgoing = null;
+      changed();
+      request().catch((error) => console.error("[e2ee] link request failed", error));
+    };
+    const invite = async (deviceId) => {
+      if (!engine2.device || !engine2.linked) return;
+      await post({ request_id: toB64u(randomBytes(16)), stage: "invite", to_device: deviceId });
+    };
     return {
       start: start2,
+      stop,
       request,
       cancel,
+      invite,
+      devicesChanged,
       unlocked: () => send({ type: "unlocked" }),
+      reset: () => {
+        [...prompts.keys()].forEach((id) => dismiss(id));
+        incoming.clear();
+        forgetOutgoing();
+        send({ type: "reset" });
+      },
       onEvent: (type, event) => {
+        if (stopped) return;
         if (type === "E2EE_LINK_RESPONSE" && event.stage === "cancel") {
           incoming.delete(event.request_id);
           if (prompts.has(event.request_id)) dismiss(event.request_id);
@@ -4409,6 +4650,7 @@ ${approver}`;
 @media (hover:hover){.fe2ee-button:hover:not(:disabled){background:var(--control-primary-background-hover,#4752c4)}.fe2ee-button[data-variant="secondary"]:hover:not(:disabled){background:var(--control-secondary-background-hover,#6d6f78)}.fe2ee-button[data-variant="danger"]:hover:not(:disabled){background:var(--control-critical-primary-background-hover,#a12829)}.fe2ee-button[data-variant="link"]:hover:not(:disabled){background:none;text-decoration:underline}}
 .fe2ee-dialog{border:0;padding:0;border-radius:12px;width:min(480px,calc(100vw - 32px));max-height:min(720px,calc(100dvh - 64px));overflow:hidden;color:var(--text-default,#dbdee1);background:var(--modal-background,var(--background-base-low,#313338));box-shadow:0 0 0 1px var(--border-subtle,rgb(255 255 255 / .06)),0 4px 8px rgb(0 0 0 / .16),0 16px 48px rgb(0 0 0 / .32)}
 .fe2ee-dialog[open]{display:flex;flex-direction:column}
+.fe2ee-dialog:focus{outline:none}
 .fe2ee-dialog::backdrop{background:rgb(0 0 0 / .7)}
 .fe2ee-dialog-head{flex:none;display:flex;align-items:flex-start;gap:16px;padding:20px 16px 4px 20px}
 .fe2ee-dialog h2{flex:1;margin:0;font-size:20px;line-height:24px;font-weight:600;text-wrap:balance;color:var(--text-strong,#f2f3f5)}
@@ -4437,7 +4679,13 @@ ${approver}`;
 .fe2ee-qr svg{display:block;width:100%;height:100%}
 @media (max-width:480px){.fe2ee-safety{flex-direction:column;align-items:flex-start}}
 .fe2ee-member-actions{display:flex;gap:8px;flex-wrap:wrap}
-.fe2ee-unlock{font:inherit;font-size:13px;font-weight:500;line-height:18px;margin-inline-start:8px;padding:2px 8px;border:0;border-radius:4px;cursor:pointer;color:var(--text-default,#dbdee1);background:var(--control-secondary-background-default,#4e5058);transition:background-color 120ms ease-out,scale 200ms ease-out}
+[data-fe2ee-state="pending"],[data-fe2ee-state="locked"],[data-fe2ee-state="missing"],[data-fe2ee-state="reset"],[data-fe2ee-state="failed"]{color:var(--text-muted,#949ba4);font-style:italic}
+[id^="message-content-"] > [class*="timestamp_"]:has(> .fe2ee-lock){white-space:nowrap}
+.fe2ee-codes{display:flex;flex-direction:column;gap:4px}
+.fe2ee-codes[hidden]{display:none}
+.fe2ee-code-row{display:flex;align-items:baseline;justify-content:space-between;gap:16px}
+.fe2ee-code-name{min-width:0;font-size:14px;line-height:18px;color:var(--text-muted,#b5bac1);overflow-wrap:anywhere}
+.fe2ee-unlock{font:inherit;font-style:normal;font-size:13px;font-weight:500;line-height:18px;margin-inline-start:8px;padding:2px 8px;border:0;border-radius:4px;cursor:pointer;color:var(--text-default,#dbdee1);background:var(--control-secondary-background-default,#4e5058);transition:background-color 120ms ease-out,scale 200ms ease-out}
 .fe2ee-unlock:active{scale:.97}
 .fe2ee-unlock:focus-visible{outline:2px solid var(--focus-primary,#00a8fc);outline-offset:2px}
 @media (hover:hover){.fe2ee-unlock:hover{background:var(--control-secondary-background-hover,#6d6f78)}}
@@ -4450,6 +4698,8 @@ ${approver}`;
 .fe2ee-input{flex:1;min-width:0;font:inherit;font-size:16px;line-height:20px;padding:9px 12px;border-radius:8px;border:0;color:var(--text-default,#dbdee1);background:var(--input-background-default,var(--background-base-lowest,#1e1f22));box-shadow:inset 0 0 0 1px var(--border-subtle,rgb(255 255 255 / .06))}
 .fe2ee-input:focus-visible{outline:2px solid var(--focus-primary,#00a8fc);outline-offset:-1px}
 .fe2ee-input[aria-invalid="true"]{box-shadow:inset 0 0 0 1px var(--status-danger,#f23f43)}
+.fe2ee-input[aria-invalid="true"]:focus-visible{outline-color:var(--status-danger,#f23f43)}
+.fe2ee-field:has(.fe2ee-input[aria-invalid="true"]) label{color:var(--text-feedback-critical,var(--status-danger,#f23f43))}
 .fe2ee-dialog .fe2ee-error,.fe2ee-page .fe2ee-error{margin:0;font-size:14px;line-height:18px;color:var(--text-feedback-critical,var(--status-danger,#f23f43))}
 .fe2ee-code{font-size:28px;line-height:36px;font-weight:600;letter-spacing:.08em;font-variant-numeric:tabular-nums;color:var(--text-strong,#f2f3f5)}
 .fe2ee-recovery{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:0;padding:12px;list-style:none;border-radius:8px;background:var(--background-base-lowest,#1e1f22)}
@@ -4463,9 +4713,11 @@ ${approver}`;
 .fe2ee-device-name{font-size:15px;line-height:20px;font-weight:600;color:var(--text-strong,#f2f3f5);overflow-wrap:anywhere}
 .fe2ee-device-meta{font-size:13px;line-height:18px;color:var(--text-muted,#b5bac1);overflow-wrap:anywhere}
 .fe2ee-device-meta[data-current="true"]{color:var(--text-feedback-positive,var(--status-positive,#23a55a))}
-.fe2ee-page{display:flex;flex-direction:column;gap:24px;font-size:15px;line-height:22px;color:var(--text-default,#dbdee1);padding-bottom:40px}
-.fe2ee-page .fe2ee-section{border-top:0;padding-top:0}
-.fe2ee-page .fe2ee-section h3{font-size:18px;line-height:22px}
+.fe2ee-device-actions{flex:none;display:flex;gap:8px}
+.fe2ee-page{display:flex;flex-direction:column;gap:40px;font-size:14px;line-height:20px;color:var(--text-default,#dbdee1);padding-bottom:40px}
+.fe2ee-page .fe2ee-section{border-top:0;padding-top:0;gap:12px}
+.fe2ee-page .fe2ee-section + .fe2ee-section{border-top:1px solid var(--border-subtle,rgb(255 255 255 / .06));padding-top:40px}
+.fe2ee-page .fe2ee-section h3{font-size:24px;line-height:30px;font-weight:400;margin-bottom:4px}
 `;
   var svg = (path, label) => `<svg viewBox="0 0 24 24" fill="currentColor" ${label ? `role="img" aria-label="${label}"` : 'aria-hidden="true"'}><path fill-rule="evenodd" d="${path}"/></svg>`;
   var escape = (text) => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -4492,16 +4744,17 @@ ${approver}`;
   };
   var UNLOCK_SNOOZE_KEY = "fe2ee-unlock-snoozed-until";
   var UNLOCK_SNOOZE_MS = 7 * 24 * 60 * 60 * 1e3;
+  var INVITE_MS = 15e3;
   var unlockSnoozed = () => {
     try {
-      return Number(localStorage.getItem(UNLOCK_SNOOZE_KEY)) > Date.now();
+      return Number(browserStorage?.getItem(UNLOCK_SNOOZE_KEY)) > Date.now();
     } catch {
       return false;
     }
   };
   var snoozeUnlock = () => {
     try {
-      localStorage.setItem(UNLOCK_SNOOZE_KEY, String(Date.now() + UNLOCK_SNOOZE_MS));
+      browserStorage?.setItem(UNLOCK_SNOOZE_KEY, String(Date.now() + UNLOCK_SNOOZE_MS));
     } catch {
       return;
     }
@@ -4521,6 +4774,7 @@ ${approver}`;
     let scheduled = false;
     let tooltip = null;
     let backupPromptDismissed = false;
+    const invited = /* @__PURE__ */ new Map();
     const mount = () => {
       if (!style.isConnected) document.head.append(style);
     };
@@ -4565,6 +4819,13 @@ ${approver}`;
       el.addEventListener("click", run2);
       return el;
     };
+    addEventListener(
+      "keydown",
+      (event) => {
+        if (event.key === "Escape" && document.querySelector("dialog.fe2ee-dialog[open]:not([data-closing])")) event.stopPropagation();
+      },
+      true
+    );
     const dialog = (title, build) => {
       const el = document.createElement("dialog");
       el.className = "fe2ee-dialog";
@@ -4610,12 +4871,6 @@ ${approver}`;
         event.preventDefault();
         if (dismissable) close();
       });
-      el.addEventListener("keydown", (event) => {
-        if (event.key !== "Escape") return;
-        event.preventDefault();
-        event.stopPropagation();
-        if (dismissable) close();
-      });
       let pressedBackdrop = false;
       el.addEventListener("pointerdown", (event) => {
         pressedBackdrop = event.target === el;
@@ -4624,9 +4879,12 @@ ${approver}`;
         if (event.target === el && pressedBackdrop && dismissable) close();
         pressedBackdrop = false;
       });
-      build(body, actions, handle);
+      const initial = build(body, actions, handle) ?? body.querySelector("input") ?? actions.querySelector('.fe2ee-button[data-variant="primary"]') ?? el;
+      if (initial === el) el.tabIndex = -1;
+      initial.autofocus = true;
       document.body.append(el);
       el.showModal();
+      initial.focus({ focusVisible: initial instanceof HTMLInputElement });
       return handle;
     };
     const field = (labelText, type, autocomplete) => {
@@ -4771,10 +5029,11 @@ ${approver}`;
         );
       });
     };
+    const lostWhat = () => engine2.backup?.mode === "recovery" ? "you lost your recovery code" : "your password doesn't unlock your keys";
     const showReset = (onDone) => dialog("Reset encryption?", (body, actions, { close }) => {
       describe2(
         body,
-        "Only do this if you lost your recovery code and no other signed-in browser can approve this one. You get new encryption keys and can keep chatting, but nobody can read the messages sent before the reset anymore, on any device."
+        `Only do this if ${lostWhat()} and no other signed-in browser can approve this one. You get new encryption keys and can keep chatting, but nobody can read the messages sent before the reset anymore, on any device.`
       );
       describe2(body, "Your other browsers have to be approved again, and the people you talk to are told that your safety number changed.");
       const { wrap, input, setError } = field("Account password", "password", "current-password");
@@ -4791,7 +5050,7 @@ ${approver}`;
           if (channelId) flash(channelId, { tone: "info", text: "Encryption was reset. New messages use your new keys." }, 6e3);
         } catch (error) {
           const status = error?.status;
-          setError(status === 400 ? "That password isn't right." : error instanceof Error ? error.message : "Couldn't reset encryption. Try again.");
+          setError(status === 400 ? "That password isn't right." : errorText(error));
         } finally {
           confirm.disabled = false;
         }
@@ -4810,7 +5069,7 @@ ${approver}`;
         try {
           await engine2.unlockWith(kind, input.value.trim());
         } catch (error) {
-          setError(error instanceof Error ? error.message : String(error));
+          setError(errorText(error));
         } finally {
           submit.disabled = false;
         }
@@ -4845,11 +5104,11 @@ ${approver}`;
         const approval = section("Approve from another device");
         const status = document.createElement("p");
         status.setAttribute("role", "status");
-        const code = document.createElement("div");
-        code.className = "fe2ee-code";
+        const codes = document.createElement("div");
+        codes.className = "fe2ee-codes";
         const again = button("Ask for approval", "secondary", () => link2.request().catch(() => {
         }));
-        approval.append(status, code, again);
+        approval.append(status, codes, again);
         body.append(approval);
         const lost = section(backup?.mode === "recovery" ? "Lost your code?" : "Can't unlock this browser?");
         describe2(lost, "If you can't use any of these, reset encryption to keep chatting. Messages sent before the reset can't be read anymore.");
@@ -4857,15 +5116,23 @@ ${approver}`;
         body.append(lost);
         const render = () => {
           const state = link2.outgoing();
-          code.hidden = state?.state !== "comparing";
-          code.textContent = state?.sas ?? "";
+          const approvers = state?.state === "comparing" ? state.approvers : [];
+          codes.hidden = !approvers.length;
+          codes.replaceChildren(
+            ...approvers.map(({ name, sas }) => {
+              const row = document.createElement("div");
+              row.className = "fe2ee-code-row";
+              row.innerHTML = `${approvers.length > 1 ? `<span class="fe2ee-code-name">${escape(name)}</span>` : ""}<span class="fe2ee-code">${escape(sas)}</span>`;
+              return row;
+            })
+          );
           again.hidden = state?.state === "waiting" || state?.state === "comparing" || state?.state === "done";
           again.textContent = state ? "Ask again" : "Ask for approval";
-          status.textContent = state?.state === "comparing" ? `${state.approverName ?? "Your other device"} is asking you to approve this browser. Check that it shows this code, then approve it there.` : state?.state === "denied" ? "Your other device declined this login." : state?.state === "failed" ? "The approval didn't unlock this browser. Ask again to retry." : state?.state === "waiting" ? "Open the app on a browser where you're already signed in. It asks you to approve this one." : "Ask a browser where you're already signed in to approve this one.";
+          status.textContent = state?.state === "comparing" ? approvers.length > 1 ? "Your signed-in browsers are asking you to approve this one. Approve it on any of them after checking that it shows the code listed under its name." : `${approvers[0]?.name ?? "Your other browser"} is asking you to approve this browser. Check that it shows this code, then approve it there.` : state?.state === "denied" ? "This login was denied on your other browser." : state?.state === "failed" ? state.error ? `The approval didn't unlock this browser. ${state.error}` : "The approval didn't unlock this browser. Ask again to retry." : state?.state === "waiting" ? "Open the app on a browser where you're already signed in. It asks you to approve this one." : "Ask a browser where you're already signed in to approve this one.";
           if (engine2.linked) {
             done();
             const channelId = currentChannel();
-            if (channelId) flash(channelId, { tone: "info", text: "This browser is unlocked. Your encrypted messages are loading." }, 5e3);
+            if (channelId) flash(channelId, { tone: "info", text: "This browser is unlocked." }, 4e3);
           }
         };
         const stop = engine2.onChange(render);
@@ -4915,7 +5182,7 @@ ${approver}`;
             await action();
             finish();
           } catch (failure3) {
-            error.textContent = `Couldn't answer that login: ${failure3 instanceof Error ? failure3.message : String(failure3)}`;
+            error.textContent = `Couldn't answer that login. ${errorText(failure3)}`;
             error.hidden = false;
             approve.disabled = deny.disabled = false;
           }
@@ -4923,6 +5190,7 @@ ${approver}`;
         const approve = button("Approve login", "primary", () => run2(prompt.approve));
         const deny = button("Deny", "secondary", () => run2(prompt.deny));
         actions.append(deny, approve);
+        return el;
       });
     };
     const dismissApproval = (requestId) => approvals.get(requestId)?.();
@@ -4937,7 +5205,7 @@ ${approver}`;
           await engine2.backUpWithPassword(input.value);
           onDone();
         } catch (error) {
-          setError(error instanceof Error ? error.message : String(error));
+          setError(errorText(error));
         } finally {
           save.disabled = false;
         }
@@ -4996,12 +5264,13 @@ ${approver}`;
             await engine2.setBackupMode("recovery", code);
             close();
           } catch (failure3) {
-            error.textContent = `Couldn't switch to the recovery code: ${failure3 instanceof Error ? failure3.message : String(failure3)}`;
+            error.textContent = `Couldn't switch to the recovery code. ${errorText(failure3)}`;
             error.hidden = false;
             saved.disabled = false;
           }
         });
         actions.replaceChildren(button("Cancel", "secondary", close), copy, saved);
+        copy.focus({ focusVisible: false });
       });
       actions.append(button("Cancel", "secondary", close), create);
     });
@@ -5009,7 +5278,11 @@ ${approver}`;
       const current = device.device_id === engine2.device?.deviceId;
       const session = device.session;
       const state = current ? "This browser" : device.status === "pending" ? "Waiting for approval" : session && !session.signed_in ? "Signed out" : session?.last_seen && Date.now() - Date.parse(session.last_seen) < 5 * 60 * 1e3 ? "Active now" : session?.last_seen ? `Last active ${ago(session.last_seen)}` : "Can read encrypted messages";
-      const added = device.created_at ? `Added ${new Date(device.created_at).toLocaleString(void 0, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}` : null;
+      const when = deviceAdded(
+        engine2.devices.filter((d) => d.name === device.name),
+        device
+      );
+      const added = when ? `Added ${when}` : null;
       return { current, text: [state, session?.location, added].filter(Boolean).join(" · ") };
     };
     const confirmRemove = (device, onDone) => dialog("Remove this device?", (body, actions, { close }) => {
@@ -5029,7 +5302,7 @@ ${approver}`;
           close();
           onDone();
         } catch (failure3) {
-          error.textContent = `Couldn't remove it: ${failure3 instanceof Error ? failure3.message : String(failure3)}`;
+          error.textContent = `Couldn't remove it. ${errorText(failure3)}`;
           error.hidden = false;
           confirm.disabled = false;
         }
@@ -5040,14 +5313,21 @@ ${approver}`;
       const browser = section("This browser");
       const backupSection = section("Key backup");
       const devices = section("Your devices", "Every browser listed here can read your encrypted messages. Remove the ones you don't recognize or don't use anymore.");
-      const resetSection = section(
-        "Reset encryption",
-        "If you lost your recovery code and no other browser can approve a new one, reset encryption to keep chatting. Messages sent before the reset can't be read anymore."
-      );
+      const resetSection = section("Reset encryption");
+      const resetText = describe2(resetSection, "");
       const list = document.createElement("div");
       list.className = "fe2ee-devices";
-      devices.append(list);
+      const inviteError = document.createElement("p");
+      inviteError.className = "fe2ee-error";
+      inviteError.setAttribute("role", "alert");
+      inviteError.hidden = true;
+      devices.append(list, inviteError);
       resetSection.append(button("Reset encryption", "danger", () => showReset()));
+      const renderReset = () => {
+        const text = `If ${lostWhat()} and no other browser can approve a new one, reset encryption to keep chatting. Messages sent before the reset can't be read anymore.`;
+        const capitalized = text.charAt(0).toUpperCase() + text.slice(1);
+        if (resetText.textContent !== capitalized) resetText.textContent = capitalized;
+      };
       root.append(browser, backupSection, devices, resetSection);
       const clear = (el) => el.querySelectorAll(":scope > :not(h3)").forEach((child) => child.remove());
       const renderBrowser = () => {
@@ -5107,7 +5387,7 @@ ${approver}`;
             await engine2.setBackupMode("password", input.value);
             renderBackup(true);
           } catch (error) {
-            setError(error instanceof Error ? error.message : String(error));
+            setError(errorText(error));
           } finally {
             save.disabled = false;
           }
@@ -5132,13 +5412,37 @@ ${approver}`;
           row.className = "fe2ee-device";
           const { current, text } = deviceMeta(device);
           row.innerHTML = `<div class="fe2ee-device-icon">${svg(SCREEN_PATH)}</div><div class="fe2ee-device-text"><span class="fe2ee-device-name">${escape(device.name ?? "Unknown browser")}</span><span class="fe2ee-device-meta" data-current="${current}">${escape(text)}</span></div>`;
-          if (!current) row.append(button("Remove", "secondary", () => confirmRemove(device, renderDevices)));
+          const buttons = document.createElement("div");
+          buttons.className = "fe2ee-device-actions";
+          if (!current && device.status === "pending" && engine2.linked && engine2.hasSecret) {
+            const asked = (invited.get(device.device_id) ?? 0) > Date.now();
+            const approve = button(asked ? "Asked" : "Approve", "primary", async () => {
+              invited.set(device.device_id, Date.now() + INVITE_MS);
+              setTimeout(renderDevices, INVITE_MS + 50);
+              renderDevices();
+              inviteError.hidden = true;
+              try {
+                await link2.invite(device.device_id);
+              } catch (error) {
+                invited.delete(device.device_id);
+                renderDevices();
+                inviteError.textContent = `Couldn't ask that browser for approval. ${errorText(error)}`;
+                inviteError.hidden = false;
+              }
+            });
+            approve.disabled = asked;
+            if (asked) approve.title = "That browser shows a code and asks you to approve it here once it's open.";
+            buttons.append(approve);
+          }
+          if (!current) buttons.append(button("Remove", "secondary", () => confirmRemove(device, renderDevices)));
+          if (buttons.childElementCount) row.append(buttons);
           list.append(row);
         }
       };
       const render = () => {
         renderBrowser();
         renderDevices();
+        renderReset();
       };
       render();
       engine2.reloadBackup().then(
@@ -5201,27 +5505,32 @@ ${approver}`;
       for (const [id, info] of states2) {
         const content = document.getElementById(`message-content-${id}`);
         if (!content) continue;
-        const existing = content.querySelector(":scope > .fe2ee-lock");
-        const trailing = existing ? [...content.children].slice([...content.children].indexOf(existing) + 1).every((el) => el.classList.contains("fe2ee-unlock")) : false;
-        if (existing?.dataset.state === info.state && trailing) continue;
+        if (info.state === "decrypted") delete content.dataset.fe2eeState;
+        else if (content.dataset.fe2eeState !== info.state) content.dataset.fe2eeState = info.state;
+        const edited = [...content.children].find((el) => el.getAttribute("class")?.includes("timestamp_") && el.querySelector('[class*="edited_"]'));
+        const host = edited ?? content;
+        const existing = content.querySelector(".fe2ee-lock");
+        const existingButton = content.querySelector(".fe2ee-unlock");
+        const wantsButton = info.state === "locked" && engine2.locked;
+        const placed = existing?.parentElement === host && existing.dataset.state === info.state && existing.nextElementSibling === (wantsButton && host === content ? existingButton : null) && (wantsButton ? existingButton?.parentElement === content && content.lastElementChild === existingButton : !existingButton);
+        if (placed) continue;
         existing?.remove();
-        content.querySelector(":scope > .fe2ee-unlock")?.remove();
+        existingButton?.remove();
         const lock = document.createElement("span");
         lock.className = "fe2ee-lock";
         lock.dataset.state = info.state;
-        const label = info.state === "decrypted" ? "End-to-end encrypted" : info.state === "pending" ? "Decrypting" : info.state === "locked" ? "Unlock this browser to read this message" : info.state === "missing" ? "This browser doesn't have the key for this message" : `Couldn't decrypt: ${info.reason ?? "unknown error"}`;
+        const label = info.state === "decrypted" ? "End-to-end encrypted" : info.state === "pending" ? "Decrypting" : info.state === "locked" ? "Unlock this browser to read this message" : info.state === "missing" ? "This browser doesn't have the key for this message" : info.state === "reset" ? "Sent before encryption was reset, so it can't be read anymore" : `Couldn't decrypt this message. ${info.reason ?? ""}`.trim();
         lock.innerHTML = svg(info.state === "decrypted" || info.state === "pending" ? LOCK_PATH : OPEN_LOCK_PATH, label);
         withTooltip(lock, () => label);
-        content.append(lock);
-        if (info.state === "missing" || info.state === "locked") {
+        host.append(lock);
+        if (wantsButton) {
           const unlock = document.createElement("button");
           unlock.type = "button";
           unlock.className = "fe2ee-unlock";
-          unlock.textContent = engine2.linked ? "Get keys" : "Unlock";
+          unlock.textContent = "Unlock";
           unlock.addEventListener("click", (event) => {
             event.stopPropagation();
-            if (engine2.linked && engine2.hasSecret) showSettings();
-            else showUnlock();
+            showUnlock();
           });
           content.append(unlock);
         }
@@ -5258,12 +5567,13 @@ ${approver}`;
         withTooltip(toggle, () => headerLabel(currentChannel() ?? ""));
         toolbar.prepend(toggle);
       }
-      const key = `${on}|${verified}`;
+      const label = headerLabel(channelId);
+      const key = `${on}|${verified}|${label}`;
       if (toggle.dataset.key === key) return;
       toggle.dataset.key = key;
       toggle.dataset.verified = String(verified);
       toggle.setAttribute("aria-pressed", String(on));
-      toggle.setAttribute("aria-label", on ? `${headerLabel(channelId)}. View safety numbers` : "Turn on end-to-end encryption");
+      toggle.setAttribute("aria-label", on ? `${label.charAt(0)}${label.slice(1).toLowerCase()}. View safety numbers` : "Turn on end-to-end encryption");
       toggle.innerHTML = svg(verified ? VERIFIED_PATH : on ? LOCK_PATH : OPEN_LOCK_PATH);
     };
     const currentNotice = (channelId) => {
@@ -5443,11 +5753,17 @@ ${approver}`;
   var started = false;
   var throttled = false;
   var initialized = false;
+  var signedOut = false;
   var lastProbe = 0;
   var api = {
     async request(method, url, body) {
       if (!http) throw new Error("HTTP client not found");
-      const res = await http[method]({ url, body, rejectWithError: false });
+      if (signedOut) throw { ok: false, status: 401, body: { message: "This session was signed out" } };
+      const res = await http[method]({ url, body, rejectWithError: false }).catch((error) => {
+        if (error?.status === 401) sessionEnded();
+        throw error;
+      });
+      if (res.status === 401) sessionEnded();
       if (!res.ok) throw res;
       return res.body;
     }
@@ -5467,7 +5783,7 @@ ${approver}`;
   };
   var storedToken = () => {
     try {
-      const value = JSON.parse(localStorage.getItem("token") ?? "null");
+      const value = JSON.parse(browserStorage?.getItem("token") ?? "null");
       return typeof value === "string" ? value : null;
     } catch {
       return null;
@@ -5478,7 +5794,10 @@ ${approver}`;
     onChange: () => ui.renderUnlock(),
     onDismiss: (requestId) => ui.dismissApproval(requestId),
     onPeerUnlock: () => {
-      if (initialized && engine.locked) engine.refresh().catch((error) => console.error("[e2ee] refresh failed", error));
+      if (initialized && !signedOut && engine.locked) engine.refresh().catch((error) => console.error("[e2ee] refresh failed", error));
+    },
+    onPeerReset: () => {
+      if (initialized && !signedOut) engine.refresh().catch((error) => console.error("[e2ee] refresh failed", error));
     },
     beacon: (body) => {
       const token = storedToken();
@@ -5524,6 +5843,12 @@ ${approver}`;
       engine.setChannelEncrypted(channelId);
     }
   });
+  function sessionEnded() {
+    if (signedOut) return;
+    signedOut = true;
+    console.warn("[e2ee] this tab's session isn't valid anymore, so it stops handling encryption");
+    link.stop();
+  }
   var fail = (reason) => {
     if (failure) return;
     failure = reason;
@@ -5544,10 +5869,18 @@ ${approver}`;
     states,
     failClosed: () => failure !== null,
     isReady: () => readyNow,
+    onLogout: () => {
+      loggedOut = true;
+      link.stop();
+      engine.forget().catch((error) => console.error("[e2ee] couldn't remove this browser's keys", error));
+    },
     onCredentials: (path, body, response) => {
       const password = typeof body.password === "string" ? body.password : void 0;
       const next = typeof body.new_password === "string" ? body.new_password : void 0;
-      if (path !== "/users/@me") return password && engine.rememberPassword(password);
+      if (path !== "/users/@me") {
+        const userId = response?.user_id;
+        return password && engine.rememberPassword(password, typeof userId === "string" ? userId : void 0);
+      }
       if (!next) return;
       const token = response?.token;
       engine.passwordChanged(password, next, typeof token === "string" ? tokenApi(token) : void 0).catch((error) => console.error("[e2ee] couldn't rewrap the backup", error));
@@ -5597,6 +5930,18 @@ ${approver}`;
       });
       if (throttled) ui.fail(null);
       throttled = false;
+      engine.onWipe(() => {
+        link.reset();
+        if (engine.locked && !ui.unlockSnoozed()) link.request().catch(() => {
+        });
+      });
+      let wasLinked = engine.linked;
+      engine.onChange(() => {
+        if (wasLinked && engine.locked && !ui.unlockSnoozed()) link.request().catch(() => {
+        });
+        wasLinked = engine.linked;
+        link.devicesChanged();
+      });
       ui.refresh();
       if (engine.locked && engine.encryptedChannels.size && !ui.unlockSnoozed()) ui.showUnlock();
     } catch (error) {
@@ -5613,8 +5958,7 @@ ${approver}`;
         setTimeout(() => start(userId), wait * 1e3);
         return;
       }
-      const reason = error instanceof Error ? error.message : response?.status ? `HTTP ${response.status}${response.body?.message ? ` ${response.body.message}` : ""}` : JSON.stringify(error) ?? String(error);
-      fail(`Self-test failed: ${reason}`);
+      fail(`Self-test failed: ${errorText(error)}`);
     }
   };
   var startWhenReady = () => {
@@ -5629,8 +5973,9 @@ ${approver}`;
   var received = {};
   var count = (type) => received[type] = (received[type] ?? 0) + 1;
   var selfRefresh = null;
+  var loggedOut = false;
   var refreshSelf = (userId) => {
-    if (userId !== engine.userId || !initialized || selfRefresh) return;
+    if (userId !== engine.userId || !initialized || selfRefresh || signedOut) return;
     selfRefresh = setTimeout(() => {
       selfRefresh = null;
       engine.refresh().catch((error) => console.error("[e2ee] refresh failed", error));
@@ -5675,7 +6020,12 @@ ${approver}`;
     if (targets.dispatcher && !installed.dispatcher) {
       installed.dispatcher = true;
       hooks.watchDispatcher(targets.dispatcher);
+      targets.dispatcher.subscribe("LOGOUT", () => {
+        loggedOut = true;
+        link.stop();
+      });
       targets.dispatcher.subscribe("CONNECTION_OPEN", (action) => {
+        if (loggedOut) return location.reload();
         const user = action.user;
         if (user?.id) start(user.id);
         else startWhenReady();

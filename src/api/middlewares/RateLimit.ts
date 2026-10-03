@@ -162,7 +162,8 @@ export async function initRateLimits(app: Router) {
     app.use("/webhooks/:webhook_id", rateLimit(routes.webhook));
     app.use("/channels/:channel_id", rateLimit(routes.channel));
     app.patch("/users/@me", rateLimit(routes.userProfile));
-    app.use("/users/@me", rateLimit({ onlyWrites: true, ...routes.user }));
+    const userWrites = rateLimit({ onlyWrites: true, ...routes.user });
+    app.use("/users/@me", (req, res, next) => (req.path.startsWith("/e2ee/") ? next() : userWrites(req, res, next)));
     app.use("/invites/:code", rateLimit({ onlyWrites: true, ...routes.invite }));
     app.use(
         ["/guilds/:guild_id/emojis", "/guilds/:guild_id/stickers", "/guilds/:guild_id/soundboard-sounds", "/applications/:application_id/emojis"],

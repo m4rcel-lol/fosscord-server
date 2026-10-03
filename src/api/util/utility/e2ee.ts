@@ -86,6 +86,7 @@ export async function e2eeUserKeys(ids: string[]) {
         const backup = backups.find((b) => b.user_id === id && b.identity_key === identity?.public_key);
         users[id] = {
             identity_key: identity?.public_key ?? null,
+            identity_created_at: identity?.created_at.toISOString() ?? null,
             previous_identity: identity?.previous_key && identity.rotation_signature ? { public_key: identity.previous_key, signature: identity.rotation_signature } : null,
             backup_key: backup ? { public_key: backup.backup_public_key, signature: backup.backup_key_signature } : null,
             devices: devices.filter((d) => d.user_id === id).map((d) => d.toPublic()),

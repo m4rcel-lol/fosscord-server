@@ -19,11 +19,12 @@
 import { createAttachments } from "./attachments";
 import { randomBytes, toB64u } from "./bytes";
 import { aesDecrypt, aesEncrypt, exportPublic, generateAgreementKey, generateSigningKey, hpkeOpen, hpkeSeal, sign, verify } from "./crypto";
-import { Api, Engine } from "./engine";
+import { Api, Engine, errorText } from "./engine";
 import { createHooks, MessageState } from "./hooks";
 import { createLink, LinkEvent } from "./link";
 import { createUi } from "./ui";
 import { StickerMeta } from "./files";
+import { browserStorage } from "./store";
 import { findStore, HttpClient, scan, Targets } from "./webpack";
 
 interface LoaderState {
@@ -57,12 +58,18 @@ const ready = new Promise<boolean>((resolve) => {
 let started = false;
 let throttled = false;
 let initialized = false;
+let signedOut = false;
 let lastProbe = 0;
 
 const api: Api = {
     async request<T>(method: "get" | "post" | "put" | "patch" | "del", url: string, body?: unknown) {
         if (!http) throw new Error("HTTP client not found");
-        const res = await http[method]({ url, body, rejectWithError: false });
+        if (signedOut) throw { ok: false, status: 401, body: { message: "This session was signed out" } };
+        const res = await http[method]({ url, body, rejectWithError: false }).catch((error: unknown) => {
+            if ((error as { status?: number } | null)?.status === 401) sessionEnded();
+            throw error;
+        });
+        if (res.status === 401) sessionEnded();
         if (!res.ok) throw res;
         return res.body as T;
     },
@@ -90,7 +97,7 @@ const apiBase = () => {
 
 const storedToken = () => {
     try {
-        const value = JSON.parse(localStorage.getItem("token") ?? "null") as unknown;
+        const value = JSON.parse(browserStorage?.getItem("token") ?? "null") as unknown;
         return typeof value === "string" ? value : null;
     } catch {
         return null;
@@ -102,7 +109,10 @@ const link = createLink(engine, api, {
     onChange: () => ui.renderUnlock(),
     onDismiss: (requestId) => ui.dismissApproval(requestId),
     onPeerUnlock: () => {
-        if (initialized && engine.locked) engine.refresh().catch((error) => console.error("[e2ee] refresh failed", error));
+        if (initialized && !signedOut && engine.locked) engine.refresh().catch((error) => console.error("[e2ee] refresh failed", error));
+    },
+    onPeerReset: () => {
+        if (initialized && !signedOut) engine.refresh().catch((error) => console.error("[e2ee] refresh failed", error));
     },
     beacon: (body) => {
         const token = storedToken();
@@ -151,6 +161,13 @@ const ui = createUi({
     },
 });
 
+function sessionEnded() {
+    if (signedOut) return;
+    signedOut = true;
+    console.warn("[e2ee] this tab's session isn't valid anymore, so it stops handling encryption");
+    link.stop();
+}
+
 const fail = (reason: string) => {
     if (failure) return;
     failure = reason;
@@ -173,10 +190,18 @@ const hooks = createHooks({
     states,
     failClosed: () => failure !== null,
     isReady: () => readyNow,
+    onLogout: () => {
+        loggedOut = true;
+        link.stop();
+        engine.forget().catch((error) => console.error("[e2ee] couldn't remove this browser's keys", error));
+    },
     onCredentials: (path, body, response) => {
         const password = typeof body.password === "string" ? body.password : undefined;
         const next = typeof body.new_password === "string" ? body.new_password : undefined;
-        if (path !== "/users/@me") return password && engine.rememberPassword(password);
+        if (path !== "/users/@me") {
+            const userId = (response as { user_id?: unknown } | null)?.user_id;
+            return password && engine.rememberPassword(password, typeof userId === "string" ? userId : undefined);
+        }
         if (!next) return;
         const token = (response as { token?: unknown } | null)?.token;
         engine.passwordChanged(password, next, typeof token === "string" ? tokenApi(token) : undefined).catch((error) => console.error("[e2ee] couldn't rewrap the backup", error));
@@ -228,6 +253,16 @@ const start = async (userId: string) => {
         });
         if (throttled) ui.fail(null);
         throttled = false;
+        engine.onWipe(() => {
+            link.reset();
+            if (engine.locked && !ui.unlockSnoozed()) link.request().catch(() => {});
+        });
+        let wasLinked = engine.linked;
+        engine.onChange(() => {
+            if (wasLinked && engine.locked && !ui.unlockSnoozed()) link.request().catch(() => {});
+            wasLinked = engine.linked;
+            link.devicesChanged();
+        });
         ui.refresh();
         if (engine.locked && engine.encryptedChannels.size && !ui.unlockSnoozed()) ui.showUnlock();
     } catch (error) {
@@ -244,13 +279,7 @@ const start = async (userId: string) => {
             setTimeout(() => start(userId), wait * 1000);
             return;
         }
-        const reason =
-            error instanceof Error
-                ? error.message
-                : response?.status
-                  ? `HTTP ${response.status}${response.body?.message ? ` ${response.body.message}` : ""}`
-                  : (JSON.stringify(error) ?? String(error));
-        fail(`Self-test failed: ${reason}`);
+        fail(`Self-test failed: ${errorText(error)}`);
     }
 };
 
@@ -267,8 +296,9 @@ const received: Record<string, number> = {};
 const count = (type: string) => (received[type] = (received[type] ?? 0) + 1);
 
 let selfRefresh: ReturnType<typeof setTimeout> | null = null;
+let loggedOut = false;
 const refreshSelf = (userId: string) => {
-    if (userId !== engine.userId || !initialized || selfRefresh) return;
+    if (userId !== engine.userId || !initialized || selfRefresh || signedOut) return;
     selfRefresh = setTimeout(() => {
         selfRefresh = null;
         engine.refresh().catch((error) => console.error("[e2ee] refresh failed", error));
@@ -316,7 +346,12 @@ const tick = () => {
     if (targets.dispatcher && !installed.dispatcher) {
         installed.dispatcher = true;
         hooks.watchDispatcher(targets.dispatcher);
+        targets.dispatcher.subscribe("LOGOUT", () => {
+            loggedOut = true;
+            link.stop();
+        });
         targets.dispatcher.subscribe("CONNECTION_OPEN", (action) => {
+            if (loggedOut) return location.reload();
             const user = action.user as { id?: string } | undefined;
             if (user?.id) start(user.id);
             else startWhenReady();

@@ -102,6 +102,7 @@ export class E2eeDevice extends BaseClassWithoutId {
             name: this.name,
             prekey: { id: this.prekey_id, public_key: this.prekey_public, signature: this.prekey_signature },
             created_at: this.created_at.toISOString(),
+            revoked_at: this.revoked_at?.toISOString() ?? null,
         };
     }
 }

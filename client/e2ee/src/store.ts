@@ -16,6 +16,8 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+import { fromB64u, fromUtf8, randomBytes, toB64u, utf8 } from "./bytes";
+
 export interface StoredIdentity {
     publicKey: string;
     privateKey: CryptoKey;
@@ -41,6 +43,7 @@ export interface Contact {
     verified: boolean;
     pendingKey: string | null;
     firstSeen: number;
+    previousKeys?: string[];
 }
 
 let database: Promise<IDBDatabase> | null = null;
@@ -74,3 +77,65 @@ export const scoped = (userId: string) => {
 };
 
 export type Store = ReturnType<typeof scoped>;
+
+const grab = (name: "localStorage" | "sessionStorage") => {
+    try {
+        return window[name] ?? null;
+    } catch {
+        return null;
+    }
+};
+
+export const browserStorage = grab("localStorage");
+export const tabStorage = grab("sessionStorage");
+
+const PENDING_KEY = "fe2ee-pending-password";
+
+interface PendingPassword {
+    userId: string;
+    at: number;
+    iv: string;
+    ct: string;
+}
+
+const pendingKey = async () => {
+    const existing = await run<CryptoKey | undefined>("readonly", (s) => s.get("pending-password-key"));
+    if (existing) return existing;
+    const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+    await run<IDBValidKey>("readwrite", (s) => s.put(key, "pending-password-key"));
+    return key;
+};
+
+export const holdPendingPassword = async (userId: string, value: string) => {
+    const iv = randomBytes(12);
+    const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await pendingKey(), utf8(value)));
+    try {
+        tabStorage?.setItem(PENDING_KEY, JSON.stringify({ userId, at: Date.now(), iv: toB64u(iv), ct: toB64u(ct) } satisfies PendingPassword));
+    } catch {
+        return;
+    }
+};
+
+export const takePendingPassword = async (userId: string, ttl: number) => {
+    let pending: PendingPassword | null = null;
+    try {
+        pending = JSON.parse(tabStorage?.getItem(PENDING_KEY) ?? "null") as PendingPassword | null;
+    } catch {
+        return null;
+    }
+    if (!pending || (pending.userId && pending.userId !== userId) || Date.now() - pending.at > ttl) return null;
+    try {
+        const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromB64u(pending.iv) }, await pendingKey(), fromB64u(pending.ct));
+        return { value: fromUtf8(plain), at: pending.at };
+    } catch {
+        return null;
+    }
+};
+
+export const dropPendingPassword = () => {
+    try {
+        tabStorage?.removeItem(PENDING_KEY);
+    } catch {
+        return;
+    }
+};

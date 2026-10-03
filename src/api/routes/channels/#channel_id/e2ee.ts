@@ -21,7 +21,7 @@ import { In } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
 import { E2eeErrors, e2eeRateLimit, isE2eeChannelType } from "@spacebar/api/util";
 import { Channel, E2eeDevice } from "@spacebar/database";
-import { ChannelE2eeResponse, ChannelE2eeUpdateSchema } from "@spacebar/schemas";
+import { ChannelE2eeResponse, ChannelE2eeUpdateSchema, MessageType } from "@spacebar/schemas";
 import { emitEvent } from "@spacebar/util";
 
 const router: Router = Router({ mergeParams: true });
@@ -75,6 +75,7 @@ router.put(
         await Channel.update({ id: channel.id }, { e2ee_enabled_at: channel.e2ee_enabled_at });
         const data = { ...toResponse(channel), user_id: req.user_id };
         await Promise.all(members.map((id) => emitEvent({ event: "CHANNEL_E2EE_UPDATE", user_id: id, data })));
+        await Channel.sendSystemMessage(channel, req.user_id, MessageType.E2EE_ENABLED);
         res.json(toResponse(channel));
     },
 );

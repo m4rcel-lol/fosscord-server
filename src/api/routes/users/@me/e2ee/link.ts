@@ -26,11 +26,12 @@ import { emitEvent } from "@spacebar/util";
 
 const router: Router = Router({ mergeParams: true });
 
-const STAGES = ["request", "offer", "reveal", "approve", "deny", "cancel"];
+const STAGES = ["request", "offer", "reveal", "approve", "deny", "cancel", "invite"];
+const APPROVER_STAGES = ["offer", "approve", "deny", "invite"];
 
 router.post(
     "/",
-    e2eeRateLimit("e2ee_link", 30, 60),
+    e2eeRateLimit("e2ee_link", 60, 60),
     route({
         spacebarOnly: true,
         requestBody: "E2eeLinkSchema",
@@ -46,6 +47,7 @@ router.post(
             approve: () => !!body.to_device && !!decodeKey(body.iv!, 12) && typeof body.ct === "string" && /^[A-Za-z0-9_-]{16,256}$/.test(body.ct),
             deny: () => !!body.to_device,
             cancel: () => true,
+            invite: () => !!body.to_device,
         }[body.stage];
         if (!needs()) throw E2eeErrors.INVALID_LINK;
         if (body.name !== undefined && (typeof body.name !== "string" || body.name.length > 64)) throw E2eeErrors.INVALID_LINK;
@@ -55,6 +57,7 @@ router.post(
         if (devices.length !== ids.length) throw E2eeErrors.UNKNOWN_DEVICE;
 
         const sender = devices.find((d) => d.id === body.device_id)!;
+        if (APPROVER_STAGES.includes(body.stage) && sender.status !== "active") throw E2eeErrors.UNKNOWN_DEVICE;
         const data = {
             request_id: body.request_id,
             stage: body.stage,

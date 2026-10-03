@@ -17,15 +17,20 @@
 */
 
 import { Attachments, UploadRef } from "./attachments";
-import { E2eeError, Engine, FALLBACK_CONTENT, RawMessage } from "./engine";
+import { E2eeError, Engine, errorText, FALLBACK_CONTENT, RawMessage } from "./engine";
 import { Payload, StickerMeta } from "./files";
 import { DispatchHandler, Dispatcher, FluxAction, GatewayStore, HttpCall, HttpClient, HttpMethod, HttpOptions, HttpResponse } from "./webpack";
 
-export type MessageState = "decrypted" | "pending" | "locked" | "missing" | "failed";
+export type MessageState = "decrypted" | "pending" | "locked" | "missing" | "reset" | "failed";
 
 export const DECRYPTING_CONTENT = "Decrypting…";
 export const MISSING_CONTENT = "Sent before this browser was set up";
 export const LOCKED_CONTENT = "Unlock this browser to read this message";
+export const RESET_CONTENT = "Sent before encryption was reset";
+export const FAILED_CONTENT = "This message couldn't be decrypted";
+
+const contentFor = (state: MessageState | undefined, fallback?: string) =>
+    state === "missing" ? MISSING_CONTENT : state === "locked" ? LOCKED_CONTENT : state === "reset" ? RESET_CONTENT : state === "failed" ? FAILED_CONTENT : fallback;
 
 const SEARCH_URL = /^\/channels\/(\d+)\/messages\/search(\/tabs)?$/;
 const SEARCH_PAGES = 10;
@@ -49,6 +54,7 @@ export interface HookContext {
     onState: () => void;
     updateRecord: (message: RawMessage) => void;
     onCredentials: (path: string, body: { password?: unknown; new_password?: unknown }, response: unknown) => void;
+    onLogout: () => void;
     onError: (error: unknown, channelId: string) => void;
 }
 
@@ -112,7 +118,7 @@ export const createHooks = (ctx: HookContext) => {
         if (!ctx.isReady()) {
             if (ctx.failClosed()) {
                 states.set(message.id, { state: "failed", reason: "Encryption is unavailable in this client build" });
-                message.content = FALLBACK_CONTENT;
+                message.content = FAILED_CONTENT;
             } else {
                 retry.set(message.id, clone(message));
                 states.set(message.id, { state: "pending" });
@@ -132,15 +138,10 @@ export const createHooks = (ctx: HookContext) => {
                     remember(message);
                 } catch (error) {
                     const code = error instanceof E2eeError ? error.code : null;
-                    if (code === "LOCKED" || code === "NO_KEY") {
-                        const locked = code === "LOCKED";
-                        states.set(message.id, { state: locked ? "locked" : "missing", reason: error instanceof Error ? error.message : String(error) });
-                        retry.set(message.id, original);
-                        message.content = locked ? LOCKED_CONTENT : MISSING_CONTENT;
-                    } else {
-                        states.set(message.id, { state: "failed", reason: error instanceof Error ? error.message : String(error) });
-                        message.content = FALLBACK_CONTENT;
-                    }
+                    const state: MessageState = code === "LOCKED" ? "locked" : code === "NO_KEY" ? "missing" : code === "RESET" ? "reset" : "failed";
+                    states.set(message.id, { state, reason: errorText(error) });
+                    if (state === "locked" || state === "missing") retry.set(message.id, original);
+                    message.content = contentFor(state);
                 }
             })().finally(() => inflight.delete(key));
             inflight.set(key, pending);
@@ -150,7 +151,7 @@ export const createHooks = (ctx: HookContext) => {
             const again = engine.cached(message);
             const state = states.get(message.id)?.state;
             if (again) show(message, again);
-            else message.content = state === "missing" ? MISSING_CONTENT : state === "locked" ? LOCKED_CONTENT : state === "failed" ? FALLBACK_CONTENT : message.content;
+            else message.content = contentFor(state, message.content);
             ctx.onState();
         });
     };
@@ -271,6 +272,7 @@ export const createHooks = (ctx: HookContext) => {
                 const opts: HttpOptions = typeof input === "string" ? { url: input, rejectWithError: false } : input;
                 const url = typeof opts?.url === "string" ? opts.url : "";
                 const path = url.split("?")[0];
+                if (method === "post" && path === "/auth/logout") ctx.onLogout();
                 if ((method === "post" && AUTH_URL.test(path)) || (method === "patch" && path === "/users/@me")) {
                     const body = (opts.body ?? {}) as { password?: unknown; new_password?: unknown };
                     const result = original(input, callback);
