@@ -495,6 +495,7 @@ await check("guilds", "automod keyword rule enforced", async () => {
         enabled: true,
     });
     const r = await call("POST", `/channels/${text.id}/messages`, B, { content: `this has badword${suffix}` });
+    if (rule.body?.id) await call("DELETE", `/guilds/${guild.id}/auto-moderation/rules/${rule.body.id}`, A);
     return { ok: rule.status === 200 && r.status !== 200, note: `rule ${rule.status} send ${r.status} ${JSON.stringify(r.body).slice(0, 100)}` };
 });
 await check("guilds", "onboarding get/put", async () => {
@@ -966,8 +967,9 @@ await check("more", "github webhook format", async () => {
     );
 });
 await check("more", "krisp browser models served", async () => {
-    const r = await fetch(`${base}/krisp_browser_models/`);
-    return { ok: r.status !== 404, note: `${r.status}` };
+    const r = await fetch(`${base}/krisp_browser_models/v1.0.11_1/model_8.kw`);
+    await r.body?.cancel();
+    return { ok: r.status === 200, note: `${r.status}` };
 });
 await check("more", "email change flow", async () => {
     const C = (
@@ -980,10 +982,11 @@ await check("more", "email change flow", async () => {
         })
     ).body.token;
     const r = await call("PATCH", "/users/@me", C, { email: `new${suffix}@fosscord.test`, password: `pw-${suffix}-Abc123!` });
+    globalThis.M = r.body?.token ?? C;
     return { ok: r.status === 200 || r.status === 400, note: `${r.status} ${JSON.stringify(r.body).slice(0, 150)}` };
 });
 await check("more", "delete account", async () => {
-    const C = (await call("POST", "/auth/register", null, { username: `del${suffix}`, password: `pw-${suffix}-Abc123!`, date_of_birth: "2000-01-01", consent: true })).body.token;
+    const C = globalThis.M;
     const r = await call("POST", "/users/@me/delete", C, { password: `pw-${suffix}-Abc123!` });
     const after = await call("GET", "/users/@me", C);
     return { ok: r.status === 204 && after.status === 401, note: `${r.status} after ${after.status}` };
