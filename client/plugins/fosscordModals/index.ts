@@ -19,20 +19,14 @@
 import definePlugin from "@utils/types";
 
 import { FosscordAuthor } from "../fosscordCore/shared";
+import managedStyle from "./style.css?managed";
 
 export default definePlugin({
     name: "FosscordModals",
     description: "Keeps the dimmed backdrop under its modals when a modal such as User Settings is closed and reopened quickly, so it never blocks clicks.",
     authors: [FosscordAuthor],
     required: true,
-
-    patches: [
-        {
-            find: /"replaceAll"===\i\.stackingBehavior/,
-            replacement: {
-                match: /(\(0,\i\.jsx\)\("div",\{className:\i\(\)\(\i\.\i,!\i&&\i\.\i\)),(?=children:\i\}\))/,
-                replace: "$1,style:{zIndex:1},",
-            },
-        },
-    ],
+    // the backdrop goes under the whole layer stack instead of every modal going over it: raising the modals
+    // also buried the popouts opened from them (color pickers, dropdowns, menus), which share their container
+    managedStyle,
 });

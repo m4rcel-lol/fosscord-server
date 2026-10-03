@@ -1,0 +1,6 @@
+/* a modal closed and reopened before its exit animation ends gets its backdrop mounted after it, where it would cover
+   the modal and block every click. Under everything else in the layer container, the backdrop stays behind modals
+   and the popouts opened from them alike */
+[class*="layerContainer__"] > [class*="scrim__"] {
+    z-index: -1;
+}
