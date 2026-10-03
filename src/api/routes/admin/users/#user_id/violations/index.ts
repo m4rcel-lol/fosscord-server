@@ -19,14 +19,13 @@
 import { Request, Response, Router } from "express";
 import { In } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
-import { User, UserViolation } from "@spacebar/database";
+import { User } from "@spacebar/database";
 import { AdminViolationCreateSchema } from "@spacebar/schemas";
-import { accountStanding, automaticAccountStanding, currentStanding, getUserViolations, isActiveViolation, notifyStandingDrop, notifyViolation } from "@spacebar/api/util";
+import { accountStanding, automaticAccountStanding, getUserViolations, isActiveViolation, issueViolation, PERMANENT_VIOLATION_EXPIRY } from "@spacebar/api/util";
 
 const router = Router({ mergeParams: true });
 
-// "permanent" violations still need an expiry for clients, so they get one far beyond anyone's account
-const PERMANENT = new Date("2100-01-01T00:00:00Z");
+const PERMANENT = PERMANENT_VIOLATION_EXPIRY;
 
 export async function describeStanding(user_id: string) {
     const user = await User.findOneOrFail({ where: { id: user_id }, select: { id: true, disabled: true, account_standing: true } });
@@ -70,20 +69,7 @@ router.post(
         const body = req.body as AdminViolationCreateSchema;
         const user_id = req.params.user_id as string;
         await User.findOneOrFail({ where: { id: user_id }, select: { id: true } });
-        const before = await currentStanding(user_id);
-
-        const violation = await UserViolation.create({
-            user_id,
-            classification_type: body.classification_type,
-            description: body.description.trim(),
-            actions: (body.actions ?? []).map((a) => ({ action_type: a.action_type, descriptions: (a.descriptions ?? []).map((d) => d.trim()).filter(Boolean) })),
-            issued_by: req.user_id,
-            expires_at: body.expires_in_days ? new Date(Date.now() + body.expires_in_days * 24 * 60 * 60 * 1000) : PERMANENT,
-        }).save();
-
-        // the user hears about it from the official account, and again if it drops their standing
-        await notifyViolation(violation);
-        await notifyStandingDrop(user_id, before, await currentStanding(user_id), violation.id);
+        await issueViolation(user_id, body, req.user_id);
 
         res.status(201).json(await describeStanding(user_id));
     },
