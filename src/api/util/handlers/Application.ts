@@ -127,7 +127,7 @@ export async function findPublicApplications(ids: string[]) {
     const activities = await EmbeddedActivity.find({ where: { application_id: In(apps.map((a) => a.id)) } });
     return apps.map((app) => {
         const activity = activities.find((a) => a.application_id === app.id);
-        return { ...toPublicApplication(app), ...(activity && { embedded_activity_config: activityConfig(activity) }) };
+        return { ...toPublicApplication(app), ...(activity && { embedded_activity_config: activityConfig(activity), embedded_surfaces: [0] }) };
     });
 }
 
