@@ -606,7 +606,9 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     const generateGuildsListTime = taskSw.getElapsedAndReset();
 
     // Generate user_guild_settings
-    const user_guild_settings_entries: ReadyUserGuildSettingsEntries[] = members.map((x) => userGuildSettingsEntry(x.settings, x.guild_id));
+    const user_guild_settings_entries: ReadyUserGuildSettingsEntries[] = members
+        .filter((x) => (x.settings?.version ?? 0) > 0)
+        .map((x) => userGuildSettingsEntry(x.settings, x.guild_id, x.guild?.default_message_notifications));
     const generateUserGuildSettingsTime = taskSw.getElapsedAndReset();
 
     // Populated with users from private channels, relationships.

@@ -18,7 +18,7 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { Channel, Member, Recipient, User, userGuildSettingsEntry } from "@spacebar/database";
+import { Channel, Guild, Member, Recipient, User, userGuildSettingsEntry } from "@spacebar/database";
 import { DefaultUserGuildSettings, UserGuildSettings, UserGuildSettingsSchema } from "@spacebar/schemas";
 import { In } from "typeorm";
 import { DiscordApiErrors } from "@spacebar/util";
@@ -46,7 +46,8 @@ router.get(
             where: { id: req.user_id, guild_id },
             select: { settings: true },
         });
-        return res.json(userGuildSettingsEntry(member.settings, guild_id));
+        const guild = await Guild.findOne({ where: { id: guild_id }, select: { id: true, default_message_notifications: true } });
+        return res.json(userGuildSettingsEntry(member.settings, guild_id, guild?.default_message_notifications));
     },
 );
 

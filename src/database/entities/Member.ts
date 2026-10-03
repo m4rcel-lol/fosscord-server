@@ -568,7 +568,8 @@ export class Member extends BaseClassWithoutId {
             return next;
         });
 
-        const entry = userGuildSettingsEntry(settings);
+        const guild = guild_id ? await Guild.findOne({ where: { id: guild_id }, select: { id: true, default_message_notifications: true } }) : null;
+        const entry = userGuildSettingsEntry(settings, guild_id, guild?.default_message_notifications);
         await emitEvent({ event: "USER_GUILD_SETTINGS_UPDATE", user_id, data: entry });
         return entry;
     }
@@ -584,9 +585,11 @@ export class Member extends BaseClassWithoutId {
     }
 }
 
-export const userGuildSettingsEntry = (settings: UserGuildSettings, guild_id = settings.guild_id) => ({
-    ...DefaultUserGuildSettings,
-    ...settings,
-    guild_id,
-    channel_overrides: Object.entries(settings.channel_overrides ?? {}).map(([channel_id, override]) => ({ ...override, channel_id })),
-});
+export const userGuildSettingsEntry = (settings: UserGuildSettings, guild_id = settings.guild_id, guild_default_level?: number) => {
+    const entry = { ...DefaultUserGuildSettings, ...settings, guild_id };
+    return {
+        ...entry,
+        message_notifications: guild_id && entry.message_notifications === 3 ? (guild_default_level ?? 1) : entry.message_notifications,
+        channel_overrides: Object.entries(settings.channel_overrides ?? {}).map(([channel_id, override]) => ({ ...override, channel_id })),
+    };
+};
