@@ -1798,26 +1798,23 @@
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "ChannelPermissionOverwriteSchema": {
+        "additionalProperties": false,
         "type": "object",
         "properties": {
-            "allow": {
-                "type": "string"
+            "type": {
+                "$ref": "#/definitions/ChannelPermissionOverwriteType"
             },
-            "deny": {
+            "allow": {
                 "type": "string"
             },
             "id": {
                 "type": "string"
             },
-            "type": {
-                "$ref": "#/definitions/ChannelPermissionOverwriteType"
+            "deny": {
+                "type": "string"
             }
         },
-        "additionalProperties": false,
         "required": [
-            "allow",
-            "deny",
-            "id",
             "type"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
