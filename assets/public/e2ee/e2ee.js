@@ -6798,6 +6798,8 @@ ${approver}`;
         link.devicesChanged();
       });
       ui.refresh();
+      if (engine.locked && engine.encryptedChannels.size && !ui.unlockSnoozed()) link.request().catch(() => {
+      });
     } catch (error) {
       const response = error;
       if (typeof response?.status !== "number") return fail(`Self-test failed: ${describeError(error)}`);
