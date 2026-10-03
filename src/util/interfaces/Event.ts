@@ -17,7 +17,7 @@
 */
 
 import { ConnectedAccount, Invite, Role, Emoji, Channel, User, Sticker, UserSettings, ReadState, PublicThreadMember } from "@spacebar/database";
-import { Activity, Presence, IReadyGuildDTO, ReadyUserGuildSettingsEntries, ReadyPrivateChannel, GuildOrUnavailable, Snowflake } from "@spacebar/util";
+import { Activity, Presence, IReadyGuildDTO, ReadyUserGuildSettingsEntries, ReadyPrivateChannel, GuildOrUnavailable, Snowflake, getApexExperiments } from "@spacebar/util";
 import { JsonValue } from "@protobuf-ts/runtime";
 import {
     ApplicationCommand,
@@ -92,6 +92,7 @@ export interface ReadyEventData {
         [number, [[number, [number, number]]]],
         { b: number; k: bigint[] }[],
     ][];
+    apex_experiments?: ReturnType<typeof getApexExperiments>;
     guild_join_requests?: unknown[]; // ? what is this? this is new
     shard?: [number, number];
     user_settings?: ReturnType<UserSettings["toLegacy"]>;
@@ -953,6 +954,8 @@ export type EVENT =
     | "USER_DELETE"
     | "USER_CONNECTIONS_UPDATE"
     | "USER_NOTE_UPDATE"
+    | "SAVED_MESSAGE_CREATE"
+    | "SAVED_MESSAGE_DELETE"
     | "WEBHOOKS_UPDATE"
     | "INTERACTION_CREATE"
     | "INTERACTION_SUCCESS"

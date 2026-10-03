@@ -28,6 +28,8 @@ export * from "./utility/e2ee";
 export * from "./utility/MessageSearch";
 export * from "./utility/BurstColors";
 export * from "./handlers/Thread";
+export * from "./handlers/UserMessage";
+export * from "./handlers/ScheduledMessages";
 export * from "./utility/profile";
 export * from "./utility/collectiblePurchases";
 export * from "./utility/emailChange";

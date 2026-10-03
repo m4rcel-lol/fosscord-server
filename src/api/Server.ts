@@ -43,7 +43,7 @@ import { BcryptWorkerPool } from "../util/util/workers/bcrypt/BcryptWorkerPool";
 import { Authentication, CORS, ExternalProxy, ImageProxy, BodyParser, ErrorHandler, initRateLimits, initTranslation } from "./middlewares";
 import { initInstance } from "./util/handlers/Instance";
 import { initEmbeddedActivities } from "./activities";
-import { addPendingPoll, startThreadArchiver } from "./util";
+import { addPendingPoll, startScheduledMessageSender, startThreadArchiver } from "./util";
 import { route } from "@spacebar/api/middlewares";
 import { GifProviderManager } from "@spacebar/integrations/gifs";
 
@@ -164,6 +164,7 @@ export class SpacebarServer extends Server {
 
         await super.start();
         startThreadArchiver();
+        startScheduledMessageSender();
         await SystemdLifecycle.setStatus(`Listening on ${this.options.host}:${this.options.port}...`);
         await ProcessLifecycle.Ready();
     }

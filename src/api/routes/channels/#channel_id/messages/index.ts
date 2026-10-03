@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { assertCanSendDirectMessage, checkAutomod, handleMessage, onThreadMessage, postHandleMessage, reopenDirectMessage } from "@spacebar/api/util";
+import { assertCanSendDirectMessage, checkAutomod, publishUserMessage } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
 import { Attachment, Channel, Member, Message, ReadState, User } from "@spacebar/database";
 import {
@@ -344,69 +344,7 @@ router.post(
             return res.status(400).json({ message: error?.toString() });
         }
 
-        const embeds = body.embeds || [];
-        if (body.embed) embeds.push(body.embed);
-        const message = await handleMessage({
-            ...body,
-            id: messageId,
-            type: 0,
-            pinned: false,
-            author_id: req.user_id,
-            embeds,
-            channel_id,
-            attachments,
-            timestamp: new Date(),
-        });
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore dont care
-        message.edited_timestamp = null;
-
-        await reopenDirectMessage(channel, req.user_id);
-
-        if (channel.isThread())
-            await onThreadMessage(
-                channel,
-                req.user_id,
-                message.mentions?.map((user) => user.id),
-            );
-
-        if (message.guild_id) {
-            // handleMessage will fetch the Member, but only if they are not guild owner.
-            // have to fetch ourselves otherwise.
-            if (!message.member) {
-                message.member = await Member.findOneOrFail({
-                    where: { id: req.user_id, guild_id: message.guild_id },
-                    relations: { roles: true },
-                });
-                message.member.clean_data();
-            }
-
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            // @ts-ignore
-            message.member.roles = message.member.roles.filter((x) => x.id != x.guild_id).map((x) => x.id);
-        }
-
-        let read_state = await ReadState.findOne({
-            where: { user_id: req.user_id, channel_id },
-        });
-        if (!read_state) read_state = ReadState.create({ user_id: req.user_id, channel_id });
-        read_state.last_message_id = message.id;
-        //It's a little more complicated than this but this'll do
-        read_state.mention_count = 0;
-
-        await Promise.all([
-            read_state.save(),
-            message.save(),
-            message.guild_id ? Member.update({ id: req.user_id, guild_id: message.guild_id }, { last_message_id: message.id }) : undefined,
-        ]);
-        await emitEvent({
-            event: "MESSAGE_CREATE",
-            channel_id: channel_id,
-            data: message.toJSON(),
-        } satisfies MessageCreateEvent);
-
-        // no await as it shouldnt block the message send function and silently catch error
-        postHandleMessage(message).catch((e) => console.error("[Message] post-message handler failed", e));
+        const message = await publishUserMessage({ channel, user_id: req.user_id, body, message_id: messageId, attachments });
         return res.json(
             message.withSignedAttachments(
                 new NewUrlUserSignatureData({
