@@ -21,6 +21,7 @@ const accounts = Object.fromEntries(
 );
 
 const call = async (method, path, token, body) => {
+    let limited = false;
     for (;;) {
         const started = performance.now();
         const res = await fetch(`${api}${path}`, {
@@ -31,11 +32,12 @@ const call = async (method, path, token, body) => {
         const text = await res.text();
         const ms = performance.now() - started;
         if (res.status === 429) {
+            limited = true;
             await sleep(Math.ceil((JSON.parse(text).retry_after ?? 1) * 1000) + 50);
             continue;
         }
         if (!res.ok) throw new Error(`${method} ${path} -> ${res.status} ${text.slice(0, 300)}`);
-        return { body: text ? JSON.parse(text) : null, ms };
+        return { body: text ? JSON.parse(text) : null, ms, limited };
     }
 };
 
@@ -105,8 +107,12 @@ for (const [name, fn] of Object.entries(scenarios)) {
     for (let i = 0; i < runs; i++) {
         await settle();
         const from = logSize();
-        const { ms } = await fn();
+        const { ms, limited } = await fn();
         await settle();
+        if (limited) {
+            i--;
+            continue;
+        }
         const lines = queriesIn(readLog(from));
         counts.push(lines.length);
         times.push(ms);
