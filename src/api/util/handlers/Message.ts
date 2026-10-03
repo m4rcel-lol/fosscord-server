@@ -894,17 +894,13 @@ async function handleMessageMentionsAsync(message: Message, allowed?: AllowedMen
             },
         });
         if (referencedMessage && referencedMessage.author_id !== message.author_id && allowed?.replied_user !== false) {
-            message.mentions.push(
-                // @ts-expect-error it does not like the .toPublicUser() lol
-                (await User.findOne({ where: { id: referencedMessage.author_id } }))!.toPublicUser(),
-            );
+            const repliedUser = await User.findOne({ where: { id: referencedMessage.author_id } });
+            if (repliedUser) message.mentions.push(repliedUser);
         }
 
         if (message.embeds[0]?.type === EmbedType.poll_result) {
-            message.mentions.push(
-                // @ts-expect-error it does not like the .toPublicUser() lol
-                (await User.findOne({ where: { id: message.author_id } }))!.toPublicUser(),
-            );
+            const author = await User.findOne({ where: { id: message.author_id } });
+            if (author) message.mentions.push(author);
         }
         trace.calls.push("handleMessageReference", { micros: sw.getElapsedAndReset().totalMicroseconds });
     }
