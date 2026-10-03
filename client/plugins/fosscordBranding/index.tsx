@@ -271,6 +271,13 @@ export default definePlugin({
             },
         },
         {
+            find: 'statusColor:"var(--border-subtle)"',
+            replacement: {
+                match: /src:null,(?=size:\i,status:\i\?\i\.\i\.ONLINE:void 0,statusColor:"var\(--border-subtle\)")/,
+                replace: 'src:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",',
+            },
+        },
+        {
             find: "isFake:!0",
             replacement: {
                 match: /,\(0,\i\.jsx\)\(\i,\{text:\i,isFake:!0\}\)/,

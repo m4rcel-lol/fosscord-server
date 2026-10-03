@@ -23,7 +23,18 @@ import vm from "node:vm";
 import zlib from "node:zlib";
 import { createHash } from "node:crypto";
 import { pipeline } from "node:stream/promises";
-import { brandImageUrls, Config, DEFAULT_ICON_FILE, helpUrl, instanceIcon, instanceIconDataUri, qrLogoSvg, sendBrandImage, wordmarkSvg } from "@spacebar/util";
+import {
+    brandImageUrls,
+    Config,
+    DEFAULT_ICON_FILE,
+    helpUrl,
+    instanceIcon,
+    instanceIconDataUri,
+    placeholderAvatarSvg,
+    qrLogoSvg,
+    sendBrandImage,
+    wordmarkSvg,
+} from "@spacebar/util";
 
 const ASSET_FOLDER_PATH = path.join(__dirname, "..", "..", "assets");
 const CACHE_PATH = path.join(ASSET_FOLDER_PATH, "cache");
@@ -92,6 +103,10 @@ const BRANDED_ASSETS: Record<string, { wordmark?: boolean; svg: (iconUri: string
     "131c318dd45b7aa4.svg": { wordmark: true, svg: (iconUri) => wordmarkSvg(undefined, iconUri) },
     "bbbc3d376d38e7bc.svg": { wordmark: true, svg: (iconUri) => wordmarkSvg([112, 36], iconUri) },
     "dd05fd1ea37e7747.png": { svg: qrLogoSvg },
+    "d11a9f2f62494f22.png": { svg: (iconUri) => placeholderAvatarSvg(132, "rgb(116 126 136 / 30%)", "rgb(255 255 255 / 30%)", iconUri) },
+    "9d8606c1376ca484.png": { svg: (iconUri) => placeholderAvatarSvg(128, "rgb(170 170 178 / 80%)", "#fff", iconUri) },
+    "2ca6b6f4a73913ed.png": { svg: (iconUri) => placeholderAvatarSvg(128, "rgb(111 111 116 / 80%)", "rgb(191 191 193 / 90%)", iconUri) },
+    "53728a8572402a56.png": { svg: (iconUri) => placeholderAvatarSvg(396, "#0c0d0e", "#444545", iconUri) },
 };
 
 export function TestClientAssets(app: Application) {
