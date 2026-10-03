@@ -28,7 +28,7 @@ const credentials = as === "friend" ? { login: "friend@fosscord.test", password:
 const login = await fetch(`${process.env.ORIGIN || `http://localhost:${port}`}/api/v9/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(credentials) }).then((r) => r.json());
 if (!login.token) throw new Error(`login failed: ${JSON.stringify(login)}`);
 
-const browser = await chromium.launch({ channel: "chrome", headless: true });
+const browser = await chromium.launch({ ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: "chrome" }), headless: true });
 const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "dark" });
 await context.addInitScript((token) => {
     localStorage.setItem("token", JSON.stringify(token));

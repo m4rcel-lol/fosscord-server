@@ -1,7 +1,7 @@
 {
     "name": "spacebar-server",
     "version": "1.0.0",
-    "description": "A Spacebar server written in Node.js",
+    "description": "Self-hosted server for the Discord API and gateway that serves a rebranded official Discord web client with Vencord",
     "scripts": {
         "prepare": "husky install",
         "postinstall": "patch-package",
