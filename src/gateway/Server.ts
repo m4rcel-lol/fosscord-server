@@ -58,7 +58,7 @@ export class GatewayServer extends Server {
         this.remoteAuth = new ws.Server({ maxPayload: 4096, noServer: true });
 
         this.ws = new ws.Server({
-            maxPayload: 4096,
+            maxPayload: 16384,
             noServer: true,
         });
         this.ws.on("connection", Connection);

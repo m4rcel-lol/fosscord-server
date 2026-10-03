@@ -17,13 +17,19 @@
 */
 
 import { getDatabase } from "@spacebar/database";
+import { GUILD_VERSION_HORIZON } from "@spacebar/util";
 
 const BATCH = 500;
 let running: Promise<void> | null = null;
 let again = false;
+let prunedAt = 0;
 
 async function drain() {
     const db = getDatabase()!;
+    if (Date.now() - prunedAt > 60 * 60 * 1000) {
+        prunedAt = Date.now();
+        await db.query(`DELETE FROM "guild_entity_deletes" WHERE "version" < $1`, [Date.now() - GUILD_VERSION_HORIZON]);
+    }
     for (;;) {
         const [next] = (await db.query(`SELECT "channel_id" FROM "message_purges" ORDER BY "created_at" LIMIT 1`)) as { channel_id: string }[];
         if (!next) return;

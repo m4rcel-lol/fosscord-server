@@ -66,6 +66,9 @@ export class Emoji extends BaseClass {
     @Column()
     name: string;
 
+    @Column({ type: "bigint", default: 0 })
+    version: string;
+
     @Column()
     require_colons: boolean;
 

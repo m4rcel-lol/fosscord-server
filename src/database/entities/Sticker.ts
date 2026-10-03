@@ -29,6 +29,9 @@ export class Sticker extends BaseClass {
     @Column()
     name: string;
 
+    @Column({ type: "bigint", default: 0 })
+    version: string;
+
     @Column({ nullable: true })
     description?: string;
 

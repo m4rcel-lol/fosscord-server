@@ -73,6 +73,9 @@ export class Role extends BaseClass {
     @Column({ default: 0 })
     flags: number;
 
+    @Column({ type: "bigint", default: 0 })
+    version: string;
+
     @Column({ nullable: false, type: "jsonb" })
     colors: RoleColors;
 

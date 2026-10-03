@@ -93,10 +93,29 @@ export interface IReadyGuildDTO {
     stage_instances: unknown[];
     stickers: Sticker[];
     threads: unknown[];
-    version: string;
+    version: number;
     guild_hashes: unknown;
     unavailable: boolean;
+    partial_updates?: GuildPartialUpdates;
 }
+
+export interface GuildPartialUpdates {
+    channels: Channel[];
+    roles: Role[];
+    emojis: Emoji[];
+    stickers: Sticker[];
+    deleted_channel_ids: string[];
+    deleted_role_ids: string[];
+    deleted_emoji_ids: string[];
+    deleted_sticker_ids: string[];
+}
+
+export type GuildEntityDelete = { entity_type: number; entity_id: string; version: string };
+
+export const GUILD_VERSION_HORIZON = 30 * 24 * 60 * 60 * 1000;
+const GUILD_VERSION_SETTLE = 10_000;
+
+const versionOf = (entity: { version?: string | number } | undefined) => Number(entity?.version ?? 0) || 0;
 
 // Identify hands this guilds that already went through Guild.toJSON(), where the profile is { tag, badge: <hash> },
 // as well as raw guilds where the hash is badge_hash and badge is the badge type; both come out as { tag, badge: <hash> }
@@ -160,12 +179,13 @@ export class ReadyGuildDTO implements IReadyGuildDTO {
     stage_instances: unknown[];
     stickers: Sticker[];
     threads: unknown[];
-    version: string;
+    version: number;
     guild_hashes: unknown;
     unavailable: boolean;
     joined_at: Date;
+    partial_updates?: GuildPartialUpdates;
 
-    constructor(guild: GuildOrUnavailable) {
+    constructor(guild: GuildOrUnavailable, sync?: { version: number; deletes: GuildEntityDelete[] }) {
         if (!guildIsAvailable(guild)) {
             this.id = guild.id;
             this.unavailable = true;
@@ -230,9 +250,33 @@ export class ReadyGuildDTO implements IReadyGuildDTO {
         this.stage_instances = (guild as { stage_instances?: unknown[] }).stage_instances ?? [];
         this.stickers = guild.stickers;
         this.threads = guild.threads;
-        this.version = "1"; // ??????
         this.guild_hashes = {};
         this.joined_at = guild.joined_at;
+
+        const channelsVersion = versionOf({ version: (guild as { channels_version?: string }).channels_version });
+        const latest = Math.max(
+            channelsVersion,
+            ...[this.channels, this.roles, this.emojis, this.stickers].flatMap((list) => (list ?? []).map((entity) => versionOf(entity as { version?: string }))),
+            ...(sync?.deletes ?? []).map((entry) => versionOf(entry)),
+        );
+        this.version = Math.min(latest, Date.now() - GUILD_VERSION_SETTLE);
+
+        const since = sync?.version;
+        if (since === undefined || !Number.isFinite(since) || since < Date.now() - GUILD_VERSION_HORIZON || since > latest) return;
+        const changed = <T>(list: T[] | undefined) => (list ?? []).filter((entity) => versionOf(entity as { version?: string }) > since);
+        const deleted = (type: number) => sync!.deletes.filter((entry) => entry.entity_type === type && versionOf(entry) > since).map((entry) => `${entry.entity_id}`);
+        this.data_mode = "partial";
+        this.partial_updates = {
+            channels: channelsVersion > since ? this.channels : changed(this.channels),
+            roles: changed(this.roles),
+            emojis: changed(this.emojis),
+            stickers: changed(this.stickers),
+            deleted_channel_ids: deleted(0),
+            deleted_role_ids: deleted(1),
+            deleted_emoji_ids: deleted(2),
+            deleted_sticker_ids: deleted(3),
+        };
+        Object.assign(this, { channels: undefined, roles: undefined, emojis: undefined, stickers: undefined });
     }
 
     toJSON() {

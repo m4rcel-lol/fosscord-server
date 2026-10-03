@@ -68,6 +68,8 @@ import {
     OrmUtils,
     ReadyEventData,
     ReadyGuildDTO,
+    GUILD_VERSION_HORIZON,
+    GuildEntityDelete,
     ReadyUserGuildSettingsEntries,
     SessionsReplace,
     TraceNode,
@@ -697,8 +699,31 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     );
     buildReadyTrace.calls!.push("serializeUserSettingsProtoJson", { micros: serialiseUserSettingsProtoJsonTime.totalMicroseconds });
 
+    const clientGuildVersions = new Map(
+        Object.entries((identify.client_state?.guild_versions ?? {}) as Record<string, unknown>)
+            .map(([id, version]) => [id, Number(version)] as const)
+            .filter(([id, version]) => memberGuildIds.includes(id) && Number.isFinite(version) && version >= Date.now() - GUILD_VERSION_HORIZON),
+    );
+    const guildEntityDeletes =
+        clientGuildVersions.size && this.capabilities!.has(Capabilities.FLAGS.CLIENT_STATE_V2)
+            ? arrayGroupBy(
+                  (await getDatabase()!.query(
+                      `SELECT d.guild_id, d.entity_type, d.entity_id, d.version FROM guild_entity_deletes d
+                       JOIN unnest($1::bigint[], $2::bigint[]) AS v(guild_id, version) ON d.guild_id = v.guild_id AND d.version > v.version`,
+                      [[...clientGuildVersions.keys()], [...clientGuildVersions.values()]],
+                  )) as (GuildEntityDelete & { guild_id: string })[],
+                  (entry) => `${entry.guild_id}`,
+              )
+            : new Map<string, GuildEntityDelete[]>();
     const { result: remappedGuilds, elapsed: remapGuildsTime } = timeFunction(() =>
-        this.capabilities!.has(Capabilities.FLAGS.CLIENT_STATE_V2) ? guilds.map((x) => new ReadyGuildDTO(x).toJSON()) : guilds,
+        this.capabilities!.has(Capabilities.FLAGS.CLIENT_STATE_V2)
+            ? guilds.map((x) =>
+                  new ReadyGuildDTO(
+                      x,
+                      clientGuildVersions.has(x.id) ? { version: clientGuildVersions.get(x.id)!, deletes: guildEntityDeletes.get(x.id) ?? [] } : undefined,
+                  ).toJSON(),
+              )
+            : guilds,
     );
     buildReadyTrace.calls!.push(this.capabilities!.has(Capabilities.FLAGS.CLIENT_STATE_V2) ? "remapGuilds" : "[NoOP] remapGuilds", { micros: remapGuildsTime.totalMicroseconds });
 

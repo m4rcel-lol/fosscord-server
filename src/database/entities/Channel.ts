@@ -47,6 +47,9 @@ export class Channel extends BaseClass {
     @Column({ nullable: true })
     name?: string;
 
+    @Column({ type: "bigint", default: 0 })
+    version: string;
+
     @Column({ type: "text", nullable: true })
     icon?: string | null;
 
