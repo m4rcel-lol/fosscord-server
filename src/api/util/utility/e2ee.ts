@@ -20,7 +20,7 @@ import { createHash, createPublicKey, verify } from "node:crypto";
 import { NextFunction, Request, Response } from "express";
 import { In, IsNull, Not } from "typeorm";
 import { Attachment, Channel, E2eeDevice, E2eeIdentity, E2eeKeyBackup, Message, Recipient, Relationship, Session } from "@spacebar/database";
-import { ApiError, Config, emitEvent, MessageFlags } from "@spacebar/util";
+import { ApiError, Config, emitEvent, Event, MessageFlags } from "@spacebar/util";
 import { ChannelType, E2eeDeviceResponse, E2eeEnvelope, E2eeUserKeysResponse, MessageType } from "@spacebar/schemas";
 import { MessageOptions } from "@spacebar/util/dtos/MessageOptions";
 import rateLimit from "../../middlewares/RateLimit";
@@ -104,6 +104,14 @@ export async function revokeE2eeDevices(devices: E2eeDevice[]) {
         device.revoked_at = now;
     }
     await E2eeDevice.save(devices);
+}
+
+export async function endE2eeDeviceSession(device: E2eeDevice, keep: string | undefined, origin: string) {
+    if (!device.session_id || device.session_id === keep) return;
+    const session = await Session.findOne({ where: { session_id: device.session_id, user_id: device.user_id } });
+    if (!session) return;
+    await emitEvent({ session_id: session.session_id, event: "SB_SESSION_REMOVE", origin } as Event);
+    await session.remove();
 }
 
 export async function pruneE2eeDevices(userId: string) {
