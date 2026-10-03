@@ -262,6 +262,7 @@ router.post(
             embeds: true,
         },
         permission: "VIEW_CHANNEL",
+        channelRelations: { recipients: { user: true } },
         right: "SEND_MESSAGES",
         responses: {
             200: {
@@ -281,10 +282,7 @@ router.post(
             throw FieldErrors({ components: { code: "COMPONENT_VALIDATION_FAILED", message: "Only applications can send message components" } });
         const messageId = Snowflake.generate();
 
-        const channel = await Channel.findOneOrFail({
-            where: { id: channel_id },
-            relations: { recipients: { user: true } },
-        });
+        const channel = req.channel!;
         if (channel.isThread()) {
             req.permission!.hasThrow("SEND_MESSAGES_IN_THREADS");
             if (channel.thread_metadata?.locked && !req.permission!.has("MANAGE_THREADS")) throw DiscordApiErrors.THREAD_IS_LOCKED;
@@ -300,7 +298,7 @@ router.post(
         }
 
         const dmViaGuilds = await assertCanSendDirectMessage(channel, req.user_id);
-        if (channel.guild_id) await assertGuildVerification(channel.guild_id, req.user_id);
+        if (channel.guild_id) await assertGuildVerification(channel.guild_id, req.user_id, req.permission!.cache);
 
         if (body.nonce) {
             const existing = await Message.findOne({
@@ -350,7 +348,7 @@ router.post(
             return res.status(400).json({ message: error?.toString() });
         }
 
-        const message = await publishUserMessage({ channel, user_id: req.user_id, body, message_id: messageId, attachments });
+        const message = await publishUserMessage({ channel, user_id: req.user_id, body, message_id: messageId, attachments, permission: req.permission });
         if (dmViaGuilds.length) {
             const recipient = channel.recipients?.find((r) => r.user_id !== req.user_id)?.user_id;
             if (recipient) recordGuildMemberDm(dmViaGuilds, req.user_id, recipient).catch((e) => console.error("[Safety] dm raid check failed", e));

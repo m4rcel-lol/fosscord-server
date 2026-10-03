@@ -253,6 +253,7 @@ export async function getPermission(
         channel_relations?: string[];
         member_select?: (keyof Member)[];
         member_relations?: string[];
+        user?: Pick<User, "id" | "flags">;
     } = {},
 ) {
     if (!user_id) throw new HTTPError("User not found");
@@ -260,10 +261,13 @@ export async function getPermission(
     let member: Member | undefined;
     let guild: Guild | undefined;
     let lurkerRoles: Role[] | undefined;
-    const user = await User.findOneOrFail({
-        where: { id: user_id },
-        select: { id: true, flags: true },
-    });
+    const user =
+        opts.user?.id === user_id && opts.user.flags !== undefined
+            ? opts.user
+            : await User.findOneOrFail({
+                  where: { id: user_id },
+                  select: { id: true, flags: true },
+              });
     const query = {
         relations: OrmUtils.keysToObject(["recipients", "thread_members", "thread_members.member", ...(opts.channel_relations || [])]), // TODO: cleanup
         select: OrmUtils.keysToObject(["type", "parent_id", "id", "recipients", "permission_overwrites", "owner_id", "guild_id", ...(<string[]>opts.channel_select || [])]), // TODO: cleanup
@@ -294,7 +298,9 @@ export async function getPermission(
         if (typeof guild_id === "string") {
             guild = await Guild.findOneOrFail({
                 where: { id: guild_id },
-                select: !opts.guild_select ? { id: true, owner_id: true } : OrmUtils.keysToObject(["id", "owner_id", ...(<string[]>opts.guild_select || [])]), // TODO: clean up
+                select: !opts.guild_select
+                    ? { id: true, owner_id: true, verification_level: true }
+                    : OrmUtils.keysToObject(["id", "owner_id", "verification_level", ...(<string[]>opts.guild_select || [])]), // TODO: clean up
                 relations: !opts.guild_relations ? undefined : OrmUtils.keysToObject(opts.guild_relations), // TODO: clean up
             });
         } else {

@@ -17,28 +17,38 @@
 */
 
 import { Channel, Member, ReadState } from "@spacebar/database";
-import { emitEvent, MessageCreateEvent } from "@spacebar/util";
+import { emitEvent, MessageCreateEvent, Permissions } from "@spacebar/util";
 import { MessageOptionAttachment } from "@spacebar/util/dtos/MessageOptions";
 import { MessageCreateSchema } from "@spacebar/schemas";
 import { handleMessage, postHandleMessage } from "./Message";
 import { reopenDirectMessage } from "./DirectMessage";
 import { onThreadMessage } from "./Thread";
 
-export async function publishUserMessage(opts: { channel: Channel; user_id: string; body: MessageCreateSchema; message_id: string; attachments: MessageOptionAttachment[] }) {
-    const { channel, user_id, body, message_id, attachments } = opts;
+export async function publishUserMessage(opts: {
+    channel: Channel;
+    user_id: string;
+    body: MessageCreateSchema;
+    message_id: string;
+    attachments: MessageOptionAttachment[];
+    permission?: Permissions;
+}) {
+    const { channel, user_id, body, message_id, attachments, permission } = opts;
     const embeds = body.embeds || [];
     if (body.embed) embeds.push(body.embed);
-    const message = await handleMessage({
-        ...body,
-        id: message_id,
-        type: 0,
-        pinned: false,
-        author_id: user_id,
-        embeds,
-        channel_id: channel.id,
-        attachments,
-        timestamp: new Date(),
-    });
+    const message = await handleMessage(
+        {
+            ...body,
+            id: message_id,
+            type: 0,
+            pinned: false,
+            author_id: user_id,
+            embeds,
+            channel_id: channel.id,
+            attachments,
+            timestamp: new Date(),
+        },
+        { channel, permission },
+    );
     Object.assign(message, { edited_timestamp: null });
 
     await reopenDirectMessage(channel, user_id);
@@ -62,12 +72,12 @@ export async function publishUserMessage(opts: { channel: Channel; user_id: stri
         Object.assign(message.member, { roles: message.member.roles.filter((x) => x.id != x.guild_id).map((x) => x.id) });
     }
 
-    const read_state = (await ReadState.findOne({ where: { user_id, channel_id: channel.id } })) ?? ReadState.create({ user_id, channel_id: channel.id });
-    read_state.last_message_id = message.id;
-    read_state.mention_count = 0;
+    const read_state = await ReadState.findOne({ where: { user_id, channel_id: channel.id }, select: { id: true } });
 
     await Promise.all([
-        read_state.save(),
+        read_state
+            ? ReadState.update({ id: read_state.id }, { last_message_id: message.id, mention_count: 0 })
+            : ReadState.create({ user_id, channel_id: channel.id, last_message_id: message.id, mention_count: 0 }).save(),
         message.save(),
         message.guild_id ? Member.update({ id: user_id, guild_id: message.guild_id }, { last_message_id: message.id }) : undefined,
     ]);
@@ -77,6 +87,6 @@ export async function publishUserMessage(opts: { channel: Channel; user_id: stri
         data: message.toJSON(),
     } satisfies MessageCreateEvent);
 
-    postHandleMessage(message).catch((e) => console.error("[Message] post-message handler failed", e));
+    postHandleMessage(message, permission).catch((e) => console.error("[Message] post-message handler failed", e));
     return message;
 }

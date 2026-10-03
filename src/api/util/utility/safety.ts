@@ -161,17 +161,20 @@ export async function recordMentionSpam(guild_id: string, user_id: string) {
 
 const BYPASSES_VERIFICATION = 1 << 2;
 
-export async function assertGuildVerification(guild_id: string, user_id: string) {
-    const guild = await Guild.findOne({ where: { id: guild_id }, select: { id: true, owner_id: true, verification_level: true } });
+export async function assertGuildVerification(guild_id: string, user_id: string, known: { guild?: Guild; member?: Member; user_id?: string } = {}) {
+    const known_guild = known.guild?.id === guild_id && known.guild.verification_level !== undefined ? known.guild : undefined;
+    const known_member = known.user_id === user_id && known.member?.id === user_id && known.member.guild_id === guild_id && known.member.roles ? known.member : undefined;
+    const guild = known_guild ?? (await Guild.findOne({ where: { id: guild_id }, select: { id: true, owner_id: true, verification_level: true } }));
     const level = guild?.verification_level ?? 0;
     if (!guild || !level || guild.owner_id === user_id) return;
     const [user, member] = await Promise.all([
         User.findOne({ where: { id: user_id }, select: { id: true, bot: true, verified: true, phone: true } }),
-        Member.findOne({
-            where: { id: user_id, guild_id },
-            relations: { roles: true },
-            select: { index: true, id: true, guild_id: true, joined_at: true, flags: true, roles: { id: true } },
-        }),
+        known_member ??
+            Member.findOne({
+                where: { id: user_id, guild_id },
+                relations: { roles: true },
+                select: { index: true, id: true, guild_id: true, joined_at: true, flags: true, roles: { id: true } },
+            }),
     ]);
     if (!user || user.bot || !member) return;
     if ((member.flags & BYPASSES_VERIFICATION) !== 0 || member.roles.some((role) => role.id !== guild_id)) return;
