@@ -38,7 +38,7 @@ router.get(
     async (req: Request, res: Response) => {
         const { user_id } = req.params as { [key: string]: string };
 
-        const note = await Note.findOneOrFail({
+        const note = await Note.findOne({
             where: {
                 owner: { id: req.user_id },
                 target: { id: user_id },
@@ -46,7 +46,7 @@ router.get(
         });
 
         return res.json({
-            note: note?.content,
+            note: note?.content ?? "",
             note_user_id: user_id,
             user_id: req.user_id,
         });
