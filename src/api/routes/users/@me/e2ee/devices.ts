@@ -37,7 +37,7 @@ import { emitEvent, Event } from "@spacebar/util";
 
 const router: Router = Router({ mergeParams: true });
 
-const registrationLimit = e2eeRateLimit("e2ee_devices", 20, 3600);
+const registrationLimit = e2eeRateLimit("e2ee_devices", 30, 3600);
 const updateLimit = e2eeRateLimit("e2ee_device_updates", 60, 3600);
 
 const limitNewDevices = async (req: Request, res: Response, next: NextFunction) => {

@@ -26,6 +26,7 @@ import { createUi } from "./ui";
 import { StickerMeta } from "./files";
 import { browserStorage } from "./store";
 import { findStore, HttpClient, scan, Targets } from "./webpack";
+import { locale, t } from "./i18n";
 
 interface LoaderState {
     reqs: { c?: Record<string, { exports: unknown }> }[];
@@ -44,7 +45,6 @@ declare global {
 }
 
 const HOOK_TIMEOUT_MS = 20000;
-const UNAVAILABLE = "End-to-end encryption is unavailable in this client build, so sending in encrypted conversations is turned off.";
 
 const loader: LoaderState = (window.__fosscordE2ee ??= { reqs: [] });
 const states = new Map<string, { state: MessageState; reason?: string }>();
@@ -56,7 +56,6 @@ const ready = new Promise<boolean>((resolve) => {
     settle = resolve;
 });
 let started = false;
-let throttled = false;
 let initialized = false;
 let signedOut = false;
 let lastProbe = 0;
@@ -167,12 +166,18 @@ function sessionEnded() {
     console.warn("[e2ee] this tab's session isn't valid anymore, so it stops handling encryption");
     link.stop();
 }
+const describeError = (error: unknown) => {
+    if (error instanceof Error) return error.message;
+    const response = error as { status?: unknown; body?: { message?: unknown } } | null;
+    if (typeof response?.status !== "number") return String(error);
+    return `HTTP ${response.status}${typeof response.body?.message === "string" ? ` ${response.body.message}` : ""}`;
+};
 
 const fail = (reason: string) => {
     if (failure) return;
     failure = reason;
     console.error(`[e2ee] ${reason}`);
-    ui.fail(UNAVAILABLE);
+    ui.fail(t("End-to-end encryption is unavailable in this client build, so sending in encrypted conversations is turned off."));
     settle(false);
 };
 
@@ -235,11 +240,13 @@ const selfTest = async () => {
     if (toB64u(await hpkeOpen(prekey.keyPair, probe.enc, probe.wrapped, "self-test", "aad")) !== toB64u(secret)) throw new Error("Stored prekey round trip failed");
 };
 
+let startAttempts = 0;
 const start = async (userId: string) => {
-    if (started || failure) return;
+    if (started || failure || signedOut) return;
     started = true;
     try {
         await engine.init(userId);
+        ui.pause(null);
         await selfTest();
         if (!(await attachments.ready())) console.warn("[e2ee] the attachment service worker isn't controlling this page, so encrypted files won't load");
         initialized = true;
@@ -251,8 +258,6 @@ const start = async (userId: string) => {
                 link.unlocked();
             }
         });
-        if (throttled) ui.fail(null);
-        throttled = false;
         engine.onWipe(() => {
             link.reset();
             if (engine.locked && !ui.unlockSnoozed()) link.request().catch(() => {});
@@ -265,20 +270,24 @@ const start = async (userId: string) => {
         });
         ui.refresh();
     } catch (error) {
-        const response = error as { status?: number; body?: { message?: string; retry_after?: number } } | null;
-        if (response?.status === 429) {
+        const response = error as { status?: unknown; body?: { retry_after?: unknown } } | null;
+        if (typeof response?.status !== "number") return fail(`Self-test failed: ${describeError(error)}`);
+        const retryAfter = Number(response.body?.retry_after);
+        const limited = response.status === 429 && retryAfter > 0;
+        const delay = limited ? Math.ceil(retryAfter) * 1000 + 1000 : Math.min(5000 * 2 ** startAttempts, 300000);
+        startAttempts++;
+        console.warn(`[e2ee] couldn't start (${describeError(error)}), retrying in ${Math.round(delay / 1000)}s`);
+        ui.pause(
+            limited
+                ? t("Encryption is paused because this account set up too many browsers recently. It will try again at {time}.", {
+                      time: new Date(Date.now() + delay).toLocaleTimeString(locale(), { hour: "numeric", minute: "2-digit" }),
+                  })
+                : t("Encryption couldn't reach the server, so sending in encrypted conversations is paused. It will try again shortly."),
+        );
+        setTimeout(() => {
             started = false;
-            throttled = true;
-            const wait = Math.max(Number(response.body?.retry_after) || 60, 5);
-            const minutes = Math.ceil(wait / 60);
-            console.warn(`[e2ee] rate limited while setting up this browser, retrying in ${Math.round(wait)} s`);
-            ui.fail(
-                `Too many new browsers signed in to this account in the last hour, so encryption can't start here yet. It turns on by itself in about ${minutes} minute${minutes === 1 ? "" : "s"}.`,
-            );
-            setTimeout(() => start(userId), wait * 1000);
-            return;
-        }
-        fail(`Self-test failed: ${errorText(error)}`);
+            start(userId);
+        }, delay);
     }
 };
 

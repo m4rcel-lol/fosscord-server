@@ -128,7 +128,7 @@ router.patch(
 
         if (body.email && body.email !== user.email) {
             await checkPassword();
-            if ((user.verified && user.email) || body.email_token !== undefined)
+            if ((user.verified && user.email) || body.email_token)
                 if (!body.email_token || !EmailChange.consumeToken(req.user_id, body.email_token))
                     throw FieldErrors({ email_token: { code: "INVALID_EMAIL_TOKEN", message: "Invalid email verification token" } });
             if (await User.findOne({ where: { email: body.email }, select: { id: true } }))

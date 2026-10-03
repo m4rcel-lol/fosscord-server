@@ -48,6 +48,20 @@ const E2EE_ENABLED_TYPE = 1000;
 const SystemMessage = findComponentByCodeLazy("iconContainerClassName", "timestampFormat");
 const LOCK_PATH = "M7 10V7a5 5 0 0 1 10 0v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1Zm2 0h6V7a3 3 0 0 0-6 0v3Z";
 
+const LABELS: Record<string, [title: string, unavailable: string]> = {
+    en: ["Encryption", "Not available in encrypted conversations"],
+    de: ["Verschlüsselung", "In verschlüsselten Unterhaltungen nicht verfügbar"],
+    fr: ["Chiffrement", "Indisponible dans les conversations chiffrées"],
+    ja: ["暗号化", "暗号化された会話では使用できません"],
+    pl: ["Szyfrowanie", "Niedostępne w szyfrowanych rozmowach"],
+    "zh-CN": ["加密", "在加密对话中不可用"],
+};
+
+const labels = () => {
+    const lang = document.documentElement.lang;
+    return LABELS[lang] ?? LABELS[lang.split("-")[0]] ?? LABELS.en;
+};
+
 const bridge = () => (window as unknown as { __fosscordE2ee?: E2eeBridge }).__fosscordE2ee;
 
 const exposeUpdater = () => {
@@ -91,7 +105,8 @@ function EncryptionPage() {
 
 const insertEntry = (items: LayoutNode[]) => {
     if (!Array.isArray(items) || items.some((item) => item?.key === ENTRY_KEY)) return items;
-    const entry = SettingsPlugin.buildEntry({ key: ENTRY_KEY, title: "Encryption", panelTitle: "Encryption", Component: EncryptionPage, Icon: EncryptionIcon });
+    const [title] = labels();
+    const entry = SettingsPlugin.buildEntry({ key: ENTRY_KEY, title, panelTitle: title, Component: EncryptionPage, Icon: EncryptionIcon });
     const anchor = items.findIndex((item) => item?.key === "data_and_privacy_sidebar_item");
     items.splice(anchor === -1 ? items.length : anchor + 1, 0, entry as LayoutNode);
     return items;
@@ -125,7 +140,7 @@ export default definePlugin({
             find: 'navId:"channel-attach"',
             replacement: {
                 match: /id:"(clips|poll)",/g,
-                replace: 'id:"$1",disabled:$self.inEncryptedChannel(),subtext:$self.inEncryptedChannel()?"Not available in encrypted conversations":void 0,',
+                replace: 'id:"$1",disabled:$self.inEncryptedChannel(),subtext:$self.inEncryptedChannel()?$self.unavailableLabel():void 0,',
             },
         },
     ],
@@ -136,6 +151,10 @@ export default definePlugin({
 
     isEncrypted(channelId?: string) {
         return !!channelId && !!bridge()?.isEncrypted?.(channelId);
+    },
+
+    unavailableLabel() {
+        return labels()[1];
     },
 
     inEncryptedChannel() {

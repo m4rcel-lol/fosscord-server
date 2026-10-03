@@ -12149,17 +12149,30 @@
         "type": "object",
         "properties": {
             "emoji_id": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "emoji_name": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "expires_at": {
-                "type": "integer"
+                "type": [
+                    "null",
+                    "string",
+                    "integer"
+                ]
             },
             "text": {
                 "maxLength": 128,
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             }
         },
         "additionalProperties": false,
@@ -13703,7 +13716,7 @@
             },
             "developer_mode": {
                 "type": "boolean",
-                "default": true
+                "default": false
             },
             "disable_games_tab": {
                 "type": "boolean",

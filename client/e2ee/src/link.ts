@@ -19,6 +19,7 @@
 import { fromB64u, randomBytes, sha256, toB64u, utf8 } from "./bytes";
 import { aesDecrypt, aesEncrypt, exportPublic, generateAgreementKey, hkdf, x25519 } from "./crypto";
 import { Api, deviceLabel, deviceName, Engine, errorText } from "./engine";
+import { t } from "./i18n";
 
 export interface LinkEvent {
     request_id: string;
@@ -249,7 +250,7 @@ export const createLink = (engine: Engine, api: Api, hooks: LinkHooks) => {
             if (stage === "deny") await post({ request_id: requestId, stage, to_device: pending.deviceId });
             else {
                 const secret = engine.exportSecret();
-                if (!secret) throw new Error("This browser can't approve logins");
+                if (!secret) throw new Error(t("This browser can't approve logins"));
                 const key = await channelKey(pending.pair, requester, requestId);
                 const iv = randomBytes(12);
                 const ct = await aesEncrypt(key, iv, secret, channelAad(requestId, requester, pending.publicKey));
@@ -279,7 +280,7 @@ export const createLink = (engine: Engine, api: Api, hooks: LinkHooks) => {
 
         if (event.stage === "offer" && current && !current.revealed && event.public_key && !current.offers.has(event.device_id) && current.offers.size < MAX_APPROVERS) {
             const first = !current.offers.size;
-            current.offers.set(event.device_id, { key: event.public_key, name: deviceLabel(engine.devices, event.device_id, "Your other browser"), sas: null });
+            current.offers.set(event.device_id, { key: event.public_key, name: deviceLabel(engine.devices, event.device_id, t("Your other browser")), sas: null });
             if (first) setTimeout(() => reveal(current).catch((error) => console.error("[e2ee] link", error)), OFFER_WINDOW_MS);
             return;
         }

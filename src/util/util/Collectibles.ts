@@ -20,6 +20,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { ASSETS_FOLDER } from "./Constants";
 import { Config } from "./Config";
+import { instanceName } from "./Branding";
 
 export enum CollectibleItemType {
     AVATAR_DECORATION = 0,
@@ -67,25 +68,37 @@ interface CollectiblePrices {
 
 type Catalog = { categories: CollectibleCategory[]; products: Map<string, CollectibleProduct>; items: Map<string, CollectibleItem> };
 
-const CATALOG_URL = process.env.COLLECTIBLES_CATALOG_URL || "https://raw.githubusercontent.com/aamiaa/discord-api-diff/main/collectibles.json";
-const CACHE_FILE = path.join(ASSETS_FOLDER, "collectibles.json");
+const SOURCES = {
+    catalog: {
+        url: process.env.COLLECTIBLES_CATALOG_URL || "https://raw.githubusercontent.com/aamiaa/discord-api-diff/main/collectibles.json",
+        file: path.join(ASSETS_FOLDER, "collectibles.json"),
+    },
+    effects: {
+        url: process.env.PROFILE_EFFECTS_CATALOG_URL || "https://raw.githubusercontent.com/aamiaa/discord-api-diff/main/profile-effects.json",
+        file: path.join(ASSETS_FOLDER, "profile-effects.json"),
+    },
+};
+type Source = (typeof SOURCES)[keyof typeof SOURCES];
 const REFRESH_MS = Number(process.env.COLLECTIBLES_REFRESH_HOURS || 12) * 3_600_000;
 
 let catalog: Promise<Catalog> | undefined;
 let refreshTimer: NodeJS.Timeout | undefined;
 
-const localizeCdn = (raw: string) => {
+const localize = (raw: string) => {
+    const branded = raw.replace(/\bDiscord\b/g, JSON.stringify(instanceName()).slice(1, -1));
     const cdn = Config.get().cdn.endpointPublic?.replace(/\/+$/, "");
-    if (!cdn) return raw;
-    return raw.replaceAll("https://cdn.discordapp.com/assets/content/", `${cdn}/content-assets/`).replaceAll("https://cdn.discordapp.com/media/v1/", `${cdn}/media/v1/`);
+    if (!cdn) return branded;
+    return branded.replaceAll("https://cdn.discordapp.com/assets/content/", `${cdn}/content-assets/`).replaceAll("https://cdn.discordapp.com/media/v1/", `${cdn}/media/v1/`);
 };
 
-const parse = (raw: string): Catalog => {
-    const categories = (JSON.parse(localizeCdn(raw)) as CollectibleCategory[]).sort((a, b) => (BigInt(b.sku_id) > BigInt(a.sku_id) ? 1 : -1));
+const parse = (raw: string, effectsRaw?: string): Catalog => {
+    const categories = (JSON.parse(localize(raw)) as CollectibleCategory[]).sort((a, b) => (BigInt(b.sku_id) > BigInt(a.sku_id) ? 1 : -1));
+    const effects = new Map((effectsRaw ? (JSON.parse(localize(effectsRaw)) as CollectibleItem[]) : []).map((x) => [x.sku_id, x]));
     const products = new Map<string, CollectibleProduct>();
     const items = new Map<string, CollectibleItem>();
 
     const index = (product: CollectibleProduct) => {
+        product.items = product.items?.map((item) => (item.type === CollectibleItemType.PROFILE_EFFECT && !item.effects ? { ...effects.get(item.sku_id), ...item } : item));
         product.prices = Object.fromEntries(
             Object.entries((product.prices ?? {}) as CollectiblePrices).map(([group, { country_prices }]) => [
                 group,
@@ -130,41 +143,46 @@ const parse = (raw: string): Catalog => {
     return { categories, products, items };
 };
 
-const download = async () => {
-    const res = await fetch(CATALOG_URL).catch(() => undefined);
+const download = async ({ url, file }: Source) => {
+    const res = await fetch(url).catch(() => undefined);
     if (!res?.ok) {
-        console.error(`[Collectibles] could not fetch catalog from ${CATALOG_URL}: ${res?.status ?? "network error"}`);
+        console.error(`[Collectibles] could not fetch ${url}: ${res?.status ?? "network error"}`);
         return undefined;
     }
     const raw = await res.text();
     try {
-        parse(raw);
+        if (!Array.isArray(JSON.parse(raw))) throw new Error("not an array");
     } catch (e) {
-        console.error(`[Collectibles] catalog from ${CATALOG_URL} is invalid`, e);
+        console.error(`[Collectibles] ${url} is invalid`, e);
         return undefined;
     }
-    await fs.writeFile(CACHE_FILE, raw).catch((e) => console.error("[Collectibles] could not cache catalog", e));
+    await fs.writeFile(file, raw).catch((e) => console.error(`[Collectibles] could not cache ${file}`, e));
     return raw;
 };
 
+const read = async (source: Source) => {
+    const stat = await fs.stat(source.file).catch(() => undefined);
+    if (!stat) return { raw: await download(source), stale: false };
+    return { raw: await fs.readFile(source.file, "utf8"), stale: Date.now() - stat.mtimeMs > REFRESH_MS };
+};
+
 const refresh = async () => {
-    const raw = await download();
+    const [raw, effectsRaw] = await Promise.all([download(SOURCES.catalog), download(SOURCES.effects)]);
     if (!raw) return;
-    const next = parse(raw);
+    const next = parse(raw, effectsRaw ?? (await fs.readFile(SOURCES.effects.file, "utf8").catch(() => undefined)));
     catalog = Promise.resolve(next);
     console.log(`[Collectibles] refreshed catalog: ${next.categories.length} categories, ${next.products.size} products`);
 };
 
 const load = async (): Promise<Catalog> => {
     refreshTimer ??= setInterval(() => void refresh(), REFRESH_MS).unref();
-    const stat = await fs.stat(CACHE_FILE).catch(() => undefined);
-    const raw = stat ? await fs.readFile(CACHE_FILE, "utf8") : await download();
-    if (!raw) {
+    const [catalogFile, effectsFile] = await Promise.all([read(SOURCES.catalog), read(SOURCES.effects)]);
+    if (!catalogFile.raw) {
         catalog = undefined;
         return { categories: [], products: new Map(), items: new Map() };
     }
-    if (stat && Date.now() - stat.mtimeMs > REFRESH_MS) void refresh();
-    return parse(raw);
+    if (catalogFile.stale || effectsFile.stale) void refresh();
+    return parse(catalogFile.raw, effectsFile.raw);
 };
 
 const listedSkus = (category: CollectibleCategory) => category.products.map((x) => x.sku_id);

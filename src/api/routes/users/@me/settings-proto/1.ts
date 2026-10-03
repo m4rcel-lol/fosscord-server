@@ -21,7 +21,7 @@ import { PreloadedUserSettings } from "discord-protos";
 import { JsonValue } from "@protobuf-ts/runtime";
 import { route } from "@spacebar/api/middlewares";
 import { UserSettingsProtos } from "@spacebar/database";
-import { emitEvent, FieldErrors, OrmUtils } from "@spacebar/util";
+import { FieldErrors, OrmUtils } from "@spacebar/util";
 import { SettingsProtoJsonResponse, SettingsProtoResponse, SettingsProtoUpdateJsonSchema, SettingsProtoUpdateSchema } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
@@ -167,31 +167,7 @@ async function patchUserSettings(userId: string, updatedSettings: PreloadedUserS
         );
     }
 
-    settings.versions = {
-        clientVersion: updatedSettings.versions?.clientVersion ?? settings.versions?.clientVersion ?? 0,
-        serverVersion: settings.versions?.serverVersion ?? 0,
-        dataVersion: (settings.versions?.dataVersion ?? 0) + 1,
-    };
-    userSettings.userSettings = settings;
-    await userSettings.save();
-
-    await emitEvent({
-        user_id: userId,
-        event: "USER_SETTINGS_PROTO_UPDATE",
-        data: {
-            settings: {
-                proto: PreloadedUserSettings.toBase64(settings),
-                type: 1,
-            },
-            json_settings: {
-                proto: PreloadedUserSettings.toJson(settings),
-                type: "user_settings",
-            },
-            partial: false, // Unsure how this should behave
-        },
-    });
-    // This should also send a USER_SETTINGS_UPDATE event, but that isn't sent
-    // when using the USER_SETTINGS_PROTOS capability, so we ignore it for now.
+    settings = await userSettings.commitUserSettings(settings, updatedSettings.versions?.clientVersion);
 
     return {
         settings: settings,

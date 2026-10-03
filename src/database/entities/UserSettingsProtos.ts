@@ -20,6 +20,7 @@ import { Column, Entity, JoinColumn, OneToOne, PrimaryColumn } from "typeorm";
 import { BaseClassWithoutId } from "./BaseClass";
 import { User } from "./User";
 import { FrecencyUserSettings, PreloadedUserSettings } from "discord-protos";
+import { emitEvent } from "@spacebar/util";
 
 @Entity({
     name: "user_settings_protos",
@@ -96,6 +97,33 @@ export class UserSettingsProtos extends BaseClassWithoutId {
         } else {
             this._frecencySettings = undefined;
         }
+    }
+
+    async commitUserSettings(settings: PreloadedUserSettings, clientVersion?: number) {
+        settings.versions = {
+            clientVersion: clientVersion ?? settings.versions?.clientVersion ?? 0,
+            serverVersion: settings.versions?.serverVersion ?? 0,
+            dataVersion: (settings.versions?.dataVersion ?? 0) + 1,
+        };
+        this.userSettings = settings;
+        await this.save();
+
+        await emitEvent({
+            user_id: this.user_id,
+            event: "USER_SETTINGS_PROTO_UPDATE",
+            data: {
+                settings: {
+                    proto: PreloadedUserSettings.toBase64(settings),
+                    type: 1,
+                },
+                json_settings: {
+                    proto: PreloadedUserSettings.toJson(settings),
+                    type: "user_settings",
+                },
+                partial: false,
+            },
+        });
+        return settings;
     }
 
     private static locks = new Map<string, Promise<unknown>>();

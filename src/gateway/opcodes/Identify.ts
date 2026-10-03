@@ -722,7 +722,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
                 v: 9,
                 application: application ? { id: application.id, flags: application.flags } : undefined,
                 user: user.toPrivateUser(["rights"]),
-                user_settings: user.settings,
+                user_settings: user.settings?.toLegacy(settingsProtos?.userSettings),
                 user_settings_proto,
                 user_settings_proto_json,
                 guilds: remappedGuilds,
