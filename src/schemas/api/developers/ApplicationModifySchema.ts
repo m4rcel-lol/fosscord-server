@@ -17,16 +17,28 @@
 */
 
 export interface ApplicationModifySchema {
+    /**
+     * @maxLength 400
+     */
     description?: string;
     icon?: string;
     cover_image?: string;
     interactions_endpoint_url?: string | null;
     max_participants?: number | null;
     name?: string;
-    privacy_policy_url?: string;
+    /**
+     * @maxLength 2048
+     */
+    privacy_policy_url?: string | null;
     role_connections_verification_url?: string;
+    /**
+     * @maxItems 5
+     */
     tags?: string[];
-    terms_of_service_url?: string;
+    /**
+     * @maxLength 2048
+     */
+    terms_of_service_url?: string | null;
     bot_public?: boolean;
     bot_require_code_grant?: boolean;
     flags?: number;

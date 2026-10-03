@@ -17,6 +17,7 @@
 */
 
 import { Request, Response, Router } from "express";
+import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
 import { Application, ApplicationAuthorization, AuditLog, Member, Role, User } from "@spacebar/database";
 import {
@@ -326,6 +327,8 @@ router.post(
             return res.json({ location: location.toString() });
         }
         if (!app.bot) throw DiscordApiErrors.OAUTH2_APPLICATION_BOT_ABSENT;
+        if (app.bot_public === false && app.owner_id !== req.user_id) throw new HTTPError("This bot is private, so only its owner can add it to servers.", 403);
+        if (app.bot_require_code_grant && req.query.response_type !== "code") throw new HTTPError("This bot can only be added through the full OAuth2 code grant flow.", 400);
         if (!body.guild_id) throw FieldErrors({ guild_id: { code: "BASE_TYPE_REQUIRED", message: req.t("common:field.BASE_TYPE_REQUIRED") } });
 
         const perms = await getPermission(req.user_id, body.guild_id, undefined, { member_relations: ["user"] });

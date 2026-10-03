@@ -20,8 +20,8 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { NextFunction, Request, Response } from "express";
 import { EmbeddedActivity } from "@spacebar/database";
-import { Config } from "@spacebar/util";
-import { BUILTIN_ACTIVITIES } from "./index";
+import { Config, isPublicUrl } from "@spacebar/util";
+import { APPLICATION_EMBEDDED, BUILTIN_ACTIVITIES } from "./index";
 
 const LOOKUP_TTL = 30_000;
 const HOP_BY_HOP = new Set([
@@ -42,10 +42,13 @@ const HOP_BY_HOP = new Set([
 
 const lookups = new Map<string, { activity: EmbeddedActivity | null; expires: number }>();
 
+export const forgetActivityLookup = (applicationId: string) => lookups.delete(applicationId);
+
 const lookup = async (applicationId: string) => {
     const cached = lookups.get(applicationId);
     if (cached && cached.expires > Date.now()) return cached.activity;
-    const activity = await EmbeddedActivity.findOne({ where: { application_id: applicationId } });
+    const found = await EmbeddedActivity.findOne({ where: { application_id: applicationId }, relations: { application: true } });
+    const activity = found && found.application.flags & APPLICATION_EMBEDDED ? found : null;
     lookups.set(applicationId, { activity, expires: Date.now() + LOOKUP_TTL });
     return activity;
 };
@@ -64,6 +67,7 @@ const matchesPrefix = (pathname: string, prefix: string) => {
 async function proxy(req: Request, res: Response, target: string, rest: string, search: string) {
     const base = new URL(/^https?:\/\//.test(target) ? target : `https://${target}`);
     const url = `${base.origin}${base.pathname.replace(/\/+$/, "")}${rest}${search}`;
+    if (!(await isPublicUrl(url))) return res.status(502).type("text/plain").send("This URL mapping points to a private address");
     const headers = new Headers();
     for (const [name, value] of Object.entries(req.headers)) if (value !== undefined && !HOP_BY_HOP.has(name)) headers.set(name, Array.isArray(value) ? value.join(", ") : value);
     headers.set("x-forwarded-host", req.headers.host ?? "");

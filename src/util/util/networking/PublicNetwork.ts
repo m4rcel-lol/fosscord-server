@@ -20,7 +20,8 @@ import { lookup } from "node:dns/promises";
 import { BlockList, isIP } from "node:net";
 import { Config } from "../Config";
 
-const privateRanges = new BlockList();
+const privateV4 = new BlockList();
+const privateV6 = new BlockList();
 for (const [network, prefix] of [
     ["0.0.0.0", 8],
     ["10.0.0.0", 8],
@@ -36,7 +37,7 @@ for (const [network, prefix] of [
     ["203.0.113.0", 24],
     ["224.0.0.0", 3],
 ] as const)
-    privateRanges.addSubnet(network, prefix, "ipv4");
+    privateV4.addSubnet(network, prefix, "ipv4");
 for (const [network, prefix] of [
     ["::", 127],
     ["::ffff:0:0", 96],
@@ -47,12 +48,14 @@ for (const [network, prefix] of [
     ["fe80::", 10],
     ["ff00::", 8],
 ] as const)
-    privateRanges.addSubnet(network, prefix, "ipv6");
+    privateV6.addSubnet(network, prefix, "ipv6");
 
 export function isPrivateAddress(address: string) {
     const family = isIP(address);
     if (!family) return true;
-    return privateRanges.check(address, family === 6 ? "ipv6" : "ipv4");
+    if (family === 4) return privateV4.check(address, "ipv4");
+    const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(address);
+    return mapped ? privateV4.check(mapped[1], "ipv4") : privateV6.check(address, "ipv6");
 }
 
 export async function isPublicUrl(url: string | URL, opts: { httpsOnly?: boolean } = {}) {

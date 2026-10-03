@@ -8053,6 +8053,7 @@
         "type": "object",
         "properties": {
             "description": {
+                "maxLength": 400,
                 "type": "string"
             },
             "icon": {
@@ -8077,19 +8078,28 @@
                 "type": "string"
             },
             "privacy_policy_url": {
-                "type": "string"
+                "maxLength": 2048,
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "role_connections_verification_url": {
                 "type": "string"
             },
             "tags": {
+                "maxItems": 5,
                 "type": "array",
                 "items": {
                     "type": "string"
                 }
             },
             "terms_of_service_url": {
-                "type": "string"
+                "maxLength": 2048,
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "bot_public": {
                 "type": "boolean"
@@ -8127,6 +8137,104 @@
                     }
                 },
                 "additionalProperties": false
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "ApplicationAssetCreateSchema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "minLength": 1,
+                "maxLength": 32,
+                "type": "string"
+            },
+            "type": {
+                "type": "integer"
+            },
+            "image": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "image",
+            "name"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "ApplicationTesterAddSchema": {
+        "type": "object",
+        "properties": {
+            "username": {
+                "minLength": 1,
+                "maxLength": 32,
+                "type": "string"
+            },
+            "discriminator": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "username"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "ApplicationProxyConfigSchema": {
+        "type": "object",
+        "properties": {
+            "url_map": {
+                "maxItems": 50,
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/ApplicationProxyMapping"
+                }
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "url_map"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "EmbeddedActivityConfigModifySchema": {
+        "type": "object",
+        "properties": {
+            "activity_preview_video_asset_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "supported_platforms": {
+                "anyOf": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "default_orientation_lock_state": {
+                "type": "integer"
+            },
+            "tablet_default_orientation_lock_state": {
+                "type": "integer"
+            },
+            "requires_age_gate": {
+                "type": "boolean"
+            },
+            "shelf_rank": {
+                "type": "integer"
             }
         },
         "additionalProperties": false,
@@ -15404,6 +15512,12 @@
             "custom_install_url": {
                 "type": "string"
             },
+            "assets": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/ApplicationAsset"
+                }
+            },
             "team": {
                 "$ref": "#/definitions/Team"
             },
@@ -15419,6 +15533,7 @@
         },
         "additionalProperties": false,
         "required": [
+            "assets",
             "description",
             "discoverability_state",
             "discovery_eligibility_flags",
@@ -15437,6 +15552,27 @@
             "summary",
             "verification_state",
             "verify_key"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "ApplicationAsset": {
+        "type": "object",
+        "properties": {
+            "id": {
+                "type": "string"
+            },
+            "name": {
+                "type": "string"
+            },
+            "type": {
+                "type": "integer"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "id",
+            "name",
+            "type"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -21918,6 +22054,27 @@
             }
         },
         "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "ApplicationProxyMapping": {
+        "type": "object",
+        "properties": {
+            "prefix": {
+                "minLength": 1,
+                "maxLength": 256,
+                "type": "string"
+            },
+            "target": {
+                "minLength": 1,
+                "maxLength": 256,
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "prefix",
+            "target"
+        ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "IntegrationGuild": {

@@ -22,8 +22,8 @@ import { activityShelf } from "@spacebar/api/activities";
 
 const router = Router({ mergeParams: true });
 
-router.get("/", route({}), async (_req: Request, res: Response) => {
-    res.json(await activityShelf());
+router.get("/", route({}), async (req: Request, res: Response) => {
+    res.json(await activityShelf(req.user_id));
 });
 
 export default router;
