@@ -20,13 +20,13 @@ import { updateMessage } from "@api/MessageUpdater";
 import SettingsPlugin from "@plugins/_core/settings";
 import definePlugin, { IconProps } from "@utils/types";
 import { findComponentByCodeLazy } from "@webpack";
-import { useEffect, useRef, useState } from "@webpack/common";
+import { MessageStore, useEffect, useRef, useState } from "@webpack/common";
 
 import { FosscordAuthor } from "../fosscordCore/shared";
 
 interface E2eeBridge {
     isEncrypted?: (channelId: string) => boolean;
-    beforeSend?: (channelId: string) => boolean;
+    beforeSend?: (channelId: string) => boolean | Promise<boolean>;
     mountSettings?: (container: HTMLElement) => () => void;
     updateMessage?: typeof updateMessage;
 }
@@ -38,7 +38,7 @@ interface LayoutNode {
 }
 
 interface SystemMessageProps {
-    message: { author?: { username?: string; globalName?: string | null; global_name?: string | null }; timestamp?: unknown };
+    message: { id: string; channel_id: string; author?: { username?: string; globalName?: string | null; global_name?: string | null }; timestamp?: unknown };
     compact?: boolean;
 }
 
@@ -76,13 +76,19 @@ const EncryptionIcon = ({ width = 20, height = 20, className }: IconProps) => (
     </svg>
 );
 
+const hadEarlierMessages = (message: SystemMessageProps["message"]) => {
+    const messages = MessageStore.getMessages(message.channel_id);
+    const index = messages?._array?.findIndex((m) => m.id === message.id) ?? -1;
+    return index !== 0 || !!messages?.hasMoreBefore;
+};
+
 function EncryptionEnabledMessage({ message, compact }: SystemMessageProps) {
     const author = message.author;
     const name = author?.globalName || author?.global_name || author?.username || "Someone";
     return (
         <SystemMessage iconNode={<EncryptionIcon width={16} height={16} />} timestamp={message.timestamp} compact={compact}>
-            <span style={{ fontWeight: 500, color: "var(--text-strong, var(--header-primary))" }}>{name}</span> turned on end-to-end encryption. Messages sent before this weren't
-            encrypted.
+            <span style={{ fontWeight: 500, color: "var(--text-strong, var(--header-primary))" }}>{name}</span> turned on end-to-end encryption.
+            {hadEarlierMessages(message) ? " Messages sent before this weren't encrypted." : null}
         </SystemMessage>
     );
 }
@@ -161,12 +167,12 @@ export default definePlugin({
         return this.isEncrypted(/^\/channels\/@me\/(\d+)/.exec(location.pathname)?.[1]);
     },
 
-    onBeforeMessageSend(channelId) {
-        if (bridge()?.beforeSend?.(channelId)) return { cancel: true };
+    async onBeforeMessageSend(channelId) {
+        if (await bridge()?.beforeSend?.(channelId)) return { cancel: true };
     },
 
-    onBeforeMessageEdit(channelId) {
-        if (bridge()?.beforeSend?.(channelId)) return { cancel: true };
+    async onBeforeMessageEdit(channelId) {
+        if (await bridge()?.beforeSend?.(channelId)) return { cancel: true };
     },
 
     start() {

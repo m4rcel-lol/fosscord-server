@@ -19,7 +19,7 @@
 import { Request, Response, Router } from "express";
 import { In, Not } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
-import { decodeKey, E2eeErrors, e2eeRateLimit, emitE2eeUserEvent, revokeE2eeDevices } from "@spacebar/api/util";
+import { decodeKey, E2eeErrors, e2eeRateLimit, emitE2eeUserEvent, endE2eeDeviceSession, revokeE2eeDevices } from "@spacebar/api/util";
 import { E2eeDevice } from "@spacebar/database";
 import { E2eeLinkSchema } from "@spacebar/schemas";
 import { emitEvent } from "@spacebar/util";
@@ -73,6 +73,7 @@ router.post(
         const denied = body.stage === "deny" ? devices.find((d) => d.id === body.to_device && d.status === "pending") : undefined;
         if (denied) {
             await revokeE2eeDevices([denied]);
+            await endE2eeDeviceSession(denied, req.session?.session_id, "E2EE login denied");
             await emitE2eeUserEvent("E2EE_DEVICES_UPDATE", req.user_id);
         }
         res.sendStatus(204);

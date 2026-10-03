@@ -44,6 +44,7 @@ export interface Contact {
     pendingKey: string | null;
     firstSeen: number;
     previousKeys?: string[];
+    verifiedAt?: number;
 }
 
 let database: Promise<IDBDatabase> | null = null;

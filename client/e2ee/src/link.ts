@@ -18,7 +18,7 @@
 
 import { fromB64u, randomBytes, sha256, toB64u, utf8 } from "./bytes";
 import { aesDecrypt, aesEncrypt, exportPublic, generateAgreementKey, hkdf, x25519 } from "./crypto";
-import { Api, deviceLabel, deviceName, Engine, errorText } from "./engine";
+import { Api, deviceAdded, deviceLabel, deviceName, deviceTitle, deviceTwins, Engine, errorText } from "./engine";
 import { t } from "./i18n";
 
 export interface LinkEvent {
@@ -50,6 +50,7 @@ export interface Outgoing {
 export interface Incoming {
     requestId: string;
     name: string;
+    detail: string | null;
     sas: string;
     approve: () => Promise<void>;
     deny: () => Promise<void>;
@@ -58,6 +59,7 @@ export interface Incoming {
 interface PromptInfo {
     requestId: string;
     name: string;
+    detail: string | null;
     sas: string;
 }
 
@@ -128,6 +130,7 @@ export const createLink = (engine: Engine, api: Api, hooks: LinkHooks) => {
     let leader = false;
     let wanted = false;
     let stopped = false;
+    let denied = false;
     let release: (() => void) | null = null;
     let channel: BroadcastChannel | null = null;
     const incoming = new Map<string, IncomingInternal>();
@@ -145,7 +148,9 @@ export const createLink = (engine: Engine, api: Api, hooks: LinkHooks) => {
                   approvers: [...outgoing.offers.values()].flatMap(({ name, sas }) => (sas ? [{ name, sas }] : [])),
                   error: outgoing.error,
               }
-            : null;
+            : denied
+              ? { requestId: "", state: "denied", approvers: [], error: null }
+              : null;
 
     const changed = () => {
         if (leader) send({ type: "outgoing", value: snapshot() });
@@ -186,8 +191,8 @@ export const createLink = (engine: Engine, api: Api, hooks: LinkHooks) => {
     };
 
     const request = (): Promise<void> => {
+        if (stopped || denied) return Promise.resolve();
         wanted = true;
-        if (stopped) return Promise.resolve();
         if (!leader) {
             send({ type: "request" });
             return Promise.resolve();
@@ -293,7 +298,15 @@ export const createLink = (engine: Engine, api: Api, hooks: LinkHooks) => {
                 return;
             }
             pending.requester = event.public_key;
-            const info = { requestId: event.request_id, name: pending.name, sas: await sasFor(event.request_id, event.public_key, pending.publicKey) };
+            if (!engine.devices.some((d) => d.device_id === pending.deviceId)) await engine.refresh().catch(() => {});
+            const device = engine.devices.find((d) => d.device_id === pending.deviceId);
+            const added = device && deviceAdded(deviceTwins(engine.devices, device), device);
+            const info = {
+                requestId: event.request_id,
+                name: (device && deviceTitle(device)) || pending.name,
+                detail: [added && t("Signed in {date}", { date: added }), device?.session?.location].filter(Boolean).join(" · ") || null,
+                sas: await sasFor(event.request_id, event.public_key, pending.publicKey),
+            };
             prompts.set(info.requestId, info);
             send({ type: "prompt", prompt: info });
             hooks.onPrompt({ ...info, approve: () => respond(info.requestId, "approve"), deny: () => respond(info.requestId, "deny") });
@@ -304,6 +317,8 @@ export const createLink = (engine: Engine, api: Api, hooks: LinkHooks) => {
         if (!current || !offer || current.approved) return;
         if (event.stage === "deny") {
             current.state = "denied";
+            denied = true;
+            wanted = false;
             changed();
             return;
         }

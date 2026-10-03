@@ -84,8 +84,19 @@ export interface E2eeBackupSchema extends E2eeBackupSecretSchema {
     wrapped_backup_key: string;
 }
 
+export interface E2eeTrustSchema {
+    version: number;
+    data: string;
+}
+
+export interface E2eeTrustResponse {
+    version: number;
+    data: string | null;
+}
+
 export interface E2eeBackupResponse extends E2eeBackupSchema {
     updated_at: string;
+    trust: E2eeTrustResponse;
 }
 
 export interface E2eeBackupKeyEntry {

@@ -8820,11 +8820,51 @@
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
+    "E2eeTrustSchema": {
+        "type": "object",
+        "properties": {
+            "version": {
+                "type": "integer"
+            },
+            "data": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "data",
+            "version"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "E2eeTrustResponse": {
+        "type": "object",
+        "properties": {
+            "version": {
+                "type": "integer"
+            },
+            "data": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "data",
+            "version"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
     "E2eeBackupResponse": {
         "type": "object",
         "properties": {
             "updated_at": {
                 "type": "string"
+            },
+            "trust": {
+                "$ref": "#/definitions/E2eeTrustResponse"
             },
             "identity_key": {
                 "type": "string"
@@ -8868,6 +8908,7 @@
             "kdf",
             "mode",
             "salt",
+            "trust",
             "updated_at",
             "version",
             "wrapped_backup_key",

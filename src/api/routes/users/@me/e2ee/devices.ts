@@ -29,12 +29,12 @@ import {
     e2eeRateLimit,
     e2eeUserKeys,
     emitE2eeUserEvent,
+    endE2eeDeviceSession,
     revokeE2eeDevices,
     verifyEd25519,
 } from "@spacebar/api/util";
-import { E2eeDevice, E2eeIdentity, Session } from "@spacebar/database";
+import { E2eeDevice, E2eeIdentity } from "@spacebar/database";
 import { E2eeDeviceCreateSchema, E2eePrekeySchema } from "@spacebar/schemas";
-import { emitEvent, Event } from "@spacebar/util";
 
 const router: Router = Router({ mergeParams: true });
 
@@ -137,12 +137,7 @@ router.delete(
         const device = await E2eeDevice.findOne({ where: { id: device_id, user_id: req.user_id } });
         if (!device) throw new HTTPError("Unknown device", 404);
         await revokeE2eeDevices([device]);
-        const session =
-            device.session_id && device.session_id !== req.session?.session_id ? await Session.findOne({ where: { session_id: device.session_id, user_id: req.user_id } }) : null;
-        if (session) {
-            await emitEvent({ session_id: session.session_id, event: "SB_SESSION_REMOVE", origin: "E2EE device removed" } as Event);
-            await session.remove();
-        }
+        await endE2eeDeviceSession(device, req.session?.session_id, "E2EE device removed");
         await emitE2eeUserEvent("E2EE_DEVICES_UPDATE", req.user_id);
         res.sendStatus(204);
     },

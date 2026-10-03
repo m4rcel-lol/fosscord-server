@@ -683,6 +683,7 @@ try {
             await shot(a, "5-recovery-code");
             await a.page.locator("dialog.fe2ee-dialog button", { hasText: "I saved it" }).click();
             assert.match(recoveryCode, /^([0-9A-Z]{4}-){7}[0-9A-Z]{4}$/);
+            await waitFor("the recovery-code backup", () => backupRow()?.mode === "recovery", 20000);
             const row = backupRow();
             assert.equal(row.mode, "recovery");
             assert.equal(row.kdf.name, "hkdf-sha256");

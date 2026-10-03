@@ -151,6 +151,12 @@ export class E2eeKeyBackup extends BaseClassWithoutId {
     @Column({ type: "timestamp with time zone" })
     updated_at: Date;
 
+    @Column({ type: "varchar", nullable: true })
+    trust: string | null;
+
+    @Column({ type: "int", default: 0 })
+    trust_version: number;
+
     toPublic(): E2eeBackupResponse {
         return {
             version: this.version,
@@ -164,6 +170,7 @@ export class E2eeKeyBackup extends BaseClassWithoutId {
             backup_key_signature: this.backup_key_signature,
             wrapped_backup_key: this.wrapped_backup_key,
             updated_at: this.updated_at.toISOString(),
+            trust: { version: this.trust_version, data: this.trust },
         };
     }
 }

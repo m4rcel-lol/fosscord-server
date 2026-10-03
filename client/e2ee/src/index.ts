@@ -32,7 +32,7 @@ interface LoaderState {
     reqs: { c?: Record<string, { exports: unknown }> }[];
     status?: () => unknown;
     isEncrypted?: (channelId: string) => boolean;
-    beforeSend?: (channelId: string) => boolean;
+    beforeSend?: (channelId: string) => boolean | Promise<boolean>;
     mountSettings?: (container: HTMLElement) => () => void;
     openSettings?: () => void;
     updateMessage?: (channelId: string, messageId: string, fields: Record<string, unknown>) => void;
@@ -323,9 +323,15 @@ const custom = {
     },
     E2EE_IDENTITY_UPDATE: (data: Record<string, unknown>) => {
         count("E2EE_IDENTITY_UPDATE");
-        engine.invalidateUser(String(data.user_id));
-        refreshSelf(String(data.user_id));
+        const userId = String(data.user_id);
+        engine.invalidateUser(userId);
+        refreshSelf(userId);
+        if (initialized && !signedOut && userId !== engine.userId) engine.keysFor([userId]).catch((error) => console.error("[e2ee] couldn't check the new safety number", error));
         ui.refresh();
+    },
+    E2EE_TRUST_UPDATE: () => {
+        count("E2EE_TRUST_UPDATE");
+        if (initialized && !signedOut) engine.syncTrust().catch((error) => console.error("[e2ee] couldn't sync verifications", error));
     },
     E2EE_LINK_REQUEST: (data: Record<string, unknown>) => {
         count("E2EE_LINK_REQUEST");

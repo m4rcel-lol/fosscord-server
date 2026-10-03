@@ -326,7 +326,7 @@ ${final ? 1 : 0}`);
     return { start: start2, ready: () => controlled, prepareCreate, isUpload, prepareUpload, uploaded, metaFor, sent, apply, nameOf: (id) => names.get(id) };
   };
 
-  // node_modules/@hpke/common/esm/src/errors.js
+  // ../../../node_modules/@hpke/common/esm/src/errors.js
   var HpkeError = class extends Error {
     constructor(e) {
       let message;
@@ -364,7 +364,7 @@ ${final ? 1 : 0}`);
   var NotSupportedError = class extends HpkeError {
   };
 
-  // node_modules/@hpke/common/esm/_dnt.shims.js
+  // ../../../node_modules/@hpke/common/esm/_dnt.shims.js
   var dntGlobals = {};
   var dntGlobalThis = createMergeProxy(globalThis, dntGlobals);
   function createMergeProxy(baseObj, extObj) {
@@ -421,7 +421,7 @@ ${final ? 1 : 0}`);
     });
   }
 
-  // node_modules/@hpke/common/esm/src/algorithm.js
+  // ../../../node_modules/@hpke/common/esm/src/algorithm.js
   async function loadSubtleCrypto() {
     if (dntGlobalThis !== void 0 && globalThis.crypto !== void 0) {
       return globalThis.crypto.subtle;
@@ -450,7 +450,7 @@ ${final ? 1 : 0}`);
     }
   };
 
-  // node_modules/@hpke/common/esm/src/identifiers.js
+  // ../../../node_modules/@hpke/common/esm/src/identifiers.js
   var Mode = {
     Base: 0,
     Psk: 1,
@@ -490,13 +490,13 @@ ${final ? 1 : 0}`);
     ExportOnly: 65535
   };
 
-  // node_modules/@hpke/common/esm/src/consts.js
+  // ../../../node_modules/@hpke/common/esm/src/consts.js
   var INPUT_LENGTH_LIMIT = 8192;
   var INFO_LENGTH_LIMIT = 268435456;
   var MINIMUM_PSK_LENGTH = 32;
   var EMPTY = /* @__PURE__ */ new Uint8Array(0);
 
-  // node_modules/@hpke/common/esm/src/interfaces/kemInterface.js
+  // ../../../node_modules/@hpke/common/esm/src/interfaces/kemInterface.js
   var SUITE_ID_HEADER_KEM = /* @__PURE__ */ new Uint8Array([
     75,
     69,
@@ -505,7 +505,7 @@ ${final ? 1 : 0}`);
     0
   ]);
 
-  // node_modules/@hpke/common/esm/src/kdfs/hkdf.js
+  // ../../../node_modules/@hpke/common/esm/src/kdfs/hkdf.js
   var HPKE_VERSION = /* @__PURE__ */ new Uint8Array([
     72,
     80,
@@ -675,7 +675,7 @@ ${final ? 1 : 0}`);
     }
   };
 
-  // node_modules/@hpke/common/esm/src/utils/misc.js
+  // ../../../node_modules/@hpke/common/esm/src/utils/misc.js
   var isCryptoKeyPair = (x) => typeof x === "object" && x !== null && typeof x.privateKey === "object" && typeof x.publicKey === "object";
   function i2Osp(n, w) {
     if (w <= 0) {
@@ -717,7 +717,7 @@ ${final ? 1 : 0}`);
     return buf;
   }
 
-  // node_modules/@hpke/common/esm/src/kems/dhkem.js
+  // ../../../node_modules/@hpke/common/esm/src/kems/dhkem.js
   var LABEL_EAE_PRK = /* @__PURE__ */ new Uint8Array([
     101,
     97,
@@ -900,7 +900,7 @@ ${final ? 1 : 0}`);
     }
   };
 
-  // node_modules/@hpke/common/esm/src/interfaces/dhkemPrimitives.js
+  // ../../../node_modules/@hpke/common/esm/src/interfaces/dhkemPrimitives.js
   var KEM_USAGES = ["deriveBits"];
   var LABEL_DKP_PRK = /* @__PURE__ */ new Uint8Array([
     100,
@@ -913,7 +913,7 @@ ${final ? 1 : 0}`);
   ]);
   var LABEL_SK = /* @__PURE__ */ new Uint8Array([115, 107]);
 
-  // node_modules/@hpke/common/esm/src/kems/dhkemPrimitives/ec.js
+  // ../../../node_modules/@hpke/common/esm/src/kems/dhkemPrimitives/ec.js
   var EC_P_521_PARAMS = {
     p: (1n << 521n) - 1n,
     b: 0x0051953eb9618e1c9a1f929a21a0b68540eea2da725b99b315f3b8b489918ef109e156193951ec7e937b1652c0bd3bb1bf073573df883d2c34f1ef451fd46b503f00n,
@@ -922,10 +922,10 @@ ${final ? 1 : 0}`);
     coordinateSize: 66
   };
 
-  // node_modules/@hpke/common/esm/src/interfaces/aeadEncryptionContext.js
+  // ../../../node_modules/@hpke/common/esm/src/interfaces/aeadEncryptionContext.js
   var AEAD_USAGES = ["encrypt", "decrypt"];
 
-  // node_modules/@hpke/common/esm/src/utils/noble.js
+  // ../../../node_modules/@hpke/common/esm/src/utils/noble.js
   function isBytes(a) {
     return a instanceof Uint8Array || ArrayBuffer.isView(a) && a.constructor.name === "Uint8Array";
   }
@@ -963,7 +963,7 @@ ${final ? 1 : 0}`);
   var _endianTestBytes = /* @__PURE__ */ new Uint8Array(_endianTestBuffer.buffer);
   var isLE = _endianTestBytes[0] === 68;
 
-  // node_modules/@hpke/common/esm/src/hash/hash.js
+  // ../../../node_modules/@hpke/common/esm/src/hash/hash.js
   function ahash(h) {
     if (typeof h !== "function" || typeof h.create !== "function") {
       throw new Error("Hash must wrapped by utils.createHasher");
@@ -972,7 +972,7 @@ ${final ? 1 : 0}`);
     anumber(h.blockLen);
   }
 
-  // node_modules/@hpke/common/esm/src/hash/hmac.js
+  // ../../../node_modules/@hpke/common/esm/src/hash/hmac.js
   var _HMAC = class {
     constructor(hash, key) {
       Object.defineProperty(this, "oHash", {
@@ -1074,7 +1074,7 @@ ${final ? 1 : 0}`);
   var hmac = (hash, key, message) => new _HMAC(hash, key).update(message).digest();
   hmac.create = (hash, key) => new _HMAC(hash, key);
 
-  // node_modules/@hpke/common/esm/src/hash/u64.js
+  // ../../../node_modules/@hpke/common/esm/src/hash/u64.js
   var U32_MASK64 = 0xffffffffn;
   var _32n = 32n;
   function fromBig(n, le = false) {
@@ -1097,7 +1097,7 @@ ${final ? 1 : 0}`);
     return [Ah, Al];
   }
 
-  // node_modules/@hpke/common/esm/src/hash/sha3.js
+  // ../../../node_modules/@hpke/common/esm/src/hash/sha3.js
   var _0n = 0n;
   var _1n = 1n;
   var _2n = 2n;
@@ -1123,7 +1123,7 @@ ${final ? 1 : 0}`);
   var SHA3_IOTA_H = IOTAS[0];
   var SHA3_IOTA_L = IOTAS[1];
 
-  // node_modules/@hpke/core/esm/src/aeads/aesGcm.js
+  // ../../../node_modules/@hpke/core/esm/src/aeads/aesGcm.js
   var AesGcmContext = class extends NativeAlgorithm {
     constructor(key) {
       super();
@@ -1236,14 +1236,14 @@ ${final ? 1 : 0}`);
     }
   };
 
-  // node_modules/@hpke/core/esm/src/utils/emitNotSupported.js
+  // ../../../node_modules/@hpke/core/esm/src/utils/emitNotSupported.js
   function emitNotSupported() {
     return new Promise((_resolve, reject) => {
       reject(new NotSupportedError("Not supported"));
     });
   }
 
-  // node_modules/@hpke/core/esm/src/exporterContext.js
+  // ../../../node_modules/@hpke/core/esm/src/exporterContext.js
   var LABEL_SEC = new Uint8Array([115, 101, 99]);
   var ExporterContextImpl = class {
     constructor(api2, kdf, exporterSecret) {
@@ -1303,7 +1303,7 @@ ${final ? 1 : 0}`);
     }
   };
 
-  // node_modules/@hpke/core/esm/src/encryptionContext.js
+  // ../../../node_modules/@hpke/core/esm/src/encryptionContext.js
   var EncryptionContextImpl = class extends ExporterContextImpl {
     constructor(api2, kdf, params) {
       super(api2, kdf, params.exporterSecret);
@@ -1364,7 +1364,7 @@ ${final ? 1 : 0}`);
     }
   };
 
-  // node_modules/@hpke/core/esm/src/mutex.js
+  // ../../../node_modules/@hpke/core/esm/src/mutex.js
   var __classPrivateFieldGet = function(receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
@@ -1394,7 +1394,7 @@ ${final ? 1 : 0}`);
   };
   _Mutex_locked = /* @__PURE__ */ new WeakMap();
 
-  // node_modules/@hpke/core/esm/src/recipientContext.js
+  // ../../../node_modules/@hpke/core/esm/src/recipientContext.js
   var __classPrivateFieldGet2 = function(receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
@@ -1429,7 +1429,7 @@ ${final ? 1 : 0}`);
   };
   _RecipientContextImpl_mutex = /* @__PURE__ */ new WeakMap();
 
-  // node_modules/@hpke/core/esm/src/senderContext.js
+  // ../../../node_modules/@hpke/core/esm/src/senderContext.js
   var __classPrivateFieldGet3 = function(receiver, state, kind, f) {
     if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
@@ -1471,7 +1471,7 @@ ${final ? 1 : 0}`);
   };
   _SenderContextImpl_mutex = /* @__PURE__ */ new WeakMap();
 
-  // node_modules/@hpke/core/esm/src/cipherSuiteNative.js
+  // ../../../node_modules/@hpke/core/esm/src/cipherSuiteNative.js
   var LABEL_BASE_NONCE = new Uint8Array([
     98,
     97,
@@ -1744,13 +1744,13 @@ ${final ? 1 : 0}`);
     }
   };
 
-  // node_modules/@hpke/core/esm/src/native.js
+  // ../../../node_modules/@hpke/core/esm/src/native.js
   var CipherSuite = class extends CipherSuiteNative {
   };
   var HkdfSha256 = class extends HkdfSha256Native {
   };
 
-  // node_modules/@hpke/core/esm/src/kems/dhkemPrimitives/x25519.js
+  // ../../../node_modules/@hpke/core/esm/src/kems/dhkemPrimitives/x25519.js
   var ALG_NAME = "X25519";
   var PKCS8_ALG_ID_X25519 = new Uint8Array([
     48,
@@ -1966,7 +1966,7 @@ ${final ? 1 : 0}`);
     }
   };
 
-  // node_modules/@hpke/core/esm/src/kems/dhkemX25519.js
+  // ../../../node_modules/@hpke/core/esm/src/kems/dhkemX25519.js
   var DhkemX25519HkdfSha256 = class extends Dhkem {
     constructor() {
       const kdf = new HkdfSha256Native();
@@ -2004,7 +2004,7 @@ ${final ? 1 : 0}`);
     }
   };
 
-  // node_modules/@hpke/core/esm/src/kems/dhkemPrimitives/x448.js
+  // ../../../node_modules/@hpke/core/esm/src/kems/dhkemPrimitives/x448.js
   var PKCS8_ALG_ID_X448 = new Uint8Array([
     48,
     70,
@@ -2101,7 +2101,7 @@ ${deviceId}
 ${prekeyId}
 ${publicKey}`;
 
-  // node_modules/hash-wasm/dist/index.esm.js
+  // ../../../node_modules/hash-wasm/dist/index.esm.js
   function __awaiter(thisArg, _arguments, P, generator) {
     function adopt(value) {
       return value instanceof P ? value : new P(function(resolve) {
@@ -2768,6 +2768,19 @@ ${userId}`;
   var secretKey = (secret, label) => hkdf(secret, new Uint8Array(32), `fosscord-e2ee/v1/backup/${label}`);
   var sealJwk = async (secret, label, userId, jwk) => sealBox(await secretKey(secret, label), utf8(JSON.stringify(jwk)), `${label}
 ${userId}`);
+  var sealTrust = async (secret, userId, trust) => sealBox(await secretKey(secret, "trust"), utf8(JSON.stringify(trust)), `trust
+${userId}`);
+  var openTrust = async (secret, userId, box) => {
+    const parsed = JSON.parse(fromUtf8(await openBox(await secretKey(secret, "trust"), box, `trust
+${userId}`)));
+    if (!parsed || typeof parsed !== "object") throw new Error("bad trust list in backup");
+    const trust = {};
+    for (const [id, entry] of Object.entries(parsed)) {
+      if (typeof entry?.key === "string" && typeof entry.verified === "boolean" && typeof entry.at === "number")
+        trust[id] = { key: entry.key, verified: entry.verified, at: entry.at };
+    }
+    return trust;
+  };
   var openJwk = async (secret, label, userId, box) => {
     const jwk = JSON.parse(fromUtf8(await openBox(await secretKey(secret, label), box, `${label}
 ${userId}`)));
@@ -2943,13 +2956,6 @@ ${userId}`)));
     ],
     "Turn on encryption": ["Verschlüsselung aktivieren", "Activer le chiffrement", "暗号化をオンにする", "Włącz szyfrowanie", "开启加密"],
     "Safety numbers": ["Sicherheitsnummern", "Numéros de sécurité", "安全番号", "Numery bezpieczeństwa", "安全码"],
-    "Compare these numbers with each person in a call or face to face, or scan the code with their phone. If they match, nobody is intercepting your messages. Mark them as verified so you're warned if they change.": [
-      "Vergleiche diese Nummern mit jeder Person in einem Anruf oder persönlich, oder scanne den Code mit ihrem Handy. Wenn sie übereinstimmen, fängt niemand deine Nachrichten ab. Markiere sie als verifiziert, damit du gewarnt wirst, wenn sie sich ändern.",
-      "Compare ces numéros avec chaque personne lors d'un appel ou en face à face, ou scanne le code avec son téléphone. S'ils correspondent, personne n'intercepte tes messages. Marque-les comme vérifiés pour être averti s'ils changent.",
-      "通話や対面で相手とこの番号を照合するか、相手のスマートフォンでコードをスキャンしてください。一致していれば、メッセージは誰にも傍受されていません。認証済みにしておくと、番号が変わったときに警告されます。",
-      "Porównaj te numery z każdą osobą podczas rozmowy lub osobiście albo zeskanuj kod jej telefonem. Jeśli się zgadzają, nikt nie przechwytuje twoich wiadomości. Oznacz je jako zweryfikowane, aby dostać ostrzeżenie, gdy się zmienią.",
-      "请通过通话或当面与每个人核对这些数字，或用对方的手机扫描二维码。如果一致，就没有人在拦截你的消息。将其标记为已验证，之后如有变化你会收到提醒。"
-    ],
     "Safety number for {name}": ["Sicherheitsnummer für {name}", "Numéro de sécurité de {name}", "{name} の安全番号", "Numer bezpieczeństwa: {name}", "{name} 的安全码"],
     "Calculating…": ["Wird berechnet …", "Calcul en cours…", "計算中…", "Obliczanie…", "正在计算…"],
     "Safety number changed": ["Sicherheitsnummer geändert", "Numéro de sécurité modifié", "安全番号が変更されました", "Numer bezpieczeństwa się zmienił", "安全码已更改"],
@@ -2962,13 +2968,6 @@ ${userId}`)));
       "Ta osoba nie skonfigurowała jeszcze szyfrowania.",
       "此人还没有设置加密。"
     ],
-    "QR code of the safety number for {name}": [
-      "QR-Code der Sicherheitsnummer für {name}",
-      "Code QR du numéro de sécurité de {name}",
-      "{name} の安全番号のQRコード",
-      "Kod QR numeru bezpieczeństwa: {name}",
-      "{name} 的安全码二维码"
-    ],
     "Accept new safety number": [
       "Neue Sicherheitsnummer akzeptieren",
       "Accepter le nouveau numéro de sécurité",
@@ -2980,13 +2979,6 @@ ${userId}`)));
     "Mark as verified": ["Als verifiziert markieren", "Marquer comme vérifié", "認証済みにする", "Oznacz jako zweryfikowane", "标记为已验证"],
     "Encryption settings": ["Verschlüsselungseinstellungen", "Paramètres de chiffrement", "暗号化の設定", "Ustawienia szyfrowania", "加密设置"],
     "Reset encryption?": ["Verschlüsselung zurücksetzen?", "Réinitialiser le chiffrement ?", "暗号化をリセットしますか？", "Zresetować szyfrowanie?", "重置加密？"],
-    "Only do this if you lost your recovery code and no other signed-in browser can approve this one. You get new encryption keys and can keep chatting, but nobody can read the messages sent before the reset anymore, on any device.": [
-      "Tu das nur, wenn du deinen Wiederherstellungscode verloren hast und kein anderer angemeldeter Browser diesen bestätigen kann. Du bekommst neue Schlüssel und kannst weiterchatten, aber die vor dem Zurücksetzen gesendeten Nachrichten kann danach niemand mehr lesen, auf keinem Gerät.",
-      "Ne fais cela que si tu as perdu ton code de récupération et qu'aucun autre navigateur connecté ne peut approuver celui-ci. Tu obtiens de nouvelles clés et peux continuer à discuter, mais plus personne ne pourra lire les messages envoyés avant la réinitialisation, sur aucun appareil.",
-      "リカバリーコードをなくし、ログイン中の他のブラウザでこのブラウザを承認できない場合にのみ実行してください。新しい暗号鍵が作成されて会話を続けられますが、リセット前に送信されたメッセージはどのデバイスでも誰も読めなくなります。",
-      "Zrób to tylko wtedy, gdy zgubiłeś kod odzyskiwania i żadna inna zalogowana przeglądarka nie może zatwierdzić tej. Dostaniesz nowe klucze i będziesz mógł dalej rozmawiać, ale wiadomości wysłanych przed resetem nikt już nie odczyta na żadnym urządzeniu.",
-      "只有在你丢失了恢复码，并且没有其他已登录的浏览器可以批准此浏览器时才这样做。你会获得新的加密密钥并可以继续聊天，但重置前发送的消息在任何设备上都将无人能读。"
-    ],
     "Your other browsers have to be approved again, and the people you talk to are told that your safety number changed.": [
       "Deine anderen Browser müssen erneut bestätigt werden, und deine Gesprächspartner erfahren, dass sich deine Sicherheitsnummer geändert hat.",
       "Tes autres navigateurs devront être approuvés à nouveau, et les personnes avec qui tu discutes seront informées que ton numéro de sécurité a changé.",
@@ -3118,13 +3110,6 @@ ${userId}`)));
       "此浏览器已解锁，正在加载你的加密消息。"
     ],
     "New login on {name}": ["Neue Anmeldung auf {name}", "Nouvelle connexion sur {name}", "{name} での新しいログイン", "Nowe logowanie: {name}", "{name} 上的新登录"],
-    "Approve it only if you just signed in there yourself, because it gets access to your encrypted messages. The other browser should show this code:": [
-      "Bestätige sie nur, wenn du dich gerade selbst dort angemeldet hast, denn sie erhält Zugriff auf deine verschlüsselten Nachrichten. Der andere Browser sollte diesen Code anzeigen:",
-      "N'approuve que si tu viens de t'y connecter toi-même, car elle aura accès à tes messages chiffrés. L'autre navigateur doit afficher ce code :",
-      "暗号化されたメッセージにアクセスできるようになるため、自分でログインした場合にのみ承認してください。相手のブラウザには次のコードが表示されているはずです：",
-      "Zatwierdź tylko wtedy, gdy przed chwilą sam się tam zalogowałeś, bo uzyska dostęp do twoich zaszyfrowanych wiadomości. Druga przeglądarka powinna pokazywać ten kod:",
-      "只有在你刚刚亲自在那里登录时才批准，因为它将能访问你的加密消息。另一个浏览器应显示此代码："
-    ],
     "Couldn't answer that login: {error}": [
       "Auf diese Anmeldung konnte nicht geantwortet werden: {error}",
       "Impossible de répondre à cette connexion : {error}",
@@ -3213,13 +3198,6 @@ ${userId}`)));
     ],
     "Key backup": ["Schlüsselsicherung", "Sauvegarde des clés", "鍵のバックアップ", "Kopia kluczy", "密钥备份"],
     "Your devices": ["Deine Geräte", "Tes appareils", "あなたのデバイス", "Twoje urządzenia", "你的设备"],
-    "Every browser listed here can read your encrypted messages. Remove the ones you don't recognize or don't use anymore.": [
-      "Jeder hier aufgeführte Browser kann deine verschlüsselten Nachrichten lesen. Entferne die, die du nicht erkennst oder nicht mehr benutzt.",
-      "Chaque navigateur listé ici peut lire tes messages chiffrés. Retire ceux que tu ne reconnais pas ou que tu n'utilises plus.",
-      "ここに表示されているブラウザはすべて、暗号化されたメッセージを読めます。心当たりのないものや使わなくなったものは削除してください。",
-      "Każda przeglądarka z tej listy może odczytać twoje zaszyfrowane wiadomości. Usuń te, których nie rozpoznajesz lub już nie używasz.",
-      "这里列出的每个浏览器都能读取你的加密消息。请移除你不认识或不再使用的浏览器。"
-    ],
     "If you lost your recovery code and no other browser can approve a new one, reset encryption to keep chatting. Messages sent before the reset can't be read anymore.": [
       "Wenn du deinen Wiederherstellungscode verloren hast und kein anderer Browser einen neuen bestätigen kann, setze die Verschlüsselung zurück, um weiterzuchatten. Vor dem Zurücksetzen gesendete Nachrichten können dann nicht mehr gelesen werden.",
       "Si tu as perdu ton code de récupération et qu'aucun autre navigateur ne peut en approuver un nouveau, réinitialise le chiffrement pour continuer à discuter. Les messages envoyés avant la réinitialisation ne pourront plus être lus.",
@@ -3314,7 +3292,6 @@ ${userId}`)));
       "Odblokuj tę przeglądarkę, aby wysyłać zaszyfrowane wiadomości. Wiadomość nadal jest w polu tekstowym.",
       "解锁此浏览器后才能发送加密消息。你的消息仍在输入框中。"
     ],
-    "End-to-end encrypted": ["Ende-zu-Ende-verschlüsselt", "Chiffré de bout en bout", "エンドツーエンド暗号化済み", "Zaszyfrowane end-to-end", "端到端加密"],
     Decrypting: ["Wird entschlüsselt", "Déchiffrement", "復号中", "Odszyfrowywanie", "正在解密"],
     "Decrypting…": ["Wird entschlüsselt …", "Déchiffrement…", "復号中…", "Odszyfrowywanie…", "正在解密…"],
     "Unlock this browser to read this message": [
@@ -3556,13 +3533,6 @@ ${userId}`)));
       "Wysłano z urządzenia, które zostało usunięte",
       "从已移除的设备发送"
     ],
-    "Only do this if your password doesn't unlock your keys and no other signed-in browser can approve this one. You get new encryption keys and can keep chatting, but nobody can read the messages sent before the reset anymore, on any device.": [
-      "Tu das nur, wenn dein Passwort deine Schlüssel nicht entsperrt und kein anderer angemeldeter Browser diesen bestätigen kann. Du bekommst neue Schlüssel und kannst weiterchatten, aber niemand kann die vor dem Zurücksetzen gesendeten Nachrichten noch lesen, auf keinem Gerät.",
-      "Ne fais ça que si ton mot de passe ne déverrouille pas tes clés et qu'aucun autre navigateur connecté ne peut approuver celui-ci. Tu obtiens de nouvelles clés de chiffrement et tu peux continuer à discuter, mais plus personne ne pourra lire les messages envoyés avant la réinitialisation, sur aucun appareil.",
-      "パスワードで鍵のロックを解除できず、ほかにサインイン中のブラウザでこのブラウザを承認できない場合にだけ実行してください。新しい暗号鍵が作成され、チャットは続けられますが、リセット前に送信されたメッセージはどのデバイスでも読めなくなります。",
-      "Zrób to tylko wtedy, gdy hasło nie odblokowuje twoich kluczy i żadna inna zalogowana przeglądarka nie może zatwierdzić tej. Dostaniesz nowe klucze szyfrowania i możesz dalej rozmawiać, ale nikt nie przeczyta już wiadomości wysłanych przed resetem, na żadnym urządzeniu.",
-      "只有在你的密码无法解锁密钥，并且没有其他已登录的浏览器可以批准此浏览器时才这样做。你会获得新的加密密钥并可以继续聊天，但重置之前发送的消息在任何设备上都将无法再读取。"
-    ],
     "Your signed-in browsers are asking you to approve this one. Approve it on any of them after checking that it shows the code listed under its name.": [
       "Deine angemeldeten Browser fragen, ob du diesen bestätigen willst. Bestätige ihn auf einem davon, nachdem du geprüft hast, dass er den Code unter seinem Namen anzeigt.",
       "Tes navigateurs connectés te demandent d'approuver celui-ci. Approuve-le sur l'un d'eux après avoir vérifié qu'il affiche le code indiqué sous son nom.",
@@ -3571,13 +3541,6 @@ ${userId}`)));
       "你已登录的浏览器正在请求你批准此浏览器。请确认它显示的是其名称下列出的代码，然后在任意一个上批准。"
     ],
     "Your other browser": ["Dein anderer Browser", "Ton autre navigateur", "別のブラウザ", "Twoja inna przeglądarka", "你的另一个浏览器"],
-    "This login was denied on your other browser.": [
-      "Diese Anmeldung wurde auf deinem anderen Browser abgelehnt.",
-      "Cette connexion a été refusée sur ton autre navigateur.",
-      "このログインは別のブラウザで拒否されました。",
-      "To logowanie zostało odrzucone w twojej innej przeglądarce.",
-      "此登录已在你的另一个浏览器上被拒绝。"
-    ],
     "The approval didn't unlock this browser. {error}": [
       "Die Bestätigung hat diesen Browser nicht entsperrt. {error}",
       "L'approbation n'a pas déverrouillé ce navigateur. {error}",
@@ -3656,6 +3619,84 @@ ${userId}`)));
       "このメッセージを復号できませんでした。",
       "Nie udało się odszyfrować tej wiadomości.",
       "无法解密此消息。"
+    ],
+    "Compare these numbers with each person in a call or face to face. If they match, nobody is intercepting your messages. Mark them as verified so you're warned if they change.": [
+      "Vergleiche diese Nummern mit jeder Person in einem Anruf oder persönlich. Wenn sie übereinstimmen, fängt niemand deine Nachrichten ab. Markiere sie als verifiziert, damit du gewarnt wirst, wenn sie sich ändern.",
+      "Compare ces numéros avec chaque personne lors d'un appel ou en face à face. S'ils correspondent, personne n'intercepte tes messages. Marque-les comme vérifiés pour être averti s'ils changent.",
+      "通話や対面で相手とこの番号を照合してください。一致していれば、メッセージは誰にも傍受されていません。認証済みにしておくと、番号が変わったときに警告されます。",
+      "Porównaj te numery z każdą osobą podczas rozmowy lub osobiście. Jeśli się zgadzają, nikt nie przechwytuje twoich wiadomości. Oznacz je jako zweryfikowane, aby dostać ostrzeżenie, gdy się zmienią.",
+      "请通过通话或当面与每个人核对这些数字。如果一致，就没有人在拦截你的消息。将其标记为已验证，之后如有变化你会收到提醒。"
+    ],
+    "This replaces your encryption keys. Only do this if you think someone else got hold of them.": [
+      "Damit ersetzt du deine Schlüssel. Tu das nur, wenn du glaubst, dass jemand anderes an sie gekommen ist.",
+      "Cela remplace tes clés de chiffrement. Ne fais cela que si tu penses que quelqu'un d'autre les a obtenues.",
+      "暗号鍵を置き換えます。他の誰かに鍵を知られたと思う場合にのみ実行してください。",
+      "To zastępuje twoje klucze szyfrowania. Zrób to tylko wtedy, gdy podejrzewasz, że ktoś inny je zdobył.",
+      "这会替换你的加密密钥。只有在你认为其他人拿到了它们时才这样做。"
+    ],
+    "Only do this if you lost your recovery code and no other signed-in browser can approve this one.": [
+      "Tu das nur, wenn du deinen Wiederherstellungscode verloren hast und kein anderer angemeldeter Browser diesen bestätigen kann.",
+      "Ne fais cela que si tu as perdu ton code de récupération et qu'aucun autre navigateur connecté ne peut approuver celui-ci.",
+      "リカバリーコードをなくし、ログイン中の他のブラウザでこのブラウザを承認できない場合にのみ実行してください。",
+      "Zrób to tylko wtedy, gdy zgubiłeś kod odzyskiwania i żadna inna zalogowana przeglądarka nie może zatwierdzić tej.",
+      "只有在你丢失了恢复码，并且没有其他已登录的浏览器可以批准此浏览器时才这样做。"
+    ],
+    "Only do this if your password doesn't unlock your keys and no other signed-in browser can approve this one.": [
+      "Tu das nur, wenn dein Passwort deine Schlüssel nicht entsperrt und kein anderer angemeldeter Browser diesen bestätigen kann.",
+      "Ne fais ça que si ton mot de passe ne déverrouille pas tes clés et qu'aucun autre navigateur connecté ne peut approuver celui-ci.",
+      "パスワードで鍵のロックを解除できず、ほかにサインイン中のブラウザでこのブラウザを承認できない場合にだけ実行してください。",
+      "Zrób to tylko wtedy, gdy hasło nie odblokowuje twoich kluczy i żadna inna zalogowana przeglądarka nie może zatwierdzić tej.",
+      "只有在你的密码无法解锁密钥，并且没有其他已登录的浏览器可以批准此浏览器时才这样做。"
+    ],
+    "You get new keys and can keep chatting, but none of your browsers can read the messages sent before the reset anymore. The people you talk to keep what they received.": [
+      "Du bekommst neue Schlüssel und kannst weiterchatten, aber keiner deiner Browser kann die vor dem Zurücksetzen gesendeten Nachrichten noch lesen. Die Personen, mit denen du schreibst, behalten, was sie erhalten haben.",
+      "Tu obtiens de nouvelles clés et peux continuer à discuter, mais aucun de tes navigateurs ne pourra plus lire les messages envoyés avant la réinitialisation. Les personnes avec qui tu discutes gardent ce qu'elles ont reçu.",
+      "新しい鍵が作成されて会話を続けられますが、リセット前に送信されたメッセージはあなたのどのブラウザでも読めなくなります。相手が受け取ったメッセージは相手の側に残ります。",
+      "Dostaniesz nowe klucze i możesz dalej rozmawiać, ale żadna z twoich przeglądarek nie odczyta już wiadomości wysłanych przed resetem. Osoby, z którymi rozmawiasz, zachowują to, co otrzymały.",
+      "你会获得新的密钥并可以继续聊天，但你的任何浏览器都将无法再读取重置前发送的消息。与你聊天的人仍会保留他们收到的内容。"
+    ],
+    "Approve it only if you just signed in there yourself, because it gets access to your encrypted messages. Deny signs it out. The other browser should show this code:": [
+      "Bestätige sie nur, wenn du dich gerade selbst dort angemeldet hast, denn sie erhält Zugriff auf deine verschlüsselten Nachrichten. Ablehnen meldet sie ab. Der andere Browser sollte diesen Code anzeigen:",
+      "N'approuve que si tu viens de t'y connecter toi-même, car elle aura accès à tes messages chiffrés. Refuser la déconnecte. L'autre navigateur doit afficher ce code :",
+      "暗号化されたメッセージにアクセスできるようになるため、自分でログインした場合にのみ承認してください。拒否するとそのブラウザはログアウトされます。相手のブラウザには次のコードが表示されているはずです：",
+      "Zatwierdź tylko wtedy, gdy przed chwilą sam się tam zalogowałeś, bo uzyska dostęp do twoich zaszyfrowanych wiadomości. Odrzucenie ją wyloguje. Druga przeglądarka powinna pokazywać ten kod:",
+      "只有在你刚刚亲自在那里登录时才批准，因为它将能访问你的加密消息。拒绝会让它退出登录。另一个浏览器应显示此代码："
+    ],
+    "Signed in {date}": ["Angemeldet am {date}", "Connecté le {date}", "{date} にログイン", "Zalogowano {date}", "登录于 {date}"],
+    "Unlocked browsers can read your encrypted messages, and browsers waiting for approval can once you approve them. Remove the ones you don't recognize or don't use anymore.": [
+      "Entsperrte Browser können deine verschlüsselten Nachrichten lesen, Browser, die auf Bestätigung warten, sobald du sie bestätigst. Entferne die, die du nicht erkennst oder nicht mehr benutzt.",
+      "Les navigateurs déverrouillés peuvent lire tes messages chiffrés, et ceux en attente d'approbation le pourront une fois approuvés. Retire ceux que tu ne reconnais pas ou que tu n'utilises plus.",
+      "ロック解除済みのブラウザは暗号化されたメッセージを読めます。承認待ちのブラウザは、承認すると読めるようになります。心当たりのないものや使わなくなったものは削除してください。",
+      "Odblokowane przeglądarki mogą odczytać twoje zaszyfrowane wiadomości, a te czekające na zatwierdzenie będą mogły po zatwierdzeniu. Usuń te, których nie rozpoznajesz lub już nie używasz.",
+      "已解锁的浏览器可以读取你的加密消息，等待批准的浏览器在你批准后也可以。请移除你不认识或不再使用的浏览器。"
+    ],
+    "This login was denied on your other browser, so this browser was signed out.": [
+      "Diese Anmeldung wurde auf deinem anderen Browser abgelehnt, daher wurde dieser Browser abgemeldet.",
+      "Cette connexion a été refusée sur ton autre navigateur, ce navigateur a donc été déconnecté.",
+      "このログインは別のブラウザで拒否されたため、このブラウザはログアウトされました。",
+      "To logowanie zostało odrzucone w twojej innej przeglądarce, więc ta przeglądarka została wylogowana.",
+      "此登录已在你的另一个浏览器上被拒绝，因此此浏览器已退出登录。"
+    ],
+    "{names} haven't set up encryption yet, so this conversation can't be encrypted. Ask them to open the app once, then try again.": [
+      "{names} haben die Verschlüsselung noch nicht eingerichtet, daher kann diese Unterhaltung nicht verschlüsselt werden. Bitte sie, die App einmal zu öffnen, und versuche es dann erneut.",
+      "{names} n'ont pas encore configuré le chiffrement, cette conversation ne peut donc pas être chiffrée. Demande-leur d'ouvrir l'appli une fois, puis réessaie.",
+      "{names} はまだ暗号化を設定していないため、この会話は暗号化できません。一度アプリを開いてもらってから、もう一度お試しください。",
+      "{names} nie skonfigurowali jeszcze szyfrowania, więc tej rozmowy nie można zaszyfrować. Poproś ich, żeby raz otworzyli aplikację, i spróbuj ponownie.",
+      "{names} 还没有设置加密，因此无法加密此对话。请让他们打开一次应用，然后再试一次。"
+    ],
+    "{name} hasn't set up encryption yet, so this conversation can't be encrypted. Ask them to open the app once, then try again.": [
+      "{name} hat die Verschlüsselung noch nicht eingerichtet, daher kann diese Unterhaltung nicht verschlüsselt werden. Bitte die Person, die App einmal zu öffnen, und versuche es dann erneut.",
+      "{name} n'a pas encore configuré le chiffrement, cette conversation ne peut donc pas être chiffrée. Demande-lui d'ouvrir l'appli une fois, puis réessaie.",
+      "{name} はまだ暗号化を設定していないため、この会話は暗号化できません。一度アプリを開いてもらってから、もう一度お試しください。",
+      "{name} nie skonfigurował(a) jeszcze szyfrowania, więc tej rozmowy nie można zaszyfrować. Poproś tę osobę, żeby raz otworzyła aplikację, i spróbuj ponownie.",
+      "{name} 还没有设置加密，因此无法加密此对话。请让对方打开一次应用，然后再试一次。"
+    ],
+    "Couldn't turn on encryption. {error}": [
+      "Die Verschlüsselung konnte nicht eingeschaltet werden. {error}",
+      "Impossible d'activer le chiffrement. {error}",
+      "暗号化をオンにできませんでした。{error}",
+      "Nie udało się włączyć szyfrowania. {error}",
+      "无法开启加密。{error}"
     ]
   };
   var locale = () => document.documentElement.lang || navigator.language || "en-US";
@@ -3743,17 +3784,25 @@ ${sig}`;
     return os ? `${browser} on ${os}` : browser;
   };
   var addedAt = (iso, seconds) => new Date(iso).toLocaleString(void 0, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", ...seconds && { second: "2-digit" } });
+  var deviceTitle = (device) => {
+    const os = device.session?.os;
+    const browser = device.session?.browser;
+    if (os) return browser ? `${os} • ${browser}` : os;
+    return device.name;
+  };
   var deviceAdded = (devices, device) => {
     if (!device.created_at) return null;
     const minutes = devices.filter((d) => d.status !== "revoked" && d.created_at).map((d) => addedAt(d.created_at, false));
     return addedAt(device.created_at, new Set(minutes).size < minutes.length);
   };
+  var deviceTwins = (devices, device) => devices.filter((d) => d.status !== "revoked" && deviceTitle(d) === deviceTitle(device));
   var deviceLabel = (devices, deviceId, fallback) => {
     const device = devices.find((d) => d.device_id === deviceId);
-    if (!device?.name) return fallback;
-    const twins = devices.filter((d) => d.status !== "revoked" && d.name === device.name);
+    const title = device && deviceTitle(device);
+    if (!device || !title) return fallback;
+    const twins = deviceTwins(devices, device);
     const added = twins.length > 1 ? deviceAdded(twins, device) : null;
-    return added ? `${device.name}, added ${added}` : device.name;
+    return added ? `${title}, added ${added}` : title;
   };
   var Engine = class {
     constructor(api2) {
@@ -3794,6 +3843,7 @@ ${sig}`;
     backfilling = false;
     wiped = false;
     freshIdentity = null;
+    trustVersion = -1;
     onChange(listener) {
       this.listeners.add(listener);
       return () => this.listeners.delete(listener);
@@ -4131,6 +4181,75 @@ ${sig}`;
       this.deviceStatus = serverDevice.status;
       this.linked = await signedBy(serverDevice);
       this.directory.delete(userId);
+      if (this.linked) await this.applyTrust(this.backup).catch((error) => console.error("[e2ee] couldn't read the synced verifications", error));
+    }
+    async applyTrust(record, syncLocal = true) {
+      const trust = record?.identity_key === this.serverKey ? record.trust : void 0;
+      if (!trust || !this.secret || trust.version === this.trustVersion) return {};
+      this.trustVersion = trust.version;
+      const remote = trust.data ? await openTrust(this.secret, this.userId, trust.data) : {};
+      let changed = false;
+      for (const [userId, entry] of Object.entries(remote)) {
+        const contact = this.contacts[userId];
+        if (userId === this.userId || entry.at <= (contact?.verifiedAt ?? 0)) continue;
+        if (!contact) this.contacts[userId] = { identityKey: entry.key, verified: entry.verified, pendingKey: null, firstSeen: Date.now(), verifiedAt: entry.at };
+        else if (contact.identityKey === entry.key) Object.assign(contact, { verified: entry.verified, verifiedAt: entry.at });
+        else if (contact.pendingKey === entry.key)
+          Object.assign(contact, {
+            previousKeys: [.../* @__PURE__ */ new Set([...contact.previousKeys ?? [], contact.identityKey])].slice(-16),
+            identityKey: entry.key,
+            pendingKey: null,
+            verified: entry.verified,
+            verifiedAt: entry.at
+          });
+        else continue;
+        this.directory.delete(userId);
+        changed = true;
+      }
+      if (changed) {
+        await this.saveContacts();
+        queueMicrotask(() => this.emit());
+      }
+      const unsynced = Object.keys(this.contacts).filter((id) => this.contacts[id].verified && !this.contacts[id].pendingKey && !remote[id]);
+      if (syncLocal && unsynced.length) queueMicrotask(() => this.pushTrust(unsynced).catch((error) => console.error("[e2ee] couldn't sync verifications", error)));
+      return remote;
+    }
+    async syncTrust() {
+      if (!this.linked) return;
+      await this.serialized(async () => {
+        this.backup = await this.fetchBackup();
+        await this.applyTrust(this.backup);
+      });
+    }
+    async pushTrust(userIds) {
+      if (!this.secret) return;
+      await this.serialized(async () => {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const backup = this.backup = await this.fetchBackup();
+          if (!backup?.trust || backup.identity_key !== this.serverKey || !this.secret) return;
+          this.trustVersion = -1;
+          const remote = await this.applyTrust(backup, false).catch(() => ({}));
+          const next = { ...remote };
+          for (const id of userIds) {
+            const contact = this.contacts[id];
+            if (!contact || contact.pendingKey) continue;
+            const at = contact.verifiedAt ?? Date.now();
+            if ((remote[id]?.at ?? 0) < at) next[id] = { key: contact.identityKey, verified: contact.verified, at };
+          }
+          if (userIds.every((id) => next[id] === remote[id])) return;
+          try {
+            const saved = await this.api.request("put", "/users/@me/e2ee/backup/trust", {
+              version: backup.trust.version,
+              data: await sealTrust(this.secret, this.userId, next)
+            });
+            this.trustVersion = saved.version;
+            backup.trust = saved;
+            return;
+          } catch (error) {
+            if (error?.status !== 409) throw error;
+          }
+        }
+      });
     }
     async unlockWith(kind, input) {
       const backup = this.backup = await this.fetchBackup();
@@ -4315,16 +4434,20 @@ ${sig}`;
       contact.identityKey = contact.pendingKey;
       contact.pendingKey = null;
       contact.verified = false;
+      contact.verifiedAt = Date.now();
       await this.saveContacts();
       this.directory.delete(userId);
       this.emit();
+      this.pushTrust([userId]).catch((error) => console.error("[e2ee] couldn't sync the accepted safety number", error));
     }
     async setVerified(userId, verified) {
       const contact = this.contacts[userId];
       if (!contact) return;
       contact.verified = verified;
+      contact.verifiedAt = Date.now();
       await this.saveContacts();
       this.emit();
+      this.pushTrust([userId]).catch((error) => console.error("[e2ee] couldn't sync the verification", error));
     }
     async encrypt(channelId, payload, opts) {
       if (!this.device || !this.userId) throw new E2eeError("NOT_READY", t("Encryption is still starting up"));
@@ -4939,6 +5062,7 @@ ${approver}`;
     let leader = false;
     let wanted = false;
     let stopped = false;
+    let denied = false;
     let release = null;
     let channel = null;
     const incoming = /* @__PURE__ */ new Map();
@@ -4951,7 +5075,7 @@ ${approver}`;
       state: outgoing.state,
       approvers: [...outgoing.offers.values()].flatMap(({ name, sas }) => sas ? [{ name, sas }] : []),
       error: outgoing.error
-    } : null;
+    } : denied ? { requestId: "", state: "denied", approvers: [], error: null } : null;
     const changed = () => {
       if (leader) send({ type: "outgoing", value: snapshot() });
       hooks2.onChange();
@@ -4988,8 +5112,8 @@ ${approver}`;
       }, 1e4);
     };
     const request = () => {
+      if (stopped || denied) return Promise.resolve();
       wanted = true;
-      if (stopped) return Promise.resolve();
       if (!leader) {
         send({ type: "request" });
         return Promise.resolve();
@@ -5088,7 +5212,16 @@ ${approver}`;
           return;
         }
         pending.requester = event.public_key;
-        const info = { requestId: event.request_id, name: pending.name, sas: await sasFor(event.request_id, event.public_key, pending.publicKey) };
+        if (!engine2.devices.some((d) => d.device_id === pending.deviceId)) await engine2.refresh().catch(() => {
+        });
+        const device = engine2.devices.find((d) => d.device_id === pending.deviceId);
+        const added = device && deviceAdded(deviceTwins(engine2.devices, device), device);
+        const info = {
+          requestId: event.request_id,
+          name: device && deviceTitle(device) || pending.name,
+          detail: [added && t("Signed in {date}", { date: added }), device?.session?.location].filter(Boolean).join(" · ") || null,
+          sas: await sasFor(event.request_id, event.public_key, pending.publicKey)
+        };
         prompts.set(info.requestId, info);
         send({ type: "prompt", prompt: info });
         hooks2.onPrompt({ ...info, approve: () => respond(info.requestId, "approve"), deny: () => respond(info.requestId, "deny") });
@@ -5098,6 +5231,8 @@ ${approver}`;
       if (!current || !offer || current.approved) return;
       if (event.stage === "deny") {
         current.state = "denied";
+        denied = true;
+        wanted = false;
         changed();
         return;
       }
@@ -5260,178 +5395,6 @@ ${approver}`;
     };
   };
 
-  // client/e2ee/src/qr.ts
-  var EC_PER_BLOCK = [0, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26];
-  var BLOCKS = [0, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5];
-  var multiply = (x, y) => {
-    let z = 0;
-    for (let i = 7; i >= 0; i--) {
-      z = z << 1 ^ (z >>> 7) * 285;
-      z ^= (y >>> i & 1) * x;
-    }
-    return z & 255;
-  };
-  var divisor = (degree) => {
-    const result = new Array(degree).fill(0);
-    result[degree - 1] = 1;
-    let root = 1;
-    for (let i = 0; i < degree; i++) {
-      for (let j = 0; j < degree; j++) {
-        result[j] = multiply(result[j], root);
-        if (j + 1 < degree) result[j] ^= result[j + 1];
-      }
-      root = multiply(root, 2);
-    }
-    return result;
-  };
-  var remainder = (data, div) => {
-    const result = new Array(div.length).fill(0);
-    for (const b of data) {
-      const factor = b ^ result.shift();
-      result.push(0);
-      div.forEach((coef, i) => result[i] ^= multiply(coef, factor));
-    }
-    return result;
-  };
-  var rawModules = (ver) => {
-    let result = (16 * ver + 128) * ver + 64;
-    if (ver >= 2) {
-      const align = Math.floor(ver / 7) + 2;
-      result -= (25 * align - 10) * align - 55;
-      if (ver >= 7) result -= 36;
-    }
-    return result;
-  };
-  var dataCodewords = (ver) => Math.floor(rawModules(ver) / 8) - EC_PER_BLOCK[ver] * BLOCKS[ver];
-  var alignmentPositions = (ver, size) => {
-    if (ver === 1) return [];
-    const count2 = Math.floor(ver / 7) + 2;
-    const step = Math.ceil((ver * 4 + 4) / (count2 * 2 - 2)) * 2;
-    const result = [6];
-    for (let pos = size - 7; result.length < count2; pos -= step) result.splice(1, 0, pos);
-    return result;
-  };
-  var qrMatrix = (text) => {
-    const bytes = [...new TextEncoder().encode(text)];
-    let ver = 1;
-    while (ver <= 10 && 4 + (ver < 10 ? 8 : 16) + bytes.length * 8 > dataCodewords(ver) * 8) ver++;
-    if (ver > 10) throw new Error("Text too long for a QR code");
-    const capacity = dataCodewords(ver) * 8;
-    const bits = [];
-    const push = (value, length) => {
-      for (let i = length - 1; i >= 0; i--) bits.push(value >>> i & 1);
-    };
-    push(4, 4);
-    push(bytes.length, ver < 10 ? 8 : 16);
-    bytes.forEach((b) => push(b, 8));
-    push(0, Math.min(4, capacity - bits.length));
-    push(0, (8 - bits.length % 8) % 8);
-    for (let pad = 236; bits.length < capacity; pad ^= 236 ^ 17) push(pad, 8);
-    const data = [];
-    for (let i = 0; i < bits.length; i += 8) data.push(bits.slice(i, i + 8).reduce((acc, bit2) => acc << 1 | bit2, 0));
-    const blockCount = BLOCKS[ver];
-    const ecLength = EC_PER_BLOCK[ver];
-    const raw = Math.floor(rawModules(ver) / 8);
-    const short = blockCount - raw % blockCount;
-    const shortLength = Math.floor(raw / blockCount);
-    const div = divisor(ecLength);
-    const blocks = [];
-    for (let i = 0, k = 0; i < blockCount; i++) {
-      const chunk = data.slice(k, k + shortLength - ecLength + (i < short ? 0 : 1));
-      k += chunk.length;
-      const ec = remainder(chunk, div);
-      if (i < short) chunk.push(0);
-      blocks.push([...chunk, ...ec]);
-    }
-    const codewords = [];
-    for (let i = 0; i < blocks[0].length; i++)
-      blocks.forEach((block, j) => {
-        if (i !== shortLength - ecLength || j >= short) codewords.push(block[i]);
-      });
-    const size = ver * 4 + 17;
-    const modules = Array.from({ length: size }, () => new Array(size).fill(false));
-    const reserved = Array.from({ length: size }, () => new Array(size).fill(false));
-    const set = (x, y, dark) => {
-      modules[y][x] = dark;
-      reserved[y][x] = true;
-    };
-    for (let i = 0; i < size; i++) {
-      set(6, i, i % 2 === 0);
-      set(i, 6, i % 2 === 0);
-    }
-    const finder = (cx, cy) => {
-      for (let dy = -4; dy <= 4; dy++)
-        for (let dx = -4; dx <= 4; dx++) {
-          const x = cx + dx;
-          const y = cy + dy;
-          if (x < 0 || x >= size || y < 0 || y >= size) continue;
-          const dist = Math.max(Math.abs(dx), Math.abs(dy));
-          set(x, y, dist !== 2 && dist !== 4);
-        }
-    };
-    finder(3, 3);
-    finder(size - 4, 3);
-    finder(3, size - 4);
-    const align = alignmentPositions(ver, size);
-    align.forEach(
-      (ax, i) => align.forEach((ay, j) => {
-        if (i === 0 && j === 0 || i === 0 && j === align.length - 1 || i === align.length - 1 && j === 0) return;
-        for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) set(ax + dx, ay + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
-      })
-    );
-    const mask = 0;
-    const formatData = mask;
-    let rem = formatData;
-    for (let i = 0; i < 10; i++) rem = rem << 1 ^ (rem >>> 9) * 1335;
-    const format = (formatData << 10 | rem) ^ 21522;
-    const bit = (value, i) => (value >>> i & 1) !== 0;
-    for (let i = 0; i <= 5; i++) set(8, i, bit(format, i));
-    set(8, 7, bit(format, 6));
-    set(8, 8, bit(format, 7));
-    set(7, 8, bit(format, 8));
-    for (let i = 9; i < 15; i++) set(14 - i, 8, bit(format, i));
-    for (let i = 0; i < 8; i++) set(size - 1 - i, 8, bit(format, i));
-    for (let i = 8; i < 15; i++) set(8, size - 15 + i, bit(format, i));
-    set(8, size - 8, true);
-    if (ver >= 7) {
-      let vrem = ver;
-      for (let i = 0; i < 12; i++) vrem = vrem << 1 ^ (vrem >>> 11) * 7973;
-      const info = ver << 12 | vrem;
-      for (let i = 0; i < 18; i++) {
-        const a = size - 11 + i % 3;
-        const b = Math.floor(i / 3);
-        set(a, b, bit(info, i));
-        set(b, a, bit(info, i));
-      }
-    }
-    let index = 0;
-    for (let right = size - 1; right >= 1; right -= 2) {
-      if (right === 6) right = 5;
-      for (let vert = 0; vert < size; vert++)
-        for (let j = 0; j < 2; j++) {
-          const x = right - j;
-          const upward = (right + 1 & 2) === 0;
-          const y = upward ? size - 1 - vert : vert;
-          if (reserved[y][x]) continue;
-          const dark = index < codewords.length * 8 && bit(codewords[index >>> 3], 7 - (index & 7));
-          index++;
-          modules[y][x] = dark !== ((x + y) % 2 === 0);
-        }
-    }
-    return modules;
-  };
-  var qrSvg = (text, label) => {
-    const modules = qrMatrix(text);
-    const size = modules.length + 8;
-    let path = "";
-    modules.forEach(
-      (row, y) => row.forEach((dark, x) => {
-        if (dark) path += `M${x + 4} ${y + 4}h1v1h-1z`;
-      })
-    );
-    return `<svg viewBox="0 0 ${size} ${size}" role="img" aria-label="${label}" shape-rendering="crispEdges"><rect width="${size}" height="${size}" fill="#fff"/><path d="${path}" fill="#000"/></svg>`;
-  };
-
   // client/e2ee/src/ui.ts
   var LOCK_PATH = "M7 10V7a5 5 0 0 1 10 0v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1Zm2 0h6V7a3 3 0 0 0-6 0v3Z";
   var OPEN_LOCK_PATH = "M9 10h9a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1V7a5 5 0 0 1 9.58-2 1 1 0 1 1-1.83.8A3 3 0 0 0 9 7v3Z";
@@ -5490,12 +5453,10 @@ ${approver}`;
 .fe2ee-member-name{font-weight:600;color:var(--text-strong,#f2f3f5);overflow-wrap:anywhere}
 .fe2ee-status{display:inline-flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap;color:var(--text-muted,#b5bac1)}
 .fe2ee-status[data-verified="true"]{color:var(--status-positive,#23a55a)}
+.fe2ee-status[data-changed="true"]{color:var(--text-feedback-warning,var(--status-warning,#f0b232))}
 .fe2ee-status svg{width:14px;height:14px}
 .fe2ee-safety{display:flex;gap:16px;align-items:center}
 .fe2ee-digits{flex:1;display:grid;grid-template-columns:repeat(4,auto);justify-content:start;gap:4px 16px;font-size:17px;line-height:24px;font-variant-numeric:tabular-nums;letter-spacing:.04em;color:var(--text-strong,#f2f3f5)}
-.fe2ee-qr{flex:none;width:112px;height:112px;border-radius:8px;overflow:hidden;background:#fff}
-.fe2ee-qr svg{display:block;width:100%;height:100%}
-@media (max-width:480px){.fe2ee-safety{flex-direction:column;align-items:flex-start}}
 .fe2ee-member-actions{display:flex;gap:8px;flex-wrap:wrap}
 [data-fe2ee-state="pending"],[data-fe2ee-state="locked"],[data-fe2ee-state="missing"],[data-fe2ee-state="reset"],[data-fe2ee-state="failed"]{color:var(--text-muted,#949ba4);font-style:italic}
 [id^="message-content-"] > [class*="timestamp_"]:has(> .fe2ee-lock){white-space:nowrap}
@@ -5508,16 +5469,23 @@ ${approver}`;
 .fe2ee-unlock:focus-visible{outline:2px solid var(--focus-primary,#00a8fc);outline-offset:2px}
 @media (hover:hover){.fe2ee-unlock:hover{background:var(--control-secondary-background-hover,#6d6f78)}}
 .fe2ee-section{display:flex;flex-direction:column;gap:8px;padding-top:16px;border-top:1px solid var(--border-subtle,rgb(255 255 255 / .06))}
+.fe2ee-section[hidden]{display:none}
 .fe2ee-section h3{margin:0;font-size:16px;line-height:20px;font-weight:600;color:var(--text-strong,#f2f3f5)}
 .fe2ee-section > .fe2ee-button{align-self:flex-start}
 .fe2ee-field{display:flex;flex-direction:column;gap:8px}
 .fe2ee-field label{font-size:14px;font-weight:500;color:var(--text-default,#dbdee1)}
 .fe2ee-row{display:flex;gap:8px;align-items:center}
 .fe2ee-input{flex:1;min-width:0;font:inherit;font-size:16px;line-height:20px;padding:9px 12px;border-radius:8px;border:0;color:var(--text-default,#dbdee1);background:var(--input-background-default,var(--background-base-lowest,#1e1f22));box-shadow:inset 0 0 0 1px var(--border-subtle,rgb(255 255 255 / .06))}
+.fe2ee-input-code{font-family:var(--font-code,ui-monospace,monospace);font-size:15px;letter-spacing:.02em;text-transform:uppercase}
+.fe2ee-input-code::placeholder{text-transform:none}
+.fe2ee-row[data-stack]{flex-direction:column;align-items:stretch}
+.fe2ee-row[data-stack] > .fe2ee-input{flex:none;width:100%;box-sizing:border-box}
+.fe2ee-row[data-stack] > .fe2ee-button{align-self:flex-start}
 .fe2ee-input:focus-visible{outline:2px solid var(--focus-primary,#00a8fc);outline-offset:-1px}
 .fe2ee-input[aria-invalid="true"]{box-shadow:inset 0 0 0 1px var(--status-danger,#f23f43)}
 .fe2ee-input[aria-invalid="true"]:focus-visible{outline-color:var(--status-danger,#f23f43)}
 .fe2ee-field:has(.fe2ee-input[aria-invalid="true"]) label{color:var(--text-feedback-critical,var(--status-danger,#f23f43))}
+.fe2ee-dialog p.fe2ee-detail{margin-top:-8px;font-size:14px;line-height:18px}
 .fe2ee-dialog .fe2ee-error,.fe2ee-page .fe2ee-error{margin:0;font-size:14px;line-height:18px;color:var(--text-feedback-critical,var(--status-danger,#f23f43))}
 .fe2ee-code{font-size:28px;line-height:36px;font-weight:600;letter-spacing:.08em;font-variant-numeric:tabular-nums;color:var(--text-strong,#f2f3f5)}
 .fe2ee-recovery{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:0;padding:12px;list-style:none;border-radius:8px;background:var(--background-base-lowest,#1e1f22)}
@@ -5780,23 +5748,43 @@ ${approver}`;
         "beforeend",
         `<p>${escape(t("New messages, files and stickers in this conversation are encrypted in your browser before they're sent, and only the people in it can read them. Encryption can't be turned off later."))}</p><p>${escape(t("Polls can't be sent in encrypted conversations."))}</p>`
       );
+      const error = document.createElement("p");
+      error.className = "fe2ee-error";
+      error.setAttribute("role", "alert");
+      error.hidden = true;
+      body.append(error);
+      const notReady = (ids) => namesOf(ids).then((who) => {
+        error.textContent = ids.length > 1 ? t("{names} haven't set up encryption yet, so this conversation can't be encrypted. Ask them to open the app once, then try again.", { names: who }) : t("{name} hasn't set up encryption yet, so this conversation can't be encrypted. Ask them to open the app once, then try again.", { name: who });
+        error.hidden = false;
+        confirm.disabled = true;
+      });
       const confirm = button(t("Turn on encryption"), "primary", async () => {
         confirm.disabled = true;
+        error.hidden = true;
         try {
           await enableChannel(channelId);
-        } catch (error) {
-          showError(error, channelId);
+          close();
+        } catch (failure3) {
+          const body2 = failure3?.body;
+          if (body2?.message === "E2EE_RECIPIENT_NO_DEVICES") return void await notReady(Array.isArray(body2.user_ids) ? body2.user_ids.map(String) : []);
+          error.textContent = t("Couldn't turn on encryption. {error}", { error: errorText(failure3) });
+          error.hidden = false;
+          confirm.disabled = false;
         }
-        close();
       });
       actions.append(button(t("Cancel"), "secondary", close), confirm);
+      engine2.channelMembers(channelId).then((ids) => engine2.keysFor(ids, true)).then((entries) => {
+        const missing = entries.filter((entry) => !entry.devices.some((d) => d.status === "active")).map((entry) => entry.userId);
+        if (missing.length) return notReady(missing);
+      }).catch(() => {
+      });
     });
     const showSafety = async (channelId) => {
       const list = await Promise.all((await engine2.channelMembers(channelId)).map((id) => engine2.profile(id)));
       dialog(t("Safety numbers"), (body, actions, { close }) => {
         body.insertAdjacentHTML(
           "beforeend",
-          `<p>${escape(t("Compare these numbers with each person in a call or face to face, or scan the code with their phone. If they match, nobody is intercepting your messages. Mark them as verified so you're warned if they change."))}</p>`
+          `<p>${escape(t("Compare these numbers with each person in a call or face to face. If they match, nobody is intercepting your messages. Mark them as verified so you're warned if they change."))}</p>`
         );
         for (const member of list) {
           const block = document.createElement("section");
@@ -5807,18 +5795,12 @@ ${approver}`;
             const contact = engine2.contacts[member.id];
             const status = block.querySelector(".fe2ee-status");
             status.dataset.verified = String(!!contact?.verified && !contact.pendingKey);
+            status.dataset.changed = String(!!contact?.pendingKey);
             status.innerHTML = contact?.pendingKey ? `${svg(OPEN_LOCK_PATH)}${escape(t("Safety number changed"))}` : contact?.verified ? `${svg(VERIFIED_PATH)}${escape(t("Verified"))}` : `${svg(OPEN_LOCK_PATH)}${escape(t("Not verified"))}`;
             const digits = await engine2.safetyNumber(member.id);
             const grid = block.querySelector(".fe2ee-digits");
             grid.innerHTML = digits ? (digits.match(/\d{5}/g) ?? []).map((g) => `<span>${g}</span>`).join("") : escape(t("This person hasn't set up encryption yet."));
             grid.dataset.number = digits ?? "";
-            block.querySelector(".fe2ee-qr")?.remove();
-            if (digits) {
-              const qr = document.createElement("div");
-              qr.className = "fe2ee-qr";
-              qr.innerHTML = qrSvg(digits, escape(t("QR code of the safety number for {name}", { name: memberName(member) })));
-              grid.after(qr);
-            }
             const row = block.querySelector(".fe2ee-member-actions");
             row.replaceChildren();
             if (!contact) return;
@@ -5851,10 +5833,12 @@ ${approver}`;
     const showReset = (onDone) => dialog(t("Reset encryption?"), (body, actions, { close }) => {
       describe2(
         body,
-        engine2.backup?.mode === "recovery" ? t(
-          "Only do this if you lost your recovery code and no other signed-in browser can approve this one. You get new encryption keys and can keep chatting, but nobody can read the messages sent before the reset anymore, on any device."
-        ) : t(
-          "Only do this if your password doesn't unlock your keys and no other signed-in browser can approve this one. You get new encryption keys and can keep chatting, but nobody can read the messages sent before the reset anymore, on any device."
+        engine2.linked ? t("This replaces your encryption keys. Only do this if you think someone else got hold of them.") : engine2.backup?.mode === "recovery" ? t("Only do this if you lost your recovery code and no other signed-in browser can approve this one.") : t("Only do this if your password doesn't unlock your keys and no other signed-in browser can approve this one.")
+      );
+      describe2(
+        body,
+        t(
+          "You get new keys and can keep chatting, but none of your browsers can read the messages sent before the reset anymore. The people you talk to keep what they received."
         )
       );
       describe2(body, t("Your other browsers have to be approved again, and the people you talk to are told that your safety number changed."));
@@ -5883,7 +5867,11 @@ ${approver}`;
     });
     const unlockForm = (kind) => {
       const { wrap, input, row, setError } = kind === "password" ? field(t("Account password"), "password", "current-password") : field(t("Recovery code"), "text", "off");
-      if (kind === "recovery") input.placeholder = "XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX";
+      if (kind === "recovery") {
+        input.placeholder = "XXXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX";
+        input.classList.add("fe2ee-input-code");
+        row.dataset.stack = "";
+      }
       const submit = button(t("Unlock"), "primary", async () => {
         if (!input.value.trim()) return setError(kind === "password" ? t("Enter your password.") : t("Enter your recovery code."));
         submit.disabled = true;
@@ -5903,11 +5891,11 @@ ${approver}`;
     const showUnlock = () => {
       if (unlockOpen || !engine2.locked) return;
       const current = link2.outgoing();
-      if (!current || current.state === "denied" || current.state === "failed") link2.request().catch(() => {
+      if (!current || current.state === "failed") link2.request().catch(() => {
       });
       dialog(t("Unlock encrypted messages"), (body, actions, { el, close }) => {
         const backup = engine2.backup;
-        describe2(body, t("This browser can't read your encrypted messages yet. Bring your keys over with one of these."));
+        const intro = describe2(body, t("This browser can't read your encrypted messages yet. Bring your keys over with one of these."));
         if (!backup || backup.mode === "password" && !backup.wrapped_secret) {
           const own = section(
             t("Enter your password"),
@@ -5950,13 +5938,16 @@ ${approver}`;
               return row;
             })
           );
-          again.hidden = state?.state === "waiting" || state?.state === "comparing" || state?.state === "done";
+          again.hidden = state?.state === "waiting" || state?.state === "comparing" || state?.state === "done" || state?.state === "denied";
           again.textContent = state ? t("Ask again") : t("Ask for approval");
           status.textContent = state?.state === "comparing" ? approvers.length > 1 ? t(
             "Your signed-in browsers are asking you to approve this one. Approve it on any of them after checking that it shows the code listed under its name."
           ) : t("{name} is asking you to approve this browser. Check that it shows this code, then approve it there.", {
             name: approvers[0]?.name ?? t("Your other browser")
-          }) : state?.state === "denied" ? t("This login was denied on your other browser.") : state?.state === "failed" ? state.error ? t("The approval didn't unlock this browser. {error}", { error: state.error }) : t("The approval didn't unlock this browser. Ask again to retry.") : state?.state === "waiting" ? t("Open the app on a browser where you're already signed in. It asks you to approve this one.") : t("Ask a browser where you're already signed in to approve this one.");
+          }) : state?.state === "denied" ? t("This login was denied on your other browser, so this browser was signed out.") : state?.state === "failed" ? state.error ? t("The approval didn't unlock this browser. {error}", { error: state.error }) : t("The approval didn't unlock this browser. Ask again to retry.") : state?.state === "waiting" ? t("Open the app on a browser where you're already signed in. It asks you to approve this one.") : t("Ask a browser where you're already signed in to approve this one.");
+          const denied = state?.state === "denied";
+          for (const el2 of [intro, ...body.querySelectorAll(":scope > .fe2ee-section")]) el2.hidden = denied && el2 !== approval;
+          notNow.textContent = denied ? t("Close") : t("Not now");
           if (engine2.linked) {
             done();
             const channelId = currentChannel();
@@ -5973,15 +5964,14 @@ ${approver}`;
         el.addEventListener("close", () => {
           stop();
           unlockOpen = null;
-          if (engine2.locked) snoozeUnlock();
+          if (engine2.locked && link2.outgoing()?.state !== "denied") snoozeUnlock();
         });
-        actions.append(
-          button(t("Not now"), "secondary", () => {
-            link2.cancel().catch(() => {
-            });
-            done();
-          })
-        );
+        const notNow = button(t("Not now"), "secondary", () => {
+          link2.cancel().catch(() => {
+          });
+          done();
+        });
+        actions.append(notNow);
         render();
       });
     };
@@ -5990,7 +5980,7 @@ ${approver}`;
       dialog(t("New login on {name}", { name: prompt.name }), (body, actions, { el, close }) => {
         body.insertAdjacentHTML(
           "beforeend",
-          `<p>${escape(t("Approve it only if you just signed in there yourself, because it gets access to your encrypted messages. The other browser should show this code:"))}</p><div class="fe2ee-code">${escape(prompt.sas)}</div>`
+          `${prompt.detail ? `<p class="fe2ee-detail">${escape(prompt.detail)}</p>` : ""}<p>${escape(t("Approve it only if you just signed in there yourself, because it gets access to your encrypted messages. Deny signs it out. The other browser should show this code:"))}</p><div class="fe2ee-code">${escape(prompt.sas)}</div>`
         );
         const error = document.createElement("p");
         error.className = "fe2ee-error";
@@ -6112,10 +6102,7 @@ ${approver}`;
       const current = device.device_id === engine2.device?.deviceId;
       const session = device.session;
       const state = current ? t("This browser") : device.status === "pending" ? t("Waiting for approval") : session && !session.signed_in ? t("Signed out") : session?.last_seen && Date.now() - Date.parse(session.last_seen) < 5 * 60 * 1e3 ? t("Active now") : session?.last_seen ? t("Last active {time}", { time: ago(session.last_seen) }) : t("Can read encrypted messages");
-      const when = deviceAdded(
-        engine2.devices.filter((d) => d.name === device.name),
-        device
-      );
+      const when = deviceAdded(deviceTwins(engine2.devices, device), device);
       const added = when ? t("Added {date}", { date: when }) : null;
       return { current, text: [state, session?.location, added].filter(Boolean).join(" · ") };
     };
@@ -6124,7 +6111,7 @@ ${approver}`;
         body,
         t(
           "{name} is signed out and can't read new encrypted messages. To read them there again, it needs your recovery code, your password, or approval from another device.",
-          { name: device.name ?? t("This browser") }
+          { name: deviceTitle(device) ?? t("This browser") }
         )
       );
       const error = document.createElement("p");
@@ -6149,7 +6136,12 @@ ${approver}`;
     const buildSettings = (root, close) => {
       const browser = section(t("This browser"));
       const backupSection = section(t("Key backup"));
-      const devices = section(t("Your devices"), t("Every browser listed here can read your encrypted messages. Remove the ones you don't recognize or don't use anymore."));
+      const devices = section(
+        t("Your devices"),
+        t(
+          "Unlocked browsers can read your encrypted messages, and browsers waiting for approval can once you approve them. Remove the ones you don't recognize or don't use anymore."
+        )
+      );
       const resetSection = section(t("Reset encryption"));
       const resetText = describe2(resetSection, "");
       const list = document.createElement("div");
@@ -6253,7 +6245,7 @@ ${approver}`;
           const row = document.createElement("div");
           row.className = "fe2ee-device";
           const { current, text } = deviceMeta(device);
-          row.innerHTML = `<div class="fe2ee-device-icon">${svg(SCREEN_PATH)}</div><div class="fe2ee-device-text"><span class="fe2ee-device-name">${escape(device.name ?? t("Unknown browser"))}</span><span class="fe2ee-device-meta" data-current="${current}">${escape(text)}</span></div>`;
+          row.innerHTML = `<div class="fe2ee-device-icon">${svg(SCREEN_PATH)}</div><div class="fe2ee-device-text"><span class="fe2ee-device-name">${escape(deviceTitle(device) ?? t("Unknown browser"))}</span><span class="fe2ee-device-meta" data-current="${current}">${escape(text)}</span></div>`;
           const buttons = document.createElement("div");
           buttons.className = "fe2ee-device-actions";
           if (!current && device.status === "pending" && engine2.linked && engine2.hasSecret) {
@@ -6283,6 +6275,7 @@ ${approver}`;
       };
       const render = () => {
         renderBrowser();
+        renderBackup();
         renderDevices();
         renderReset();
       };
@@ -6317,7 +6310,21 @@ ${approver}`;
         root.remove();
       };
     };
-    const beforeSend = (channelId) => {
+    const pauseForChange = (channelId, changed) => {
+      flash(channelId, {
+        tone: "warning",
+        text: t("{name}'s safety number changed. Review it before sending. Your message is still in the text box.", { name: memberName(changed) }),
+        action: { label: t("Review"), run: () => showSafety(channelId) }
+      });
+      return true;
+    };
+    const changedMember = async (channelId) => {
+      const ids = await engine2.channelMembers(channelId);
+      await engine2.keysFor(ids);
+      const id = ids.find((m) => engine2.contacts[m]?.pendingKey);
+      return id ? engine2.profile(id) : null;
+    };
+    const beforeSend = async (channelId) => {
       if (!engine2.isEncrypted(channelId)) return false;
       if (failure2) {
         flash(channelId, { tone: "danger", text: failure2 });
@@ -6328,14 +6335,7 @@ ${approver}`;
         return true;
       }
       const changed = members?.channelId === channelId ? members.list.find((m) => engine2.contacts[m.id]?.pendingKey) : void 0;
-      if (changed) {
-        flash(channelId, {
-          tone: "warning",
-          text: t("{name}'s safety number changed. Review it before sending. Your message is still in the text box.", { name: memberName(changed) }),
-          action: { label: t("Review"), run: () => showSafety(channelId) }
-        });
-        return true;
-      }
+      if (changed) return pauseForChange(channelId, changed);
       if (engine2.locked) {
         showUnlock();
         flash(channelId, {
@@ -6345,7 +6345,8 @@ ${approver}`;
         });
         return true;
       }
-      return false;
+      const checked = await Promise.race([changedMember(channelId).catch(() => null), new Promise((resolve) => void setTimeout(() => resolve(null), 3e3))]);
+      return checked ? pauseForChange(channelId, checked) : false;
     };
     const decorateMessages = () => {
       for (const [id, info] of states2) {
@@ -6365,7 +6366,7 @@ ${approver}`;
         const lock = document.createElement("span");
         lock.className = "fe2ee-lock";
         lock.dataset.state = info.state;
-        const label = info.state === "decrypted" ? t("End-to-end encrypted") : info.state === "pending" ? t("Decrypting") : info.state === "locked" ? t("Unlock this browser to read this message") : info.state === "missing" ? t("This browser doesn't have the key for this message") : info.state === "reset" ? t("Sent before encryption was reset, so it can't be read anymore") : info.reason ? t("Couldn't decrypt this message. {reason}", { reason: info.reason }) : t("Couldn't decrypt this message.");
+        const label = info.state === "decrypted" ? t("End-to-End Encrypted") : info.state === "pending" ? t("Decrypting") : info.state === "locked" ? t("Unlock this browser to read this message") : info.state === "missing" ? t("This browser doesn't have the key for this message") : info.state === "reset" ? t("Sent before encryption was reset, so it can't be read anymore") : info.reason ? t("Couldn't decrypt this message. {reason}", { reason: info.reason }) : t("Couldn't decrypt this message.");
         lock.innerHTML = svg(info.state === "decrypted" || info.state === "pending" ? LOCK_PATH : OPEN_LOCK_PATH, label);
         withTooltip(lock, () => label);
         host.append(lock);
@@ -6848,9 +6849,15 @@ ${approver}`;
     },
     E2EE_IDENTITY_UPDATE: (data) => {
       count("E2EE_IDENTITY_UPDATE");
-      engine.invalidateUser(String(data.user_id));
-      refreshSelf(String(data.user_id));
+      const userId = String(data.user_id);
+      engine.invalidateUser(userId);
+      refreshSelf(userId);
+      if (initialized && !signedOut && userId !== engine.userId) engine.keysFor([userId]).catch((error) => console.error("[e2ee] couldn't check the new safety number", error));
       ui.refresh();
+    },
+    E2EE_TRUST_UPDATE: () => {
+      count("E2EE_TRUST_UPDATE");
+      if (initialized && !signedOut) engine.syncTrust().catch((error) => console.error("[e2ee] couldn't sync verifications", error));
     },
     E2EE_LINK_REQUEST: (data) => {
       count("E2EE_LINK_REQUEST");
