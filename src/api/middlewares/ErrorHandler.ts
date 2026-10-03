@@ -91,12 +91,9 @@ export function ErrorHandler(error: Error & { type?: string }, req: Request, res
             message = "The request body contains invalid JSON.";
         } else {
             console.error(`[Error] ${code} ${req.url}\n`, errors ?? error, "\nbody:", req.body);
-
-            if (req.server?.options?.production) {
-                // don't expose internal errors to the user, instead human errors should be thrown as HTTPError
-                message = "Internal Server Error";
-            }
-            code = httpcode = 500;
+            message = "500: Internal Server Error";
+            code = 0;
+            httpcode = 500;
         }
 
         if (httpcode > 511) httpcode = 400;
@@ -110,6 +107,6 @@ export function ErrorHandler(error: Error & { type?: string }, req: Request, res
         res.status(httpcode).json({ code, message, errors, _ajvErrors, request: `${req.method} ${req.url}` });
     } catch (error) {
         console.error(`[Internal Server Error] 500`, error);
-        return res.status(500).json({ code: 500, message: `Internal server error while handling error`, request: `${req.method} ${req.url}` });
+        return res.status(500).json({ code: 0, message: "500: Internal Server Error" });
     }
 }

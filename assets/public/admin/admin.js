@@ -155,7 +155,7 @@ const currentToken = () => auth.memory || auth.token;
 
 class ApiError extends Error {
     constructor(status, body) {
-        super(describeError(body) || `Request failed (${status})`);
+        super(status >= 500 ? "Something went wrong on the server. Try again in a moment." : describeError(body) || `Request failed (${status})`);
         this.status = status;
         this.body = body;
     }
@@ -177,7 +177,9 @@ async function api(path, { method = "GET", body, auth: useAuth = true } = {}) {
     const headers = {};
     if (body !== undefined) headers["Content-Type"] = "application/json";
     if (useAuth && currentToken()) headers.Authorization = currentToken();
-    const res = await fetch(API + path, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
+    const res = await fetch(API + path, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined }).catch(() => {
+        throw new ApiError(0, { message: "Couldn't reach the server. Check your connection and try again." });
+    });
     const text = await res.text();
     let data = null;
     try {
@@ -389,6 +391,13 @@ function showLogin(message) {
     err.textContent = message || "";
 }
 
+function syncBrandIcon() {
+    const image = state.overview.instance.image;
+    const icon = $(".sidebar .brand-icon");
+    if (!image || icon?.getAttribute("src") === image) return;
+    icon?.replaceWith(Object.assign(document.createElement("img"), { className: "brand-icon", src: image, alt: "" }));
+}
+
 async function boot() {
     if (!currentToken()) return showLogin();
     try {
@@ -408,7 +417,7 @@ async function boot() {
     $("#app").hidden = false;
     $("#brand-name").textContent = state.overview.instance.name;
     document.title = `${state.overview.instance.name} Admin`;
-    if (state.overview.instance.image) $("#brand-icon").src = state.overview.instance.image;
+    syncBrandIcon();
     mount($("#me"), html`${avatar(state.me)}<div class="ident"><div><strong>${userName(state.me)}</strong><span class="muted">${userTag(state.me)}</span></div></div>`);
     for (const link of $$("#nav a")) link.hidden = link.dataset.access ? !state.overview.access[link.dataset.access] : false;
     syncNavCounts();
@@ -727,7 +736,7 @@ async function renderSettings(view) {
         if (saved) {
             state.overview = await api("/admin");
             $("#brand-name").textContent = state.overview.instance.name;
-            if (state.overview.instance.image) $("#brand-icon").src = state.overview.instance.image;
+            syncBrandIcon();
             renderSettings(view);
         }
     });
