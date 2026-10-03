@@ -62,7 +62,7 @@ export async function syncThreadList(this: WebSocket, guild_id: string) {
             guild_id,
             threads: visible.map((t) => t.toJSON()),
             members: members.filter((m) => visible.some((t) => t.id === m.id)).map((m) => m.toJSON()),
-            most_recent_messages: recent.map((m) => m.toJSON()),
+            most_recent_messages: recent.map((m) => m.toPublicJSON(this.user_id)),
         },
     });
 }

@@ -201,8 +201,8 @@ export async function threadSearchExtras(threads: Channel[], user_id: string) {
     ]);
     return {
         members: members.map((m) => m.toJSON()),
-        first_messages: firstMessages.map((m) => m.toJSON()),
-        most_recent_messages: recentMessages.map((m) => m.toJSON()),
+        first_messages: firstMessages.map((m) => m.toPublicJSON(user_id)),
+        most_recent_messages: recentMessages.map((m) => m.toPublicJSON(user_id)),
         owners: new Map(owners.map((o) => [o.id, { ...o.toPublicMember(), roles: o.roles.filter((r) => r.id !== guild_id).map((r) => r.id) }])),
     };
 }
