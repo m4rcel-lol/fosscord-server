@@ -111,6 +111,7 @@ export async function sendScheduledMessage(scheduled: ScheduledMessage) {
             body,
             message_id: Snowflake.generate(),
             attachments: (scheduled.payload.attachments ?? []) as MessageOptionAttachment[],
+            permission,
         });
         return null;
     } catch (error) {

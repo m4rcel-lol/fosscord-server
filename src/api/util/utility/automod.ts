@@ -215,7 +215,11 @@ export async function checkAutomod(opts: MessageContext) {
     if (opts.permission?.has("ADMINISTRATOR") || opts.permission?.has("MANAGE_GUILD")) return;
 
     const rules = await AutomodRule.find({ where: { guild_id: opts.guild_id, enabled: true, event_type: AutomodRuleEventType.MESSAGE_SEND }, order: { position: "ASC" } });
-    const member = await Member.findOne({ where: { id: opts.user_id, guild_id: opts.guild_id }, relations: { roles: true } });
+    const cached = opts.permission?.cache;
+    const member =
+        cached?.user_id === opts.user_id && cached.member?.id === opts.user_id && cached.member.guild_id === opts.guild_id && cached.member.roles
+            ? cached.member
+            : await Member.findOne({ where: { id: opts.user_id, guild_id: opts.guild_id }, relations: { roles: true } });
 
     if (
         mentionRaidActive(opts.guild_id) &&

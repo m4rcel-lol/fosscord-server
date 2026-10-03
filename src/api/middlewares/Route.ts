@@ -29,10 +29,12 @@ import {
     getPermission,
     getRights,
 } from "@spacebar/util";
+import { Channel } from "@spacebar/database";
 import { AnyValidateFunction } from "ajv/dist/core";
 import { NextFunction, Request, Response } from "express";
 import { ajv } from "@spacebar/schemas";
 import { BigNumber } from "bignumber.js";
+import { FindOptionsRelations } from "typeorm";
 
 const ignoredRequestSchemas = [
     // skip validation for settings proto JSON updates - TODO: figure out if this even possible to fix?
@@ -45,6 +47,7 @@ declare global {
     namespace Express {
         interface Request {
             permission?: Permissions;
+            channel?: Channel;
         }
     }
 }
@@ -57,6 +60,7 @@ export type RouteResponse = {
 export type stripNulls = { [key: string]: true | stripNulls };
 export interface RouteOptions {
     permission?: PermissionResolvable;
+    channelRelations?: FindOptionsRelations<Channel>;
     right?: RightResolvable;
     requestBody?: `${string}Schema`; // typescript interface name
     responses?: {
@@ -165,7 +169,11 @@ export function route(opts: RouteOptions) {
 
         if (opts.permission) {
             const { guild_id, channel_id } = req.params as { [key: string]: string };
-            req.permission = await getPermission(req.user_id, guild_id, channel_id);
+            const user = req.user?.id === req.user_id ? req.user : undefined;
+            if (opts.channelRelations && channel_id) {
+                req.channel = await Channel.findOneOrFail({ where: { id: channel_id }, relations: opts.channelRelations });
+                req.permission = await getPermission(req.user_id, req.channel.guild_id || guild_id, req.channel, { user });
+            } else req.permission = await getPermission(req.user_id, guild_id, channel_id, { user });
 
             const requiredPerms = Array.isArray(opts.permission) ? opts.permission : [opts.permission];
             requiredPerms.forEach((perm) => {
@@ -176,7 +184,7 @@ export function route(opts: RouteOptions) {
 
         if (opts.right) {
             const required = new Rights(opts.right);
-            req.rights = await getRights(req.user_id);
+            req.rights = req.user?.id === req.user_id && req.user.rights !== undefined ? new Rights(req.user.rights) : await getRights(req.user_id);
 
             if (!req.rights || !req.rights.has(required)) {
                 throw SpacebarApiErrors.MISSING_RIGHTS.withParams(opts.right as string);

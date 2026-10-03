@@ -18,7 +18,7 @@
 
 import { assertCanSendDirectMessage, assertGuildVerification, assertNoHarmfulLinks, checkAutomod, publishUserMessage, recordGuildMemberDm } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
-import { Attachment, Channel, GuildInsights, Member, Message, ReadState, User } from "@spacebar/database";
+import { Application, Attachment, Channel, GuildInsights, Member, Message, ReadState, Recipient, User, Webhook } from "@spacebar/database";
 import {
     Config,
     DiscordApiErrors,
@@ -37,7 +37,7 @@ import { MessageOptionAttachment } from "@spacebar/util/dtos/MessageOptions";
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import multer from "multer";
-import { FindManyOptions, FindOperator, LessThan, MoreThan, MoreThanOrEqual } from "typeorm";
+import { FindManyOptions, FindOperator, In, LessThan, MoreThan, MoreThanOrEqual } from "typeorm";
 import { AcknowledgeDeleteSchema, isTextChannel, MessageCreateSchema, PartialUser, PollAnswerCount, PublicMessage, ReadStateType } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
@@ -79,6 +79,7 @@ router.get(
             where: { id: channel_id },
         });
         if (!channel) throw new HTTPError("Channel not found", 404);
+        if (!channel.guild_id) channel.recipients = await Recipient.find({ where: { channel_id } });
 
         if (channel.threadOnly()) return res.json([]);
         isTextChannel(channel.type);
@@ -88,7 +89,7 @@ router.get(
         const limit = Number(req.query.limit) || 50;
         if (limit < 1 || limit > 100) throw new HTTPError("limit must be between 1 and 100", 422);
 
-        const permissions = await getPermission(req.user_id, channel.guild_id, channel_id);
+        const permissions = await getPermission(req.user_id, channel.guild_id, channel, { user: req.user?.id === req.user_id ? req.user : undefined });
         permissions.hasThrow("VIEW_CHANNEL");
         if (channel.guild_id) GuildInsights.visit(channel_id, req.user_id);
         if (!permissions.has("READ_MESSAGE_HISTORY")) return res.json([]);
@@ -102,18 +103,11 @@ router.get(
             where: { channel_id },
             relations: {
                 author: true,
-                webhook: true,
-                application: true,
                 mentions: true,
                 mention_roles: true,
                 mention_channels: true,
                 sticker_items: true,
                 attachments: true,
-                thread: {
-                    recipients: {
-                        user: true,
-                    },
-                },
             },
         };
 
@@ -159,6 +153,32 @@ router.get(
             if (after) messages.reverse();
         }
 
+        const attach = async <K extends "webhook" | "application" | "thread">(
+            key: K,
+            ids: (message: Message) => string | null | undefined,
+            load: (ids: string[]) => Promise<NonNullable<Message[K]>[]>,
+        ) => {
+            const wanted = [...new Set(messages.map(ids).filter((id): id is string => !!id))];
+            const found = new Map((wanted.length ? await load(wanted) : []).map((entity) => [entity.id, entity]));
+            for (const message of messages) message[key] = (found.get(ids(message) ?? "") ?? null) as Message[K];
+        };
+        await Promise.all([
+            attach(
+                "webhook",
+                (m) => m.webhook_id,
+                (ids) => Webhook.find({ where: { id: In(ids) } }),
+            ),
+            attach(
+                "application",
+                (m) => m.application_id,
+                (ids) => Application.find({ where: { id: In(ids) } }),
+            ),
+            attach(
+                "thread",
+                (m) => m.thread_id,
+                (ids) => Channel.find({ where: { id: In(ids) }, relations: { recipients: { user: true } }, relationLoadStrategy: "query" }),
+            ),
+        ]);
         await Message.fillReplies(messages);
         const ret = messages.map((msg) => {
             const x = msg.toPublicJSON(req.user_id);
@@ -262,6 +282,7 @@ router.post(
             embeds: true,
         },
         permission: "VIEW_CHANNEL",
+        channelRelations: { recipients: { user: true } },
         right: "SEND_MESSAGES",
         responses: {
             200: {
@@ -281,10 +302,7 @@ router.post(
             throw FieldErrors({ components: { code: "COMPONENT_VALIDATION_FAILED", message: "Only applications can send message components" } });
         const messageId = Snowflake.generate();
 
-        const channel = await Channel.findOneOrFail({
-            where: { id: channel_id },
-            relations: { recipients: { user: true } },
-        });
+        const channel = req.channel!;
         if (channel.isThread()) {
             req.permission!.hasThrow("SEND_MESSAGES_IN_THREADS");
             if (channel.thread_metadata?.locked && !req.permission!.has("MANAGE_THREADS")) throw DiscordApiErrors.THREAD_IS_LOCKED;
@@ -300,7 +318,7 @@ router.post(
         }
 
         const dmViaGuilds = await assertCanSendDirectMessage(channel, req.user_id);
-        if (channel.guild_id) await assertGuildVerification(channel.guild_id, req.user_id);
+        if (channel.guild_id) await assertGuildVerification(channel.guild_id, req.user_id, req.permission!.cache);
 
         if (body.nonce) {
             const existing = await Message.findOne({
@@ -350,7 +368,7 @@ router.post(
             return res.status(400).json({ message: error?.toString() });
         }
 
-        const message = await publishUserMessage({ channel, user_id: req.user_id, body, message_id: messageId, attachments });
+        const message = await publishUserMessage({ channel, user_id: req.user_id, body, message_id: messageId, attachments, permission: req.permission });
         if (dmViaGuilds.length) {
             const recipient = channel.recipients?.find((r) => r.user_id !== req.user_id)?.user_id;
             if (recipient) recordGuildMemberDm(dmViaGuilds, req.user_id, recipient).catch((e) => console.error("[Safety] dm raid check failed", e));

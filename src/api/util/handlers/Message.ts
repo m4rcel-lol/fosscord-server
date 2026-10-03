@@ -34,7 +34,6 @@ import {
     FieldErrors,
     fetchPublicUrl,
     getPermission,
-    getRights,
     handleFile,
     HERE_MENTION,
     makeObjectErrorContent,
@@ -42,6 +41,7 @@ import {
     MessageFlags,
     MessageUpdateEvent,
     Permissions,
+    Rights,
     ROLE_MENTION,
     Snowflake,
     TraceNode,
@@ -347,17 +347,21 @@ function checkMessageLimits(opts: MessageOptions) {
     if (Object.keys(errors).length) throw FieldErrors(errors);
 }
 
-export async function handleMessage(opts: MessageOptions): Promise<Message> {
+export async function handleMessage(opts: MessageOptions, known: { channel?: Channel; permission?: Permissions } = {}): Promise<Message> {
     const conf = Config.get();
     checkMessageLimits(opts);
     const handle = opts.components ? handleComps(opts.components, opts.flags || 0) : undefined;
 
-    const channel = await Channel.findOneOrFail({
-        where: { id: opts.channel_id },
-        relations: { recipients: true },
-    });
+    const channel =
+        known.channel?.recipients && known.channel.id === opts.channel_id
+            ? known.channel
+            : await Channel.findOneOrFail({
+                  where: { id: opts.channel_id },
+                  relations: { recipients: true },
+              });
     if (!channel || !opts.channel_id) throw new HTTPError("Channel not found", 404);
 
+    const authorPermission = opts.author_id && !opts.webhook_id && !opts.interaction_metadata ? known.permission : undefined;
     let permission: null | Permissions = null;
     const limit = channel.rate_limit_per_user;
     const isEdit = !!opts.edited_timestamp;
@@ -366,7 +370,7 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
         const lastMsgTime = (await Message.findOne({ where: { channel_id: channel.id, author_id: opts.author_id }, select: { timestamp: true }, order: { timestamp: "DESC" } }))
             ?.timestamp;
         if (lastMsgTime && Date.now() - limit * 1000 < +lastMsgTime) {
-            permission = await getPermission(opts.author_id, channel.guild_id, channel);
+            permission = authorPermission ?? (await getPermission(opts.author_id, channel.guild_id, channel));
             //FIXME MANAGE_MESSAGES and MANAGE_CHANNELS will need to be removed once they're gone as checks
             if (!permission.has("MANAGE_MESSAGES") && !permission.has("MANAGE_CHANNELS") && !permission.has("BYPASS_SLOWMODE")) {
                 throw Object.assign(new ApiError("You are being rate limited.", 20016, 429), { retry_after: (limit * 1000 - (Date.now() - +lastMsgTime)) / 1000 });
@@ -398,7 +402,7 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
         message.author = await User.findOneOrFail({
             where: { id: opts.author_id },
         });
-        const rights = await getRights(opts.author_id);
+        const rights = new Rights(message.author.rights);
         message.author.clean_data();
         rights.hasThrow("SEND_MESSAGES");
     }
@@ -488,7 +492,7 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
             );
             if (appPermission) permission.cache = appPermission.cache;
         }
-        permission ||= await getPermission(opts.author_id, channel.guild_id, channel);
+        permission ||= authorPermission ?? (await getPermission(opts.author_id, channel.guild_id, channel));
         if (permission === null) throw new HTTPError("permission was null after getPermission", 500);
         permission.hasThrow("SEND_MESSAGES");
         if (permission.cache.member) {
@@ -594,7 +598,7 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
         }
     }
 
-    await handleMessageMentionsAsync(message, opts.allowed_mentions, isEdit);
+    await handleMessageMentionsAsync(message, opts.allowed_mentions, isEdit, !opts.webhook_id && !opts.interaction_metadata ? (permission ?? undefined) : undefined);
 
     const attachmentIndices = new Map(message.attachments?.map((attachment, index) => [`attachment://${attachment.filename}`, index]));
     const attachmentsToRemove = new Set<number>();
@@ -648,7 +652,7 @@ export async function handleMessage(opts: MessageOptions): Promise<Message> {
 }
 
 // TODO: cache link result in db
-export async function postHandleMessage(message: Message) {
+export async function postHandleMessage(message: Message, permission?: Permissions) {
     message.clean_data();
 
     message.embeds ??= [];
@@ -657,7 +661,7 @@ export async function postHandleMessage(message: Message) {
         embed.type ||= EmbedType.rich;
     });
 
-    if (message.isWebhook || (await getPermission(message.author_id, message.channel.guild_id, message.channel_id)).has(Permissions.FLAGS.EMBED_LINKS))
+    if (message.isWebhook || (permission ?? (await getPermission(message.author_id, message.channel.guild_id, message.channel_id))).has(Permissions.FLAGS.EMBED_LINKS))
         await fillMessageUrlEmbeds(message);
 }
 
@@ -801,22 +805,27 @@ export async function convertCloudAttachmentToAttachment(cloudAttachmentReferenc
     return realAtt;
 }
 
-async function handleMessageMentionsAsync(message: Message, allowed?: AllowedMentions | null, isEdit = false) {
+async function handleMessageMentionsAsync(message: Message, allowed?: AllowedMentions | null, isEdit = false, authorPermission?: Permissions) {
     const sw = Stopwatch.startNew(),
         totalSw = Stopwatch.startNew();
     const trace: TraceNode = { micros: 0, calls: [] };
     const traceRoot: TraceRoot = ["handleMessageMentionsAsync", trace];
 
-    const channel = await Channel.findOneOrFail({
-        where: { id: message.channel_id },
-        relations: { recipients: true },
-    });
+    const channel =
+        message.channel?.id === message.channel_id && message.channel.recipients
+            ? message.channel
+            : await Channel.findOneOrFail({
+                  where: { id: message.channel_id },
+                  relations: { recipients: true },
+              });
     trace.calls.push(`getChannel(${channel.id})`, { micros: sw.getElapsedAndReset().totalMicroseconds });
 
     const permissionTargetId = message.isWebhook ? message.webhook?.application_id : (message.author_id ?? message.author?.id);
     const permission =
         permissionTargetId != null
-            ? await getPermission(permissionTargetId, channel.guild_id, channel)
+            ? !message.isWebhook && authorPermission
+                ? authorPermission
+                : await getPermission(permissionTargetId, channel.guild_id, channel)
             : message.guild_id != null
               ? new Permissions((await Role.findOneOrFail({ where: { id: message.guild_id ?? message.guild?.id } })).permissions)
               : Permissions.DEFAULT_DM_PERMISSIONS;
@@ -831,6 +840,7 @@ async function handleMessageMentionsAsync(message: Message, allowed?: AllowedMen
     let mention_here = false;
     const mention_user_id_set = new Set<string>();
     const mention_role_id_set = new Set<string>();
+    let mentionedRoles: Role[] = [];
 
     if (content) {
         const contentSw = Stopwatch.startNew();
@@ -859,7 +869,8 @@ async function handleMessageMentionsAsync(message: Message, allowed?: AllowedMen
         }
         contentTrace.calls.push("parseMentions", { micros: sw.getElapsedAndReset().totalMicroseconds });
 
-        let mentionedRoles = !channel.guild_id ? [] : await Role.find({ where: { id: In(mention_role_id_set.values().toArray()), guild_id: channel.guild_id } });
+        mentionedRoles =
+            !channel.guild_id || !mention_role_id_set.size ? [] : await Role.find({ where: { id: In(mention_role_id_set.values().toArray()), guild_id: channel.guild_id } });
         contentTrace.calls.push("queryMentionRoles", { micros: sw.getElapsedAndReset().totalMicroseconds });
 
         //TODO: should this throw at all?
@@ -883,20 +894,26 @@ async function handleMessageMentionsAsync(message: Message, allowed?: AllowedMen
     }
 
     if (message.message_reference?.message_id && message.message_reference.type !== MessageReferenceType.FORWARD) {
-        const referencedMessage = await Message.findOne({
-            where: {
-                id: message.message_reference.message_id,
-                channel_id: message.channel_id,
-            },
-            relations: {
-                mentions: true,
-                mention_roles: true,
-            },
-        });
+        const loaded = message.referenced_message;
+        const referencedMessage =
+            loaded?.id === message.message_reference.message_id && loaded.channel_id === message.channel_id
+                ? loaded
+                : await Message.findOne({
+                      where: {
+                          id: message.message_reference.message_id,
+                          channel_id: message.channel_id,
+                      },
+                      relations: {
+                          mentions: true,
+                          mention_roles: true,
+                      },
+                  });
         if (referencedMessage && referencedMessage.author_id !== message.author_id && allowed?.replied_user !== false) {
+            const author =
+                referencedMessage.author?.id === referencedMessage.author_id ? referencedMessage.author : await User.findOne({ where: { id: referencedMessage.author_id } });
             message.mentions.push(
                 // @ts-expect-error it does not like the .toPublicUser() lol
-                (await User.findOne({ where: { id: referencedMessage.author_id } }))!.toPublicUser(),
+                author!.toPublicUser(),
             );
         }
 
@@ -913,17 +930,12 @@ async function handleMessageMentionsAsync(message: Message, allowed?: AllowedMen
     /*message.mention_channels = mention_channel_ids.map((x) =>
 		Channel.create({ id: x }),
 	);*/
-    message.mention_roles = mention_role_id_set.size == 0 ? [] : await Role.find({ where: { id: In(mention_role_id_set.values().toArray()), guild_id: channel.guild_id } });
-    const mentionedUsers = await User.find({
-        where: {
-            id: In(
-                mention_user_id_set
-                    .values()
-                    .toArray()
-                    .filter((id) => !message.mentions.some((u) => u.id === id)),
-            ),
-        },
-    });
+    message.mention_roles = mention_role_id_set.size == 0 ? [] : mentionedRoles;
+    const unresolvedUserIds = mention_user_id_set
+        .values()
+        .toArray()
+        .filter((id) => !message.mentions.some((u) => u.id === id));
+    const mentionedUsers = unresolvedUserIds.length ? await User.find({ where: { id: In(unresolvedUserIds) } }) : [];
     message.mentions = [...message.mentions, ...mentionedUsers];
     message.mention_everyone = mention_everyone || mention_here;
     trace.calls.push("fillMessageMentionProperties", { micros: sw.getElapsedAndReset().totalMicroseconds });
