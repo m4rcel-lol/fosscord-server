@@ -27,6 +27,7 @@ router.get(
     "/",
     route({
         responses: {
+            200: {},
             404: {
                 body: "APIErrorResponse",
             },
@@ -36,14 +37,8 @@ router.get(
         const { guild_id } = req.params as { [key: string]: string };
         const guild = await Guild.findOneOrFail({ where: { id: guild_id } });
 
-        if (!guild.member_verification)
-            return res.status(404).json({
-                message: "Unknown Guild Member Verification Form",
-                code: 10068,
-            });
-
         res.json({
-            ...guild.member_verification,
+            ...(guild.member_verification ?? { version: null, form_fields: [], description: null }),
             ...(req.query.with_guild === "true" && {
                 guild: { ...guild.toInviteGuild(), approximate_member_count: guild.member_count, approximate_presence_count: guild.presence_count ?? 0 },
             }),
