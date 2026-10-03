@@ -338,6 +338,13 @@ export interface AdminStatusIncidentPostUpdateSchema {
     body: string;
 }
 
+export interface AdminOfficialAccountUpdateSchema {
+    /**
+     * New profile picture as a data: URI image, or null for the default one
+     */
+    avatar?: string | null;
+}
+
 export interface AdminAnnouncementCreateSchema {
     /**
      * Markdown, sent as the message's text

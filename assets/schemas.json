@@ -10800,6 +10800,20 @@
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
+    "AdminOfficialAccountUpdateSchema": {
+        "type": "object",
+        "properties": {
+            "avatar": {
+                "description": "New profile picture as a data: URI image, or null for the default one",
+                "type": [
+                    "null",
+                    "string"
+                ]
+            }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
     "AdminAnnouncementCreateSchema": {
         "type": "object",
         "properties": {

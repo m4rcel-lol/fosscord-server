@@ -54,6 +54,7 @@ export * from "./utility/staffBadge";
 export * from "./utility/guildTag";
 export * from "./utility/accountStanding";
 export * from "./utility/systemAccounts";
+export * from "./utility/announcements";
 export * from "./utility/safetyNotices";
 export * from "./utility/notifications";
 export * from "./utility/webPush";

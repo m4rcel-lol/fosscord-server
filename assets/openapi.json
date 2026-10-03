@@ -9880,6 +9880,16 @@
                     "status"
                 ]
             },
+            "AdminOfficialAccountUpdateSchema": {
+                "type": "object",
+                "properties": {
+                    "avatar": {
+                        "description": "New profile picture as a data: URI image, or null for the default one",
+                        "type": "string",
+                        "nullable": true
+                    }
+                }
+            },
             "AdminAnnouncementCreateSchema": {
                 "type": "object",
                 "properties": {
@@ -46298,6 +46308,41 @@
                         "description": "badge_id"
                     }
                 ],
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/admin/announcements/official/": {
+            "patch": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Change the profile picture of the official account announcements come from",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminOfficialAccountUpdateSchema"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
                 "tags": [
                     "api"
                 ],

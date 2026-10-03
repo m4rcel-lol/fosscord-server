@@ -20,8 +20,7 @@ import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { Announcement, AnnouncementMessage, Message } from "@spacebar/database";
 import { Snowflake } from "@spacebar/util";
-import { getSystemAccount } from "@spacebar/api/util";
-import { deleteAnnouncementMessages } from "./index";
+import { deleteAnnouncementMessages, getSystemAccount } from "@spacebar/api/util";
 
 const router = Router({ mergeParams: true });
 // announcements sent before their dms were recorded: the official account's messages with the same text (plain, or the

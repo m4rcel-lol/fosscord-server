@@ -1673,6 +1673,16 @@ async function renderAnnouncements(view) {
                 </div>
             </div>
             <div class="stack">
+                <div class="card row" id="official-card">
+                    <div class="ident grow">
+                        ${avatar(official, "large")}
+                        <div><strong>${official.global_name || official.username}</strong><span class="muted">${userTag(official)} · official account</span></div>
+                    </div>
+                    <label class="btn small"
+                        >Change picture<input id="official-avatar" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden
+                    /></label>
+                    ${official.avatar ? html`<button class="btn small" id="official-avatar-remove" type="button">Remove</button>` : ""}
+                </div>
                 <form id="announce-form" class="card stack">
                     <h2>New announcement</h2>
                     <label
@@ -1735,6 +1745,16 @@ async function renderAnnouncements(view) {
             renderAnnouncements(view);
         }
     });
+
+    const setOfficialAvatar = async (trigger, avatarData, success) => {
+        const updated = await act(trigger, () => api("/admin/announcements/official", { method: "PATCH", body: { avatar: avatarData } }), success);
+        if (updated) renderAnnouncements(view);
+    };
+    $("#official-avatar").addEventListener("change", async (e) => {
+        const file = e.currentTarget.files[0];
+        if (file) await setOfficialAvatar(e.currentTarget.closest("label"), await readAsDataUrl(file), "Profile picture updated");
+    });
+    $("#official-avatar-remove")?.addEventListener("click", (e) => setOfficialAvatar(e.currentTarget, null, "Profile picture removed"));
 
     for (const button of $$(".announcement-delete", view))
         button.addEventListener("click", async (e) => {

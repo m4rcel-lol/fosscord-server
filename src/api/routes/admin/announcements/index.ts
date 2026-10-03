@@ -20,33 +20,15 @@ import { Request, Response, Router } from "express";
 import multer from "multer";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
-import { In } from "typeorm";
-import { Announcement, AnnouncementMessage, Attachment, Message, User } from "@spacebar/database";
-import { Config, deleteFile, emitEvent, MessageDeleteEvent } from "@spacebar/util";
+import { Announcement, AnnouncementMessage, User } from "@spacebar/database";
+import { Config } from "@spacebar/util";
 import { AdminAnnouncementCreateSchema } from "@spacebar/schemas";
-import { getSystemAccount, sendSystemDM } from "@spacebar/api/util";
+import { deleteAnnouncementMessages, getSystemAccount, sendSystemDM, serializeOfficial } from "@spacebar/api/util";
 
 const router = Router({ mergeParams: true });
 
 // people with admin panel access: operators, user managers and server managers
 const STAFF_RIGHTS_MASK = 1 + 4 + 128;
-
-const CHUNK = 500;
-
-/** Deletes announcement dms for everyone, with their attachment files. */
-export async function deleteAnnouncementMessages(messages: Pick<Message, "id" | "channel_id">[]) {
-    for (let i = 0; i < messages.length; i += CHUNK) {
-        const chunk = messages.slice(i, i + CHUNK);
-        const ids = chunk.map((m) => m.id);
-        // each dm has its own copy of the files; deleting the rows below doesn't remove them from storage
-        const attachments = await Attachment.find({ where: { message_id: In(ids) } });
-        for (const attachment of attachments)
-            await deleteFile(new URL(attachment.toJSON().url).pathname).catch((e) => console.error(`[Announcement] couldn't delete file of attachment ${attachment.id}`, e));
-        await Message.delete({ id: In(ids) });
-        for (const message of chunk)
-            await emitEvent({ event: "MESSAGE_DELETE", channel_id: message.channel_id!, data: { id: message.id, channel_id: message.channel_id! } } satisfies MessageDeleteEvent);
-    }
-}
 
 async function audienceIds(audience: AdminAnnouncementCreateSchema["audience"]) {
     const query = User.createQueryBuilder("u").select(["u.id"]).where("u.deleted = false AND u.bot = false AND u.system = false");
@@ -57,7 +39,7 @@ async function audienceIds(audience: AdminAnnouncementCreateSchema["audience"]) 
 router.get("/", route({ right: "OPERATOR", spacebarOnly: true, description: "Recent staff announcements" }), async (req: Request, res: Response) => {
     const official = await getSystemAccount("official");
     const announcements = await Announcement.find({ order: { created_at: "DESC" }, take: 50 });
-    res.json({ official: { id: official.id, username: official.username, global_name: official.global_name }, announcements });
+    res.json({ official: serializeOfficial(official), announcements });
 });
 
 const announcementUpload = multer({
