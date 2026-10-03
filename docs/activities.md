@@ -13,19 +13,30 @@ In development `*.localhost` resolves to 127.0.0.1, so `http://<id>.fosscord.loc
 - `builtin://<name>` targets serve one of the activities bundled with the server.
 - `https://` targets are reverse proxied with the request method, headers, cookies and body. WebSocket upgrades are not proxied yet.
 
-The mappings live in `embedded_activities.url_mappings`. There is no developer portal endpoint for them yet, so third-party activities are added by inserting a row next to the application.
+- Any other target is a domain, optionally with a path, and is reverse proxied over https. The proxy refuses targets that resolve to a private address.
+
+The mappings live in `embedded_activities.url_mappings`.
+
+## Your own activities
+
+Developers turn activities on for their app in the developer portal at `/developers`, under Activities. That sets the `EMBEDDED` application flag (`1 << 17`), creates the `embedded_activities` row with `on_shelf` off and adds a `launch` primary entry point command. The same page edits the URL mappings, the supported platforms and the age gate. Turning activities off clears the flag and keeps the row, so the activity host and launches stop answering until it is turned on again.
+
+An activity starts out unreleased. Only the owner and the app testers (Applications > App Testers, friends of the owner, up to 50) can start it, and it shows up in their shelf. Anyone in the channel can still join a running instance. Release to everyone sets `EMBEDDED_RELEASED` (`1 << 1`) and lets anyone start it from the entry point command. The global shelf stays curated: only rows with `on_shelf` appear there for everyone.
 
 ## API
 
 | Route                                                                         | Use                                                                                                                                                     |
 | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /activities/shelf`                                                       | Activity configs, applications and image assets for every row with `on_shelf`, ordered by `shelf_rank`.                                                 |
+| `GET /activities/shelf`                                                       | Activity configs, applications and image assets for every row with `on_shelf`, plus the user's own and tested unreleased activities.                    |
+| `GET`, `PATCH /applications/:id/embedded-activity-config`                     | Owner only. Reads and edits the activity config: supported platforms, orientation locks, age gate, preview asset.                                       |
+| `GET`, `PUT /applications/:id/proxy-config`                                   | Owner only. Reads and replaces the URL mappings as `{ url_map: [{ prefix, target }] }`.                                                                 |
+| `GET`, `POST`, `DELETE /oauth2/applications/:id/allowlist`                    | Owner only. App testers, added by username.                                                                                                             |
 | `POST /applications/:id/proxy-tickets`                                        | A signed ticket for the user, valid for 12 hours. The client appends it to the iframe URL as `discord_proxy_ticket`.                                    |
 | `POST /interactions`                                                          | Running a primary entry point command whose handler is `DISCORD_LAUNCH_ACTIVITY` starts the activity. This is how the client starts one from the shelf. |
 | `POST /activities/:channel_id/:application_id`                                | Joins the running instance, which is how "Join Activity" works.                                                                                         |
 | `POST /applications/:id/activities/:location_id/instances/:instance_id/leave` | Leaves it.                                                                                                                                              |
 | `GET /applications/:id/activity-instances/:instance_id`                       | Bot token only. Lets an activity backend check who is in an instance.                                                                                   |
-| `GET /oauth2/applications/:id/rpc`, `GET /oauth2/applications/:id/assets`     | Application details the RPC bridge and the shelf ask for.                                                                                               |
+| `GET /oauth2/applications/:id/rpc`, `GET /oauth2/applications/:id/assets`     | Application details the RPC bridge and the shelf ask for. Assets combine the app's Rich Presence assets with the activity's own images.                 |
 
 A bot can also answer an interaction with callback type 12 (`LAUNCH_ACTIVITY`) to start its activity for the user who ran the command.
 
