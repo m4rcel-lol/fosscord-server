@@ -1,0 +1,188 @@
+diff --git a/src/api/Settings.ts b/src/api/Settings.ts
+index 2bcc785..b6b007b 100644
+--- a/src/api/Settings.ts
++++ b/src/api/Settings.ts
+@@ -19,7 +19,7 @@
+ import { SettingsStore as SettingsStoreClass } from "@shared/SettingsStore";
+ import { Logger } from "@utils/Logger";
+ import { mergeDefaults } from "@utils/mergeDefaults";
+-import { DefinedSettings, OptionType, SettingsChecks, SettingsDefinition } from "@utils/types";
++import { brand, DefinedSettings, OptionType, SettingsChecks, SettingsDefinition } from "@utils/types";
+ import { React, useEffect } from "@webpack/common";
+ 
+ import plugins from "~plugins";
+@@ -263,6 +263,9 @@ export function definePluginSettings<
+     Checks extends SettingsChecks<Def>,
+     PrivateSettings extends object = {}
+ >(def: Def, checks?: Checks) {
++    for (const option of Object.values(def) as any[]) {
++        if (option && typeof option.description === "string") option.description = brand(option.description);
++    }
+     if (checks) {
+         for (const [name, check] of Object.entries(checks)) {
+             Object.assign(def[name], check);
+diff --git a/src/components/settings/tabs/plugins/index.tsx b/src/components/settings/tabs/plugins/index.tsx
+index 28b33c0..c4cb518 100644
+--- a/src/components/settings/tabs/plugins/index.tsx
++++ b/src/components/settings/tabs/plugins/index.tsx
+@@ -35,7 +35,7 @@ import { Margins } from "@utils/margins";
+ import { classes } from "@utils/misc";
+ import { PluginTarget } from "@utils/pluginTargets";
+ import { useAwaiter, useCleanupEffect } from "@utils/react";
+-import { PluginTag, PluginTags } from "@utils/types";
++import { brand, PluginTag, PluginTags } from "@utils/types";
+ import { Button, ConfirmModal, lodash, openModal, Parser, React, SearchableSelect, Select, TextInput, Tooltip, useMemo, useRef, useState } from "@webpack/common";
+ import { JSX } from "react";
+ 
+@@ -90,10 +90,10 @@ function ExcludedPluginsList({ search }: { search: string; }) {
+         : [];
+ 
+     const ExcludedReasons: Record<PluginTarget, string> = {
+-        desktop: "Discord Desktop app or Vesktop",
+-        discordDesktop: "Discord Desktop app",
++        desktop: brand("Discord Desktop app or Vesktop"),
++        discordDesktop: brand("Discord Desktop app"),
+         vesktop: "Vesktop app",
+-        web: "Vesktop app and the Web version of Discord",
++        web: brand("Vesktop app and the Web version of Discord"),
+         dev: "Developer version of Vencord",
+         browser: "Web Browser version of Vencord"
+     };
+diff --git a/src/components/settings/tabs/themes/LocalThemesTab.tsx b/src/components/settings/tabs/themes/LocalThemesTab.tsx
+index 0ed8c1f..d9f0d36 100644
+--- a/src/components/settings/tabs/themes/LocalThemesTab.tsx
++++ b/src/components/settings/tabs/themes/LocalThemesTab.tsx
+@@ -18,6 +18,7 @@ import ClientThemePlugin from "@plugins/clientTheme";
+ import { classNameFactory } from "@utils/css";
+ import { findLazy } from "@webpack";
+ import { Forms, useEffect, useRef, useState } from "@webpack/common";
++import { brand } from "@utils/types";
+ import type { ComponentType, Ref, SyntheticEvent } from "react";
+ 
+ import { ThemeCard } from "./ThemeCard";
+@@ -136,7 +137,7 @@ export function LocalThemesTab() {
+             <Card>
+                 <Forms.FormTitle tag="h5">External Resources</Forms.FormTitle>
+                 <Forms.FormText>For security reasons, loading resources (styles, fonts, images, ...) from most sites is blocked.</Forms.FormText>
+-                <Forms.FormText>Make sure all your assets are hosted on GitHub, GitLab, Codeberg, Imgur, Discord or Google Fonts.</Forms.FormText>
++                <Forms.FormText>{brand("Make sure all your assets are hosted on GitHub, GitLab, Codeberg, Imgur, Discord or Google Fonts.")}</Forms.FormText>
+             </Card>
+ 
+             <section>
+diff --git a/src/components/settings/tabs/themes/OnlineThemesTab.tsx b/src/components/settings/tabs/themes/OnlineThemesTab.tsx
+index c314b87..b5600ab 100644
+--- a/src/components/settings/tabs/themes/OnlineThemesTab.tsx
++++ b/src/components/settings/tabs/themes/OnlineThemesTab.tsx
+@@ -8,6 +8,7 @@ import { useSettings } from "@api/Settings";
+ import { Card } from "@components/Card";
+ import { Flex } from "@components/Flex";
+ import { Forms, TextArea, useState } from "@webpack/common";
++import { brand } from "@utils/types";
+ 
+ export function OnlineThemesTab() {
+     const settings = useSettings(["themeLinks"]);
+@@ -36,7 +37,7 @@ export function OnlineThemesTab() {
+             <Card>
+                 <Forms.FormTitle tag="h5">Paste links to css files here</Forms.FormTitle>
+                 <Forms.FormText>One link per line</Forms.FormText>
+-                <Forms.FormText>You can prefix lines with @light or @dark to toggle them based on your Discord theme</Forms.FormText>
++                <Forms.FormText>{brand("You can prefix lines with @light or @dark to toggle them based on your Discord theme")}</Forms.FormText>
+                 <Forms.FormText>Make sure to use direct links to files (raw or github.io)!</Forms.FormText>
+             </Card>
+ 
+diff --git a/src/components/settings/tabs/vencord/NotificationSettings.tsx b/src/components/settings/tabs/vencord/NotificationSettings.tsx
+index f8de31c..a7203ef 100644
+--- a/src/components/settings/tabs/vencord/NotificationSettings.tsx
++++ b/src/components/settings/tabs/vencord/NotificationSettings.tsx
+@@ -11,6 +11,7 @@ import { Flex } from "@components/Flex";
+ import { Margins } from "@utils/margins";
+ import { identity } from "@utils/misc";
+ import { Button, Forms, Modal,openModal, Select, Slider } from "@webpack/common";
++import { brand } from "@utils/types";
+ 
+ export function NotificationSection() {
+     return (
+@@ -18,7 +19,7 @@ export function NotificationSection() {
+             <Forms.FormTitle tag="h5">Notifications</Forms.FormTitle>
+             <Forms.FormText className={Margins.bottom8}>
+                 Settings for Notifications sent by Vencord.
+-                This does NOT include Discord notifications (messages, etc)
++                {brand("This does NOT include Discord notifications (messages, etc)")}
+             </Forms.FormText>
+             <Flex>
+                 <Button onClick={openNotificationSettingsModal}>
+@@ -66,7 +67,7 @@ function NotificationSettings() {
+             <Select
+                 placeholder="Notification Style"
+                 options={[
+-                    { label: "Only use Desktop notifications when Discord is not focused", value: "not-focused", default: true },
++                    { label: brand("Only use Desktop notifications when Discord is not focused"), value: "not-focused", default: true },
+                     { label: "Always use Desktop notifications", value: "always" },
+                     { label: "Always use Vencord notifications", value: "never" },
+                 ] satisfies Array<{ value: typeof settings["useNative"]; } & Record<string, any>>}
+diff --git a/src/plugins/crashHandler/index.ts b/src/plugins/crashHandler/index.ts
+index 2b82faf..4b21af9 100644
+--- a/src/plugins/crashHandler/index.ts
++++ b/src/plugins/crashHandler/index.ts
+@@ -21,7 +21,7 @@ import { showNotification } from "@api/Notifications";
+ import { definePluginSettings } from "@api/Settings";
+ import { Devs } from "@utils/constants";
+ import { Logger } from "@utils/Logger";
+-import definePlugin, { OptionType } from "@utils/types";
++import definePlugin, { brand, OptionType } from "@utils/types";
+ import { maybePromptToUpdate } from "@utils/updater";
+ import { filters, findBulk, proxyLazyWebpack } from "@webpack";
+ import { closeAllModals, DraftType, ExpressionPickerStore, FluxDispatcher, NavigationRouter, SelectedChannelStore } from "@webpack/common";
+@@ -99,8 +99,8 @@ export default definePlugin({
+                     try {
+                         showNotification({
+                             color: "#eed202",
+-                            title: "Discord has crashed!",
+-                            body: "Awn :( Discord has crashed two times rapidly, not attempting to recover.",
++                            title: brand("Discord has crashed!"),
++                            body: brand("Awn :( Discord has crashed two times rapidly, not attempting to recover."),
+                             noPersist: true
+                         });
+                     } catch { }
+@@ -116,7 +116,7 @@ export default definePlugin({
+             try {
+                 if (!hasCrashedOnce) {
+                     hasCrashedOnce = true;
+-                    maybePromptToUpdate("Uh oh, Discord has just crashed... but good news, there is a Vencord update available that might fix this issue! Would you like to update now?", true);
++                    maybePromptToUpdate(brand("Uh oh, Discord has just crashed... but good news, there is a Vencord update available that might fix this issue! Would you like to update now?"), true);
+                 }
+             } catch { }
+ 
+@@ -134,7 +134,7 @@ export default definePlugin({
+         try {
+             showNotification({
+                 color: "#eed202",
+-                title: "Discord has crashed!",
++                title: brand("Discord has crashed!"),
+                 body: "Attempting to recover...",
+                 noPersist: true
+             });
+diff --git a/src/utils/types.ts b/src/utils/types.ts
+index 5d25b17..b40f27c 100644
+--- a/src/utils/types.ts
++++ b/src/utils/types.ts
+@@ -28,8 +28,19 @@ import { Command, FluxEvents } from "@vencord/discord-types";
+ import { ReactNode } from "react";
+ import { LiteralUnion } from "type-fest";
+ 
++export const instanceName = () => (globalThis as any).GLOBAL_ENV?.INSTANCE_NAME || "Fosscord";
++
++export const hiddenPlugins = new Set(["FakeNitro"]);
++
++export const brand = <T,>(text: T): T =>
++    typeof text === "string"
++        ? text.replace(/\bDiscord\b/g, instanceName()).replace(/\bDISCORD\b/g, instanceName().toUpperCase()).replace(/\bNitro\b/g, "Premium") as T
++        : text;
++
+ // exists to export default definePlugin({...})
+ export default function definePlugin<P extends PluginDef>(p: P & Record<PropertyKey, any>) {
++    p.description = brand(p.description);
++    if (hiddenPlugins.has(p.name)) p.hidden = true;
+     return p as typeof p & Plugin;
+ }
+ 
