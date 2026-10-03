@@ -24,6 +24,10 @@ import zlib from "node:zlib";
 import { createHash } from "node:crypto";
 import { pipeline } from "node:stream/promises";
 import {
+    APP_THEME_COLOR,
+    appIconPng,
+    appIconUrl,
+    appManifest,
     brandImageUrls,
     Config,
     DEFAULT_ICON_FILE,
@@ -112,6 +116,17 @@ const BRANDED_ASSETS: Record<string, { wordmark?: boolean; svg: (iconUri: string
 export function TestClientAssets(app: Application) {
     const noCache = { setHeaders: (res: Response) => res.set("Cache-Control", "no-cache") };
     app.get("/assets/favicon.ico", (req, res) => void sendBrandImage(res, instanceIcon() ?? { file: DEFAULT_ICON_FILE }, "no-cache"));
+    app.get("/manifest.webmanifest", (req, res) => {
+        res.set("Cache-Control", "no-cache");
+        res.type("application/manifest+json").send(JSON.stringify(appManifest()));
+    });
+    app.get("/assets/pwa/:file", async (req, res) => {
+        const size = Number(/^icon-(180|192|512)\.png$/.exec(req.params.file as string)?.[1]);
+        if (!size) return res.sendStatus(404);
+        const png = await appIconPng(size);
+        if (!png) return sendBrandImage(res, instanceIcon() ?? { file: DEFAULT_ICON_FILE }, "no-cache");
+        res.set("Cache-Control", "public, max-age=21600").type("png").send(png);
+    });
     app.get("/assets/:file", async (req, res, next) => {
         const branded = BRANDED_ASSETS[req.params.file as string];
         if (!branded) return next();
@@ -227,6 +242,17 @@ const buildHtml = () => {
     const vencord = fs.existsSync(VENCORD_SCRIPT)
         ? `<script src="/assets/vencord/vencord.js?v=${createHash("sha256").update(fs.readFileSync(VENCORD_SCRIPT)).digest("hex").slice(0, 12)}"></script>`
         : "";
+    const title = client.instanceName.replace(/[<>&"]/g, (c) => `&#${c.charCodeAt(0)};`);
+    const appMeta = [
+        `<link rel="manifest" href="/manifest.webmanifest">`,
+        `<meta name="theme-color" content="${APP_THEME_COLOR}">`,
+        `<meta name="mobile-web-app-capable" content="yes">`,
+        `<meta name="apple-mobile-web-app-capable" content="yes">`,
+        `<meta name="apple-mobile-web-app-status-bar-style" content="black">`,
+        `<meta name="apple-mobile-web-app-title" content="${title}">`,
+        `<link rel="apple-touch-icon" href="${appIconUrl(180)}">`,
+    ].join("\n    ");
+
     if (!vencord) console.warn("[TestClient] assets/vencord/vencord.js is missing, run `npm run build:vencord` to build the client mods");
 
     return source
@@ -236,7 +262,11 @@ const buildHtml = () => {
         .replace(/ nonce="[^"]*"/g, "")
         .replace(/<link rel="preconnect"[^>]*>\s*/g, "")
         .replace(/<!-- section:seometa -->[\s\S]*?<!-- endsection -->/, "")
-        .replace(/<title>[^<]*<\/title>/, () => `<title>${client.instanceName.replace(/[<>&]/g, (c) => `&#${c.charCodeAt(0)};`)}</title>`);
+        .replace(
+            /<meta content="[^"]*" name="viewport">/,
+            '<meta content="width=device-width, initial-scale=1, maximum-scale=3, interactive-widget=resizes-content" name="viewport">',
+        )
+        .replace(/<title>[^<]*<\/title>/, () => `<title>${title}</title>\n    ${appMeta}`);
 };
 
 const renderPage = () => {

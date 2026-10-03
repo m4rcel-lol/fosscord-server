@@ -1,0 +1,9 @@
+@media (max-width: 485px) {
+    .container__1e128 .content__1e128 {
+        flex-direction: column;
+    }
+
+    .container__1e128 .column__1e128 {
+        padding-inline: 16px;
+    }
+}
