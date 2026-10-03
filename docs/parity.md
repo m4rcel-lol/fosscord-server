@@ -1,0 +1,220 @@
+# Discord parity checklist
+
+This is a feature-by-feature list of what Discord offers as of October 2026, set against what this instance does with the official web client (build 627798). The feature list comes from the client's own route table and experiment names in `assets/cache`, [docs.discord.food](https://docs.discord.food) and the Discord changelog.
+
+Each feature has one of four marks:
+
+- **working**: checked against a running instance on 2026-10-03, either with exact API requests or by driving the real client in Brave.
+- **partial**: the core works, and the note says what is missing.
+- **not started**: the client has the feature and nothing on the server answers it.
+- **excluded**: left out on purpose by owner policy (no Quests, ads, promotions, upsells or paid tiers; Nitro and boost level 3 are free for everyone).
+
+`scripts/dev/parity-probe.mjs` repeats the API side of these checks. Run it against a seeded dev server with `PORT=<port> node scripts/dev/parity-probe.mjs`, or pass a word to run only the checks whose name contains it. On 2026-10-03 it ran 151 checks: 149 passed, the GitHub connection was skipped because no provider is configured, and the report check failed because reports are not stored yet.
+
+## Accounts and sign-in
+
+| Feature                                       | Status   | Notes                                                                                                              |
+| --------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------ |
+| Register with username and password           | working  | Email and date of birth are optional.                                                                              |
+| Captcha on register, login and password reset | working  | Optional Cap captcha. `/auth/captcha` reports what is turned on.                                                   |
+| Login, logout                                 | working  | Logging out revokes the token, so the next request with it gets 401.                                               |
+| Password reset by email                       | working  | Without SMTP the reset link is written to the server log.                                                          |
+| Email verification and change                 | working  | Changing a verified email asks for the code sent to the old address.                                               |
+| TOTP two-factor and backup codes              | working  | Enabling with a code, then login asking for the TOTP ticket.                                                       |
+| Security keys and passkeys (WebAuthn)         | working  | Registering a key asks for MFA first, like Discord. Passkey login (`/auth/conditional/start`) returns a challenge. |
+| SMS two-factor and phone numbers              | partial  | Works, but without an SMS provider the code is only written to the server log.                                     |
+| QR code login (remote auth)                   | working  | `/remote-auth` answers with `hello`.                                                                               |
+| Sessions and devices list, remote logout      | working  |                                                                                                                    |
+| Disable and delete account                    | working  |                                                                                                                    |
+| Data package request                          | working  | Without SMTP the download link is written to the server log.                                                       |
+| Unique usernames (pomelo) and suggestions     | working  |                                                                                                                    |
+| Age verification flows                        | excluded | Discord runs these for legal reasons in some countries. Nothing here needs them.                                   |
+
+## Profiles
+
+| Feature                                                     | Status      | Notes                                                                                             |
+| ----------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------- |
+| Avatar, banner, bio, pronouns, accent color, profile theme  | working     |                                                                                                   |
+| Display name and display name styles (font, effect, colors) | working     |                                                                                                   |
+| Per-server profile (nickname, avatar, banner, bio)          | working     |                                                                                                   |
+| Avatar decorations, profile effects, nameplates             | working     | All free from the Shop.                                                                           |
+| Server tag on the profile (`primary_guild`)                 | working     |                                                                                                   |
+| Profile badges: Nitro                                       | working     | Everyone has Nitro, so everyone gets the badge. Admins can hide it per user.                      |
+| Profile badges: custom badges from the admin dashboard      | working     | Created and assigned through `/admin/badges` and `/admin/users/:id`, shown on the profile.        |
+| Profile badges: Nitro tenure tiers (bronze to opal)         | not started | The client knows the `premium_tenure_*_month_v2` ids, but the badge art is not available locally. |
+| Profile badges: server booster tiers                        | excluded    | Nobody boosts, every server is level 3 already.                                                   |
+| Notes on users                                              | working     |                                                                                                   |
+| Connections                                                 | partial     | The routes work, but every provider is off until the operator adds OAuth credentials for it.      |
+| Profile widgets and game widgets                            | working     | Game search (`/games/autocomplete?q=`) finds games from the detectable games list.                |
+| Mutual servers and mutual friends                           | working     |                                                                                                   |
+
+## Friends and safety
+
+| Feature                                           | Status      | Notes                                                                                                                                       |
+| ------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Friend requests, accept, remove, friend nicknames | working     |                                                                                                                                             |
+| Block and unblock                                 | working     |                                                                                                                                             |
+| Ignore and unignore                               | working     | Added in this pass. Works for friends and strangers, survives a later friend request, and shows the "Unignore" item in the client.          |
+| Message requests from strangers                   | working     | A DM from someone you only share a server with lands in message requests. Someone with no mutual server and no friendship gets error 50007. |
+| Friend request with a message                     | not started | Behind the `2026-03-friend-request-message` experiment, which stays off.                                                                    |
+| Family Center                                     | working     | Returns an empty center, nothing links accounts yet.                                                                                        |
+| Account standing and violations                   | working     | Violations added from the admin dashboard show up in the client's Safety Hub.                                                               |
+| Reporting messages, users and servers             | partial     | The report menus load and a submitted report is validated, but the server answers 418 and stores nothing.                                   |
+
+## Presence and activity
+
+| Feature                                                            | Status      | Notes                                                                                                                                                                 |
+| ------------------------------------------------------------------ | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status (online, idle, do not disturb, invisible) and custom status | working     |                                                                                                                                                                       |
+| Game activity and rich presence sent over the gateway              | working     | Friends receive the activity with details, state, party and timestamps.                                                                                               |
+| Detecting games running on the computer                            | partial     | The detectable games list loads (24,549 games), but a browser cannot see local processes, so only the desktop app would detect games.                                 |
+| Rich presence from games through local RPC                         | not started | Needs the desktop client's local RPC server.                                                                                                                          |
+| Spotify activity and Listen Along                                  | partial     | A Spotify activity sent over the gateway reaches friends with its `sync_id`, but connecting Spotify needs operator credentials and Listen Along needs Spotify itself. |
+| Active Now and activity statistics                                 | working     |                                                                                                                                                                       |
+
+## Direct messages and calls
+
+| Feature                                                | Status  | Notes                                                                   |
+| ------------------------------------------------------ | ------- | ----------------------------------------------------------------------- |
+| DMs and group DMs (create, rename, add, remove, leave) | working | Group DM changes post their system messages.                            |
+| Group DM invites                                       | working |                                                                         |
+| DM voice and video calls with ringing                  | working | Starting a call in the client sends `CALL_CREATE` to the other user.    |
+| End-to-end encrypted DMs                               | working | `scripts/dev/e2ee-test.mjs` passes every check, see [e2ee.md](e2ee.md). |
+
+## Messages
+
+| Feature                                                                   | Status  | Notes                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Send, edit, delete, bulk delete                                           | working |                                                                                                                                                                                                                                                             |
+| Replies with mention control                                              | working |                                                                                                                                                                                                                                                             |
+| Forwarding                                                                | working |                                                                                                                                                                                                                                                             |
+| Reactions, custom emoji reactions, super reactions                        | working |                                                                                                                                                                                                                                                             |
+| Pins (new paginated pins API)                                             | working |                                                                                                                                                                                                                                                             |
+| Polls: create, vote, multi-select, voter lists, early end, result message | working |                                                                                                                                                                                                                                                             |
+| Attachments through the client's upload flow                              | working |                                                                                                                                                                                                                                                             |
+| Attachments sent as multipart by bots and webhooks                        | working | Fixed in this pass: alt text, voice message fields and spoilers from `attachments[]` used to make the request fail with 500.                                                                                                                                |
+| Media mosaic layout                                                       | working | Uploaded images carry their width and height, which the client needs for the mosaic.                                                                                                                                                                        |
+| Voice messages                                                            | working |                                                                                                                                                                                                                                                             |
+| Stickers and sticker packs                                                | working |                                                                                                                                                                                                                                                             |
+| Custom emoji everywhere                                                   | working | Everyone has Nitro.                                                                                                                                                                                                                                         |
+| GIF picker                                                                | partial | Needs a Klipy API key. Without one the picker is empty.                                                                                                                                                                                                     |
+| Link embeds                                                               | working |                                                                                                                                                                                                                                                             |
+| Silent messages, suppress embeds, spoilers, markdown                      | working |                                                                                                                                                                                                                                                             |
+| Typing indicators, read states, unread and mention badges                 | working |                                                                                                                                                                                                                                                             |
+| Mark unread (message and channel)                                         | working | Turned on in this pass through the `2026-08-mark-channel-unread` experiment.                                                                                                                                                                                |
+| Bookmarks and reminders                                                   | working | Added in this pass: `/users/@me/saved-messages` with `SAVED_MESSAGE_CREATE` and `SAVED_MESSAGE_DELETE`, 500 bookmarks and 100 reminders per user. The client shows "Bookmark Message", "Create Reminder" and the Bookmarks and Reminders tabs of the inbox. |
+| Scheduled messages                                                        | working | Added in this pass: `/users/@me/scheduled-messages`, between 10 minutes and 8 days ahead, 25 per user. The server sends due messages every 15 seconds and "Send now" works. Scheduled from the composer's + menu in the client and listed in the inbox.     |
+| Search with tabs (messages, media, files, links)                          | working |                                                                                                                                                                                                                                                             |
+| Recent mentions inbox                                                     | working |                                                                                                                                                                                                                                                             |
+| Slowmode                                                                  | working |                                                                                                                                                                                                                                                             |
+| Announcement channels: publish and follow                                 | working |                                                                                                                                                                                                                                                             |
+| Soundmoji                                                                 | working | Added in this pass. Messages that contain `<sound:guild_id:sound_id>` carry the referenced sounds in `soundboard_sounds`, so the client renders them as playable chips, and the emoji picker has a Soundmoji tab. Default and server sounds both work.      |
+| Explicit media filter                                                     | partial | The setting saves, but the server never scans attachments, so nothing gets flagged or blurred.                                                                                                                                                              |
+
+## Threads, forums and media channels
+
+| Feature                                           | Status      | Notes                                                                            |
+| ------------------------------------------------- | ----------- | -------------------------------------------------------------------------------- |
+| Threads from messages, private threads, archiving | working     |                                                                                  |
+| Forum channels with tags                          | working     | Fixed in this pass: bots can pass `available_tags` when they create the channel. |
+| Media channels                                    | working     |                                                                                  |
+| Connected thread sidebar                          | not started | Behind the `2026-09-connected-thread-sidebar` experiment, which stays off.       |
+
+## Servers
+
+| Feature                                                  | Status      | Notes                                                                                                                                                                           |
+| -------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Create a server, from scratch or from a template         | working     |                                                                                                                                                                                 |
+| Server templates: create, preview, use, sync             | working     |                                                                                                                                                                                 |
+| Server settings, icon, banner, description               | working     |                                                                                                                                                                                 |
+| Boost level 3 for every server                           | working     | Reported as level 3 with 33 boosts.                                                                                                                                             |
+| Roles, gradient role colors, role icons                  | working     |                                                                                                                                                                                 |
+| Channel permission overwrites                            | working     | Fixed in this pass: the body no longer needs `id`, `allow` or `deny`, which broke bots such as discord.js.                                                                      |
+| Invites with expiry, use limits and temporary membership | working     |                                                                                                                                                                                 |
+| Vanity URL                                               | working     |                                                                                                                                                                                 |
+| Kick, ban, bulk ban, timeout                             | working     | Fixed in this pass: bulk ban failed for users who were not members, and it stored the moderator's IP address on every ban, which then blocked everyone on that IP from joining. |
+| Prune                                                    | working     |                                                                                                                                                                                 |
+| Audit log                                                | working     |                                                                                                                                                                                 |
+| AutoMod keyword rules                                    | working     | Fixed in this pass: a rule created without exempt lists failed with 500.                                                                                                        |
+| Onboarding and server guide                              | working     |                                                                                                                                                                                 |
+| Welcome screen and rules screening setup                 | working     |                                                                                                                                                                                 |
+| Community servers                                        | working     |                                                                                                                                                                                 |
+| Rules screening acceptance                               | working     | `PUT /guilds/:id/requests/@me` approves the member right away.                                                                                                                  |
+| Member applications with manual review                   | not started | There is no `/guilds/:id/requests` review list, so servers cannot hold applicants for approval.                                                                                 |
+| Server Discovery with categories and search              | working     | 17 categories, search, and the client's Discover page.                                                                                                                          |
+| Server widget (JSON and image)                           | working     |                                                                                                                                                                                 |
+| Custom emoji and stickers                                | working     |                                                                                                                                                                                 |
+| Soundboard: upload and play                              | working     | Playing a sound in voice sends `VOICE_CHANNEL_EFFECT_SEND`.                                                                                                                     |
+| Scheduled events with RSVP                               | working     |                                                                                                                                                                                 |
+| Server tags                                              | working     |                                                                                                                                                                                 |
+| Server insights                                          | partial     | The endpoints answer with empty data.                                                                                                                                           |
+| Raid and DM spam actions (pause invites and DMs)         | working     |                                                                                                                                                                                 |
+| Members search and mod view                              | working     |                                                                                                                                                                                 |
+| Linked roles                                             | partial     | Role connection configuration saves, but connections need operator credentials to satisfy it.                                                                                   |
+| Server folders                                           | working     | Stored in the settings protobuf.                                                                                                                                                |
+| Role subscriptions, server shop, server products         | excluded    | Paid features.                                                                                                                                                                  |
+
+## Voice and video
+
+| Feature                           | Status      | Notes                                                                                                                                                                                            |
+| --------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Voice and video in voice channels | working     | `scripts/dev/voice-probe.mjs` connects two browsers through the built-in pion SFU and both receive audio and video.                                                                              |
+| DAVE end-to-end encrypted voice   | working     | The voice server negotiates DAVE version 1 and sends the MLS external sender (opcode 25) when the client joins.                                                                                  |
+| Go Live screen sharing            | working     |                                                                                                                                                                                                  |
+| Stage channels                    | working     |                                                                                                                                                                                                  |
+| Text chat in voice channels       | working     |                                                                                                                                                                                                  |
+| Voice channel status              | working     |                                                                                                                                                                                                  |
+| Activities (embedded apps)        | working     | See [activities.md](activities.md).                                                                                                                                                              |
+| Krisp noise suppression           | working     | The browser models are served locally.                                                                                                                                                           |
+| Clips                             | not started | Clips need the desktop app's capture, which the web client cannot do.                                                                                                                            |
+| Soundboard favorites              | partial     | Turned on in this pass with favorites sorted by when they were added, but not checked in the client. Drag reordering stays off because the bundled settings protobuf has no field for the order. |
+
+## Apps and bots
+
+| Feature                                       | Status   | Notes                                                                                                                       |
+| --------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Applications, bots and the developer portal   | working  |                                                                                                                             |
+| Bot gateway with intents                      | working  |                                                                                                                             |
+| OAuth2 bot and user authorization             | working  |                                                                                                                             |
+| Slash commands, context menu commands         | working  |                                                                                                                             |
+| Slash command autocomplete                    | working  | Autocomplete interactions reach the bot and its choices come back.                                                          |
+| Message components and components v2          | working  |                                                                                                                             |
+| Modals                                        | working  |                                                                                                                             |
+| User-installed apps in DMs                    | working  | User installs are listed in `/users/@me/application-command-index`, which the client merges into the command picker in DMs. |
+| App directory and app launcher                | working  |                                                                                                                             |
+| Webhooks, including GitHub and Slack formats  | working  |                                                                                                                             |
+| Premium apps, entitlements, app subscriptions | excluded | Paid features.                                                                                                              |
+
+## Settings
+
+| Feature                                          | Status  | Notes                                                                                                                                                                    |
+| ------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Settings sync (protobuf settings 1 and 2)        | working |                                                                                                                                                                          |
+| Appearance, Nitro themes, app icons              | working | Client-side, stored in the settings protobuf.                                                                                                                            |
+| Notifications per server and per channel         | working | Fixed in this pass: the per-server endpoint rejected channel overrides that left out fields or had `collapsed`. The client uses the bulk endpoint, which already worked. |
+| Email notification settings                      | working |                                                                                                                                                                          |
+| Privacy and safety, data toggles                 | working | Personalization and sponsored content toggles are hidden.                                                                                                                |
+| Keybinds, accessibility, language, streamer mode | working | Client-side.                                                                                                                                                             |
+
+## Instance features
+
+| Feature                                 | Status  | Notes                                                                                                                                                                                                                                              |
+| --------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Admin dashboard at `/admin`             | working | Overview, users, badges, violations, announcements and status incidents all answered through the API.                                                                                                                                              |
+| Status page at `/status`                | working | Incidents from the dashboard show up in `/status/summary.json`.                                                                                                                                                                                    |
+| Announcements from the official account | working |                                                                                                                                                                                                                                                    |
+| Terms, privacy and guidelines pages     | working |                                                                                                                                                                                                                                                    |
+| Instance branding in the client         | working |                                                                                                                                                                                                                                                    |
+| Experiments                             | working | Added in this pass: `/apex/experiments` and `apex_experiments` in READY assign the experiments listed in `src/util/util/ApexExperiments.ts`. Operators can turn others on or off with `client.experiments`, a map from experiment name to variant. |
+
+## Left out by owner policy
+
+| Feature                                          | Status   | Notes                    |
+| ------------------------------------------------ | -------- | ------------------------ |
+| Nitro purchase, trials, gifting, referral offers | excluded | Everyone has Nitro.      |
+| Server boost purchase                            | excluded | Every server is level 3. |
+| Quests and Orbs                                  | excluded |                          |
+| Ads, sponsored content, ads personalization      | excluded |                          |
+| Download-the-app prompts                         | excluded |                          |
+| Shop prices                                      | excluded | Every Shop item is free. |
+| Server subscriptions and premium apps            | excluded |                          |
