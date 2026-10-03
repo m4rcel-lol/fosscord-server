@@ -14297,7 +14297,10 @@
                 "type": "boolean"
             },
             "note": {
-                "type": "string"
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "stranger_request": {
                 "type": "boolean"
