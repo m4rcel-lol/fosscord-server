@@ -17,6 +17,7 @@
 */
 
 import { route } from "@spacebar/api/middlewares";
+import { onGuildMemberJoin } from "@spacebar/api/util";
 import { AuditLog, Ban, Channel, Guild, GuildScheduledEvent, Invite, Member, PublicInviteRelation, Recipient, ScheduledEvents, User } from "@spacebar/database";
 import { ChannelRecipientAddEvent, Config, DiscordApiErrors, DmChannelDTO, emitEvent, getPermission, InviteDeleteEvent } from "@spacebar/util";
 import { Request, Response, Router } from "express";
@@ -172,6 +173,7 @@ router.post(
         }
 
         const { new_member } = await Invite.joinGuild(req.user_id, invite_code);
+        if (new_member) await onGuildMemberJoin(guild_id, req.user_id);
         const invite = await Invite.findOneOrFail({
             where: { code: invite_code },
             relations: Object.fromEntries(PublicInviteRelation.map((i) => [i, true])),

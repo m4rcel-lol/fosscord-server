@@ -320,6 +320,11 @@ async function consume(this: WebSocket, opts: EventOpts): Promise<void> {
         case "INVITE_CREATE":
         case "INVITE_DELETE":
         case "GUILD_INTEGRATIONS_UPDATE":
+        case "AUTO_MODERATION_RULE_CREATE":
+        case "AUTO_MODERATION_RULE_UPDATE":
+        case "AUTO_MODERATION_RULE_DELETE":
+        case "AUTO_MODERATION_ACTION_EXECUTION":
+        case "AUTO_MODERATION_MENTION_RAID_DETECTION":
             if (!permission.has("MANAGE_GUILD")) return;
             break;
         case "WEBHOOKS_UPDATE":

@@ -18,7 +18,17 @@
 
 import { Request, Response, Router } from "express";
 import { ArrayContains, ArrayOverlap, FindOptionsWhere, ILike, In, LessThan } from "typeorm";
-import { createThread, handleMessage, postHandleMessage, sendMessage, THREAD_TYPES, threadSearchExtras } from "@spacebar/api/util";
+import {
+    assertGuildVerification,
+    assertNoHarmfulLinks,
+    checkAutomod,
+    createThread,
+    handleMessage,
+    postHandleMessage,
+    sendMessage,
+    THREAD_TYPES,
+    threadSearchExtras,
+} from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
 import { Channel, Member, ReadState, ThreadMember } from "@spacebar/database";
 import { ChannelFlags, emitEvent, FieldErrors, MessageCreateEvent, uploadMessageFiles } from "@spacebar/util";
@@ -73,6 +83,14 @@ router.post(
             if (type === ChannelType.GUILD_PUBLIC_THREAD && channel.type === ChannelType.GUILD_NEWS) type = ChannelType.GUILD_NEWS_THREAD;
             req.permission!.hasThrow(type === ChannelType.GUILD_PRIVATE_THREAD ? "CREATE_PRIVATE_THREADS" : "CREATE_PUBLIC_THREADS");
             body.applied_tags = undefined;
+        }
+
+        if (channel.guild_id) {
+            await assertGuildVerification(channel.guild_id, req.user_id);
+            assertNoHarmfulLinks(body.name);
+            assertNoHarmfulLinks(body.message?.content);
+            await checkAutomod({ guild_id: channel.guild_id, channel, user_id: req.user_id, content: body.name, permission: req.permission, title: true });
+            if (body.message?.content) await checkAutomod({ guild_id: channel.guild_id, channel, user_id: req.user_id, content: body.message.content, permission: req.permission });
         }
 
         const { thread, member } = await createThread({

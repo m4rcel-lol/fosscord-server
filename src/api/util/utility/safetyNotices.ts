@@ -18,7 +18,7 @@
 
 import { Message, User, UserViolation } from "@spacebar/database";
 import { Config, emitEvent, getRights, MessageUpdateEvent } from "@spacebar/util";
-import { AccountStandingState, AppealStatusValue, Embed, EmbedType } from "@spacebar/schemas";
+import { AccountStandingState, AdminViolationCreateSchema, AppealStatusValue, Embed, EmbedType } from "@spacebar/schemas";
 import { accountStanding, getUserViolations } from "./accountStanding";
 import { getSystemAccount, sendSystemDM } from "./systemAccounts";
 
@@ -233,4 +233,22 @@ export async function handleAppealVote(message_id: string, voterId: string, emoj
     if (!violation || violation.appeal_status !== AppealStatusValue.REVIEW_PENDING) return;
     if (!(await getRights(voterId)).has("MANAGE_USERS")) return;
     await resolveAppeal(violation, emoji === "✅", voterId);
+}
+
+export const PERMANENT_VIOLATION_EXPIRY = new Date("2100-01-01T00:00:00Z");
+
+export async function issueViolation(user_id: string, body: AdminViolationCreateSchema, issued_by: string, flagged_content: unknown[] = []) {
+    const before = await currentStanding(user_id);
+    const violation = await UserViolation.create({
+        user_id,
+        classification_type: body.classification_type,
+        description: body.description.trim(),
+        actions: (body.actions ?? []).map((a) => ({ action_type: a.action_type, descriptions: (a.descriptions ?? []).map((d) => d.trim()).filter(Boolean) })),
+        flagged_content,
+        issued_by,
+        expires_at: body.expires_in_days ? new Date(Date.now() + body.expires_in_days * 24 * 60 * 60 * 1000) : PERMANENT_VIOLATION_EXPIRY,
+    }).save();
+    await notifyViolation(violation);
+    await notifyStandingDrop(user_id, before, await currentStanding(user_id), violation.id);
+    return violation;
 }

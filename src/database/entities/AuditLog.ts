@@ -54,6 +54,8 @@ export class AuditLog extends BaseClass {
         id?: string;
         type?: string;
         role_name?: string;
+        auto_moderation_rule_name?: string;
+        auto_moderation_rule_trigger_type?: string;
     };
 
     @Column()

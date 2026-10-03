@@ -16,12 +16,12 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { DiscoveryConfiguration, AutoJoinConfiguration, SafetyConfiguration } from "./subconfigurations";
-
-export class GuildConfiguration {
-    discovery: DiscoveryConfiguration = new DiscoveryConfiguration();
-    autoJoin: AutoJoinConfiguration = new AutoJoinConfiguration();
-    defaultFeatures: string[] = [];
-    publicThreadsInvitable: boolean = false;
-    safety: SafetyConfiguration = new SafetyConfiguration();
+export class SafetyConfiguration {
+    harmfulLinkDomains: string[] = [];
+    raidJoinThreshold: number = 15;
+    raidJoinWindowSeconds: number = 120;
+    dmRaidThreshold: number = 10;
+    dmRaidWindowSeconds: number = 300;
+    mentionRaidThreshold: number = 3;
+    mentionRaidWindowSeconds: number = 300;
 }

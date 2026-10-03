@@ -214,6 +214,7 @@ export class Permissions extends BitField {
 
     static NONE: Permissions = new Permissions(0);
     static TIMED_OUT_MASK: Permissions = new Permissions(Permissions.FLAGS.VIEW_CHANNEL | Permissions.FLAGS.READ_MESSAGE_HISTORY);
+    static AUTOMOD_QUARANTINE_MEMBER_FLAGS = 128 | 256 | 1024;
     static QUARANTINED_MASK: Permissions = new Permissions(Permissions.FLAGS.VIEW_CHANNEL | Permissions.FLAGS.READ_MESSAGE_HISTORY | Permissions.FLAGS.CHANGE_NICKNAME);
     static DEFAULT_DM_PERMISSIONS: Permissions = new Permissions(
         Permissions.FLAGS.VIEW_CHANNEL |
@@ -335,7 +336,14 @@ export async function getPermission(
         },
     });
 
-    const obj = new Permissions(lurkerRoles ? permission.bitfield & (Permissions.FLAGS.VIEW_CHANNEL | Permissions.FLAGS.READ_MESSAGE_HISTORY) : permission);
+    const quarantined = guild?.owner_id !== user_id && ((member?.flags ?? 0) & Permissions.AUTOMOD_QUARANTINE_MEMBER_FLAGS) !== 0;
+    const obj = new Permissions(
+        lurkerRoles
+            ? permission.bitfield & (Permissions.FLAGS.VIEW_CHANNEL | Permissions.FLAGS.READ_MESSAGE_HISTORY)
+            : quarantined
+              ? permission.bitfield & Permissions.QUARANTINED_MASK.bitfield
+              : permission,
+    );
 
     // pass cache to permission for possible future getPermission calls
     obj.cache = { guild, member, channel, roles: member?.roles, user_id };

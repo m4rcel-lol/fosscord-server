@@ -22,7 +22,9 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
 import { ReportMenuTypeNames, ReportMenuType, type CreateReportSchema, ReportMenuTypeNameArray } from "@spacebar/schemas";
-import { FieldErrors } from "@spacebar/util";
+import { DiscordApiErrors, FieldErrors, getPermission } from "@spacebar/util";
+import { Guild, Message, User, UserReport } from "@spacebar/database";
+import { MoreThan } from "typeorm";
 
 const router = Router({ mergeParams: true });
 if (process.env.LOG_ROUTES !== "false") console.log("[Server] Registering reporting menu routes...");
@@ -78,8 +80,7 @@ for (const type of Object.values(ReportMenuTypeNames)) {
             },
             spacebarOnly: false, // Maps to /reporting/:id
         }),
-        (req: Request, res: Response) => {
-            // TODO: implement
+        async (req: Request, res: Response) => {
             const body = req.body as CreateReportSchema;
             if (body.name !== type)
                 throw FieldErrors({
@@ -110,7 +111,6 @@ for (const type of Object.values(ReportMenuTypeNames)) {
             }
 
             if (body.breadcrumbs.find((_) => !(_ in menuData.nodes))) {
-                console.log(menuData);
                 throw FieldErrors({
                     breadcrumbs: {
                         message: `Invalid report menu breadcrumbs.`,
@@ -121,12 +121,12 @@ for (const type of Object.values(ReportMenuTypeNames)) {
 
             const validateBreadcrumbs = (currentNode: unknown, breadcrumbs: number[]): boolean => {
                 // navigate via node.children ([name, id][]) according to breadcrumbs
-                let node = currentNode as { children: [string, number][] };
+                let node = currentNode as { children: [string, number][]; button?: { target?: number | null } | null };
                 for (let i = 1; i < breadcrumbs.length; i++) {
                     const crumb = breadcrumbs[i];
-                    if (!node || !node.children || !Array.isArray(node.children)) return false;
-                    const nextNode = node.children.find((child: [string, number]) => child[1] === crumb);
-                    if (!nextNode) return false;
+                    if (!node) return false;
+                    const viaChild = Array.isArray(node.children) && node.children.some((child: [string, number]) => child[1] === crumb);
+                    if (!viaChild && node.button?.target !== crumb) return false;
                     // load next node
                     const nextNodeData = menuData.nodes[crumb];
                     if (!nextNodeData) return false;
@@ -195,7 +195,45 @@ for (const type of Object.values(ReportMenuTypeNames)) {
                     throw new HTTPError("Unknown report menu type", 400);
             }
 
-            throw new HTTPError("Validation success - implementation TODO", 418);
+            const recent = await UserReport.count({ where: { reporter_id: req.user_id, created_at: MoreThan(new Date(Date.now() - 60 * 60 * 1000)) } });
+            if (recent >= 30) throw new HTTPError("You are sending too many reports. Try again later.", 429);
+
+            const snowflake = (value?: string) => (value && /^\d{1,20}$/.test(value) ? value : null);
+            const report = UserReport.create({
+                type,
+                reporter_id: req.user_id,
+                guild_id: snowflake(body.guild_id),
+                channel_id: snowflake(body.channel_id),
+                message_id: snowflake(body.message_id),
+                reported_user_id: snowflake(body.reported_user_id ?? body.user_id),
+                breadcrumbs: body.breadcrumbs,
+                elements: body.elements ?? {},
+            });
+
+            if (type === ReportMenuType.MESSAGE && report.message_id && report.channel_id) {
+                const message = await Message.findOne({ where: { id: report.message_id, channel_id: report.channel_id }, relations: { attachments: true } });
+                if (!message) throw DiscordApiErrors.UNKNOWN_MESSAGE;
+                const permission = await getPermission(req.user_id, message.guild_id ?? undefined, report.channel_id);
+                if (!permission.has("VIEW_CHANNEL")) throw DiscordApiErrors.UNKNOWN_MESSAGE;
+                report.guild_id = message.guild_id ?? null;
+                report.reported_user_id = message.author_id ?? null;
+                report.snapshot = {
+                    content: message.content ?? "",
+                    author_id: message.author_id,
+                    attachments: (message.attachments ?? []).map((a) => ({ id: a.id, url: a.toJSON().url, filename: a.filename, content_type: a.content_type ?? null })),
+                    embeds: message.embeds?.length ?? 0,
+                    timestamp: message.timestamp?.toISOString(),
+                };
+            } else if (type === ReportMenuType.GUILD || type === ReportMenuType.GUILD_DISCOVERY) {
+                const guild = report.guild_id ? await Guild.findOne({ where: { id: report.guild_id }, select: { id: true, owner_id: true } }) : null;
+                if (!guild) throw DiscordApiErrors.UNKNOWN_GUILD;
+                report.reported_user_id ??= guild.owner_id ?? null;
+            }
+            if (report.reported_user_id && !(await User.exists({ where: { id: report.reported_user_id } }))) throw DiscordApiErrors.UNKNOWN_USER;
+            if (report.reported_user_id === req.user_id) throw new HTTPError("You can't report yourself.", 400);
+
+            await report.save();
+            res.json({ report_id: report.id, id: report.id });
         },
     );
     if (process.env.LOG_ROUTES !== "false") console.log(`[Server] Route /reporting/${type} registered (reports).`);

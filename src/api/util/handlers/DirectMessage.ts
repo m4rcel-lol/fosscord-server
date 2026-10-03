@@ -21,10 +21,10 @@ import { Channel, Member, Message, Relationship, User, UserSettingsProtos } from
 import { ChannelCreateEvent, ChannelUpdateEvent, DiscordApiErrors, DmChannelDTO, emitEvent } from "@spacebar/util";
 import { ChannelType, RelationshipType, UserFlags } from "@spacebar/schemas";
 
-export async function assertCanSendDirectMessage(channel: Channel, senderId: string) {
-    if (channel.type !== ChannelType.DM) return;
+export async function assertCanSendDirectMessage(channel: Channel, senderId: string): Promise<string[]> {
+    if (channel.type !== ChannelType.DM) return [];
     const recipientId = channel.recipients?.find((r) => r.user_id !== senderId)?.user_id;
-    if (!recipientId) return;
+    if (!recipientId) return [];
 
     // the official and appeals accounts only send; nothing reads what's sent to them
     const target = await User.findOne({ where: { id: recipientId }, select: { id: true, system: true, flags: true } });
@@ -37,10 +37,10 @@ export async function assertCanSendDirectMessage(channel: Channel, senderId: str
         ],
     });
     if (relationships.some((r) => r.type === RelationshipType.BLOCKED)) throw DiscordApiErrors.CANNOT_MESSAGE_USER;
-    if (relationships.some((r) => r.type === RelationshipType.FRIEND)) return;
+    if (relationships.some((r) => r.type === RelationshipType.FRIEND)) return [];
 
     const [sender, recipient] = await Promise.all([senderId, recipientId].map((id) => User.findOne({ where: { id }, select: { id: true, bot: true, system: true } })));
-    if (!sender || !recipient || sender.system || recipient.system || recipient.bot) return;
+    if (!sender || !recipient || sender.system || recipient.system || recipient.bot) return [];
 
     const senderGuilds = (await Member.find({ where: { id: senderId }, select: { guild_id: true } })).map((m) => m.guild_id);
     if (!senderGuilds.length) throw DiscordApiErrors.CANNOT_MESSAGE_USER;
@@ -49,6 +49,7 @@ export async function assertCanSendDirectMessage(channel: Channel, senderId: str
 
     const restricted = new Set((await UserSettingsProtos.findOne({ where: { user_id: recipientId } }))?.userSettings?.privacy?.restrictedGuildIds?.map(String) ?? []);
     if (mutualGuilds.every((id) => restricted.has(id))) throw DiscordApiErrors.CANNOT_MESSAGE_USER;
+    return mutualGuilds.filter((id) => !restricted.has(id));
 }
 
 async function isMessageRequest(channelId: string, recipientId: string, senderId: string) {

@@ -19,10 +19,10 @@
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
-import { AuditLog, Ban, Member, Message, User } from "@spacebar/database";
-import { DiscordApiErrors, GuildBanAddEvent, GuildBanRemoveEvent, MessageDeleteBulkEvent, emitEvent } from "@spacebar/util";
+import { AuditLog, Ban, User } from "@spacebar/database";
+import { DiscordApiErrors, GuildBanRemoveEvent, emitEvent } from "@spacebar/util";
+import { banDeleteSeconds, banHierarchy, banUser } from "@spacebar/api/util";
 import { AuditLogEvents, BanCreateSchema, BanRegistrySchema, GuildBanResponse, GuildBansResponse, PublicUser } from "@spacebar/schemas";
-import { MoreThan } from "typeorm";
 
 const router: Router = Router({ mergeParams: true });
 
@@ -200,73 +200,17 @@ router.put(
     async (req: Request, res: Response) => {
         const { guild_id } = req.params as { [key: string]: string };
         const banned_user_id = req.params.user_id as string;
-        const opts = req.body as BanCreateSchema;
-
-        let deleteMessagesMs = opts.delete_message_days
-            ? (opts.delete_message_days as number) * 86400000
-            : opts.delete_message_seconds
-              ? (opts.delete_message_seconds as number) * 1000
-              : 0;
-
-        if (deleteMessagesMs < 0) deleteMessagesMs = 0;
+        const opts = (req.body ?? {}) as BanCreateSchema;
+        const delete_message_seconds = banDeleteSeconds(opts);
 
         if (req.user_id === banned_user_id && banned_user_id === req.permission?.cache.guild?.owner_id)
             throw new HTTPError("You are the guild owner, hence can't ban yourself", 403);
-
         if (req.permission?.cache.guild?.owner_id === banned_user_id) throw new HTTPError("You can't ban the owner", 400);
+        if (!(await (await banHierarchy(guild_id, req.user_id))(banned_user_id))) throw DiscordApiErrors.MISSING_PERMISSIONS.withParams("BAN_MEMBERS");
 
-        const existingBan = await Ban.findOne({
-            where: { guild_id: guild_id, user_id: banned_user_id },
-        });
-
-        // Bans on already banned users are silently ignored
-        if (existingBan) return res.status(204).send();
-
-        const banned_user = await User.getPublicUser(banned_user_id);
         const headerReason = req.headers["x-audit-log-reason"];
-        const reason = (Array.isArray(headerReason) ? headerReason[0] : headerReason) ?? req.body.reason;
-
-        const ban = Ban.create({
-            user_id: banned_user_id,
-            guild_id: guild_id,
-            executor_id: req.user_id,
-            reason: reason ? decodeURIComponent(reason) : undefined,
-        });
-
-        if (deleteMessagesMs > 0) {
-            const messages = await Message.find({
-                where: { guild_id, author_id: banned_user_id, timestamp: MoreThan(new Date(Date.now() - deleteMessagesMs)) },
-                select: { id: true, channel_id: true },
-            });
-            const byChannel = Map.groupBy(messages, (message) => message.channel_id!);
-            if (messages.length) await Message.delete(messages.map((message) => message.id));
-            for (const [channel_id, list] of byChannel)
-                await emitEvent({ event: "MESSAGE_DELETE_BULK", channel_id, data: { ids: list.map((m) => m.id), channel_id, guild_id } } satisfies MessageDeleteBulkEvent);
-        }
-
-        await Promise.all([
-            Member.exists({ where: { id: banned_user_id, guild_id } }).then(async (isMember) => {
-                if (isMember) await Member.removeFromGuild(banned_user_id, guild_id);
-            }),
-            ban.save(),
-            AuditLog.log({
-                guild_id,
-                user_id: req.user_id,
-                action_type: AuditLogEvents.MEMBER_BAN_ADD,
-                target_id: banned_user_id,
-                reason,
-                options: deleteMessagesMs ? { delete_member_days: String(Math.round(deleteMessagesMs / 86400000)) } : undefined,
-            }),
-            emitEvent({
-                event: "GUILD_BAN_ADD",
-                data: {
-                    guild_id: guild_id,
-                    user: banned_user,
-                    delete_message_secs: Math.floor(deleteMessagesMs / 1000),
-                },
-                guild_id: guild_id,
-            } satisfies GuildBanAddEvent),
-        ]);
+        const reason = (Array.isArray(headerReason) ? headerReason[0] : headerReason) ?? opts.reason;
+        await banUser({ guild_id, user_id: banned_user_id, executor_id: req.user_id, reason: reason ? decodeURIComponent(reason) : undefined, delete_message_seconds });
 
         return res.status(204).send();
     },

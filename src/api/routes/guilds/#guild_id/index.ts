@@ -140,6 +140,7 @@ router.patch(
                 "INVITES_DISABLED",
                 "DISCOVERABLE",
                 "RAID_ALERTS_DISABLED",
+                "NON_COMMUNITY_RAID_ALERTS",
                 "MEMBER_VERIFICATION_GATE_ENABLED",
                 "PREVIEW_ENABLED",
                 "NEWS",
@@ -167,7 +168,7 @@ router.patch(
             if (value == null || value === "1") continue;
             if (!/^\d{1,20}$/.test(value)) throw FieldErrors({ [key]: { code: "NUMBER_TYPE_COERCE", message: `Value "${value}" is not snowflake.` } });
         }
-        const referencedChannels = [...new Set([body.afk_channel_id, body.system_channel_id].filter((id): id is string => !!id))];
+        const referencedChannels = [...new Set([body.afk_channel_id, body.system_channel_id, body.safety_alerts_channel_id].filter((id): id is string => !!id))];
         if (referencedChannels.length && (await Channel.count({ where: { guild_id, id: In(referencedChannels) } })) !== referencedChannels.length)
             throw DiscordApiErrors.UNKNOWN_CHANNEL;
 

@@ -17,12 +17,25 @@
 */
 
 import { Request, Response, Router } from "express";
-import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
-import { User, AutomodRule } from "@spacebar/database";
-import { AutomodRuleSchema } from "@spacebar/schemas";
+import { AuditLog, AutomodRule } from "@spacebar/database";
+import { AuditLogEvents } from "@spacebar/schemas";
+import { emitEvent } from "@spacebar/util";
+import { HTTPError } from "lambert-server/HTTPError";
+import { validateAutomodRule } from "@spacebar/api/util";
 
 const router: Router = Router({ mergeParams: true });
+
+const AUDIT_KEYS = ["name", "event_type", "trigger_type", "trigger_metadata", "actions", "enabled", "exempt_roles", "exempt_channels"];
+
+const findRule = async (guild_id: string, rule_id: string) => {
+    const rule = /^\d{1,20}$/.test(rule_id) ? await AutomodRule.findOne({ where: { id: rule_id, guild_id } }) : null;
+    if (!rule) throw new HTTPError("Unknown Auto Moderation Rule", 404);
+    return rule;
+};
+
+const emitRule = (event: "AUTO_MODERATION_RULE_CREATE" | "AUTO_MODERATION_RULE_UPDATE" | "AUTO_MODERATION_RULE_DELETE", rule: AutomodRule) =>
+    emitEvent({ event, guild_id: rule.guild_id, data: rule.toJSON() });
 
 router.get(
     "/",
@@ -39,15 +52,54 @@ router.get(
     }),
     async (req: Request, res: Response) => {
         const { guild_id } = req.params as { [key: string]: string };
-        const rules = await AutomodRule.find({ where: { guild_id } });
-        return res.json(rules);
+        const rules = await AutomodRule.find({ where: { guild_id }, order: { position: "ASC", id: "ASC" } });
+        return res.json(rules.map((rule) => rule.toJSON()));
+    },
+);
+
+router.post(
+    "/validate",
+    route({
+        permission: ["MANAGE_GUILD"],
+        responses: {
+            200: {
+                body: "AutomodRuleSchemaWithId",
+            },
+            400: {
+                body: "APIErrorResponse",
+            },
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const { guild_id } = req.params as { [key: string]: string };
+        const existing = req.body?.id ? await AutomodRule.findOne({ where: { id: String(req.body.id), guild_id } }) : null;
+        const data = await validateAutomodRule(guild_id, req.body ?? {}, existing ?? undefined);
+        return res.json({ id: existing?.id ?? req.body?.id ?? null, guild_id, creator_id: existing?.creator_id ?? req.user_id, position: existing?.position ?? 0, ...data });
+    },
+);
+
+router.get(
+    "/:rule_id",
+    route({
+        permission: ["MANAGE_GUILD"],
+        responses: {
+            200: {
+                body: "AutomodRuleSchemaWithId",
+            },
+            404: {
+                body: "APIErrorResponse",
+            },
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const { guild_id, rule_id } = req.params as { [key: string]: string };
+        return res.json((await findRule(guild_id, rule_id)).toJSON());
     },
 );
 
 router.post(
     "/",
     route({
-        // requestBody: "AutomodRuleSchema",
         permission: ["MANAGE_GUILD"],
         responses: {
             200: {
@@ -63,38 +115,26 @@ router.post(
     }),
     async (req: Request, res: Response) => {
         const { guild_id } = req.params as { [key: string]: string };
-        req.body.creator_id ??= req.user_id;
-        req.body.guild_id ??= guild_id;
-        if (req.user_id !== req.body.creator_id) throw new HTTPError("You can't create a rule for someone else", 403);
+        const data = await validateAutomodRule(guild_id, req.body ?? {});
+        const position = Number.isInteger(req.body?.position) ? req.body.position : await AutomodRule.count({ where: { guild_id } });
 
-        if (guild_id !== req.body.guild_id) throw new HTTPError("You can't create a rule for another guild", 403);
-
-        if (req.body.id) {
-            throw new HTTPError("You can't specify an ID for a new rule", 400);
-        }
-
-        const data = req.body as AutomodRuleSchema;
-        data.position ??= await AutomodRule.count({ where: { guild_id } });
-
-        const created = AutomodRule.create({
-            creator: await User.findOneOrFail({
-                where: { id: data.creator_id },
-            }),
-            ...data,
-            enabled: data.enabled ?? false,
-            exempt_channels: data.exempt_channels ?? [],
-            exempt_roles: data.exempt_roles ?? [],
+        const rule = await AutomodRule.create({ ...data, guild_id, creator_id: req.user_id, position }).save();
+        await AuditLog.log({
+            guild_id,
+            user_id: req.user_id,
+            action_type: AuditLogEvents.AUTO_MODERATION_RULE_CREATE,
+            target_id: rule.id,
+            changes: AuditLog.diff({}, rule.toJSON(), AUDIT_KEYS),
+            reason: req.headers["x-audit-log-reason"],
         });
-
-        const savedRule = await AutomodRule.save(created);
-        return res.json(savedRule);
+        await emitRule("AUTO_MODERATION_RULE_CREATE", rule);
+        return res.json(rule.toJSON());
     },
 );
 
 router.patch(
     "/:rule_id",
     route({
-        // requestBody: "AutomodRuleSchema
         permission: ["MANAGE_GUILD"],
         responses: {
             200: {
@@ -109,16 +149,27 @@ router.patch(
         },
     }),
     async (req: Request, res: Response) => {
-        const { rule_id } = req.params as { [key: string]: string };
-        const rule = await AutomodRule.findOneOrFail({
-            where: { id: rule_id },
-        });
+        const { guild_id, rule_id } = req.params as { [key: string]: string };
+        const rule = await findRule(guild_id, rule_id);
+        const before = rule.toJSON();
+        const data = await validateAutomodRule(guild_id, req.body ?? {}, rule);
 
-        const data = req.body as AutomodRuleSchema;
+        Object.assign(rule, data);
+        if (Number.isInteger(req.body?.position)) rule.position = req.body.position;
+        await rule.save();
 
-        AutomodRule.merge(rule, data);
-        const savedRule = await AutomodRule.save(rule);
-        return res.json(savedRule);
+        const changes = AuditLog.diff(before, rule.toJSON(), AUDIT_KEYS);
+        if (changes.length)
+            await AuditLog.log({
+                guild_id,
+                user_id: req.user_id,
+                action_type: AuditLogEvents.AUTO_MODERATION_RULE_UPDATE,
+                target_id: rule.id,
+                changes,
+                reason: req.headers["x-audit-log-reason"],
+            });
+        await emitRule("AUTO_MODERATION_RULE_UPDATE", rule);
+        return res.json(rule.toJSON());
     },
 );
 
@@ -137,8 +188,18 @@ router.delete(
         },
     }),
     async (req: Request, res: Response) => {
-        const { rule_id } = req.params as { [key: string]: string };
-        await AutomodRule.delete({ id: rule_id });
+        const { guild_id, rule_id } = req.params as { [key: string]: string };
+        const rule = await findRule(guild_id, rule_id);
+        await AutomodRule.delete({ id: rule.id, guild_id });
+        await AuditLog.log({
+            guild_id,
+            user_id: req.user_id,
+            action_type: AuditLogEvents.AUTO_MODERATION_RULE_DELETE,
+            target_id: rule.id,
+            changes: AuditLog.diff(rule.toJSON(), {}, AUDIT_KEYS),
+            reason: req.headers["x-audit-log-reason"],
+        });
+        await emitRule("AUTO_MODERATION_RULE_DELETE", rule);
         return res.status(204).send();
     },
 );

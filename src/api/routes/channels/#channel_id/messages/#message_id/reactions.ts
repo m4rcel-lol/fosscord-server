@@ -20,7 +20,7 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { In, MoreThan } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
-import { getBurstColors, handleAppealVote } from "@spacebar/api/util";
+import { assertCanInteract, assertGuildVerification, getBurstColors, handleAppealVote } from "@spacebar/api/util";
 import { Channel, Emoji, Member, Message, User } from "@spacebar/database";
 import {
     DiscordApiErrors,
@@ -237,6 +237,10 @@ router.put(
         const channel = await Channel.findOneOrFail({
             where: { id: channel_id },
         });
+        if (channel.guild_id) {
+            await assertCanInteract(channel.guild_id, req.user_id);
+            await assertGuildVerification(channel.guild_id, req.user_id);
+        }
         const external_emoji = emoji.id ? await Emoji.findOneOrFail({ where: { id: emoji.id } }) : undefined;
         if (external_emoji) {
             emoji.animated = external_emoji.animated;

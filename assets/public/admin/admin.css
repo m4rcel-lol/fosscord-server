@@ -924,3 +924,33 @@ details > summary::-webkit-details-marker {
     margin: 4px 0 0;
     white-space: pre-wrap;
 }
+
+.report-message {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    padding: 10px 12px;
+    background: var(--panel-2);
+    border-radius: 8px;
+}
+
+.report-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.report-attachments img {
+    display: block;
+    max-width: 220px;
+    max-height: 160px;
+    border-radius: 8px;
+    outline: 1px solid rgba(255, 255, 255, 0.08);
+    outline-offset: -1px;
+}
+
+@media (prefers-color-scheme: light) {
+    .report-attachments img {
+        outline-color: rgba(0, 0, 0, 0.08);
+    }
+}

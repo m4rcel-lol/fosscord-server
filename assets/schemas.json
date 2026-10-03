@@ -1798,26 +1798,23 @@
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "ChannelPermissionOverwriteSchema": {
+        "additionalProperties": false,
         "type": "object",
         "properties": {
-            "allow": {
-                "type": "string"
+            "type": {
+                "$ref": "#/definitions/ChannelPermissionOverwriteType"
             },
-            "deny": {
+            "allow": {
                 "type": "string"
             },
             "id": {
                 "type": "string"
             },
-            "type": {
-                "$ref": "#/definitions/ChannelPermissionOverwriteType"
+            "deny": {
+                "type": "string"
             }
         },
-        "additionalProperties": false,
         "required": [
-            "allow",
-            "deny",
-            "id",
             "type"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
@@ -4114,6 +4111,12 @@
             },
             "discovery_splash": {
                 "type": "string"
+            },
+            "safety_alerts_channel_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "bans": {
                 "type": "array",
@@ -7816,6 +7819,220 @@
             }
         },
         "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "GuildChannelCreateSchema": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string"
+            },
+            "type": {
+                "enum": [
+                    0,
+                    1,
+                    10,
+                    11,
+                    12,
+                    13,
+                    14,
+                    15,
+                    16,
+                    17,
+                    18,
+                    2,
+                    255,
+                    3,
+                    4,
+                    5,
+                    6,
+                    7,
+                    8,
+                    9
+                ],
+                "type": "number"
+            },
+            "id": {
+                "type": "string"
+            },
+            "flags": {
+                "type": "integer"
+            },
+            "icon": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "template": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "nsfw": {
+                "type": "boolean"
+            },
+            "applied_tags": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "topic": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "bitrate": {
+                "type": "integer"
+            },
+            "user_limit": {
+                "type": "integer"
+            },
+            "rate_limit_per_user": {
+                "type": "integer"
+            },
+            "position": {
+                "type": "integer"
+            },
+            "invitable": {
+                "type": "boolean"
+            },
+            "permission_overwrites": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string"
+                        },
+                        "type": {
+                            "$ref": "#/definitions/ChannelPermissionOverwriteType"
+                        },
+                        "allow": {
+                            "type": "string"
+                        },
+                        "deny": {
+                            "type": "string"
+                        }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                        "allow",
+                        "deny",
+                        "id",
+                        "type"
+                    ]
+                }
+            },
+            "parent_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "rtc_region": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "default_auto_archive_duration": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "default_reaction_emoji": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/DefaultReaction"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "default_sort_order": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "default_forum_layout": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "default_tag_setting": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "default_thread_rate_limit_per_user": {
+                "type": "integer"
+            },
+            "video_quality_mode": {
+                "type": "integer"
+            },
+            "auto_archive_duration": {
+                "type": "integer"
+            },
+            "archived": {
+                "type": "boolean"
+            },
+            "locked": {
+                "type": "boolean"
+            },
+            "icon_emoji": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            },
+                            "name": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            }
+                        },
+                        "additionalProperties": false
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "theme_color": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "application_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "available_tags": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/TagCreateSchema"
+                }
+            }
+        },
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "PushDeviceSchema": {
@@ -11757,6 +11974,17 @@
                     }
                 ]
             },
+            "unusual_dm_activity_until": {
+                "anyOf": [
+                    {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
             "avatar_decoration_data": {
                 "$ref": "#/definitions/AvatarDecorationData"
             },
@@ -14669,6 +14897,17 @@
                     }
                 ]
             },
+            "unusual_dm_activity_until": {
+                "anyOf": [
+                    {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
             "avatar_decoration_data": {
                 "$ref": "#/definitions/AvatarDecorationData"
             },
@@ -14752,6 +14991,12 @@
             },
             "explicit_content_filter": {
                 "type": "integer"
+            },
+            "safety_alerts_channel_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
             },
             "features": {
                 "type": "array",
@@ -16968,6 +17213,19 @@
                     }
                 ]
             },
+            "soundboard_sounds": {
+                "anyOf": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/definitions/MessageSoundboardSound"
+                        }
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
             "call": {
                 "anyOf": [
                     {
@@ -17097,6 +17355,7 @@
                 "enum": [
                     "article",
                     "auto_moderation_message",
+                    "auto_moderation_notification",
                     "gifv",
                     "image",
                     "link",
@@ -18548,6 +18807,51 @@
             "enc",
             "user_id",
             "wrapped"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "MessageSoundboardSound": {
+        "type": "object",
+        "properties": {
+            "sound_id": {
+                "type": "string"
+            },
+            "name": {
+                "type": "string"
+            },
+            "volume": {
+                "type": "integer"
+            },
+            "emoji_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "emoji_name": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "guild_id": {
+                "type": "string"
+            },
+            "user_id": {
+                "type": "string"
+            },
+            "available": {
+                "type": "boolean"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "available",
+            "emoji_id",
+            "emoji_name",
+            "name",
+            "sound_id",
+            "volume"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
@@ -20705,6 +21009,12 @@
             },
             "encrypted": {
                 "$ref": "#/definitions/E2eeEnvelope"
+            },
+            "soundboard_sounds": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/MessageSoundboardSound"
+                }
             }
         },
         "additionalProperties": false,

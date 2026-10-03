@@ -19,7 +19,7 @@
 import bcrypt from "bcrypt";
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { EmailChange, Pomelo, authenticatorTypes, oauth2User, revokeSessions } from "@spacebar/api/util";
+import { EmailChange, Pomelo, authenticatorTypes, checkProfileAcrossGuilds, oauth2User, revokeSessions } from "@spacebar/api/util";
 import { AvatarDecoration, User } from "@spacebar/database";
 import {
     broadcastUserUpdate,
@@ -281,6 +281,8 @@ router.patch(
             data,
         } as unknown as UserUpdateEvent);
         if (JSON.stringify(user.toPublicUser()) !== publicBefore) await broadcastUserUpdate(req.user_id);
+        if (body.username !== undefined || body.global_name !== undefined)
+            await checkProfileAcrossGuilds(req.user_id).catch((e) => console.error("[AutoMod] profile check failed", e));
 
         if (emailChanged && updated.email)
             await Email.sendVerifyEmail(updated, updated.email).catch((e) => console.error(`[Email] failed to send verification email to ${updated.id}`, e));

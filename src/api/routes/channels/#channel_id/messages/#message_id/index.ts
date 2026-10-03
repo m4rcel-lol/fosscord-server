@@ -19,7 +19,7 @@
 import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import multer from "multer";
-import { checkAutomod, handleMessage, postHandleMessage, syncCrosspostCopies } from "@spacebar/api/util";
+import { assertNoHarmfulLinks, checkAutomod, handleMessage, postHandleMessage, syncCrosspostCopies } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
 import { Attachment, AuditLog, Channel, Message } from "@spacebar/database";
 import {
@@ -109,9 +109,10 @@ router.patch(
             throw DiscordApiErrors.POLL_CANNOT_EDIT_MESSAGE;
         }
 
+        if (body.content !== undefined && body.content !== message.content) assertNoHarmfulLinks(body.content);
         if (message.guild_id && body.content !== undefined && body.content !== message.content) {
             const channel = await Channel.findOneOrFail({ where: { id: channel_id } });
-            await checkAutomod({ guild_id: message.guild_id, channel, user_id: req.user_id, content: body.content, permission: permissions });
+            await checkAutomod({ guild_id: message.guild_id, channel, user_id: req.user_id, content: body.content, permission: permissions, message_id: message.id });
         }
 
         const attachments = body.attachments?.map((attachment) =>

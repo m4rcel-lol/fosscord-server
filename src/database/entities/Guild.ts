@@ -141,6 +141,9 @@ export class Guild extends BaseClass {
     @Column({ nullable: true })
     explicit_content_filter?: number;
 
+    @Column({ type: "int8", nullable: true })
+    safety_alerts_channel_id?: string | null;
+
     @Column({ type: "varchar", array: true })
     features: string[] = []; //TODO use enum
     //TODO: https://discord.com/developers/docs/resources/guild#guild-object-guild-features
@@ -618,6 +621,7 @@ export class Guild extends BaseClass {
             discovery_excluded: undefined,
             vanity_url_code: this.vanity_url_code ?? null,
             incidents_data: this.incidents_data ?? null,
+            safety_alerts_channel_id: this.safety_alerts_channel_id ?? null,
             profile: this.profile?.tag ? ({ tag: this.profile.tag, badge: this.profile.badge_hash ?? null } as GuildProfileSettings) : null,
             home_settings: undefined,
             onboarding: undefined,

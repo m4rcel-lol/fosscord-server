@@ -18,8 +18,10 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { Guild } from "@spacebar/database";
+import { Guild, User } from "@spacebar/database";
 import { FieldErrors } from "@spacebar/util";
+import { MessageType } from "@spacebar/schemas";
+import { postGuildSystemMessage, safetyChannelId } from "@spacebar/api/util";
 
 const router = Router({ mergeParams: true });
 
@@ -50,6 +52,8 @@ router.put(
         };
 
         const guild = await Guild.findOneOrFail({ where: { id: guild_id } });
+        const active = (value?: string | null) => !!value && new Date(value).getTime() > Date.now();
+        const wasLocked = active(guild.incidents_data?.invites_disabled_until) || active(guild.incidents_data?.dms_disabled_until);
         const invites_disabled_until = parse("invites_disabled_until");
         const dms_disabled_until = parse("dms_disabled_until");
         guild.incidents_data = {
@@ -60,6 +64,20 @@ router.put(
         };
         await guild.save();
         await Guild.emitUpdate(guild_id);
+
+        const until = [invites_disabled_until, dms_disabled_until]
+            .filter((value): value is string => !!value)
+            .sort()
+            .pop();
+        const channel_id = safetyChannelId(guild);
+        if (channel_id && (until || wasLocked))
+            await postGuildSystemMessage({
+                guild_id,
+                channel_id,
+                author: await User.findOneOrFail({ where: { id: req.user_id } }),
+                type: until ? MessageType.GUILD_INCIDENT_ALERT_MODE_ENABLED : MessageType.GUILD_INCIDENT_ALERT_MODE_DISABLED,
+                content: until ?? "",
+            });
 
         return res.json(guild.incidents_data);
     },

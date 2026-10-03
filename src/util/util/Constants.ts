@@ -796,7 +796,7 @@ export const DiscordApiErrors = {
         return new ApiError("Cannot send messages in a voice channel", 50008);
     },
     get CHANNEL_VERIFICATION_LEVEL_TOO_HIGH() {
-        return new ApiError("Channel verification level is too high for you to gain access", 50009);
+        return new ApiError("Channel verification level is too high for you to gain access", 50009, 403);
     },
     get OAUTH2_APPLICATION_BOT_ABSENT() {
         return new ApiError("OAuth2 application does not have a bot", 50010);

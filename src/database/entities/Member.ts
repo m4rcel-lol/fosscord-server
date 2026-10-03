@@ -70,6 +70,7 @@ export const MemberPrivateProjection: (keyof Member)[] = [
     "theme_colors",
     "pronouns",
     "communication_disabled_until",
+    "unusual_dm_activity_until",
     "flags",
 ];
 
@@ -182,6 +183,9 @@ export class Member extends BaseClassWithoutId {
 
     @Column({ nullable: true, type: Date })
     communication_disabled_until: Date | null;
+
+    @Column({ type: "timestamptz", nullable: true })
+    unusual_dm_activity_until?: Date | null;
 
     // TODO: add this when we have proper read receipts
     // @Column({ type: "jsonb" })
