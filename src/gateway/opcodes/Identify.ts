@@ -362,10 +362,12 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     const friendPresenceUserIds = [...new Set(relationships.filter((relationship) => relationship.type === RelationshipType.FRIEND).map((relationship) => relationship.to_id))];
     const memberGuildIds = members.map((m) => m.guild_id);
 
-    const friendPresencePromise = timePromise(() => getUserPresences(friendPresenceUserIds));
-    const affinityUserIds = [
-        ...new Set([...friendPresenceUserIds, ...recipients.flatMap((r) => r.channel.recipients?.map((x) => x.user?.id).filter((id) => id && id !== this.user_id) ?? [])]),
-    ];
+    const affinityUsers = new Map<string, User>();
+    for (const relationship of relationships) if (relationship.type === RelationshipType.FRIEND && relationship.to) affinityUsers.set(relationship.to_id, relationship.to);
+    for (const { channel } of recipients)
+        for (const recipient of channel.recipients ?? []) if (recipient.user?.id && recipient.user.id !== this.user_id) affinityUsers.set(recipient.user.id, recipient.user);
+    const affinityUserIds = [...new Set([...friendPresenceUserIds, ...affinityUsers.keys()])];
+    const friendPresencePromise = timePromise(() => getUserPresences(affinityUserIds));
     const guildPresencePromise = (async () => {
         if (!memberGuildIds.length || (!user.bot && !affinityUserIds.length))
             return {
@@ -454,9 +456,9 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     const [{ elapsed: sessionSaveTime }, { result: friendPresenceMap, elapsed: friendPresenceSessionsQueryTime }, { guildPresenceMembers, guildPresenceMap, guildPresenceUsers }] =
         await Promise.all([sessionSavePromise, friendPresencePromise, guildPresencePromise]);
     const { result: friendPresences, elapsed: generateFriendPresencesTime } = timeFunction(() =>
-        relationships
-            .filter((x) => x.type === RelationshipType.FRIEND && friendPresenceMap.has(x.to_id))
-            .map((x) => ({ user: x.to.toPublicUser(), ...friendPresenceMap.get(x.to_id)! })),
+        affinityUserIds
+            .filter((id) => affinityUsers.has(id) && friendPresenceMap.has(id))
+            .map((id) => ({ user: affinityUsers.get(id)!.toPublicUser(), ...friendPresenceMap.get(id)! })),
     );
 
     const guildPresenceMembersByGuild = arrayGroupBy(guildPresenceMembers, (m) => m.guild_id);
