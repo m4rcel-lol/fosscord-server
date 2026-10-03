@@ -288,7 +288,7 @@
                 img.alt = "";
                 img.loading = "lazy";
                 img.decoding = "async";
-                const fallback = `/embed/avatars/${Number(BigInt(member.id ?? 0) % 6n)}.png`;
+                const fallback = `/embed/avatars/${Number((BigInt(member.id ?? 0) >> 22n) % 6n)}.png`;
                 img.src = member.avatar_url || fallback;
                 img.addEventListener("error", () => img.src !== new URL(fallback, location.href).href && (img.src = fallback), { once: true });
                 const status = document.createElement("span");

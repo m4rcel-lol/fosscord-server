@@ -142,7 +142,7 @@ async function getWidgetJsonData(guild_id: string) {
                 ? `${cdn}/guilds/${guild_id}/users/${x.id}/avatars/${x.avatar}.png`
                 : x.user.avatar
                   ? `${cdn}/avatars/${x.id}/${x.user.avatar}.png`
-                  : `${cdn}/embed/avatars/${BigInt(x.id) % 6n}.png`,
+                  : `${cdn}/embed/avatars/${Number((BigInt(x.id) >> 22n) % 6n)}.png`,
         }))
         .sort((a, b) => Number(BigInt(a.id) - BigInt(b.id)));
 
