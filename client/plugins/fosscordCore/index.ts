@@ -65,5 +65,18 @@ export default definePlugin({
                 replace: "`${location.origin}/api/v9/",
             },
         },
+        {
+            find: '"ChannelSectionStore2"',
+            replacement: [
+                {
+                    match: /initialize\((\i)\)\{null!=\1&&\(/,
+                    replace: "initialize($1){$1??={};null!=$1&&(",
+                },
+                {
+                    match: /(isMembersOpen\?\?)!1/,
+                    replace: "$1!0",
+                },
+            ],
+        },
     ],
 });
