@@ -1363,6 +1363,32 @@ export const CUSTOM_CLAN_BADGES: CustomClanBadge[] = [
         ],
         palette: { K: "black", O: "#FF9F1C", P: main("base", "#F5F3EC"), L: main("light", "#FFFFFF"), D: main("dark", "#BFC3CC"), S: accent("base", "#E8333A") },
     },
+    {
+        id: 10048,
+        name: "DISCORD",
+        staff_only: false,
+        pack: "The worst company ever",
+        // the controller-shaped face in the main colour
+        grid: [
+            "................",
+            "................",
+            "..KKKK....KKKK..",
+            ".KLLLLKKKKPPPPK.",
+            "KLLPPPPPPPPPPPDK",
+            "KLPPPPPPPPPPPPDK",
+            "KLPPPPPPPPPPPPDK",
+            "KPPPWWPPPPWWPPDK",
+            "KPPPWWPPPPWWPPDK",
+            "KPPPWWPPPPWWPPDK",
+            "KPPPPPPPPPPPPPDK",
+            "KPPPPPKKKKPPPPDK",
+            "KPPPKK....KKPDDK",
+            ".KPPK......KDDK.",
+            "..KK........KK..",
+            "................",
+        ],
+        palette: { K: "black", W: "white", P: main("base", "#5865F2"), L: main("light", "#A3ABFF"), D: main("dark", "#3C45B8") },
+    },
 ];
 
 // how many of the server's badge colours a badge uses, which the client uses to decide whether to offer the accent colour
