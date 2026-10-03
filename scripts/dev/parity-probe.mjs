@@ -988,6 +988,40 @@ await check("more", "delete account", async () => {
     const after = await call("GET", "/users/@me", C);
     return { ok: r.status === 204 && after.status === 401, note: `${r.status} after ${after.status}` };
 });
+await check("servers", "member applications with manual review", async () => {
+    const own = (await call("POST", "/guilds", A, { name: `apply${suffix}` })).body;
+    const channel = (await call("GET", `/guilds/${own.id}/channels`, A)).body.find((c) => c.type === 0);
+    await call("PATCH", `/guilds/${own.id}/member-verification`, A, {
+        enabled: true,
+        form_fields: [
+            { field_type: "TERMS", label: "Rules", values: ["be nice"], required: true },
+            { field_type: "TEXT_INPUT", label: "Why?", required: true },
+        ],
+    });
+    const invite = (await call("POST", `/channels/${channel.id}/invites`, A, { max_age: 0 })).body;
+    const accepted = await call("POST", `/invites/${invite.code}`, B, {});
+    const held = (await call("GET", `/guilds/${own.id}/members/${them.id}`, A)).status;
+    const submitted = await call("PUT", `/guilds/${own.id}/requests/@me`, B, {
+        form_fields: [
+            { field_type: "TERMS", label: "Rules", values: ["be nice"], required: true, response: true },
+            { field_type: "TEXT_INPUT", label: "Why?", required: true, response: "probe" },
+        ],
+    });
+    const listed = (await call("GET", `/guilds/${own.id}/requests?status=SUBMITTED`, A)).body?.guild_join_requests?.length;
+    const approved = await call("PATCH", `/guilds/${own.id}/requests/${submitted.body?.id}`, A, { action: "APPROVED" });
+    const member = (await call("GET", `/guilds/${own.id}/members/${them.id}`, A)).status;
+    await call("POST", `/guilds/${own.id}/delete`, A, {});
+    return {
+        ok:
+            accepted.body?.show_verification_form === true &&
+            held === 404 &&
+            submitted.body?.application_status === "SUBMITTED" &&
+            listed === 1 &&
+            approved.status === 200 &&
+            member === 200,
+        note: `held ${held}, ${submitted.body?.application_status}, listed ${listed}, approve ${approved.status}, member ${member}`,
+    };
+});
 
 for (const r of results) console.log(`${r.ok ? "PASS" : r.skip ? "SKIP" : "FAIL"} [${r.area}] ${r.name}${r.note ? ` :: ${r.note}` : ""}`);
 console.log(`${results.filter((r) => r.ok).length} passed, ${results.filter((r) => r.skip).length} skipped, ${results.filter((r) => !r.ok && !r.skip).length} failed`);
