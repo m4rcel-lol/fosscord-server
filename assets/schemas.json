@@ -7780,6 +7780,220 @@
         "additionalProperties": false,
         "$schema": "http://json-schema.org/draft-07/schema#"
     },
+    "GuildChannelCreateSchema": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string"
+            },
+            "type": {
+                "enum": [
+                    0,
+                    1,
+                    10,
+                    11,
+                    12,
+                    13,
+                    14,
+                    15,
+                    16,
+                    17,
+                    18,
+                    2,
+                    255,
+                    3,
+                    4,
+                    5,
+                    6,
+                    7,
+                    8,
+                    9
+                ],
+                "type": "number"
+            },
+            "id": {
+                "type": "string"
+            },
+            "flags": {
+                "type": "integer"
+            },
+            "icon": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "template": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "nsfw": {
+                "type": "boolean"
+            },
+            "applied_tags": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "topic": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "bitrate": {
+                "type": "integer"
+            },
+            "user_limit": {
+                "type": "integer"
+            },
+            "rate_limit_per_user": {
+                "type": "integer"
+            },
+            "position": {
+                "type": "integer"
+            },
+            "invitable": {
+                "type": "boolean"
+            },
+            "permission_overwrites": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string"
+                        },
+                        "type": {
+                            "$ref": "#/definitions/ChannelPermissionOverwriteType"
+                        },
+                        "allow": {
+                            "type": "string"
+                        },
+                        "deny": {
+                            "type": "string"
+                        }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                        "allow",
+                        "deny",
+                        "id",
+                        "type"
+                    ]
+                }
+            },
+            "parent_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "rtc_region": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "default_auto_archive_duration": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "default_reaction_emoji": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/DefaultReaction"
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "default_sort_order": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "default_forum_layout": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "default_tag_setting": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "default_thread_rate_limit_per_user": {
+                "type": "integer"
+            },
+            "video_quality_mode": {
+                "type": "integer"
+            },
+            "auto_archive_duration": {
+                "type": "integer"
+            },
+            "archived": {
+                "type": "boolean"
+            },
+            "locked": {
+                "type": "boolean"
+            },
+            "icon_emoji": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            },
+                            "name": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            }
+                        },
+                        "additionalProperties": false
+                    },
+                    {
+                        "type": "null"
+                    }
+                ]
+            },
+            "theme_color": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            },
+            "application_id": {
+                "type": [
+                    "null",
+                    "string"
+                ]
+            },
+            "available_tags": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/TagCreateSchema"
+                }
+            }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#"
+    },
     "PublicMessageListResponse": {
         "type": "array",
         "items": {

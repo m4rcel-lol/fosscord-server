@@ -18,10 +18,10 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { AuditLog, Channel, Guild } from "@spacebar/database";
-import { ChannelUpdateEvent, Config, DiscordApiErrors, emitEvent, FieldErrors } from "@spacebar/util";
+import { AuditLog, Channel, Guild, Tag } from "@spacebar/database";
+import { ChannelCreateEvent, ChannelUpdateEvent, Config, DiscordApiErrors, emitEvent, FieldErrors } from "@spacebar/util";
 import { THREAD_TYPES } from "@spacebar/api/util";
-import { AuditLogEvents, ChannelCreateSchema, ChannelReorderSchema, ChannelType } from "@spacebar/schemas";
+import { AuditLogEvents, GuildChannelCreateSchema, ChannelReorderSchema, ChannelType } from "@spacebar/schemas";
 import { In, Not } from "typeorm";
 
 const router = Router({ mergeParams: true });
@@ -55,7 +55,7 @@ router.get(
 router.post(
     "/",
     route({
-        requestBody: "ChannelCreateSchema",
+        requestBody: "GuildChannelCreateSchema",
         permission: "MANAGE_CHANNELS",
         responses: {
             201: {
@@ -72,7 +72,7 @@ router.post(
     async (req: Request, res: Response) => {
         // creates a new guild channel https://discord.com/developers/docs/resources/guild#create-guild-channel
         const { guild_id } = req.params as { [key: string]: string };
-        const body = req.body as ChannelCreateSchema;
+        const body = req.body as GuildChannelCreateSchema;
         const { maxName } = Config.get().limits.channel;
         if (body.name !== undefined && (body.name.length < 1 || body.name.length > maxName))
             throw FieldErrors({ name: { code: "BASE_TYPE_BAD_LENGTH", message: `Must be between 1 and ${maxName} in length.` } });
@@ -89,7 +89,24 @@ router.post(
             }
         }
 
-        const channel = await Channel.createChannel({ ...body, type: body.type ?? ChannelType.GUILD_TEXT, guild_id }, req.user_id);
+        const { available_tags, ...fields } = body;
+        if (available_tags && available_tags.length > 20) throw FieldErrors({ available_tags: { code: "BASE_TYPE_MAX_LENGTH", message: "Must be 20 or fewer in length." } });
+        const channel = await Channel.createChannel({ ...fields, type: body.type ?? ChannelType.GUILD_TEXT, guild_id }, req.user_id, { skipEventEmit: true });
+        if (available_tags?.length && channel.isForum()) {
+            channel.available_tags = [];
+            for (const [position, input] of available_tags.entries())
+                channel.available_tags.push(
+                    await Tag.create({
+                        channel_id: channel.id,
+                        position,
+                        name: input.name.slice(0, 20),
+                        moderated: !!input.moderated,
+                        emoji_id: input.emoji_id ?? undefined,
+                        emoji_name: input.emoji_id ? undefined : (input.emoji_name ?? undefined),
+                    }).save(),
+                );
+        }
+        await emitEvent({ event: "CHANNEL_CREATE", data: channel.toJSON(), guild_id } satisfies ChannelCreateEvent);
         channel.position = await Channel.calculatePosition(channel.id, guild_id, channel.guild);
         await AuditLog.log({
             guild_id,
