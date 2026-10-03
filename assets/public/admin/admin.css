@@ -1,37 +1,78 @@
+@font-face {
+    font-family: "gg sans";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url(/assets/66d715454104d24e.woff2) format("woff2");
+}
+
+@font-face {
+    font-family: "gg sans";
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url(/assets/b272b33815319bae.woff2) format("woff2");
+}
+
+@font-face {
+    font-family: "gg sans";
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url(/assets/2df2c3ff74408972.woff2) format("woff2");
+}
+
+@font-face {
+    font-family: "gg sans";
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url(/assets/189422196a4f8b53.woff2) format("woff2");
+}
+
+@font-face {
+    font-family: "gg sans";
+    font-style: normal;
+    font-weight: 800;
+    font-display: swap;
+    src: url(/assets/b2fdbe507d6ce9ef.woff2) format("woff2");
+}
+
 :root {
     color-scheme: dark;
-    --bg: #111214;
-    --panel: #1a1b1e;
-    --panel-2: #222327;
-    --border: #2e3035;
-    --text: #e8e9ec;
-    --muted: #9a9ca3;
+    --bg: #121214;
+    --panel: #1a1a1e;
+    --panel-2: #242429;
+    --border: #2b2b31;
+    --text: #dfe0e2;
+    --muted: #94959c;
     --accent: #5865f2;
     --accent-text: #ffffff;
-    --danger: #e5484d;
-    --warn: #f5a524;
-    --ok: #30a46c;
-    --info: #3e9bff;
-    --radius: 10px;
+    --danger: #f23f43;
+    --warn: #f0b232;
+    --ok: #23a55a;
+    --info: #5865f2;
+    --radius: 8px;
     --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
     font-family:
         "gg sans",
-        system-ui,
-        -apple-system,
-        "Segoe UI",
-        Roboto,
+        "Noto Sans",
+        "Helvetica Neue",
+        Helvetica,
+        Arial,
         sans-serif;
+    -webkit-font-smoothing: antialiased;
 }
 
 @media (prefers-color-scheme: light) {
     :root {
         color-scheme: light;
-        --bg: #f4f5f7;
+        --bg: #f3f3f5;
         --panel: #ffffff;
-        --panel-2: #f0f1f4;
-        --border: #dfe1e6;
-        --text: #17181b;
-        --muted: #5e616b;
+        --panel-2: #ebebed;
+        --border: #e1e2e5;
+        --text: #2f3035;
+        --muted: #5c5d64;
         --shadow: 0 10px 30px rgba(20, 22, 30, 0.12);
     }
 }
@@ -115,12 +156,12 @@ code,
     padding: 0 6px;
 }
 
-.brand img {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-    object-fit: contain;
-    background: var(--panel-2);
+.brand-icon {
+    width: 40px;
+    height: 40px;
+    flex: none;
+    border-radius: 14px;
+    object-fit: cover;
 }
 
 .brand div {

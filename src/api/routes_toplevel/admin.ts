@@ -20,7 +20,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import express, { Router, Response, Request } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { PUBLIC_ASSETS_FOLDER, instanceName } from "@spacebar/util";
+import { PUBLIC_ASSETS_FOLDER, brandPage } from "@spacebar/util";
 
 const router = Router({ mergeParams: true });
 const PAGE_FOLDER = path.join(PUBLIC_ASSETS_FOLDER, "admin");
@@ -33,8 +33,7 @@ router.get(
     }),
     async (req: Request, res: Response) => {
         const page = await fs.readFile(path.join(PAGE_FOLDER, "index.html"), "utf8");
-        const name = instanceName().replace(/[<>&"']/g, (c) => `&#${c.charCodeAt(0)};`);
-        res.set("Cache-Control", "no-cache").type("html").send(page.replaceAll("__INSTANCE_NAME__", name));
+        res.set("Cache-Control", "no-cache").type("html").send(brandPage(page));
     },
 );
 

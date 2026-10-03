@@ -61,6 +61,16 @@ export const brandImageUrls = () => {
     };
 };
 
+export const BRAND_COLOR = "#5865f2";
+
+export const instanceIconTile = () => {
+    const { icon } = brandImageUrls();
+    if (icon) return `<img class="brand-icon" src="${escapeXml(icon)}" alt="" />`;
+    return `<svg class="brand-icon" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="16" fill="${BRAND_COLOR}"/><path fill="#fff" transform="translate(10 10) scale(1.1667)" d="${INSTANCE_ICON_PATH}"/></svg>`;
+};
+
+export const brandPage = (html: string) => html.replaceAll("__INSTANCE_NAME__", escapeXml(instanceName())).replaceAll("__INSTANCE_ICON__", instanceIconTile());
+
 export const sendBrandImage = (res: Response, image: BrandImage, cacheControl = "public, max-age=21600") => {
     res.set("Cache-Control", cacheControl);
     if ("url" in image) return res.redirect(302, image.url);
