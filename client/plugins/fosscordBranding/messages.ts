@@ -64,6 +64,8 @@ const brandText = (text: string, name: string) => {
 
 const QR_LOGIN = /^\["Scan this with the ",\[8,"\$b",\["[^"]*"\]\]," to log in instantly\."\]$/;
 
+const QR_LABEL = JSON.stringify(["QR code to log in with the Discord mobile app"]);
+
 const brandList = (list: unknown[], name: string): unknown[] =>
     list.map((node) => (typeof node === "string" ? brandText(node, name) : Array.isArray(node) ? brandNode(node, name) : node));
 
@@ -81,6 +83,7 @@ const brandNode = (node: unknown[], name: string): unknown[] => {
 export const brandMessages = (messages: Record<string, unknown>) => {
     if (!messages || typeof messages !== "object" || Array.isArray(messages)) return messages;
     const name = String((window as any).GLOBAL_ENV?.INSTANCE_NAME || "Fosscord");
+    const qrLabel = JSON.stringify(messages["SzYj9v"]);
     for (const key in messages) {
         const value = messages[key];
         if (typeof value === "string") messages[key] = brandText(value, name);
@@ -88,6 +91,7 @@ export const brandMessages = (messages: Record<string, unknown>) => {
     }
     const qr = messages["Qq+A6i"];
     if (Array.isArray(qr) && QR_LOGIN.test(JSON.stringify(qr)))
-        messages["Qq+A6i"] = ["Scan this with the camera of a phone that is ", [8, "$b", [`logged in to ${name}`]], " to log in instantly."];
+        messages["Qq+A6i"] = ["Scan this with ", [8, "$b", ["your phone's camera"]], ", then approve the login on your phone."];
+    if (qrLabel === QR_LABEL) messages["SzYj9v"] = ["QR code to log in with your phone's camera"];
     return messages;
 };

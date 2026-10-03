@@ -24,7 +24,7 @@ import { FosscordAuthor, redirectTo } from "../fosscordCore/shared";
 
 export default definePlugin({
     name: "FosscordDiscovery",
-    description: "Shows an empty state in Discover when this instance has no servers to list yet, and sends /activities to the app directory.",
+    description: "Shows an empty state in Discover when this instance has no servers to list yet, hides the Student Hubs tab, and sends /activities to the app directory.",
     authors: [FosscordAuthor],
     required: true,
 
@@ -49,6 +49,13 @@ export default definePlugin({
             replacement: {
                 match: /(variant:"heading-lg\/semibold",color:"text-strong",children:\i\}\),\(0,(\i)\.jsx\)\(\i\.\i,\{children:)(\(0,\2\.jsx\)\("div",\{className:\i\.\i,children:(\i)\}\))/,
                 replace: "$1$4.length===0?$self.renderEmpty():$3",
+            },
+        },
+        {
+            find: /\.EDUCATION,\i\.\i\.HUBS\]\.map\(/,
+            replacement: {
+                match: /(\.EDUCATION),\i\.\i\.HUBS\](?=\.map\()/,
+                replace: "$1]",
             },
         },
     ],

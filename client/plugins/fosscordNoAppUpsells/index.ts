@@ -18,13 +18,15 @@
 
 import definePlugin from "@utils/types";
 
-import { FosscordAuthor, hideNotices, hideSetting } from "../fosscordCore/shared";
+import { FosscordAuthor, hideNotices, hideSetting, redirectHome } from "../fosscordCore/shared";
 
 export default definePlugin({
     name: "FosscordNoAppUpsells",
-    description: "Removes every prompt to download the desktop or mobile apps.",
+    description: "Removes every prompt to download the desktop or mobile apps, and the game library that only the desktop app fills.",
     authors: [FosscordAuthor],
     required: true,
+
+    redirectHome,
 
     patches: [
         hideNotices(["DOWNLOAD_NAG"]),
@@ -45,6 +47,13 @@ export default definePlugin({
         {
             find: ".SYSTEM_CUSTOM_KEYBINDS_CATEGORY,{",
             replacement: hideSetting("SYSTEM_CUSTOM_KEYBINDS_CATEGORY"),
+        },
+        {
+            find: "QUEST_HOME_DEPRECATED,render:",
+            replacement: {
+                match: /(path:\i\.\i\.APPLICATION_LIBRARY,render:)\i/,
+                replace: "$1$self.redirectHome",
+            },
         },
     ],
 });
