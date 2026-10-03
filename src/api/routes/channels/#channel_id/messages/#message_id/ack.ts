@@ -18,7 +18,7 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { ReadState } from "@spacebar/database";
+import { GuildInsights, ReadState } from "@spacebar/database";
 import { emitEvent, getPermission, MessageAckEvent } from "@spacebar/util";
 import { MessageAcknowledgeSchema } from "@spacebar/schemas";
 
@@ -42,6 +42,7 @@ router.post(
 
         const permission = await getPermission(req.user_id, undefined, channel_id);
         permission.hasThrow("VIEW_CHANNEL");
+        GuildInsights.visit(channel_id, req.user_id);
 
         const body = req.body as MessageAcknowledgeSchema;
         let read_state = await ReadState.findOne({

@@ -27,6 +27,7 @@ import { GoLiveStreams } from "./StreamPreviews";
 import { StageInstances } from "./StageInstances";
 import { ScheduledEvents } from "./ScheduledEvents";
 import { ActivityInstances } from "./ActivityInstances";
+import { GuildInsights } from "../insights/GuildInsights";
 
 export class VoiceChannels {
     static async startTime(channelId: string) {
@@ -39,8 +40,10 @@ export class VoiceChannels {
         return row.start != null ? Number(row.start) : Math.floor(Date.now() / 1000);
     }
 
-    static async occupancyChanged(guildId: string | null | undefined, channelId: string | null | undefined, userId: string, joined: boolean) {
+    static async occupancyChanged(guildId: string | null | undefined, channelId: string | null | undefined, userId: string, joined: boolean, connectedAt?: number | null) {
         if (!channelId) return;
+        if (joined) GuildInsights.voiceJoined(guildId, channelId, userId);
+        else GuildInsights.voiceLeft(guildId, channelId, connectedAt);
         if (!joined) {
             await GoLiveStreams.end(userId);
             await ActivityInstances.userLeftChannel(channelId, userId);
@@ -87,6 +90,8 @@ export class VoiceChannels {
         if (!voiceState?.channel_id || voiceState.channel_id === channelId) return false;
         const previousChannel = voiceState.channel_id;
 
+        const connectedAt = voiceState.connected_at;
+
         if (!channelId) {
             voiceState.channel_id = null as unknown as string;
             voiceState.guild_id = null as unknown as string;
@@ -95,7 +100,7 @@ export class VoiceChannels {
             voiceState.connected_at = null;
             await voiceState.save();
             await VoiceChannels.publish(Object.assign(VoiceState.create({ ...voiceState }), { guild_id: guildId }), { channel_id: null });
-            await VoiceChannels.occupancyChanged(guildId, previousChannel, userId, false);
+            await VoiceChannels.occupancyChanged(guildId, previousChannel, userId, false, connectedAt);
             return true;
         }
 
@@ -108,7 +113,7 @@ export class VoiceChannels {
         voiceState.token = randomBytes(8).toString("hex");
         await voiceState.save();
         await VoiceChannels.publish(voiceState);
-        await VoiceChannels.occupancyChanged(guildId, previousChannel, userId, false);
+        await VoiceChannels.occupancyChanged(guildId, previousChannel, userId, false, connectedAt);
         await VoiceChannels.occupancyChanged(guildId, channelId, userId, true);
 
         const { regions } = Config.get();

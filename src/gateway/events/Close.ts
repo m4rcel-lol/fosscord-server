@@ -63,6 +63,7 @@ export async function Close(this: WebSocket, code: number, reason: Buffer) {
         if (voiceState && voiceState.session_id === this.session_id && voiceState.channel_id) {
             const prevGuildId = voiceState.guild_id;
             const prevChannelId = voiceState.channel_id;
+            const prevConnectedAt = voiceState.connected_at;
 
             // @ts-expect-error channel_id is nullable
             voiceState.channel_id = null;
@@ -84,7 +85,7 @@ export async function Close(this: WebSocket, code: number, reason: Buffer) {
                 guild_id: prevGuildId ?? undefined,
                 channel_id: prevGuildId ? undefined : prevChannelId,
             } satisfies VoiceStateUpdateEvent);
-            await VoiceChannels.occupancyChanged(prevGuildId, prevChannelId, this.user_id, false);
+            await VoiceChannels.occupancyChanged(prevGuildId, prevChannelId, this.user_id, false, prevConnectedAt);
         }
     }
 }
