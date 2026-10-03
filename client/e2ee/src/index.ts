@@ -150,6 +150,13 @@ const ui = createUi({
     },
 });
 
+const describeError = (error: unknown) => {
+    if (error instanceof Error) return error.message;
+    const response = error as { status?: unknown; body?: { message?: unknown } } | null;
+    if (typeof response?.status !== "number") return String(error);
+    return `HTTP ${response.status}${typeof response.body?.message === "string" ? ` ${response.body.message}` : ""}`;
+};
+
 const fail = (reason: string) => {
     if (failure) return;
     failure = reason;
@@ -209,11 +216,13 @@ const selfTest = async () => {
     if (toB64u(await hpkeOpen(prekey.keyPair, probe.enc, probe.wrapped, "self-test", "aad")) !== toB64u(secret)) throw new Error("Stored prekey round trip failed");
 };
 
+let startAttempts = 0;
 const start = async (userId: string) => {
     if (started || failure) return;
     started = true;
     try {
         await engine.init(userId);
+        ui.pause(null);
         await selfTest();
         if (!(await attachments.ready())) console.warn("[e2ee] the attachment service worker isn't controlling this page, so encrypted files won't load");
         initialized = true;
@@ -228,7 +237,23 @@ const start = async (userId: string) => {
         ui.refresh();
         if (engine.locked && !ui.unlockSnoozed()) ui.showUnlock();
     } catch (error) {
-        fail(`Self-test failed: ${error instanceof Error ? error.message : String(error)}`);
+        const response = error as { status?: unknown; body?: { retry_after?: unknown } } | null;
+        if (typeof response?.status !== "number") return fail(`Self-test failed: ${describeError(error)}`);
+        const retryAfter = Number(response.body?.retry_after);
+        const limited = response.status === 429 && retryAfter > 0;
+        const delay = limited ? Math.ceil(retryAfter) * 1000 + 1000 : Math.min(5000 * 2 ** startAttempts, 300000);
+        startAttempts++;
+        console.warn(`[e2ee] couldn't start (${describeError(error)}), retrying in ${Math.round(delay / 1000)}s`);
+        const minutes = Math.max(1, Math.round(delay / 60000));
+        ui.pause(
+            limited
+                ? `Encryption is paused because this account set up too many browsers recently. It will try again in about ${minutes} minute${minutes === 1 ? "" : "s"}.`
+                : "Encryption couldn't reach the server, so sending in encrypted conversations is paused. It will try again shortly.",
+        );
+        setTimeout(() => {
+            started = false;
+            start(userId);
+        }, delay);
     }
 };
 

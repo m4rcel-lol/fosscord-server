@@ -55,7 +55,7 @@ router.get(
 
 router.post(
     "/",
-    e2eeRateLimit("e2ee_devices", 10, 3600),
+    e2eeRateLimit("e2ee_devices", 30, 3600),
     route({
         spacebarOnly: true,
         requestBody: "E2eeDeviceCreateSchema",

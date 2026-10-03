@@ -186,6 +186,7 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
     bar.className = "fe2ee-notice";
     bar.setAttribute("role", "status");
     let failure: string | null = null;
+    let paused: string | null = null;
     let transient: (Notice & { channelId: string; until: number }) | null = null;
     let transientTimer: ReturnType<typeof setTimeout> | null = null;
     let unlockOpen: { render: () => void; close: () => void } | null = null;
@@ -904,7 +905,7 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
         root.className = "fe2ee-page";
         container.replaceChildren(root);
         if (!engine.userId) {
-            describe(root, failure ?? "Encryption is still starting up.");
+            describe(root, failure ?? paused ?? "Encryption is still starting up.");
             return () => {};
         }
         const stop = buildSettings(root);
@@ -918,6 +919,10 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
         if (!engine.isEncrypted(channelId)) return false;
         if (failure) {
             flash(channelId, { tone: "danger", text: failure });
+            return true;
+        }
+        if (paused) {
+            flash(channelId, { tone: "warning", text: paused });
             return true;
         }
         const changed = members?.channelId === channelId ? members.list.find((m) => engine.contacts[m.id]?.pendingKey) : undefined;
@@ -1027,6 +1032,7 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
         const temporary = transient && transient.channelId === channelId && transient.until > Date.now() ? transient : null;
         if (!engine.isEncrypted(channelId)) return temporary;
         if (failure) return { tone: "danger", text: failure };
+        if (paused) return { tone: "warning", text: paused };
         const changed = members?.channelId === channelId ? members.list.find((m) => engine.contacts[m.id]?.pendingKey) : undefined;
         if (changed)
             return {
@@ -1117,6 +1123,10 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
         renderUnlock: () => unlockOpen?.render(),
         fail: (text: string) => {
             failure = text;
+            refresh();
+        },
+        pause: (text: string | null) => {
+            paused = text;
             refresh();
         },
     };
