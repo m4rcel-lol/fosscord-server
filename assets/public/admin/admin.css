@@ -688,6 +688,10 @@ tbody tr:last-child td {
     margin: 0;
 }
 
+.login-brand {
+    padding: 0 0 6px;
+}
+
 .spinner {
     padding: 48px;
     text-align: center;

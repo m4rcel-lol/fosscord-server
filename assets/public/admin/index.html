@@ -4,15 +4,22 @@
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="robots" content="noindex" />
-        <title>Admin Dashboard</title>
+        <title>__INSTANCE_NAME__ Admin</title>
         <link rel="icon" href="/static/logo.png" />
         <link rel="stylesheet" href="/admin/admin.css" />
     </head>
     <body>
         <div id="login" class="login" hidden>
             <form class="card login-card" id="login-form" autocomplete="on">
-                <h1>Admin sign in</h1>
-                <p class="muted">Sign in with an account that has admin rights on this instance.</p>
+                <div class="brand login-brand">
+                    <img src="/static/logo.png" alt="" />
+                    <div>
+                        <strong>__INSTANCE_NAME__</strong>
+                        <span class="muted">Admin</span>
+                    </div>
+                </div>
+                <h1>Sign in</h1>
+                <p class="muted">Use an account that has admin rights on this instance.</p>
                 <label>Email or username<input name="login" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required /></label>
                 <label>Password<input name="password" type="password" autocomplete="current-password" required /></label>
                 <label id="mfa-field" hidden>Two-factor code<input name="code" inputmode="numeric" autocomplete="one-time-code" /></label>
@@ -26,7 +33,7 @@
                 <div class="brand">
                     <img id="brand-icon" src="/static/logo.png" alt="" />
                     <div>
-                        <strong id="brand-name">Instance</strong>
+                        <strong id="brand-name">__INSTANCE_NAME__</strong>
                         <span class="muted">Admin</span>
                     </div>
                 </div>
