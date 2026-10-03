@@ -375,7 +375,12 @@ router.post(
 
         await reopenDirectMessage(channel, req.user_id);
 
-        if (channel.isThread()) await onThreadMessage(channel, req.user_id);
+        if (channel.isThread())
+            await onThreadMessage(
+                channel,
+                req.user_id,
+                message.mentions?.map((user) => user.id),
+            );
 
         if (message.guild_id) {
             // handleMessage will fetch the Member, but only if they are not guild owner.

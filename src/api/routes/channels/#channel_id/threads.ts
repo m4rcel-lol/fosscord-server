@@ -22,7 +22,7 @@ import { createThread, handleMessage, postHandleMessage, sendMessage, THREAD_TYP
 import { route } from "@spacebar/api/middlewares";
 import { Attachment, Channel, Member, ReadState, ThreadMember } from "@spacebar/database";
 import { ChannelFlags, emitEvent, FieldErrors, MessageCreateEvent, uploadFile } from "@spacebar/util";
-import { ChannelType, MessageCreateAttachment, MessageCreateCloudAttachment, MessageType, ThreadCreationSchema } from "@spacebar/schemas";
+import { AttachmentFlags, ChannelType, MessageCreateAttachment, MessageCreateCloudAttachment, MessageType, ThreadCreationSchema } from "@spacebar/schemas";
 import { messageUpload } from "./messages";
 
 const router = Router({ mergeParams: true });
@@ -118,6 +118,9 @@ router.post(
             attachments,
             timestamp: new Date(),
         } as Parameters<typeof handleMessage>[0]);
+        const thumbnail = Number(AttachmentFlags.IS_THUMBNAIL);
+        if (channel.type === ChannelType.GUILD_MEDIA && message.attachments?.length && message.attachments.every((attachment) => (attachment.flags ?? 0) & thumbnail))
+            for (const attachment of message.attachments) attachment.flags = (attachment.flags ?? 0) & ~thumbnail;
         if (message.guild_id && !message.member) {
             message.member = await Member.findOneOrFail({
                 where: { id: req.user_id, guild_id: message.guild_id },

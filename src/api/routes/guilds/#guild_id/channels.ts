@@ -77,6 +77,18 @@ router.post(
         if (body.name !== undefined && (body.name.length < 1 || body.name.length > maxName))
             throw FieldErrors({ name: { code: "BASE_TYPE_BAD_LENGTH", message: `Must be between 1 and ${maxName} in length.` } });
 
+        if (body.type === ChannelType.GUILD_NEWS || body.type === ChannelType.GUILD_STAGE_VOICE) {
+            const { features } = await Guild.findOneOrFail({ where: { id: guild_id }, select: { id: true, features: true } });
+            const allowed = body.type === ChannelType.GUILD_NEWS ? features.includes("NEWS") : features.includes("COMMUNITY");
+            if (!allowed) {
+                const types = [ChannelType.GUILD_TEXT, ChannelType.GUILD_VOICE, ChannelType.GUILD_CATEGORY];
+                if (features.includes("NEWS")) types.push(ChannelType.GUILD_NEWS);
+                if (features.includes("COMMUNITY")) types.push(ChannelType.GUILD_STAGE_VOICE);
+                types.push(ChannelType.GUILD_FORUM, ChannelType.GUILD_MEDIA);
+                throw FieldErrors({ type: { code: "BASE_TYPE_CHOICES", message: `Value must be one of {${types.join(", ")}}.` } });
+            }
+        }
+
         const channel = await Channel.createChannel({ ...body, type: body.type ?? ChannelType.GUILD_TEXT, guild_id }, req.user_id);
         channel.position = await Channel.calculatePosition(channel.id, guild_id, channel.guild);
         await AuditLog.log({

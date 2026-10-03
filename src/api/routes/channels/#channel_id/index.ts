@@ -20,7 +20,7 @@ import { Request, Response, Router } from "express";
 import { Not } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
 import { AUTO_ARCHIVE_DURATION_ERROR, AUTO_ARCHIVE_DURATIONS, emitThreadUpdate, sendMessage, setThreadArchived } from "@spacebar/api/util";
-import { AuditLog, Channel, Recipient, Tag, ThreadMember, VoiceChannels } from "@spacebar/database";
+import { AuditLog, Channel, Guild, Recipient, Tag, ThreadMember, VoiceChannels } from "@spacebar/database";
 import {
     ChannelDeleteEvent,
     ChannelFlags,
@@ -31,6 +31,7 @@ import {
     emitEvent,
     ErrorList,
     FieldError,
+    FieldErrors,
     handleFile,
     makeObjectErrorContent,
     Snowflake,
@@ -332,6 +333,11 @@ router.patch(
         if (payload.type !== undefined && payload.type !== channel.type) {
             const convertible = [ChannelType.GUILD_TEXT, ChannelType.GUILD_NEWS];
             if (!convertible.includes(channel.type) || !convertible.includes(payload.type)) throw DiscordApiErrors.CANNOT_EXECUTE_ON_THIS_CHANNEL_TYPE;
+            if (
+                payload.type === ChannelType.GUILD_NEWS &&
+                !(await Guild.findOneOrFail({ where: { id: channel.guild_id! }, select: { id: true, features: true } })).features.includes("NEWS")
+            )
+                throw FieldErrors({ type: { code: "BASE_TYPE_CHOICES", message: `Value must be one of {${ChannelType.GUILD_TEXT}}.` } });
         }
         if (payload.default_reaction_emoji)
             payload.default_reaction_emoji = {

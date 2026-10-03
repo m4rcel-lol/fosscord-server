@@ -76,16 +76,11 @@ export async function Send(target: WebSocket, data: Payload) {
         buffer = socket.zstdEncoder!.encodeSync(buffer as Buffer);
     }
 
-    return new Promise((res, rej) => {
-        if (socket.readyState !== 1) {
-            // return rej("socket not open");
+    return new Promise((res) => {
+        if (socket.readyState === 1) socket.send(buffer, () => res(null));
+        else {
             socket.close();
-            return;
+            res(null);
         }
-
-        socket.send(buffer, (err) => {
-            if (err) return rej(err);
-            return res(null);
-        });
     });
 }
