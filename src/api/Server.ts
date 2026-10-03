@@ -21,7 +21,7 @@ import { Request, Response, Router } from "express";
 import morgan from "morgan";
 import { Server, ServerOptions } from "lambert-server/Server";
 import { red } from "picocolors";
-import { getDatabase, initDatabase, Message, ScheduledEvents } from "@spacebar/database";
+import { getDatabase, GuildInsights, initDatabase, Message, ScheduledEvents } from "@spacebar/database";
 import {
     Config,
     ConnectionConfig,
@@ -167,6 +167,7 @@ export class SpacebarServer extends Server {
         await super.start();
         startThreadArchiver();
         startScheduledMessageSender();
+        GuildInsights.startRollups();
         await SystemdLifecycle.setStatus(`Listening on ${this.options.host}:${this.options.port}...`);
         await ProcessLifecycle.Ready();
     }

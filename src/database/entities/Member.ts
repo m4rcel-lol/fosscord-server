@@ -48,6 +48,7 @@ import { Guild, PublicGuildRelations } from "./Guild";
 import { Message } from "./Message";
 import { Role } from "./Role";
 import { User } from "./User";
+import { GuildInsights } from "../insights/GuildInsights";
 import { ScheduledEvents } from "../voice/ScheduledEvents";
 
 export const MemberPrivateProjection: (keyof Member)[] = [
@@ -239,6 +240,8 @@ export class Member extends BaseClassWithoutId {
         });
 
         const managedRoles = member.user.bot ? (await Role.find({ where: { guild_id, managed: true } })).filter((role) => role.tags?.bot_id === user_id) : [];
+
+        GuildInsights.recordLeave(guild_id, member.joined_at);
 
         // use promise all to execute all promises at the same time -> save time
         return Promise.all([
@@ -463,6 +466,7 @@ export class Member extends BaseClassWithoutId {
         const scheduledEventCounts = await ScheduledEvents.userCounts(scheduledEvents.map((e) => e.id));
 
         await newMember.save();
+        GuildInsights.recordJoin(guild_id, source);
         await Promise.all([
             Guild.increment({ id: guild_id }, "member_count", 1),
             emitEvent({

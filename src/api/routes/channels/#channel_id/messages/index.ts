@@ -18,7 +18,7 @@
 
 import { assertCanSendDirectMessage, assertGuildVerification, assertNoHarmfulLinks, checkAutomod, publishUserMessage, recordGuildMemberDm } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
-import { Attachment, Channel, Member, Message, ReadState, User } from "@spacebar/database";
+import { Attachment, Channel, GuildInsights, Member, Message, ReadState, User } from "@spacebar/database";
 import {
     Config,
     DiscordApiErrors,
@@ -90,6 +90,7 @@ router.get(
 
         const permissions = await getPermission(req.user_id, channel.guild_id, channel_id);
         permissions.hasThrow("VIEW_CHANNEL");
+        if (channel.guild_id) GuildInsights.visit(channel_id, req.user_id);
         if (!permissions.has("READ_MESSAGE_HISTORY")) return res.json([]);
 
         const query: FindManyOptions<Message> & {

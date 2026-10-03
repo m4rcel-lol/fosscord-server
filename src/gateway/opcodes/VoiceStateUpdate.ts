@@ -49,7 +49,9 @@ export async function onVoiceStateUpdate(this: WebSocket, data: Payload) {
     let voiceState = await VoiceState.findOne({ where: { user_id: this.user_id } });
     if (voiceState && voiceState.session_id !== this.session_id && !channelId) return;
 
-    const previous = voiceState ? { guild_id: voiceState.guild_id, channel_id: voiceState.channel_id } : { guild_id: undefined, channel_id: undefined };
+    const previous = voiceState
+        ? { guild_id: voiceState.guild_id, channel_id: voiceState.channel_id, connected_at: voiceState.connected_at }
+        : { guild_id: undefined, channel_id: undefined, connected_at: undefined };
     const channel = channelId ? await canJoin(this.user_id, guildId, channelId, previous.channel_id) : null;
     if (channelId && !channel) return;
 
@@ -103,7 +105,7 @@ export async function onVoiceStateUpdate(this: WebSocket, data: Payload) {
     }
 
     if (channelChanged) {
-        if (previous.channel_id) await VoiceChannels.occupancyChanged(previous.guild_id, previous.channel_id, this.user_id, false);
+        if (previous.channel_id) await VoiceChannels.occupancyChanged(previous.guild_id, previous.channel_id, this.user_id, false, previous.connected_at);
         if (channelId) await VoiceChannels.occupancyChanged(channel?.guild_id, channelId, this.user_id, true);
     }
 
