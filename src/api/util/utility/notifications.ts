@@ -16,9 +16,11 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Channel, Guild, Member, Role, ThreadMember } from "@spacebar/database";
-import { Permissions, PRESENCE_STALE_AFTER_MS } from "@spacebar/util";
-import { RelationshipType, UserGuildSettings } from "@spacebar/schemas";
+import { In } from "typeorm";
+import { Channel, Guild, Member, PushDevice, Role, ThreadMember, ThreadMemberFlags, WebPushKeys } from "@spacebar/database";
+import { Config, MessageFlags, Permissions, PRESENCE_STALE_AFTER_MS } from "@spacebar/util";
+import { ChannelOverride, ChannelType, DefaultUserGuildSettings, MuteConfig, RelationshipType, UserGuildSettings } from "@spacebar/schemas";
+import { sendWebPush, vapidPublicKey } from "./webPush";
 
 export interface AudienceMember {
     id: string;
@@ -113,4 +115,189 @@ export async function getMentionedUsers(target: MentionTarget) {
         .map((member) => member.id);
     const blocked = await usersBlocking(author_id, mentioned);
     return new Set(mentioned.filter((id) => !blocked.has(id)));
+}
+
+interface PushMessage {
+    id: string;
+    channel_id: string;
+    guild_id?: string | null;
+    author?: { id: string; username: string; global_name?: string | null; avatar?: string | null };
+    member?: { nick?: string | null } | null;
+    content?: string;
+    flags?: number | string;
+    mentions?: { id: string; username: string; global_name?: string | null }[];
+    mention_roles?: string[];
+    mention_everyone?: boolean;
+    attachments?: unknown[];
+    embeds?: unknown[];
+    sticker_items?: { name: string }[];
+}
+
+interface PushDeviceRow {
+    id: string;
+    user_id: string;
+    token: string;
+    keys: WebPushKeys | null;
+}
+
+const ALL_MESSAGES = 0;
+const NO_MESSAGES = 2;
+const INHERIT = 3;
+const SILENT = Number(MessageFlags.FLAGS.SUPPRESS_NOTIFICATIONS | MessageFlags.FLAGS.EPHEMERAL);
+
+const isMuted = (target?: { muted?: boolean; mute_config?: MuteConfig | { end_time?: string | Date | null } | null } | null) =>
+    !!target?.muted && (!target.mute_config?.end_time || new Date(target.mute_config.end_time).getTime() > Date.now());
+
+async function dndUsers(ids: string[]) {
+    const rows: { id: string }[] = await Member.query(
+        `SELECT u.id::text AS id FROM users u JOIN user_settings s ON s.index = u."settingsIndex" WHERE u.id = ANY($1::bigint[]) AND s.status = 'dnd'`,
+        [ids],
+    );
+    return new Set(rows.map((r) => r.id));
+}
+
+async function pushRecipients(channel: Channel, message: PushMessage, candidates: string[]) {
+    const author_id = message.author?.id;
+    const user_ids = (message.mentions ?? []).map((user) => user.id);
+    const role_ids = message.mention_roles ?? [];
+    const everyone = !!message.mention_everyone && /@everyone/.test(message.content ?? "");
+    const blocked = await usersBlocking(author_id, candidates);
+    const allowed = candidates.filter((id) => id !== author_id && !blocked.has(id));
+
+    if (channel.isDm()) {
+        const open = new Set((channel.recipients ?? []).filter((r) => !r.message_request_timestamp).map((r) => r.user_id));
+        const rows: { id: string; settings: UserGuildSettings | null }[] = await Member.query(
+            `SELECT id::text AS id, private_channel_settings AS settings FROM users WHERE id = ANY($1::bigint[])`,
+            [allowed],
+        );
+        return new Set(
+            rows
+                .filter((row) => {
+                    if (!open.has(row.id)) return false;
+                    const settings = { ...DefaultUserGuildSettings, ...(row.settings ?? {}) };
+                    return settings.mobile_push !== false && (!isMuted(settings.channel_overrides?.[channel.id]) || user_ids.includes(row.id));
+                })
+                .map((row) => row.id),
+        );
+    }
+
+    const guild_id = channel.guild_id!;
+    const thread = channel.isThread() ? channel : null;
+    const [members, canView, guild, parent, threadMembers] = await Promise.all([
+        loadAudienceMembers(guild_id, { all: false, ids: allowed, roles: [] }),
+        channelViewChecker(channel),
+        Guild.findOne({ where: { id: guild_id }, select: { id: true, default_message_notifications: true } }),
+        thread?.parent_id ? Channel.findOne({ where: { id: thread.parent_id }, select: { id: true, parent_id: true } }) : channel,
+        thread ? ThreadMember.find({ where: { id: thread.id, user_id: In(allowed) } }) : [],
+    ]);
+    const threadMember = new Map(threadMembers.map((m) => [m.user_id, m]));
+
+    return new Set(
+        members
+            .filter((member) => {
+                if (!canView(member)) return false;
+                const membership = threadMember.get(member.id);
+                if (thread && !membership) return false;
+
+                const settings = { ...DefaultUserGuildSettings, ...(member.settings ?? {}) };
+                if (settings.mobile_push === false) return false;
+                const mentioned =
+                    user_ids.includes(member.id) ||
+                    ((!!thread || !settings.suppress_roles) && member.roles.some((id) => role_ids.includes(id))) ||
+                    ((!!thread || !settings.suppress_everyone) && everyone);
+
+                const overrides: Record<string, ChannelOverride> = settings.channel_overrides ?? {};
+                const own = parent ? overrides[parent.id] : undefined;
+                const category = parent?.parent_id ? overrides[parent.parent_id] : undefined;
+                const muted = isMuted(settings) || isMuted(own) || isMuted(category);
+                const level =
+                    [own?.message_notifications, category?.message_notifications, settings.message_notifications].find((x) => x != null && x !== INHERIT) ??
+                    guild?.default_message_notifications ??
+                    1;
+
+                if (membership) {
+                    if (isMuted(membership) || membership.flags & ThreadMemberFlags.NO_MESSAGES) return false;
+                    if (membership.flags & ThreadMemberFlags.ALL_MESSAGES) return true;
+                    if (membership.flags & ThreadMemberFlags.ONLY_MENTIONS) return mentioned;
+                    if (muted) return false;
+                }
+                if (level === NO_MESSAGES) return false;
+                return (level === ALL_MESSAGES && !muted) || mentioned;
+            })
+            .map((member) => member.id),
+    );
+}
+
+async function pushPayload(channel: Channel, message: PushMessage) {
+    const author = message.author;
+    const name = message.member?.nick || author?.global_name || author?.username || "Someone";
+    const roles = message.mention_roles?.length ? await Role.find({ where: { id: In(message.mention_roles) }, select: { id: true, name: true } }) : [];
+    const content = (message.content ?? "")
+        .replace(/<@!?(\d+)>/g, (match, id) => {
+            const user = message.mentions?.find((u) => u.id === id);
+            return user ? `@${user.global_name || user.username}` : match;
+        })
+        .replace(/<@&(\d+)>/g, (match, id) => {
+            const role = roles.find((r) => r.id === id);
+            return role ? `@${role.name}` : match;
+        })
+        .replace(/<a?(:\w+:)\d+>/g, "$1")
+        .trim();
+    const fallback = message.attachments?.length
+        ? "Sent an attachment"
+        : message.sticker_items?.length
+          ? `Sent a sticker: ${message.sticker_items[0].name}`
+          : message.embeds?.length
+            ? "Sent an embed"
+            : "";
+    const body = content || fallback;
+    const guild = channel.guild_id ? await Guild.findOne({ where: { id: channel.guild_id }, select: { id: true, name: true } }) : null;
+    const where = channel.isDm() ? (channel.type === ChannelType.GROUP_DM ? channel.name || "Group DM" : null) : `#${channel.name}${guild ? `, ${guild.name}` : ""}`;
+    const cdn = Config.get().cdn.endpointPublic || Config.get().api.endpointPublic || "http://localhost/";
+    const avatar = author?.avatar ? `avatars/${author.id}/${author.avatar}.png?size=128` : `embed/avatars/${author ? Number((BigInt(author.id) >> 22n) % 6n) : 0}.png`;
+    return {
+        title: where ? `${name} (${where})` : name,
+        body: body.length > 300 ? `${body.slice(0, 299)}…` : body,
+        icon: new URL(avatar, cdn.endsWith("/") ? cdn : `${cdn}/`).toString(),
+        tag: message.channel_id,
+        url: `/channels/${channel.guild_id ?? "@me"}/${message.channel_id}/${message.id}`,
+        channel_id: message.channel_id,
+        guild_id: channel.guild_id ?? null,
+        message_id: message.id,
+    };
+}
+
+export async function dispatchMessagePush(message: PushMessage) {
+    if (!vapidPublicKey() || !message?.channel_id || Number(message.flags ?? 0) & SILENT) return;
+    const author_id = message.author?.id ?? null;
+    const audience = message.guild_id ? `SELECT id FROM members WHERE guild_id = $2` : `SELECT user_id FROM recipients WHERE channel_id = $2`;
+    const devices: PushDeviceRow[] = await PushDevice.query(
+        `SELECT d.id::text AS id, d.user_id::text AS user_id, d.token, d.keys FROM push_devices d WHERE d.provider = 'webpush' AND d.user_id IS DISTINCT FROM $1::bigint AND d.user_id IN (${audience})`,
+        [author_id, message.guild_id ?? message.channel_id],
+    );
+    if (!devices.length) return;
+
+    const candidates = [...new Set(devices.map((d) => d.user_id))];
+    const [online, dnd] = await Promise.all([onlineUsers(candidates), dndUsers(candidates)]);
+    const offline = candidates.filter((id) => !online.has(id) && !dnd.has(id));
+    if (!offline.length) return;
+
+    const channel = await Channel.findOne({ where: { id: message.channel_id }, relations: { recipients: true } });
+    if (!channel) return;
+    const recipients = await pushRecipients(channel, message, offline);
+    if (!recipients.size) return;
+
+    const payload = await pushPayload(channel, message);
+    await Promise.all(
+        devices
+            .filter((device) => recipients.has(device.user_id) && device.keys)
+            .map(async (device) => {
+                try {
+                    const { gone } = await sendWebPush({ endpoint: device.token, keys: device.keys! }, payload);
+                    if (gone) await PushDevice.delete({ id: device.id });
+                } catch (e) {
+                    console.warn(`[WebPush] delivery to device ${device.id} failed:`, (e as Error).message);
+                }
+            }),
+    );
 }

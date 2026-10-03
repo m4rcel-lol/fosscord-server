@@ -30,6 +30,7 @@ import {
     JSONReplacer,
     WebAuthn,
     initEvent,
+    onEmitEvent,
     registerRoutes,
     getRevInfoOrFail,
     pendingPolls,
@@ -43,7 +44,7 @@ import { BcryptWorkerPool } from "../util/util/workers/bcrypt/BcryptWorkerPool";
 import { Authentication, CORS, ExternalProxy, ImageProxy, BodyParser, ErrorHandler, initRateLimits, initTranslation } from "./middlewares";
 import { initInstance } from "./util/handlers/Instance";
 import { initEmbeddedActivities } from "./activities";
-import { addPendingPoll, startThreadArchiver } from "./util";
+import { addPendingPoll, dispatchMessagePush, startThreadArchiver } from "./util";
 import { route } from "@spacebar/api/middlewares";
 import { GifProviderManager } from "@spacebar/integrations/gifs";
 
@@ -73,6 +74,7 @@ export class SpacebarServer extends Server {
         await initDatabase();
         await Config.init();
         await initEvent();
+        onEmitEvent((payload) => (payload.event === "MESSAGE_CREATE" && payload.channel_id ? dispatchMessagePush(payload.data) : undefined));
         await Email.init();
         await ConnectionConfig.init();
         await initInstance();

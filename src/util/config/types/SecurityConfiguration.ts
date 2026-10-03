@@ -17,11 +17,12 @@
 */
 
 import crypto from "node:crypto";
-import { CaptchaConfiguration, TwoFactorConfiguration } from "./subconfigurations";
+import { CaptchaConfiguration, TwoFactorConfiguration, WebPushConfiguration } from "./subconfigurations";
 
 export class SecurityConfiguration {
     captcha: CaptchaConfiguration = new CaptchaConfiguration();
     twoFactor: TwoFactorConfiguration = new TwoFactorConfiguration();
+    webPush: WebPushConfiguration = new WebPushConfiguration();
     requestSignature: string = crypto.randomBytes(32).toString("base64");
     jwtSecret: string | null = null;
     // header to get the real user ip address

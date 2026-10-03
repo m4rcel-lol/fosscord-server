@@ -31,6 +31,8 @@ import { RabbitMqSingleListener } from "./listener/RabbitMqSingleListener";
 import { RabbitMqSingleWriter } from "./writer/RabbitMqSingleWriter";
 
 export const events = new EventEmitter();
+type EmitHook = (payload: Omit<Event, "created_at">) => unknown;
+const emitHooks: EmitHook[] = [];
 let listener: BaseEventListener | null = null;
 let writer: BaseEventWriter | null = null;
 
@@ -66,9 +68,17 @@ export async function emitEvent(payload: Omit<Event, "created_at">) {
     if (!id) return console.error("event doesn't contain any id", payload);
 
     await transmit(id, payload);
+    for (const hook of emitHooks)
+        Promise.resolve(payload)
+            .then(hook)
+            .catch((e) => console.error(`[Event] ${payload.event} hook failed`, e));
 
     const guild_id = guildCacheEvents.has(payload.event) ? (payload.guild_id ?? payload.data?.guild_id) : undefined;
     if (guild_id) await transmit(GuildCacheEventId, { event: "SB_GUILD_CACHE_INVALIDATE", channel_id: GuildCacheEventId, data: { guild_id } });
+}
+
+export function onEmitEvent(hook: EmitHook) {
+    emitHooks.push(hook);
 }
 
 export async function initEvent() {
