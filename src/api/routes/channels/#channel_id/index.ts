@@ -212,6 +212,7 @@ router.patch(
         const channelLimits = Config.get().limits.channel;
         const errors: ErrorList = {};
         const maxName = channel.isThread() ? 100 : channelLimits.maxName;
+        if (payload.name != null && channel.guild_id && !channel.isThread()) payload.name = Channel.normalizeName(channel.type, payload.name);
         if (payload.name !== undefined && (payload.name.length < 1 || payload.name.length > maxName))
             errors["name"] = makeObjectErrorContent("BASE_TYPE_BAD_LENGTH", `Must be between 1 and ${maxName} in length.`);
         if (channel.isThread() && payload.auto_archive_duration != null && !AUTO_ARCHIVE_DURATIONS.includes(Number(payload.auto_archive_duration)))
