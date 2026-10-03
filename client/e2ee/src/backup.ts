@@ -43,7 +43,16 @@ export interface BackupRecord extends BackupSecretFields {
     backup_public_key: string;
     backup_key_signature: string;
     wrapped_backup_key: string;
+    trust?: { version: number; data: string | null };
 }
+
+export interface TrustEntry {
+    key: string;
+    verified: boolean;
+    at: number;
+}
+
+export type TrustMap = Record<string, TrustEntry>;
 
 export const PASSWORD_KDF: BackupKdf = { name: "argon2id", memory: 65536, iterations: 3, parallelism: 1 };
 export const RECOVERY_KDF: BackupKdf = { name: "hkdf-sha256" };
@@ -115,6 +124,19 @@ const secretKey = (secret: Bytes, label: string) => hkdf(secret, new Uint8Array(
 
 export const sealJwk = async (secret: Bytes, label: string, userId: string, jwk: OkpJwk) =>
     sealBox(await secretKey(secret, label), utf8(JSON.stringify(jwk)), `${label}\n${userId}`);
+
+export const sealTrust = async (secret: Bytes, userId: string, trust: TrustMap) => sealBox(await secretKey(secret, "trust"), utf8(JSON.stringify(trust)), `trust\n${userId}`);
+
+export const openTrust = async (secret: Bytes, userId: string, box: string) => {
+    const parsed = JSON.parse(fromUtf8(await openBox(await secretKey(secret, "trust"), box, `trust\n${userId}`))) as unknown;
+    if (!parsed || typeof parsed !== "object") throw new Error("bad trust list in backup");
+    const trust: TrustMap = {};
+    for (const [id, entry] of Object.entries(parsed as Record<string, Partial<TrustEntry>>)) {
+        if (typeof entry?.key === "string" && typeof entry.verified === "boolean" && typeof entry.at === "number")
+            trust[id] = { key: entry.key, verified: entry.verified, at: entry.at };
+    }
+    return trust;
+};
 
 export const openJwk = async (secret: Bytes, label: string, userId: string, box: string) => {
     const jwk = JSON.parse(fromUtf8(await openBox(await secretKey(secret, label), box, `${label}\n${userId}`))) as OkpJwk;

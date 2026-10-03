@@ -112,14 +112,6 @@ export const STRINGS: Record<string, Row> = {
     ],
     "Turn on encryption": ["Verschlüsselung aktivieren", "Activer le chiffrement", "暗号化をオンにする", "Włącz szyfrowanie", "开启加密"],
     "Safety numbers": ["Sicherheitsnummern", "Numéros de sécurité", "安全番号", "Numery bezpieczeństwa", "安全码"],
-    "Compare these numbers with each person in a call or face to face, or scan the code with their phone. If they match, nobody is intercepting your messages. Mark them as verified so you're warned if they change.":
-        [
-            "Vergleiche diese Nummern mit jeder Person in einem Anruf oder persönlich, oder scanne den Code mit ihrem Handy. Wenn sie übereinstimmen, fängt niemand deine Nachrichten ab. Markiere sie als verifiziert, damit du gewarnt wirst, wenn sie sich ändern.",
-            "Compare ces numéros avec chaque personne lors d'un appel ou en face à face, ou scanne le code avec son téléphone. S'ils correspondent, personne n'intercepte tes messages. Marque-les comme vérifiés pour être averti s'ils changent.",
-            "通話や対面で相手とこの番号を照合するか、相手のスマートフォンでコードをスキャンしてください。一致していれば、メッセージは誰にも傍受されていません。認証済みにしておくと、番号が変わったときに警告されます。",
-            "Porównaj te numery z każdą osobą podczas rozmowy lub osobiście albo zeskanuj kod jej telefonem. Jeśli się zgadzają, nikt nie przechwytuje twoich wiadomości. Oznacz je jako zweryfikowane, aby dostać ostrzeżenie, gdy się zmienią.",
-            "请通过通话或当面与每个人核对这些数字，或用对方的手机扫描二维码。如果一致，就没有人在拦截你的消息。将其标记为已验证，之后如有变化你会收到提醒。",
-        ],
     "Safety number for {name}": ["Sicherheitsnummer für {name}", "Numéro de sécurité de {name}", "{name} の安全番号", "Numer bezpieczeństwa: {name}", "{name} 的安全码"],
     "Calculating…": ["Wird berechnet …", "Calcul en cours…", "計算中…", "Obliczanie…", "正在计算…"],
     "Safety number changed": ["Sicherheitsnummer geändert", "Numéro de sécurité modifié", "安全番号が変更されました", "Numer bezpieczeństwa się zmienił", "安全码已更改"],
@@ -132,13 +124,6 @@ export const STRINGS: Record<string, Row> = {
         "Ta osoba nie skonfigurowała jeszcze szyfrowania.",
         "此人还没有设置加密。",
     ],
-    "QR code of the safety number for {name}": [
-        "QR-Code der Sicherheitsnummer für {name}",
-        "Code QR du numéro de sécurité de {name}",
-        "{name} の安全番号のQRコード",
-        "Kod QR numeru bezpieczeństwa: {name}",
-        "{name} 的安全码二维码",
-    ],
     "Accept new safety number": [
         "Neue Sicherheitsnummer akzeptieren",
         "Accepter le nouveau numéro de sécurité",
@@ -150,14 +135,6 @@ export const STRINGS: Record<string, Row> = {
     "Mark as verified": ["Als verifiziert markieren", "Marquer comme vérifié", "認証済みにする", "Oznacz jako zweryfikowane", "标记为已验证"],
     "Encryption settings": ["Verschlüsselungseinstellungen", "Paramètres de chiffrement", "暗号化の設定", "Ustawienia szyfrowania", "加密设置"],
     "Reset encryption?": ["Verschlüsselung zurücksetzen?", "Réinitialiser le chiffrement ?", "暗号化をリセットしますか？", "Zresetować szyfrowanie?", "重置加密？"],
-    "Only do this if you lost your recovery code and no other signed-in browser can approve this one. You get new encryption keys and can keep chatting, but nobody can read the messages sent before the reset anymore, on any device.":
-        [
-            "Tu das nur, wenn du deinen Wiederherstellungscode verloren hast und kein anderer angemeldeter Browser diesen bestätigen kann. Du bekommst neue Schlüssel und kannst weiterchatten, aber die vor dem Zurücksetzen gesendeten Nachrichten kann danach niemand mehr lesen, auf keinem Gerät.",
-            "Ne fais cela que si tu as perdu ton code de récupération et qu'aucun autre navigateur connecté ne peut approuver celui-ci. Tu obtiens de nouvelles clés et peux continuer à discuter, mais plus personne ne pourra lire les messages envoyés avant la réinitialisation, sur aucun appareil.",
-            "リカバリーコードをなくし、ログイン中の他のブラウザでこのブラウザを承認できない場合にのみ実行してください。新しい暗号鍵が作成されて会話を続けられますが、リセット前に送信されたメッセージはどのデバイスでも誰も読めなくなります。",
-            "Zrób to tylko wtedy, gdy zgubiłeś kod odzyskiwania i żadna inna zalogowana przeglądarka nie może zatwierdzić tej. Dostaniesz nowe klucze i będziesz mógł dalej rozmawiać, ale wiadomości wysłanych przed resetem nikt już nie odczyta na żadnym urządzeniu.",
-            "只有在你丢失了恢复码，并且没有其他已登录的浏览器可以批准此浏览器时才这样做。你会获得新的加密密钥并可以继续聊天，但重置前发送的消息在任何设备上都将无人能读。",
-        ],
     "Your other browsers have to be approved again, and the people you talk to are told that your safety number changed.": [
         "Deine anderen Browser müssen erneut bestätigt werden, und deine Gesprächspartner erfahren, dass sich deine Sicherheitsnummer geändert hat.",
         "Tes autres navigateurs devront être approuvés à nouveau, et les personnes avec qui tu discutes seront informées que ton numéro de sécurité a changé.",
@@ -289,13 +266,6 @@ export const STRINGS: Record<string, Row> = {
         "此浏览器已解锁，正在加载你的加密消息。",
     ],
     "New login on {name}": ["Neue Anmeldung auf {name}", "Nouvelle connexion sur {name}", "{name} での新しいログイン", "Nowe logowanie: {name}", "{name} 上的新登录"],
-    "Approve it only if you just signed in there yourself, because it gets access to your encrypted messages. The other browser should show this code:": [
-        "Bestätige sie nur, wenn du dich gerade selbst dort angemeldet hast, denn sie erhält Zugriff auf deine verschlüsselten Nachrichten. Der andere Browser sollte diesen Code anzeigen:",
-        "N'approuve que si tu viens de t'y connecter toi-même, car elle aura accès à tes messages chiffrés. L'autre navigateur doit afficher ce code :",
-        "暗号化されたメッセージにアクセスできるようになるため、自分でログインした場合にのみ承認してください。相手のブラウザには次のコードが表示されているはずです：",
-        "Zatwierdź tylko wtedy, gdy przed chwilą sam się tam zalogowałeś, bo uzyska dostęp do twoich zaszyfrowanych wiadomości. Druga przeglądarka powinna pokazywać ten kod:",
-        "只有在你刚刚亲自在那里登录时才批准，因为它将能访问你的加密消息。另一个浏览器应显示此代码：",
-    ],
     "Couldn't answer that login: {error}": [
         "Auf diese Anmeldung konnte nicht geantwortet werden: {error}",
         "Impossible de répondre à cette connexion : {error}",
@@ -387,13 +357,6 @@ export const STRINGS: Record<string, Row> = {
     ],
     "Key backup": ["Schlüsselsicherung", "Sauvegarde des clés", "鍵のバックアップ", "Kopia kluczy", "密钥备份"],
     "Your devices": ["Deine Geräte", "Tes appareils", "あなたのデバイス", "Twoje urządzenia", "你的设备"],
-    "Every browser listed here can read your encrypted messages. Remove the ones you don't recognize or don't use anymore.": [
-        "Jeder hier aufgeführte Browser kann deine verschlüsselten Nachrichten lesen. Entferne die, die du nicht erkennst oder nicht mehr benutzt.",
-        "Chaque navigateur listé ici peut lire tes messages chiffrés. Retire ceux que tu ne reconnais pas ou que tu n'utilises plus.",
-        "ここに表示されているブラウザはすべて、暗号化されたメッセージを読めます。心当たりのないものや使わなくなったものは削除してください。",
-        "Każda przeglądarka z tej listy może odczytać twoje zaszyfrowane wiadomości. Usuń te, których nie rozpoznajesz lub już nie używasz.",
-        "这里列出的每个浏览器都能读取你的加密消息。请移除你不认识或不再使用的浏览器。",
-    ],
     "If you lost your recovery code and no other browser can approve a new one, reset encryption to keep chatting. Messages sent before the reset can't be read anymore.": [
         "Wenn du deinen Wiederherstellungscode verloren hast und kein anderer Browser einen neuen bestätigen kann, setze die Verschlüsselung zurück, um weiterzuchatten. Vor dem Zurücksetzen gesendete Nachrichten können dann nicht mehr gelesen werden.",
         "Si tu as perdu ton code de récupération et qu'aucun autre navigateur ne peut en approuver un nouveau, réinitialise le chiffrement pour continuer à discuter. Les messages envoyés avant la réinitialisation ne pourront plus être lus.",
@@ -489,7 +452,6 @@ export const STRINGS: Record<string, Row> = {
         "Odblokuj tę przeglądarkę, aby wysyłać zaszyfrowane wiadomości. Wiadomość nadal jest w polu tekstowym.",
         "解锁此浏览器后才能发送加密消息。你的消息仍在输入框中。",
     ],
-    "End-to-end encrypted": ["Ende-zu-Ende-verschlüsselt", "Chiffré de bout en bout", "エンドツーエンド暗号化済み", "Zaszyfrowane end-to-end", "端到端加密"],
     Decrypting: ["Wird entschlüsselt", "Déchiffrement", "復号中", "Odszyfrowywanie", "正在解密"],
     "Decrypting…": ["Wird entschlüsselt …", "Déchiffrement…", "復号中…", "Odszyfrowywanie…", "正在解密…"],
     "Unlock this browser to read this message": [
@@ -731,14 +693,6 @@ export const STRINGS: Record<string, Row> = {
         "Wysłano z urządzenia, które zostało usunięte",
         "从已移除的设备发送",
     ],
-    "Only do this if your password doesn't unlock your keys and no other signed-in browser can approve this one. You get new encryption keys and can keep chatting, but nobody can read the messages sent before the reset anymore, on any device.":
-        [
-            "Tu das nur, wenn dein Passwort deine Schlüssel nicht entsperrt und kein anderer angemeldeter Browser diesen bestätigen kann. Du bekommst neue Schlüssel und kannst weiterchatten, aber niemand kann die vor dem Zurücksetzen gesendeten Nachrichten noch lesen, auf keinem Gerät.",
-            "Ne fais ça que si ton mot de passe ne déverrouille pas tes clés et qu'aucun autre navigateur connecté ne peut approuver celui-ci. Tu obtiens de nouvelles clés de chiffrement et tu peux continuer à discuter, mais plus personne ne pourra lire les messages envoyés avant la réinitialisation, sur aucun appareil.",
-            "パスワードで鍵のロックを解除できず、ほかにサインイン中のブラウザでこのブラウザを承認できない場合にだけ実行してください。新しい暗号鍵が作成され、チャットは続けられますが、リセット前に送信されたメッセージはどのデバイスでも読めなくなります。",
-            "Zrób to tylko wtedy, gdy hasło nie odblokowuje twoich kluczy i żadna inna zalogowana przeglądarka nie może zatwierdzić tej. Dostaniesz nowe klucze szyfrowania i możesz dalej rozmawiać, ale nikt nie przeczyta już wiadomości wysłanych przed resetem, na żadnym urządzeniu.",
-            "只有在你的密码无法解锁密钥，并且没有其他已登录的浏览器可以批准此浏览器时才这样做。你会获得新的加密密钥并可以继续聊天，但重置之前发送的消息在任何设备上都将无法再读取。",
-        ],
     "Your signed-in browsers are asking you to approve this one. Approve it on any of them after checking that it shows the code listed under its name.": [
         "Deine angemeldeten Browser fragen, ob du diesen bestätigen willst. Bestätige ihn auf einem davon, nachdem du geprüft hast, dass er den Code unter seinem Namen anzeigt.",
         "Tes navigateurs connectés te demandent d'approuver celui-ci. Approuve-le sur l'un d'eux après avoir vérifié qu'il affiche le code indiqué sous son nom.",
@@ -747,13 +701,6 @@ export const STRINGS: Record<string, Row> = {
         "你已登录的浏览器正在请求你批准此浏览器。请确认它显示的是其名称下列出的代码，然后在任意一个上批准。",
     ],
     "Your other browser": ["Dein anderer Browser", "Ton autre navigateur", "別のブラウザ", "Twoja inna przeglądarka", "你的另一个浏览器"],
-    "This login was denied on your other browser.": [
-        "Diese Anmeldung wurde auf deinem anderen Browser abgelehnt.",
-        "Cette connexion a été refusée sur ton autre navigateur.",
-        "このログインは別のブラウザで拒否されました。",
-        "To logowanie zostało odrzucone w twojej innej przeglądarce.",
-        "此登录已在你的另一个浏览器上被拒绝。",
-    ],
     "The approval didn't unlock this browser. {error}": [
         "Die Bestätigung hat diesen Browser nicht entsperrt. {error}",
         "L'approbation n'a pas déverrouillé ce navigateur. {error}",
@@ -833,6 +780,85 @@ export const STRINGS: Record<string, Row> = {
         "このメッセージを復号できませんでした。",
         "Nie udało się odszyfrować tej wiadomości.",
         "无法解密此消息。",
+    ],
+    "Compare these numbers with each person in a call or face to face. If they match, nobody is intercepting your messages. Mark them as verified so you're warned if they change.":
+        [
+            "Vergleiche diese Nummern mit jeder Person in einem Anruf oder persönlich. Wenn sie übereinstimmen, fängt niemand deine Nachrichten ab. Markiere sie als verifiziert, damit du gewarnt wirst, wenn sie sich ändern.",
+            "Compare ces numéros avec chaque personne lors d'un appel ou en face à face. S'ils correspondent, personne n'intercepte tes messages. Marque-les comme vérifiés pour être averti s'ils changent.",
+            "通話や対面で相手とこの番号を照合してください。一致していれば、メッセージは誰にも傍受されていません。認証済みにしておくと、番号が変わったときに警告されます。",
+            "Porównaj te numery z każdą osobą podczas rozmowy lub osobiście. Jeśli się zgadzają, nikt nie przechwytuje twoich wiadomości. Oznacz je jako zweryfikowane, aby dostać ostrzeżenie, gdy się zmienią.",
+            "请通过通话或当面与每个人核对这些数字。如果一致，就没有人在拦截你的消息。将其标记为已验证，之后如有变化你会收到提醒。",
+        ],
+    "This replaces your encryption keys. Only do this if you think someone else got hold of them.": [
+        "Damit ersetzt du deine Schlüssel. Tu das nur, wenn du glaubst, dass jemand anderes an sie gekommen ist.",
+        "Cela remplace tes clés de chiffrement. Ne fais cela que si tu penses que quelqu'un d'autre les a obtenues.",
+        "暗号鍵を置き換えます。他の誰かに鍵を知られたと思う場合にのみ実行してください。",
+        "To zastępuje twoje klucze szyfrowania. Zrób to tylko wtedy, gdy podejrzewasz, że ktoś inny je zdobył.",
+        "这会替换你的加密密钥。只有在你认为其他人拿到了它们时才这样做。",
+    ],
+    "Only do this if you lost your recovery code and no other signed-in browser can approve this one.": [
+        "Tu das nur, wenn du deinen Wiederherstellungscode verloren hast und kein anderer angemeldeter Browser diesen bestätigen kann.",
+        "Ne fais cela que si tu as perdu ton code de récupération et qu'aucun autre navigateur connecté ne peut approuver celui-ci.",
+        "リカバリーコードをなくし、ログイン中の他のブラウザでこのブラウザを承認できない場合にのみ実行してください。",
+        "Zrób to tylko wtedy, gdy zgubiłeś kod odzyskiwania i żadna inna zalogowana przeglądarka nie może zatwierdzić tej.",
+        "只有在你丢失了恢复码，并且没有其他已登录的浏览器可以批准此浏览器时才这样做。",
+    ],
+    "Only do this if your password doesn't unlock your keys and no other signed-in browser can approve this one.": [
+        "Tu das nur, wenn dein Passwort deine Schlüssel nicht entsperrt und kein anderer angemeldeter Browser diesen bestätigen kann.",
+        "Ne fais ça que si ton mot de passe ne déverrouille pas tes clés et qu'aucun autre navigateur connecté ne peut approuver celui-ci.",
+        "パスワードで鍵のロックを解除できず、ほかにサインイン中のブラウザでこのブラウザを承認できない場合にだけ実行してください。",
+        "Zrób to tylko wtedy, gdy hasło nie odblokowuje twoich kluczy i żadna inna zalogowana przeglądarka nie może zatwierdzić tej.",
+        "只有在你的密码无法解锁密钥，并且没有其他已登录的浏览器可以批准此浏览器时才这样做。",
+    ],
+    "You get new keys and can keep chatting, but none of your browsers can read the messages sent before the reset anymore. The people you talk to keep what they received.": [
+        "Du bekommst neue Schlüssel und kannst weiterchatten, aber keiner deiner Browser kann die vor dem Zurücksetzen gesendeten Nachrichten noch lesen. Die Personen, mit denen du schreibst, behalten, was sie erhalten haben.",
+        "Tu obtiens de nouvelles clés et peux continuer à discuter, mais aucun de tes navigateurs ne pourra plus lire les messages envoyés avant la réinitialisation. Les personnes avec qui tu discutes gardent ce qu'elles ont reçu.",
+        "新しい鍵が作成されて会話を続けられますが、リセット前に送信されたメッセージはあなたのどのブラウザでも読めなくなります。相手が受け取ったメッセージは相手の側に残ります。",
+        "Dostaniesz nowe klucze i możesz dalej rozmawiać, ale żadna z twoich przeglądarek nie odczyta już wiadomości wysłanych przed resetem. Osoby, z którymi rozmawiasz, zachowują to, co otrzymały.",
+        "你会获得新的密钥并可以继续聊天，但你的任何浏览器都将无法再读取重置前发送的消息。与你聊天的人仍会保留他们收到的内容。",
+    ],
+    "Approve it only if you just signed in there yourself, because it gets access to your encrypted messages. Deny signs it out. The other browser should show this code:": [
+        "Bestätige sie nur, wenn du dich gerade selbst dort angemeldet hast, denn sie erhält Zugriff auf deine verschlüsselten Nachrichten. Ablehnen meldet sie ab. Der andere Browser sollte diesen Code anzeigen:",
+        "N'approuve que si tu viens de t'y connecter toi-même, car elle aura accès à tes messages chiffrés. Refuser la déconnecte. L'autre navigateur doit afficher ce code :",
+        "暗号化されたメッセージにアクセスできるようになるため、自分でログインした場合にのみ承認してください。拒否するとそのブラウザはログアウトされます。相手のブラウザには次のコードが表示されているはずです：",
+        "Zatwierdź tylko wtedy, gdy przed chwilą sam się tam zalogowałeś, bo uzyska dostęp do twoich zaszyfrowanych wiadomości. Odrzucenie ją wyloguje. Druga przeglądarka powinna pokazywać ten kod:",
+        "只有在你刚刚亲自在那里登录时才批准，因为它将能访问你的加密消息。拒绝会让它退出登录。另一个浏览器应显示此代码：",
+    ],
+    "Signed in {date}": ["Angemeldet am {date}", "Connecté le {date}", "{date} にログイン", "Zalogowano {date}", "登录于 {date}"],
+    "Unlocked browsers can read your encrypted messages, and browsers waiting for approval can once you approve them. Remove the ones you don't recognize or don't use anymore.": [
+        "Entsperrte Browser können deine verschlüsselten Nachrichten lesen, Browser, die auf Bestätigung warten, sobald du sie bestätigst. Entferne die, die du nicht erkennst oder nicht mehr benutzt.",
+        "Les navigateurs déverrouillés peuvent lire tes messages chiffrés, et ceux en attente d'approbation le pourront une fois approuvés. Retire ceux que tu ne reconnais pas ou que tu n'utilises plus.",
+        "ロック解除済みのブラウザは暗号化されたメッセージを読めます。承認待ちのブラウザは、承認すると読めるようになります。心当たりのないものや使わなくなったものは削除してください。",
+        "Odblokowane przeglądarki mogą odczytać twoje zaszyfrowane wiadomości, a te czekające na zatwierdzenie będą mogły po zatwierdzeniu. Usuń te, których nie rozpoznajesz lub już nie używasz.",
+        "已解锁的浏览器可以读取你的加密消息，等待批准的浏览器在你批准后也可以。请移除你不认识或不再使用的浏览器。",
+    ],
+    "This login was denied on your other browser, so this browser was signed out.": [
+        "Diese Anmeldung wurde auf deinem anderen Browser abgelehnt, daher wurde dieser Browser abgemeldet.",
+        "Cette connexion a été refusée sur ton autre navigateur, ce navigateur a donc été déconnecté.",
+        "このログインは別のブラウザで拒否されたため、このブラウザはログアウトされました。",
+        "To logowanie zostało odrzucone w twojej innej przeglądarce, więc ta przeglądarka została wylogowana.",
+        "此登录已在你的另一个浏览器上被拒绝，因此此浏览器已退出登录。",
+    ],
+    "{names} haven't set up encryption yet, so this conversation can't be encrypted. Ask them to open the app once, then try again.": [
+        "{names} haben die Verschlüsselung noch nicht eingerichtet, daher kann diese Unterhaltung nicht verschlüsselt werden. Bitte sie, die App einmal zu öffnen, und versuche es dann erneut.",
+        "{names} n'ont pas encore configuré le chiffrement, cette conversation ne peut donc pas être chiffrée. Demande-leur d'ouvrir l'appli une fois, puis réessaie.",
+        "{names} はまだ暗号化を設定していないため、この会話は暗号化できません。一度アプリを開いてもらってから、もう一度お試しください。",
+        "{names} nie skonfigurowali jeszcze szyfrowania, więc tej rozmowy nie można zaszyfrować. Poproś ich, żeby raz otworzyli aplikację, i spróbuj ponownie.",
+        "{names} 还没有设置加密，因此无法加密此对话。请让他们打开一次应用，然后再试一次。",
+    ],
+    "{name} hasn't set up encryption yet, so this conversation can't be encrypted. Ask them to open the app once, then try again.": [
+        "{name} hat die Verschlüsselung noch nicht eingerichtet, daher kann diese Unterhaltung nicht verschlüsselt werden. Bitte die Person, die App einmal zu öffnen, und versuche es dann erneut.",
+        "{name} n'a pas encore configuré le chiffrement, cette conversation ne peut donc pas être chiffrée. Demande-lui d'ouvrir l'appli une fois, puis réessaie.",
+        "{name} はまだ暗号化を設定していないため、この会話は暗号化できません。一度アプリを開いてもらってから、もう一度お試しください。",
+        "{name} nie skonfigurował(a) jeszcze szyfrowania, więc tej rozmowy nie można zaszyfrować. Poproś tę osobę, żeby raz otworzyła aplikację, i spróbuj ponownie.",
+        "{name} 还没有设置加密，因此无法加密此对话。请让对方打开一次应用，然后再试一次。",
+    ],
+    "Couldn't turn on encryption. {error}": [
+        "Die Verschlüsselung konnte nicht eingeschaltet werden. {error}",
+        "Impossible d'activer le chiffrement. {error}",
+        "暗号化をオンにできませんでした。{error}",
+        "Nie udało się włączyć szyfrowania. {error}",
+        "无法开启加密。{error}",
     ],
 };
 

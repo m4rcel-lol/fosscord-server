@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { BackupMode, BackupRecord, generateRecoveryCode, openJwk, sealJwk, unwrapSecret, wrapSecret } from "./backup";
+import { BackupMode, BackupRecord, generateRecoveryCode, openJwk, openTrust, sealJwk, sealTrust, TrustMap, unwrapSecret, wrapSecret } from "./backup";
 import { Bytes, fromB64u, fromUtf8, randomBytes, toB64u, utf8 } from "./bytes";
 import {
     aesDecrypt,
@@ -256,18 +256,28 @@ export const deviceName = () => {
 const addedAt = (iso: string, seconds: boolean) =>
     new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", ...(seconds && { second: "2-digit" }) });
 
+export const deviceTitle = (device: ServerDevice) => {
+    const os = device.session?.os;
+    const browser = device.session?.browser;
+    if (os) return browser ? `${os} • ${browser}` : os;
+    return device.name;
+};
+
 export const deviceAdded = (devices: ServerDevice[], device: ServerDevice) => {
     if (!device.created_at) return null;
     const minutes = devices.filter((d) => d.status !== "revoked" && d.created_at).map((d) => addedAt(d.created_at!, false));
     return addedAt(device.created_at, new Set(minutes).size < minutes.length);
 };
 
+export const deviceTwins = (devices: ServerDevice[], device: ServerDevice) => devices.filter((d) => d.status !== "revoked" && deviceTitle(d) === deviceTitle(device));
+
 export const deviceLabel = (devices: ServerDevice[], deviceId: string, fallback: string) => {
     const device = devices.find((d) => d.device_id === deviceId);
-    if (!device?.name) return fallback;
-    const twins = devices.filter((d) => d.status !== "revoked" && d.name === device.name);
+    const title = device && deviceTitle(device);
+    if (!device || !title) return fallback;
+    const twins = deviceTwins(devices, device);
     const added = twins.length > 1 ? deviceAdded(twins, device) : null;
-    return added ? `${device.name}, added ${added}` : device.name;
+    return added ? `${title}, added ${added}` : title;
 };
 
 export class Engine {
@@ -305,6 +315,7 @@ export class Engine {
     private backfilling = false;
     private wiped = false;
     private freshIdentity: OkpJwk | null = null;
+    private trustVersion = -1;
 
     constructor(private api: Api) {}
 
@@ -681,6 +692,78 @@ export class Engine {
         this.deviceStatus = serverDevice.status;
         this.linked = await signedBy(serverDevice);
         this.directory.delete(userId);
+        if (this.linked) await this.applyTrust(this.backup).catch((error) => console.error("[e2ee] couldn't read the synced verifications", error));
+    }
+
+    private async applyTrust(record: BackupRecord | null, syncLocal = true) {
+        const trust = record?.identity_key === this.serverKey ? record.trust : undefined;
+        if (!trust || !this.secret || trust.version === this.trustVersion) return {};
+        this.trustVersion = trust.version;
+        const remote = trust.data ? await openTrust(this.secret, this.userId, trust.data) : {};
+        let changed = false;
+        for (const [userId, entry] of Object.entries(remote)) {
+            const contact = this.contacts[userId];
+            if (userId === this.userId || entry.at <= (contact?.verifiedAt ?? 0)) continue;
+            if (!contact) this.contacts[userId] = { identityKey: entry.key, verified: entry.verified, pendingKey: null, firstSeen: Date.now(), verifiedAt: entry.at };
+            else if (contact.identityKey === entry.key) Object.assign(contact, { verified: entry.verified, verifiedAt: entry.at });
+            else if (contact.pendingKey === entry.key)
+                Object.assign(contact, {
+                    previousKeys: [...new Set([...(contact.previousKeys ?? []), contact.identityKey])].slice(-16),
+                    identityKey: entry.key,
+                    pendingKey: null,
+                    verified: entry.verified,
+                    verifiedAt: entry.at,
+                });
+            else continue;
+            this.directory.delete(userId);
+            changed = true;
+        }
+        if (changed) {
+            await this.saveContacts();
+            queueMicrotask(() => this.emit());
+        }
+        const unsynced = Object.keys(this.contacts).filter((id) => this.contacts[id].verified && !this.contacts[id].pendingKey && !remote[id]);
+        if (syncLocal && unsynced.length) queueMicrotask(() => this.pushTrust(unsynced).catch((error) => console.error("[e2ee] couldn't sync verifications", error)));
+        return remote;
+    }
+
+    async syncTrust() {
+        if (!this.linked) return;
+        await this.serialized(async () => {
+            this.backup = await this.fetchBackup();
+            await this.applyTrust(this.backup);
+        });
+    }
+
+    private async pushTrust(userIds: string[]) {
+        if (!this.secret) return;
+        await this.serialized(async () => {
+            for (let attempt = 0; attempt < 3; attempt++) {
+                const backup = (this.backup = await this.fetchBackup());
+                if (!backup?.trust || backup.identity_key !== this.serverKey || !this.secret) return;
+                this.trustVersion = -1;
+                const remote = await this.applyTrust(backup, false).catch(() => ({}) as TrustMap);
+                const next = { ...remote };
+                for (const id of userIds) {
+                    const contact = this.contacts[id];
+                    if (!contact || contact.pendingKey) continue;
+                    const at = contact.verifiedAt ?? Date.now();
+                    if ((remote[id]?.at ?? 0) < at) next[id] = { key: contact.identityKey, verified: contact.verified, at };
+                }
+                if (userIds.every((id) => next[id] === remote[id])) return;
+                try {
+                    const saved = await this.api.request<{ version: number; data: string }>("put", "/users/@me/e2ee/backup/trust", {
+                        version: backup.trust.version,
+                        data: await sealTrust(this.secret, this.userId, next),
+                    });
+                    this.trustVersion = saved.version;
+                    backup.trust = saved;
+                    return;
+                } catch (error) {
+                    if ((error as { status?: number })?.status !== 409) throw error;
+                }
+            }
+        });
     }
 
     async unlockWith(kind: BackupMode, input: string) {
@@ -888,17 +971,21 @@ export class Engine {
         contact.identityKey = contact.pendingKey;
         contact.pendingKey = null;
         contact.verified = false;
+        contact.verifiedAt = Date.now();
         await this.saveContacts();
         this.directory.delete(userId);
         this.emit();
+        this.pushTrust([userId]).catch((error) => console.error("[e2ee] couldn't sync the accepted safety number", error));
     }
 
     async setVerified(userId: string, verified: boolean) {
         const contact = this.contacts[userId];
         if (!contact) return;
         contact.verified = verified;
+        contact.verifiedAt = Date.now();
         await this.saveContacts();
         this.emit();
+        this.pushTrust([userId]).catch((error) => console.error("[e2ee] couldn't sync the verification", error));
     }
 
     async encrypt(channelId: string, payload: Payload, opts: { nonce?: string; mid?: string }): Promise<Envelope> {
