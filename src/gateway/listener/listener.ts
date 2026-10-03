@@ -24,7 +24,7 @@ import { WebSocket } from "@spacebar/gateway";
 import { ChannelType, PublicMember, RelationshipType } from "@spacebar/schemas";
 import { In, Not } from "typeorm";
 import { CLOSECODES, holdForResume, OPCODES, resolveSocket, Send } from "../util";
-import { scheduleMemberListSync } from "../opcodes/LazyRequest";
+import { markMemberListsStale, resyncMemberList } from "../opcodes/LazyRequest";
 
 // TODO: close connection on Invalidated Token
 // TODO: check intent
@@ -331,11 +331,13 @@ async function consume(this: WebSocket, opts: EventOpts): Promise<void> {
             break;
         case "PRESENCE_UPDATE": {
             const presenceUser = data?.user?.id;
-            if (presenceUser === this.user_id && !data.guild_id) return;
+            if (presenceUser === this.user_id) {
+                if (data?.guild_id && this.member_lists?.[data.guild_id]) markMemberListsStale(data.guild_id, "presence");
+                return;
+            }
             if (
                 data?.guild_id &&
                 !this.isBot &&
-                presenceUser !== this.user_id &&
                 !this.affinityUsers?.has(presenceUser) &&
                 !this.member_lists?.[data.guild_id] &&
                 !this.presenceSubscriptions?.[data.guild_id]?.has(presenceUser)
@@ -429,7 +431,13 @@ async function consume(this: WebSocket, opts: EventOpts): Promise<void> {
     });
 
     const listGuildId = opts.guild_id ?? data?.guild_id;
-    if (listGuildId && this.member_lists?.[listGuildId] && MemberListEvents.has(event)) scheduleMemberListSync(this, listGuildId);
+    const subscription = listGuildId && this.member_lists?.[listGuildId];
+    if (!subscription || !MemberListEvents.has(event)) return;
+    if (event === "CHANNEL_UPDATE") {
+        if (subscription.channel_id === data?.id) await resyncMemberList(this, listGuildId);
+        return;
+    }
+    markMemberListsStale(listGuildId, event === "PRESENCE_UPDATE" ? "presence" : "members");
 }
 
 const MemberListEvents = new Set([

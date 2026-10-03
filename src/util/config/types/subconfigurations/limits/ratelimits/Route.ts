@@ -22,7 +22,12 @@ import { RateLimitOptions } from "./RateLimitOptions";
 export class RouteRateLimit {
     guild: RateLimitOptions = {
         count: 5,
+        GET: 50,
         window: 5,
+    };
+    guildCreate: RateLimitOptions = {
+        count: 10,
+        window: 60 * 60,
     };
     webhook: RateLimitOptions = {
         count: 10,
@@ -30,6 +35,7 @@ export class RouteRateLimit {
     };
     channel: RateLimitOptions = {
         count: 10,
+        GET: 50,
         window: 5,
     };
     user: RateLimitOptions = {

@@ -374,6 +374,15 @@ export class Guild extends BaseClass {
         this.premium_features = { features: GuildPowerupFeatures, additional_emoji_slots: 200, additional_sticker_slots: 55, additional_sound_slots: 40 };
     }
 
+    static async countOnlineMembersIn(guild_ids: string[]): Promise<Map<string, number>> {
+        if (!guild_ids.length) return new Map();
+        const rows: { guild_id: string; count: number }[] = await Guild.query(
+            `SELECT m.guild_id, COUNT(DISTINCT m.id)::int AS count FROM members m JOIN sessions s ON s.user_id = m.id WHERE m.guild_id = ANY($1::bigint[]) AND s.status IN ('online', 'idle', 'dnd') GROUP BY m.guild_id`,
+            [guild_ids],
+        );
+        return new Map(rows.map((x) => [`${x.guild_id}`, x.count]));
+    }
+
     static async countOnlineMembers(guild_id: string): Promise<number> {
         const [{ count }] = await Guild.query(
             `SELECT COUNT(DISTINCT m.id)::int AS count FROM members m JOIN sessions s ON s.user_id = m.id WHERE m.guild_id = $1 AND s.status IN ('online', 'idle', 'dnd')`,

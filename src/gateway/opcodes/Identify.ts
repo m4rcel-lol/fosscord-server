@@ -42,6 +42,7 @@ import {
     VoiceState,
     PrivateCalls,
     ActivityInstances,
+    RateLimit,
 } from "@spacebar/database";
 import {
     Activity,
@@ -54,6 +55,7 @@ import {
     PRESENCE_STALE_AFTER_MS,
     checkToken,
     Config,
+    Rights,
     CurrentTokenFormatVersion,
     emitEvent,
     EVENTEnum,
@@ -130,6 +132,18 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     if (!user) {
         console.log(`[Gateway/${this.ipAddress}] Failed to identify user`);
         return this.close(CLOSECODES.Authentication_failed);
+    }
+
+    const { enabled, identify: identifyLimit } = Config.get().limits.rate;
+    if (enabled && !new Rights(user.rights).has("BYPASS_RATE_LIMITS")) {
+        const max = user.bot ? (identifyLimit.bot ?? identifyLimit.count) : identifyLimit.count;
+        const limit = await RateLimit.hit(`${user.id}:identify`, user.id, max, identifyLimit.window);
+        if (limit.hits > max) {
+            console.log(`[Gateway/${user.id}] identify rate limited (${limit.hits} in ${identifyLimit.window}s)`);
+            await Send(this, { op: OPCODES.Invalid_Session, d: false });
+            return this.close(CLOSECODES.Rate_limited, "You are identifying too fast.");
+        }
+        if (this.readyState !== this.OPEN) return;
     }
 
     this.user_id = user.id;
@@ -936,5 +950,5 @@ export async function onIdentify(this: WebSocket, data: Payload) {
         process.env.LOG_GATEWAY_TRACES ? JSON.stringify(d._trace, null, 2) : "",
     );
 
-    await broadcastPresence(this.user_id, user.toPublicUser());
+    await broadcastPresence(this.user_id);
 }

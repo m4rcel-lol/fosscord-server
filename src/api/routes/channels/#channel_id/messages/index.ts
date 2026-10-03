@@ -105,7 +105,7 @@ router.get(
             where: { id?: FindOperator<string> | FindOperator<string>[] };
         } = {
             relationLoadStrategy: "query",
-            order: { timestamp: "DESC" },
+            order: { id: "DESC" },
             take: limit,
             where: { channel_id },
             relations: {
@@ -138,11 +138,11 @@ router.get(
                     Message.find({
                         ...query,
                         where: { channel_id, id: MoreThanOrEqual(around) },
-                        order: { timestamp: "ASC" },
+                        order: { id: "ASC" },
                     }),
                 ]);
                 left.push(...right);
-                messages = left.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+                messages = left.sort((a, b) => (BigInt(b.id) > BigInt(a.id) ? 1 : -1));
             } else {
                 query.take = 1;
                 const message = await Message.findOne({
@@ -156,7 +156,7 @@ router.get(
                 if (BigInt(after) > BigInt(Snowflake.generate())) throw new HTTPError("after parameter must not be greater than current time", 422);
 
                 query.where.id = MoreThan(after);
-                query.order = { timestamp: "ASC" };
+                query.order = { id: "ASC" };
             } else if (before) {
                 if (BigInt(before) > BigInt(Snowflake.generate())) throw new HTTPError("before parameter must not be greater than current time", 422);
 

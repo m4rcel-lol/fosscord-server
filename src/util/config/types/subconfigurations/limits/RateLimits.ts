@@ -32,5 +32,10 @@ export class RateLimits {
         count: 10000,
         window: 600,
     };
+    identify: RateLimitOptions = {
+        count: 12,
+        bot: 60,
+        window: 60,
+    };
     routes: RouteRateLimit = new RouteRateLimit();
 }

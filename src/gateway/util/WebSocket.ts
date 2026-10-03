@@ -67,5 +67,5 @@ export interface WebSocket extends WS {
     fullMemberRequests?: Record<string, number>;
     affinityUsers?: Set<string>;
     presenceSubscriptions?: Record<string, Set<string>>;
-    member_lists?: Record<string, { channel_id: string; ranges: [number, number][]; timer?: NodeJS.Timeout }>;
+    member_lists?: Record<string, { channel_id: string; ranges: [number, number][]; key: string }>;
 }

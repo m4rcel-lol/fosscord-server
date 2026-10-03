@@ -17,7 +17,9 @@
 */
 
 import { Config, listenEvent, RabbitMQ } from "@spacebar/util";
+import { RateLimit as StoredRateLimit } from "@spacebar/database";
 import { NextFunction, Request, Response, Router } from "express";
+import { LessThanOrEqual } from "typeorm";
 
 export const API_PREFIX_TRAILING_SLASH = /^\/api(\/v\d+)?\//;
 
@@ -34,6 +36,7 @@ const EventRateLimit = "RATELIMIT";
 const InvalidRequestStatuses = new Set([401, 403, 429]);
 const MajorParameters = new Set(["channels", "guilds", "webhooks"]);
 const Snowflake = /^\d{15,20}$/;
+const PersistedWindow = 60;
 let limiterCount = 0;
 
 export function routeBucket(req: Request) {
@@ -85,12 +88,6 @@ export default function rateLimit(opts: {
         else if (opts.MODIFY && ["POST", "DELETE", "PATCH", "PUT"].includes(req.method)) max_hits = opts.MODIFY;
 
         const now = Date.now();
-        let entry = Cache.get(key);
-        if (entry && entry.expires_at.getTime() <= now) {
-            Cache.delete(key);
-            entry = undefined;
-        }
-
         const setHeaders = (limit: RateLimit | undefined) => {
             const reset = limit?.expires_at.getTime() ?? now + opts.window * 1000;
             res.set("X-RateLimit-Limit", `${max_hits}`)
@@ -99,10 +96,9 @@ export default function rateLimit(opts: {
                 .set("X-RateLimit-Reset", `${(reset / 1000).toFixed(3)}`)
                 .set("X-RateLimit-Reset-After", `${(Math.max(0, reset - now) / 1000).toFixed(3)}`);
         };
-
-        if (entry?.blocked) {
-            const retryAfter = Math.max(0, entry.expires_at.getTime() - now) / 1000;
-            setHeaders(entry);
+        const reject = (limit: RateLimit) => {
+            const retryAfter = Math.max(0, limit.expires_at.getTime() - now) / 1000;
+            setHeaders(limit);
             if (opts.global) res.set("X-RateLimit-Global", "true");
             return res
                 .status(429)
@@ -114,14 +110,41 @@ export default function rateLimit(opts: {
                     retry_after: Number(retryAfter.toFixed(3)),
                     global: !!opts.global,
                 });
+        };
+        const counts = () => (opts.error ? InvalidRequestStatuses.has(res.statusCode) : res.statusCode >= 200 && res.statusCode < 300);
+        const hitOpts = { key, bucket_id, executor_id, max_hits, window: opts.window };
+
+        if (!opts.global && opts.window >= PersistedWindow) {
+            (async () => {
+                if (opts.error || opts.success) {
+                    const stored = await StoredRateLimit.findOne({ where: { id: key } });
+                    const current = stored && stored.expires_at.getTime() > now ? stored : undefined;
+                    if (current && current.hits >= max_hits) return reject(current);
+                    setHeaders(current);
+                    res.once("finish", () => {
+                        if (counts()) StoredRateLimit.hit(key, executor_id, max_hits, opts.window).catch((e) => console.error("[RateLimit] failed to store hit", e));
+                    });
+                    return next();
+                }
+                const limit = await StoredRateLimit.hit(key, executor_id, max_hits, opts.window);
+                if (limit.hits > max_hits) return reject(limit);
+                setHeaders(limit);
+                next();
+            })().catch(next);
+            return;
         }
 
-        const hitOpts = { key, bucket_id, executor_id, max_hits, window: opts.window };
+        let entry = Cache.get(key);
+        if (entry && entry.expires_at.getTime() <= now) {
+            Cache.delete(key);
+            entry = undefined;
+        }
+        if (entry?.blocked) return reject(entry);
+
         if (opts.error || opts.success) {
             setHeaders(entry);
             res.once("finish", () => {
-                if (opts.error && InvalidRequestStatuses.has(res.statusCode)) hitRoute(hitOpts);
-                else if (opts.success && res.statusCode >= 200 && res.statusCode < 300) hitRoute(hitOpts);
+                if (counts()) hitRoute(hitOpts);
             });
         } else setHeaders(hitRoute(hitOpts));
 
@@ -153,11 +176,13 @@ export async function initRateLimits(app: Router) {
         Cache.forEach((x, key) => {
             if (x.expires_at.getTime() <= now) Cache.delete(key);
         });
+        StoredRateLimit.delete({ expires_at: LessThanOrEqual(new Date(now)) }).catch((e) => console.error("[RateLimit] failed to prune stored limits", e));
     }, 1000 * 60).unref();
 
     app.use(rateLimit({ bucket: "ip", onlyIp: true, onlyAnonymous: true, global: true, ...ip }));
     app.use(rateLimit({ bucket: "global", onlyUsers: true, global: true, ...global }));
     app.use(rateLimit({ bucket: "error", error: true, onlyIp: true, global: true, ...error }));
+    app.post(["/guilds", "/guilds/templates/:code"], rateLimit({ bucket: "guild-create", ...routes.guildCreate }));
     app.use("/guilds/:guild_id", rateLimit(routes.guild));
     app.use("/webhooks/:webhook_id", rateLimit(routes.webhook));
     app.use("/channels/:channel_id", rateLimit(routes.channel));

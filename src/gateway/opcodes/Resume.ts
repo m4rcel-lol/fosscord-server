@@ -20,6 +20,7 @@ import { Session } from "@spacebar/database";
 import { holdForResume, OPCODES, Payload, resumableSockets, Send, WebSocket } from "@spacebar/gateway";
 import { broadcastPresence, checkToken } from "@spacebar/util";
 import { CLOSECODES } from "../util/Constants";
+import { resubscribeMemberLists } from "./LazyRequest";
 
 export async function onResume(this: WebSocket, { d }: Payload) {
     if (this.user_id) return this.close(CLOSECODES.Already_authenticated);
@@ -48,6 +49,7 @@ export async function onResume(this: WebSocket, { d }: Payload) {
     this.member_events = previous.member_events;
     this.permissions = previous.permissions;
     this.member_lists = previous.member_lists;
+    resubscribeMemberLists(this);
     this.listen_options = previous.listen_options;
     this.listenerCleanup = previous.listenerCleanup;
     this.recentTransactions = previous.recentTransactions;

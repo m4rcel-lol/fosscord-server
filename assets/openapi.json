@@ -19214,7 +19214,7 @@
                 "properties": {
                     "maxGuilds": {
                         "type": "integer",
-                        "default": 1048576
+                        "default": 200
                     },
                     "maxUsername": {
                         "type": "integer",
@@ -19381,6 +19381,9 @@
                     "error": {
                         "$ref": "#/components/schemas/RateLimitOptions"
                     },
+                    "identify": {
+                        "$ref": "#/components/schemas/RateLimitOptions"
+                    },
                     "routes": {
                         "$ref": "#/components/schemas/RouteRateLimit"
                     }
@@ -19389,6 +19392,7 @@
                     "enabled",
                     "error",
                     "global",
+                    "identify",
                     "ip",
                     "routes"
                 ]
@@ -19400,6 +19404,9 @@
                         "type": "integer"
                     },
                     "count": {
+                        "type": "integer"
+                    },
+                    "GET": {
                         "type": "integer"
                     },
                     "window": {
@@ -19418,6 +19425,9 @@
                 "type": "object",
                 "properties": {
                     "guild": {
+                        "$ref": "#/components/schemas/RateLimitOptions"
+                    },
+                    "guildCreate": {
                         "$ref": "#/components/schemas/RateLimitOptions"
                     },
                     "webhook": {
@@ -19474,6 +19484,7 @@
                     "connection",
                     "expression",
                     "guild",
+                    "guildCreate",
                     "interaction",
                     "invite",
                     "oauth2",
