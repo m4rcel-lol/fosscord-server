@@ -54,6 +54,7 @@ export interface HookContext {
     onState: () => void;
     updateRecord: (message: RawMessage) => void;
     onCredentials: (path: string, body: { password?: unknown; new_password?: unknown }, response: unknown) => void;
+    onLogout: () => void;
     onError: (error: unknown, channelId: string) => void;
 }
 
@@ -271,6 +272,7 @@ export const createHooks = (ctx: HookContext) => {
                 const opts: HttpOptions = typeof input === "string" ? { url: input, rejectWithError: false } : input;
                 const url = typeof opts?.url === "string" ? opts.url : "";
                 const path = url.split("?")[0];
+                if (method === "post" && path === "/auth/logout") ctx.onLogout();
                 if ((method === "post" && AUTH_URL.test(path)) || (method === "patch" && path === "/users/@me")) {
                     const body = (opts.body ?? {}) as { password?: unknown; new_password?: unknown };
                     const result = original(input, callback);

@@ -64,7 +64,10 @@ const api: Api = {
     async request<T>(method: "get" | "post" | "put" | "patch" | "del", url: string, body?: unknown) {
         if (!http) throw new Error("HTTP client not found");
         if (signedOut) throw { ok: false, status: 401, body: { message: "This session was signed out" } };
-        const res = await http[method]({ url, body, rejectWithError: false });
+        const res = await http[method]({ url, body, rejectWithError: false }).catch((error: unknown) => {
+            if ((error as { status?: number } | null)?.status === 401) sessionEnded();
+            throw error;
+        });
         if (res.status === 401) sessionEnded();
         if (!res.ok) throw res;
         return res.body as T;
@@ -105,10 +108,10 @@ const link = createLink(engine, api, {
     onChange: () => ui.renderUnlock(),
     onDismiss: (requestId) => ui.dismissApproval(requestId),
     onPeerUnlock: () => {
-        if (initialized && engine.locked) engine.refresh().catch((error) => console.error("[e2ee] refresh failed", error));
+        if (initialized && !signedOut && engine.locked) engine.refresh().catch((error) => console.error("[e2ee] refresh failed", error));
     },
     onPeerReset: () => {
-        if (initialized) engine.refresh().catch((error) => console.error("[e2ee] refresh failed", error));
+        if (initialized && !signedOut) engine.refresh().catch((error) => console.error("[e2ee] refresh failed", error));
     },
     beacon: (body) => {
         const token = storedToken();
@@ -186,6 +189,11 @@ const hooks = createHooks({
     states,
     failClosed: () => failure !== null,
     isReady: () => readyNow,
+    onLogout: () => {
+        loggedOut = true;
+        link.stop();
+        engine.forget().catch((error) => console.error("[e2ee] couldn't remove this browser's keys", error));
+    },
     onCredentials: (path, body, response) => {
         const password = typeof body.password === "string" ? body.password : undefined;
         const next = typeof body.new_password === "string" ? body.new_password : undefined;
@@ -325,7 +333,6 @@ const tick = () => {
         targets.dispatcher.subscribe("LOGOUT", () => {
             loggedOut = true;
             link.stop();
-            engine.forget().catch((error) => console.error("[e2ee] couldn't remove this browser's keys", error));
         });
         targets.dispatcher.subscribe("CONNECTION_OPEN", (action) => {
             if (loggedOut) return location.reload();

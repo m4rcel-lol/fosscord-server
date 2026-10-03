@@ -3922,6 +3922,7 @@ backup:${this.userId}`).catch(() => null);
           const opts = typeof input === "string" ? { url: input, rejectWithError: false } : input;
           const url = typeof opts?.url === "string" ? opts.url : "";
           const path = url.split("?")[0];
+          if (method === "post" && path === "/auth/logout") ctx.onLogout();
           if (method === "post" && AUTH_URL.test(path) || method === "patch" && path === "/users/@me") {
             const body = opts.body ?? {};
             const result = original(input, callback);
@@ -4814,7 +4815,7 @@ ${approver}`;
     addEventListener(
       "keydown",
       (event) => {
-        if (event.key === "Escape" && document.querySelector("dialog.fe2ee-dialog[open]")) event.stopPropagation();
+        if (event.key === "Escape" && document.querySelector("dialog.fe2ee-dialog[open]:not([data-closing])")) event.stopPropagation();
       },
       true
     );
@@ -5750,7 +5751,10 @@ ${approver}`;
     async request(method, url, body) {
       if (!http) throw new Error("HTTP client not found");
       if (signedOut) throw { ok: false, status: 401, body: { message: "This session was signed out" } };
-      const res = await http[method]({ url, body, rejectWithError: false });
+      const res = await http[method]({ url, body, rejectWithError: false }).catch((error) => {
+        if (error?.status === 401) sessionEnded();
+        throw error;
+      });
       if (res.status === 401) sessionEnded();
       if (!res.ok) throw res;
       return res.body;
@@ -5782,10 +5786,10 @@ ${approver}`;
     onChange: () => ui.renderUnlock(),
     onDismiss: (requestId) => ui.dismissApproval(requestId),
     onPeerUnlock: () => {
-      if (initialized && engine.locked) engine.refresh().catch((error) => console.error("[e2ee] refresh failed", error));
+      if (initialized && !signedOut && engine.locked) engine.refresh().catch((error) => console.error("[e2ee] refresh failed", error));
     },
     onPeerReset: () => {
-      if (initialized) engine.refresh().catch((error) => console.error("[e2ee] refresh failed", error));
+      if (initialized && !signedOut) engine.refresh().catch((error) => console.error("[e2ee] refresh failed", error));
     },
     beacon: (body) => {
       const token = storedToken();
@@ -5857,6 +5861,11 @@ ${approver}`;
     states,
     failClosed: () => failure !== null,
     isReady: () => readyNow,
+    onLogout: () => {
+      loggedOut = true;
+      link.stop();
+      engine.forget().catch((error) => console.error("[e2ee] couldn't remove this browser's keys", error));
+    },
     onCredentials: (path, body, response) => {
       const password = typeof body.password === "string" ? body.password : void 0;
       const next = typeof body.new_password === "string" ? body.new_password : void 0;
@@ -5991,7 +6000,6 @@ ${approver}`;
       targets.dispatcher.subscribe("LOGOUT", () => {
         loggedOut = true;
         link.stop();
-        engine.forget().catch((error) => console.error("[e2ee] couldn't remove this browser's keys", error));
       });
       targets.dispatcher.subscribe("CONNECTION_OPEN", (action) => {
         if (loggedOut) return location.reload();

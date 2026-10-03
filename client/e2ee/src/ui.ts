@@ -268,7 +268,7 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
     addEventListener(
         "keydown",
         (event) => {
-            if (event.key === "Escape" && document.querySelector("dialog.fe2ee-dialog[open]")) event.stopPropagation();
+            if (event.key === "Escape" && document.querySelector("dialog.fe2ee-dialog[open]:not([data-closing])")) event.stopPropagation();
         },
         true,
     );
