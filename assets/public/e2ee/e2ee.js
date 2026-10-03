@@ -5935,7 +5935,7 @@ ${approver}`;
       ui.refresh();
       if (engine.locked && !ui.unlockSnoozed()) ui.showUnlock();
     } catch (error) {
-      fail(`Self-test failed: ${error instanceof Error ? error.message : String(error)}`);
+      fail(`Self-test failed: ${errorText(error)}`);
     }
   };
   var startWhenReady = () => {

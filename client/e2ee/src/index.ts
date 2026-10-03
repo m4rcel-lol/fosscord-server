@@ -19,7 +19,7 @@
 import { createAttachments } from "./attachments";
 import { randomBytes, toB64u } from "./bytes";
 import { aesDecrypt, aesEncrypt, exportPublic, generateAgreementKey, generateSigningKey, hpkeOpen, hpkeSeal, sign, verify } from "./crypto";
-import { Api, Engine } from "./engine";
+import { Api, Engine, errorText } from "./engine";
 import { createHooks, MessageState } from "./hooks";
 import { createLink, LinkEvent } from "./link";
 import { createUi } from "./ui";
@@ -263,7 +263,7 @@ const start = async (userId: string) => {
         ui.refresh();
         if (engine.locked && !ui.unlockSnoozed()) ui.showUnlock();
     } catch (error) {
-        fail(`Self-test failed: ${error instanceof Error ? error.message : String(error)}`);
+        fail(`Self-test failed: ${errorText(error)}`);
     }
 };
 
