@@ -134,6 +134,7 @@ function toCatalogItem(item: StoreItem): CollectibleItem | null {
 function toProduct(item: StoreItem, catalogItem: CollectibleItem): CollectibleProduct {
     return {
         sku_id: item.id,
+        store_listing_id: item.id,
         name: item.name,
         summary: item.summary || DEFAULT_SUMMARIES[item.type],
         styles: STYLES,

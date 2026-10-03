@@ -27,7 +27,7 @@ import { green, bold } from "picocolors";
 import { SpacebarServer } from "@spacebar/api";
 import { CDNServer } from "@spacebar/cdn";
 import { initDatabase } from "@spacebar/database";
-import { GatewayServer } from "@spacebar/gateway";
+import { clearCallStateOnStartup, GatewayServer } from "@spacebar/gateway";
 import { Config } from "@spacebar/util";
 import { WebrtcServer } from "@spacebar/webrtc";
 import { ProcessLifecycle } from "../util/util/ProcessLifecycle";
@@ -85,6 +85,8 @@ async function main() {
 
     if (Config.get().client.useTestClient) app.get("/", (req, res) => res.redirect("/app"));
 
+    // before the port opens, since the gateway and voice sockets are served from the moment it does
+    await clearCallStateOnStartup();
     await new Promise((resolve) => void server.listen({ port }, () => resolve(undefined)));
     const httpsPort = Number(process.env.HTTPS_PORT) || port;
     if (process.env.TLS_CERT && process.env.TLS_KEY) {

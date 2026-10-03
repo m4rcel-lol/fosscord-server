@@ -21,4 +21,5 @@ export class ChannelLimits {
     maxTopic: number = 1024;
     maxWebhooks: number = 100;
     maxName: number = 100;
+    maxGroupDmRecipients: number = 25; // everyone in a group DM, its owner included
 }

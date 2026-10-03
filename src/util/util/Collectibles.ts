@@ -130,6 +130,8 @@ const parse = (raw: string, effectsRaw?: string): Catalog => {
             ]),
         );
         product.unpublished_at = null;
+        // the client keys its product list by listing id, so products without one (most of the mirror) collapse into one
+        product.store_listing_id ??= product.sku_id;
         product.premium_type = 2;
         product.hide_badge = true;
         if (!products.has(product.sku_id) || product.items?.some((x) => x.asset || x.effects)) products.set(product.sku_id, product);
@@ -229,6 +231,37 @@ const load = async (): Promise<Catalog> => {
 
 const listedSkus = (category: CollectibleCategory) => category.products.map((x) => x.sku_id);
 
+export type CollectibleSearchItemType = "AVATAR_DECORATION" | "PROFILE_EFFECT" | "NAMEPLATE" | "PROFILE_FRAME" | "BUNDLE";
+export interface CollectibleSearchOptions {
+    item_types?: string[];
+    search?: string;
+    sort_type?: string; // recency | popularity | relevance | alphabetical | price
+    sort_direction?: string; // asc | desc
+    offset?: number;
+    limit?: number;
+    first_party?: boolean; // false lists only collabs
+}
+
+const SEARCH_TYPES: Record<CollectibleSearchItemType, CollectibleItemType> = {
+    AVATAR_DECORATION: CollectibleItemType.AVATAR_DECORATION,
+    PROFILE_EFFECT: CollectibleItemType.PROFILE_EFFECT,
+    NAMEPLATE: CollectibleItemType.NAMEPLATE,
+    PROFILE_FRAME: CollectibleItemType.PROFILE_FRAME,
+    BUNDLE: CollectibleItemType.BUNDLE,
+};
+
+// what a product counts as for the shop's item type filter; a variants group counts as what its variants are
+const searchType = (product: CollectibleProduct): CollectibleItemType | undefined => {
+    if (product.type === CollectibleItemType.VARIANTS_GROUP) return product.variants?.[0]?.type;
+    return product.type in CollectibleItemType ? product.type : undefined;
+};
+
+const searchText = (product: CollectibleProduct, category: CollectibleCategory) =>
+    [product.name, product.summary, category.name, ...(product.items ?? []).flatMap((item) => [item.label, item.title, item.description])]
+        .filter((x): x is string => typeof x === "string")
+        .join(" ")
+        .toLowerCase();
+
 export const Collectibles = {
     get: () => (catalog ??= load()),
 
@@ -282,6 +315,56 @@ export const Collectibles = {
         if (product.type === CollectibleItemType.BUNDLE) return [product.sku_id, ...(product.bundled_products ?? []).map((x) => x.sku_id)];
         if (product.type === CollectibleItemType.VARIANTS_GROUP) return (product.variants ?? []).map((x) => x.sku_id);
         return [product.sku_id];
+    },
+
+    /** The shop's search and browse tabs: listed products filtered and sorted, as SKU ids the client looks up in what it loaded. */
+    async search(options: CollectibleSearchOptions) {
+        const wanted = new Set((options.item_types ?? []).flatMap((type) => (type in SEARCH_TYPES ? [SEARCH_TYPES[type as CollectibleSearchItemType]] : [])));
+        const terms = (options.search ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+        const seen = new Set<string>();
+        const found: { product: CollectibleProduct; order: number; score: number }[] = [];
+        for (const category of await Collectibles.categories())
+            for (const product of category.products) {
+                if (seen.has(product.sku_id)) continue;
+                seen.add(product.sku_id);
+                const type = searchType(product);
+                // only cosmetics: not nitro credit and the like
+                if (type === undefined || ![...Object.values(SEARCH_TYPES)].includes(type)) continue;
+                if (wanted.size && !wanted.has(type)) continue;
+                if (options.first_party === false && product.is_first_party !== false) continue;
+                let score = 0;
+                if (terms.length) {
+                    const text = searchText(product, category);
+                    if (!terms.every((term) => text.includes(term))) continue;
+                    const name = product.name.toLowerCase();
+                    score = terms.reduce((sum, term) => sum + (name === term ? 4 : name.startsWith(term) ? 3 : name.includes(term) ? 2 : 1), 0);
+                }
+                found.push({ product, order: found.length, score });
+            }
+
+        const direction = options.sort_direction === "asc" ? 1 : -1;
+        const byName = (a: CollectibleProduct, b: CollectibleProduct) => a.name.localeCompare(b.name);
+        const byRecency = (a: CollectibleProduct, b: CollectibleProduct) => (BigInt(a.sku_id) > BigInt(b.sku_id) ? 1 : BigInt(a.sku_id) < BigInt(b.sku_id) ? -1 : 0);
+        found.sort((a, b) => {
+            switch (options.sort_type) {
+                case "alphabetical":
+                case "price": // everything is free here, so price can only fall back to the name
+                    return direction * byName(a.product, b.product);
+                case "popularity": // no sales to count; the shop's own order stands in
+                    return -direction * (a.order - b.order);
+                case "relevance":
+                    return direction * (a.score - b.score) || -byRecency(a.product, b.product);
+                default:
+                    return direction * byRecency(a.product, b.product);
+            }
+        });
+
+        const offset = Math.max(0, options.offset ?? 0);
+        const limit = Math.min(Math.max(1, options.limit ?? 50), 200);
+        return {
+            skus: found.slice(offset, offset + limit).map((x) => x.product.sku_id),
+            pagination: { offset, limit, total: found.length, has_more: offset + limit < found.length },
+        };
     },
 
     async shop() {

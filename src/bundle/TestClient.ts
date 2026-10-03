@@ -228,6 +228,7 @@ const buildHtml = () => {
         INSTANCE_ICON: ${json(images.icon)},
         INSTANCE_LOGO: ${json(images.logo)},
         HELP_URL: ${json(helpUrl())},
+        GROUP_DM_RECIPIENT_LIMIT: ${json(Config.get().limits.channel.maxGroupDmRecipients)},
     });
 })();
 </script>`;
@@ -310,7 +311,7 @@ const renderPage = () => {
 export default function TestClient(app: Application) {
     if (!Config.get().client.useTestClient || !fs.existsSync(path.join(CACHE_PATH, "index.html"))) return;
 
-    const brandStamp = () => JSON.stringify([Config.get().client.instanceName, brandImageUrls(), helpUrl()]);
+    const brandStamp = () => JSON.stringify([Config.get().client.instanceName, brandImageUrls(), helpUrl(), Config.get().limits.channel.maxGroupDmRecipients]);
     let brand = brandStamp();
     let page = renderPage();
     let roots = clientRoots();

@@ -155,6 +155,12 @@ export async function subscribeToProducers(this: WebRtcWebSocket): Promise<void>
 
     const clients = mediaServer.getClientsForRtcServer<WebRtcWebSocket>(this.webRtcClient.voiceRoomId);
 
+    // a subscription made before this connection was up (everyone reconnects at once after a restart) missed the
+    // keyframes asked for then, and a screenshare encoder may not send another for a long time: ask again
+    for (const client of clients)
+        if (client.user_id !== this.user_id && client.isProducingVideo())
+            for (const delay of [250, 1000]) setTimeout(() => (client as { requestKeyframe?: () => void }).requestKeyframe?.(), delay);
+
     await Promise.all(
         Array.from(clients).map(async (client) => {
             let needsUpdate = false;

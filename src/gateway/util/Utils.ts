@@ -57,6 +57,24 @@ export function generateStreamKey(type: "guild" | "call", guildId: string | unde
     return streamKey;
 }
 
+let callStateCleanup: Promise<void> | undefined;
+
+/**
+ * Clears the voice states, Go Live streams, stage instances and open calls left by the last run. It runs once per process
+ * and has to finish before any client connects: clients reconnect within seconds of a restart and set up their voice
+ * states and streams again, and a wipe landing after that leaves people missing from calls and screenshares black.
+ */
+export function clearCallStateOnStartup() {
+    callStateCleanup ??= (async () => {
+        console.log("[Gateway] Clearing voice states, streams and calls left from the last run...");
+        await Promise.all([VoiceState.clear(), Stream.createQueryBuilder().delete().execute(), StageInstances.clear(), PrivateCalls.endStaleCalls()]).then(
+            () => console.log("[Gateway] Cleared voice states, streams and calls"),
+            (e) => console.error("[Gateway] Error clearing voice states, streams and calls on startup:", e),
+        );
+    })();
+    return callStateCleanup;
+}
+
 // Temporary cleanup function until shutdown cleanup function is fixed.
 // Currently when server is shut down the voice states are not cleared
 // TODO: remove this when Server.stop() is fixed so that it waits for all websocket connections to run their
@@ -75,17 +93,7 @@ export async function cleanupOnStartup(): Promise<void> {
     //	},
     //);
 
-    PrivateCalls.endStaleCalls().catch((e) => console.error("[Gateway] Error ending stale calls on startup:", e));
-    Stream.createQueryBuilder()
-        .delete()
-        .execute()
-        .catch((e) => console.error("[Gateway] Error clearing streams on startup:", e));
-    StageInstances.clear().catch((e) => console.error("[Gateway] Error clearing stage instances on startup:", e));
-
-    console.log("[Gateway] Starting async voice state wipe...");
-    VoiceState.clear()
-        .then(() => console.log("[Gateway] Successfully cleaned voice states"))
-        .catch((e) => console.error("[Gateway] Error cleaning voice states on startup:", e));
+    await clearCallStateOnStartup();
 
     const singleProcess = !process.env.EVENT_TRANSMISSION && !RabbitMQ.connection;
     console.log("[Gateway] Starting async presence expiry...");

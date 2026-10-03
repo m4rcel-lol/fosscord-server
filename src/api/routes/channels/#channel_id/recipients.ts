@@ -19,7 +19,7 @@
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
 import { Channel, Recipient, User } from "@spacebar/database";
-import { ChannelDeleteEvent, ChannelRecipientAddEvent, ChannelUpdateEvent, DiscordApiErrors, DmChannelDTO, emitEvent } from "@spacebar/util";
+import { ChannelDeleteEvent, ChannelRecipientAddEvent, ChannelUpdateEvent, Config, DiscordApiErrors, DmChannelDTO, emitEvent } from "@spacebar/util";
 import { ChannelType, MessageType, PublicUserProjection } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
@@ -125,7 +125,8 @@ router.put(
             if (channel.recipients?.map((r) => r.user_id).includes(user_id)) {
                 throw DiscordApiErrors.INVALID_RECIPIENT; //TODO is this the right error?
             }
-            if ((channel.recipients?.length ?? 0) >= 10) throw DiscordApiErrors.MAXIMUM_NUMBER_OF_RECIPIENTS_REACHED.withDefaultParams();
+            if ((channel.recipients?.length ?? 0) >= Config.get().limits.channel.maxGroupDmRecipients)
+                throw DiscordApiErrors.MAXIMUM_NUMBER_OF_RECIPIENTS_REACHED.withDefaultParams();
 
             channel.recipients?.push(Recipient.create({ channel_id: channel_id, user_id: user_id }));
             await channel.save();

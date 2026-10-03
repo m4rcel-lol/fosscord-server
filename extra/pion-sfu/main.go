@@ -630,16 +630,11 @@ func main() {
 		go func() {
 			ipcConn.handleConnection()
 
-			// when the connection finishes (Node disconnects/crashes),
-			// set the connection to nil so a new connection can be accepted.
-			ipcConn.mu.Lock()
-			ipcConn.conn = nil
-			ipcConn.mu.Unlock()
-
 			log.Println("Node.js client disconnected")
 
-			// clean up all peers when the nodejs client disconnects
-			// todo: or should we just let them continue in case theres a problem with our signaling node process
+			// clean up all peers when the nodejs client disconnects: they belong to the process that went away.
+			// This happens before a new connection is accepted, or the next process's first peers (people
+			// reconnecting right after a restart) would be cleaned up along with the old ones
 			sfu.mu.RLock()
 			peerIDs := make([]string, 0, len(sfu.peers))
 			for id := range sfu.peers {
@@ -652,6 +647,11 @@ func main() {
 					cleanupPeer(p)
 				}
 			}
+
+			// now a new connection can be accepted
+			ipcConn.mu.Lock()
+			ipcConn.conn = nil
+			ipcConn.mu.Unlock()
 		}()
 	}
 }
