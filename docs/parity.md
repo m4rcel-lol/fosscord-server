@@ -113,12 +113,12 @@ Each feature has one of four marks:
 
 ## Threads, forums and media channels
 
-| Feature                                           | Status      | Notes                                                                            |
-| ------------------------------------------------- | ----------- | -------------------------------------------------------------------------------- |
-| Threads from messages, private threads, archiving | working     |                                                                                  |
-| Forum channels with tags                          | working     | Fixed in this pass: bots can pass `available_tags` when they create the channel. |
-| Media channels                                    | working     |                                                                                  |
-| Connected thread sidebar                          | not started | Behind the `2026-09-connected-thread-sidebar` experiment, which stays off.       |
+| Feature                                           | Status  | Notes                                                                                                                                                                                                                                              |
+| ------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Threads from messages, private threads, archiving | working |                                                                                                                                                                                                                                                    |
+| Forum channels with tags                          | working | Fixed in this pass: bots can pass `available_tags` when they create the channel.                                                                                                                                                                   |
+| Media channels                                    | working |                                                                                                                                                                                                                                                    |
+| Connected thread sidebar                          | working | The `2026-09-connected-thread-sidebar` experiment is on. It only changes the client layout, so a thread or forum post opened beside the channel is drawn joined to the chat instead of as a separate floating panel. The server needed no changes. |
 
 ## Servers
 
