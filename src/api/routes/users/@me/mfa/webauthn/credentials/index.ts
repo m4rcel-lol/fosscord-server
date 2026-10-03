@@ -32,7 +32,7 @@ import {
     signTicket,
     verifyAttestation,
 } from "@spacebar/api/util";
-import { SecurityKey, User } from "@spacebar/database";
+import { BackupCode, SecurityKey, User } from "@spacebar/database";
 
 export const serializeAuthenticator = (key: SecurityKey) => ({
     id: key.id,
@@ -81,7 +81,8 @@ router.post("/", route({}), async (req: Request, res: Response) => {
     await key.save();
     await User.update({ id: req.user_id }, { webauthn_enabled: true, mfa_enabled: true });
 
-    const backup_codes = firstAuthenticator ? serializeBackupCodes(req.user_id, await freshBackupCodes(req.user_id)) : undefined;
+    const existing = firstAuthenticator ? [] : await BackupCode.find({ where: { user: { id: req.user_id }, expired: false } });
+    const backup_codes = serializeBackupCodes(req.user_id, existing.length ? existing : await freshBackupCodes(req.user_id));
     await emitUserUpdate(req.user_id);
     await emitUserEvent(req.user_id, "AUTHENTICATOR_CREATE", serializeAuthenticator(key));
 
