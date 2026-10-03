@@ -3921,6 +3921,9 @@
                             "type": "string"
                         }
                     },
+                    "channels_version": {
+                        "type": "string"
+                    },
                     "discovery_weight": {
                         "type": "integer"
                     },
@@ -4056,6 +4059,7 @@
                     "bans",
                     "channel_ordering",
                     "channels",
+                    "channels_version",
                     "clean_data",
                     "discovery_excluded",
                     "discovery_weight",
@@ -12437,6 +12441,9 @@
                     "name": {
                         "type": "string"
                     },
+                    "version": {
+                        "type": "string"
+                    },
                     "icon": {
                         "type": "string",
                         "nullable": true
@@ -12637,7 +12644,8 @@
                     "owner",
                     "parent_id",
                     "position",
-                    "type"
+                    "type",
+                    "version"
                 ]
             },
             "Recipient": {
@@ -14350,6 +14358,9 @@
                             "type": "string"
                         }
                     },
+                    "channels_version": {
+                        "type": "string"
+                    },
                     "discovery_weight": {
                         "type": "integer",
                         "default": 0
@@ -14457,6 +14468,7 @@
                     "bans",
                     "channel_ordering",
                     "channels",
+                    "channels_version",
                     "discovery_excluded",
                     "discovery_weight",
                     "emojis",
@@ -14573,6 +14585,9 @@
                     "flags": {
                         "type": "integer"
                     },
+                    "version": {
+                        "type": "string"
+                    },
                     "colors": {
                         "$ref": "#/components/schemas/RoleColors"
                     },
@@ -14592,7 +14607,8 @@
                     "mentionable",
                     "name",
                     "permissions",
-                    "position"
+                    "position",
+                    "version"
                 ]
             },
             "RoleColors": {
@@ -14716,6 +14732,9 @@
                     "name": {
                         "type": "string"
                     },
+                    "version": {
+                        "type": "string"
+                    },
                     "require_colons": {
                         "type": "boolean"
                     },
@@ -14749,7 +14768,8 @@
                     "require_colons",
                     "roles",
                     "user",
-                    "user_id"
+                    "user_id",
+                    "version"
                 ]
             },
             "Application": {
@@ -15022,6 +15042,9 @@
                     "name": {
                         "type": "string"
                     },
+                    "version": {
+                        "type": "string"
+                    },
                     "description": {
                         "type": "string"
                     },
@@ -15067,7 +15090,8 @@
                     "id",
                     "name",
                     "pack",
-                    "type"
+                    "type",
+                    "version"
                 ]
             },
             "StickerPack": {
