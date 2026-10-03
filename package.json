@@ -97,7 +97,7 @@
         "chalk": "^6.0.0",
         "cheerio": "^1.2.0",
         "cookie-parser": "^1.4.7",
-        "discord-protos": "^1.2.311",
+        "discord-protos": "^1.2.362",
         "dotenv": "^17.4.2",
         "email-providers": "^2.25.0",
         "exif-be-gone": "^1.5.1",

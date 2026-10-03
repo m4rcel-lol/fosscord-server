@@ -29,6 +29,19 @@ import { profileApplication } from "@spacebar/api/util/handlers/Application";
 const router: Router = Router({ mergeParams: true });
 
 const PREMIUM_BADGE_ICON = "2ba85e8026a8614b640c2837bcdfe21b";
+const PREMIUM_TENURE_MONTHS = [72, 60, 36, 24, 12, 6, 3, 1];
+
+const premiumBadge = (since: Date) => {
+    const now = new Date();
+    const months = (now.getUTCFullYear() - since.getUTCFullYear()) * 12 + now.getUTCMonth() - since.getUTCMonth() - (now.getUTCDate() < since.getUTCDate() ? 1 : 0);
+    const tier = PREMIUM_TENURE_MONTHS.find((x) => months >= x);
+    const id = tier ? `premium_tenure_${tier}_month_v2` : "premium";
+    return {
+        id,
+        description: `Subscriber since ${since.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}`,
+        icon: tier ? id : PREMIUM_BADGE_ICON,
+    };
+};
 
 router.get("/", route({ responses: { 200: { body: "UserProfileResponse" } } }), async (req: Request, res: Response) => {
     if (req.params.user_id === "@me") req.params.user_id = req.user_id;
@@ -92,12 +105,7 @@ router.get("/", route({ responses: { 200: { body: "UserProfileResponse" } } }), 
         : null;
 
     const badges = [];
-    if (user.premium_type > 0 && user.premium_since && !user.hide_premium_badge)
-        badges.push({
-            id: "premium",
-            description: `Subscriber since ${new Date(user.premium_since).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`,
-            icon: PREMIUM_BADGE_ICON,
-        });
+    if (user.premium_type > 0 && !user.hide_premium_badge) badges.push(premiumBadge(new Date(user.created_at)));
     if (user.badge_ids?.length) badges.push(...(await Badge.find({ where: { id: In(user.badge_ids) } })));
 
     const connected_accounts: PartialConnectedAccountResponse[] = user.connected_accounts
@@ -113,7 +121,7 @@ router.get("/", route({ responses: { 200: { body: "UserProfileResponse" } } }), 
     res.json({
         user: { ...user.toPartialUser(), bio: user.bio ?? "" },
         connected_accounts,
-        premium_since: user.premium_type > 0 ? user.premium_since : null,
+        premium_since: user.premium_type > 0 ? user.created_at : null,
         premium_type: user.premium_type,
         premium_guild_since: premium_guild_since ? new Date(Number(premium_guild_since)) : null,
         profile_themes_experiment_bucket: 4,
