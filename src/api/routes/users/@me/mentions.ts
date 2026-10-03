@@ -19,8 +19,9 @@
 import { Request, Response, Router } from "express";
 import { In } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
-import { Message, Member, Channel, Attachment } from "@spacebar/database";
-import { Snowflake, Permissions, NewUrlUserSignatureData, FieldErrors } from "@spacebar/util";
+import { Message, Member, Channel, Attachment, MentionDismissal, ThreadMember } from "@spacebar/database";
+import { Snowflake, Permissions, NewUrlUserSignatureData, FieldErrors, emitEvent, RecentMentionDeleteEvent, DiscordApiErrors } from "@spacebar/util";
+import { ChannelType } from "@spacebar/schemas";
 import { Stopwatch } from "@spacebar/extensions";
 
 const router: Router = Router({ mergeParams: true });
@@ -73,15 +74,23 @@ router.get(
             where: {
                 guild_id: In(memberships.map((m) => m.guild_id)),
             },
-            select: { id: true, guild_id: true, permission_overwrites: true },
+            select: { id: true, guild_id: true, permission_overwrites: true, parent_id: true, type: true },
         });
+        const byId = new Map(channels.map((c) => [c.id, c]));
+        const privateThreads = channels.filter((c) => c.type === ChannelType.GUILD_PRIVATE_THREAD).map((c) => c.id);
+        const joinedPrivateThreads = new Set(
+            privateThreads.length ? (await ThreadMember.find({ where: { id: In(privateThreads), user_id: req.user_id }, select: { id: true } })).map((m) => m.id) : [],
+        );
 
         const visibleChannels = channels.filter((c) => {
+            if (c.type === ChannelType.GUILD_PRIVATE_THREAD && !joinedPrivateThreads.has(c.id)) return false;
             const member = memberships.find((m) => m.guild_id === c.guild_id)!;
+            const source =
+                c.parent_id && [ChannelType.GUILD_PUBLIC_THREAD, ChannelType.GUILD_PRIVATE_THREAD, ChannelType.GUILD_NEWS_THREAD].includes(c.type) ? byId.get(c.parent_id) : c;
             return Permissions.finalPermission({
                 user: { id: member.id, roles: member.roles.map((r) => r.id), communication_disabled_until: member.communication_disabled_until, flags: 0 },
                 guild: { id: member.guild.id, owner_id: member.guild.owner_id!, roles: member.roles },
-                channel: c,
+                channel: { overwrites: source?.permission_overwrites ?? [] },
             }).has("VIEW_CHANNEL");
         });
 
@@ -96,13 +105,13 @@ router.get(
                   await Message.getRepository().query(
                       `SELECT id FROM (
                           (SELECT m.id FROM message_user_mentions u JOIN messages m ON m.id = u.message_id
-                           WHERE u.user_id = $1 AND m.channel_id = ANY($2::bigint[]) AND ($3::bigint IS NULL OR u.message_id < $3) ORDER BY u.message_id DESC LIMIT $4)
+                           WHERE u.user_id = $1 AND m.channel_id = ANY($2::bigint[]) AND ($3::bigint IS NULL OR u.message_id < $3) AND m.author_id IS DISTINCT FROM $1 ORDER BY u.message_id DESC LIMIT $4)
                           UNION
-                          (SELECT id FROM messages WHERE $5 AND mention_everyone AND channel_id = ANY($2::bigint[]) AND ($3::bigint IS NULL OR id < $3) ORDER BY id DESC LIMIT $4)
+                          (SELECT id FROM messages WHERE $5 AND mention_everyone AND channel_id = ANY($2::bigint[]) AND ($3::bigint IS NULL OR id < $3) AND author_id IS DISTINCT FROM $1 ORDER BY id DESC LIMIT $4)
                           UNION
                           (SELECT m.id FROM message_role_mentions r JOIN messages m ON m.id = r.message_id
-                           WHERE $6 AND r.role_id = ANY($7::bigint[]) AND m.channel_id = ANY($2::bigint[]) AND ($3::bigint IS NULL OR r.message_id < $3) ORDER BY r.message_id DESC LIMIT $4)
-                      ) mentioned ORDER BY id DESC LIMIT $4`,
+                           WHERE $6 AND r.role_id = ANY($7::bigint[]) AND m.channel_id = ANY($2::bigint[]) AND ($3::bigint IS NULL OR r.message_id < $3) AND m.author_id IS DISTINCT FROM $1 ORDER BY r.message_id DESC LIMIT $4)
+                      ) mentioned WHERE NOT EXISTS (SELECT 1 FROM mention_dismissals d WHERE d.user_id = $1 AND d.message_id = mentioned.id) ORDER BY id DESC LIMIT $4`,
                       [user.id, visibleChannelIds, before ?? null, limit, everyone, roles, ownedMentionableRoleIds],
                   )
               ).map((row: { id: string }) => `${row.id}`)
@@ -152,6 +161,25 @@ router.get(
         console.log(`[Inbox/mentions] User ${user.id} fetched full message data for ${finalMessages.length} messages in ${sw.elapsed().totalMilliseconds}ms`);
 
         return res.json(finalMessages);
+    },
+);
+
+router.delete(
+    "/:message_id",
+    route({
+        responses: {
+            204: {},
+            404: {
+                body: "APIErrorResponse",
+            },
+        },
+    }),
+    async (req: Request, res: Response) => {
+        const message_id = req.params.message_id as string;
+        if (!(await Message.existsBy({ id: message_id }))) throw DiscordApiErrors.UNKNOWN_MESSAGE;
+        await MentionDismissal.createQueryBuilder().insert().values({ user_id: req.user_id, message_id }).orIgnore().execute();
+        await emitEvent({ event: "RECENT_MENTION_DELETE", user_id: req.user_id, data: { message_id } } satisfies RecentMentionDeleteEvent);
+        return res.sendStatus(204);
     },
 );
 

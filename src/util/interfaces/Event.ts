@@ -655,6 +655,13 @@ export interface MessageAckEvent extends Event {
     };
 }
 
+export interface RecentMentionDeleteEvent extends Event {
+    event: "RECENT_MENTION_DELETE";
+    data: {
+        message_id: string;
+    };
+}
+
 export interface RelationshipAddEvent extends Event {
     event: "RELATIONSHIP_ADD";
     data: RelationshipSchema & {
@@ -988,6 +995,7 @@ export type EVENT =
     | "APPLICATION_COMMAND_UPDATE"
     | "APPLICATION_COMMAND_DELETE"
     | "MESSAGE_ACK"
+    | "RECENT_MENTION_DELETE"
     | "RELATIONSHIP_ADD"
     | "RELATIONSHIP_REMOVE"
     | "RELATIONSHIP_UPDATE"
