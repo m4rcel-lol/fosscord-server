@@ -295,10 +295,12 @@ async function subscribeMemberList(socket: WebSocket, guild_id: string, channel:
         if (!guildLists.has(guild_id)) guildLists.set(guild_id, new Set());
         guildLists.get(guild_id)!.add(key);
     }
+    const watched = liveSubscribers(state).some((x) => x !== socket);
     socket.member_lists ??= {};
     socket.member_lists[guild_id] = { channel_id: channel.id, ranges, key };
     state.subscribers.add(socket);
-    const list = state.list ?? (await rebuild(state));
+    if (!watched) state.stale = "members";
+    const list = (watched && state.list) || (await rebuild(state));
     if (socket.readyState !== 1 || socket.member_lists[guild_id]?.key !== key) return;
     await sendListUpdate(socket, list, syncOps(list, ranges));
 }

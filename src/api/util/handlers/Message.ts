@@ -546,6 +546,7 @@ export async function handleMessage(opts: MessageOptions, known: { channel?: Cha
                     throw new HTTPError("Referenced message not found in the specified channel", 404);
                 if (referenced) message.referenced_message = referenced;
                 else message.message_reference = undefined;
+                if (referenced && opts.type === MessageType.THREAD_STARTER_MESSAGE) await Message.fillReplies([referenced]);
             }
             if (
                 message.message_reference &&
@@ -909,19 +910,14 @@ async function handleMessageMentionsAsync(message: Message, allowed?: AllowedMen
                       },
                   });
         if (referencedMessage && referencedMessage.author_id !== message.author_id && allowed?.replied_user !== false) {
-            const author =
+            const repliedUser =
                 referencedMessage.author?.id === referencedMessage.author_id ? referencedMessage.author : await User.findOne({ where: { id: referencedMessage.author_id } });
-            message.mentions.push(
-                // @ts-expect-error it does not like the .toPublicUser() lol
-                author!.toPublicUser(),
-            );
+            if (repliedUser) message.mentions.push(repliedUser);
         }
 
         if (message.embeds[0]?.type === EmbedType.poll_result) {
-            message.mentions.push(
-                // @ts-expect-error it does not like the .toPublicUser() lol
-                (await User.findOne({ where: { id: message.author_id } }))!.toPublicUser(),
-            );
+            const author = await User.findOne({ where: { id: message.author_id } });
+            if (author) message.mentions.push(author);
         }
         trace.calls.push("handleMessageReference", { micros: sw.getElapsedAndReset().totalMicroseconds });
     }

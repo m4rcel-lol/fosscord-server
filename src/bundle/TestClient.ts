@@ -222,6 +222,7 @@ const buildHtml = () => {
         RTC_LATENCY_ENDPOINT: \`//\${host}/rtc\`,
         MIGRATION_SOURCE_ORIGIN: location.origin,
         MIGRATION_DESTINATION_ORIGIN: location.origin,
+        WEBAUTHN_ORIGIN: location.hostname,
         ACTIVITY_APPLICATION_HOST: ${json(client.activityApplicationHost ?? "")} || \`//\${host}\`,
         INSTANCE_NAME: ${json(client.instanceName)},
         INSTANCE_ICON: ${json(images.icon)},
@@ -260,6 +261,7 @@ const buildHtml = () => {
         .replace(envMatch[0], `${env}\n${vencord}\n${patches}`)
         .replace(/<script[^>]*>[^<]*__CF\$cv\$params[\s\S]*?<\/script>/, "")
         .replace(/<script[^>]*src="\/assets\/sentry\.[0-9a-f]+\.js"[^>]*><\/script>\s*/g, "")
+        .replace(/<link[^>]*href="\/assets\/sentry\.[0-9a-f]+\.js"[^>]*>\s*/g, "")
         .replace(/ nonce="[^"]*"/g, "")
         .replace(/<link rel="preconnect"[^>]*>\s*/g, "")
         .replace(/<!-- section:seometa -->[\s\S]*?<!-- endsection -->/, "")

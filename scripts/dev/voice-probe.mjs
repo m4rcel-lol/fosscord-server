@@ -31,7 +31,7 @@ const users = {
     friend: { login: "friend@fosscord.test", password: accounts.FRIEND_PASSWORD },
 };
 const call = async (token, method, path, body) =>
-    fetch(`${api}${path}`, { method, headers: { "content-type": "application/json", authorization: token }, body: body && JSON.stringify(body) }).then((r) => r.json());
+    fetch(`${api}${path}`, { method, headers: { "content-type": "application/json", ...(token && { authorization: token }) }, body: body && JSON.stringify(body) }).then((r) => r.json());
 const tokens = Object.fromEntries(await Promise.all(Object.entries(users).map(async ([name, body]) => [name, (await call(undefined, "POST", "/auth/login", body)).token])));
 
 const friendGuilds = new Set((await call(tokens.friend, "GET", "/users/@me/guilds")).map((g) => g.id));
