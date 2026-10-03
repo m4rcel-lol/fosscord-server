@@ -22573,23 +22573,6 @@
                 ]
             }
         },
-        "/api/users/@me/virtual-currency/balance": {
-            "get": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "responses": {
-                    "default": {
-                        "description": "No description available"
-                    }
-                },
-                "tags": [
-                    "api"
-                ]
-            }
-        },
         "/api/users/@me/virtual-currency/balance/": {
             "get": {
                 "security": [
@@ -27263,86 +27246,6 @@
                         "description": "No description available"
                     }
                 },
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/stage-instances/{channel_id}": {
-            "get": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "responses": {
-                    "default": {
-                        "description": "No description available"
-                    }
-                },
-                "parameters": [
-                    {
-                        "name": "channel_id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "channel_id"
-                    }
-                ],
-                "tags": [
-                    "api"
-                ]
-            },
-            "patch": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "responses": {
-                    "default": {
-                        "description": "No description available"
-                    }
-                },
-                "parameters": [
-                    {
-                        "name": "channel_id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "channel_id"
-                    }
-                ],
-                "tags": [
-                    "api"
-                ]
-            },
-            "delete": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "responses": {
-                    "default": {
-                        "description": "No description available"
-                    }
-                },
-                "parameters": [
-                    {
-                        "name": "channel_id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "channel_id"
-                    }
-                ],
                 "tags": [
                     "api"
                 ]
@@ -37594,6 +37497,23 @@
                 ]
             }
         },
+        "/api/collectibles-categories/v2/": {
+            "get": {
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "default": {
+                        "description": "No description available"
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            }
+        },
         "/api/collectibles-categories/": {
             "get": {
                 "security": [
@@ -37611,23 +37531,6 @@
                                 }
                             }
                         }
-                    }
-                },
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/collectibles-categories/v2/": {
-            "get": {
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "responses": {
-                    "default": {
-                        "description": "No description available"
                     }
                 },
                 "tags": [
@@ -41479,90 +41382,6 @@
                 "responses": {
                     "default": {
                         "description": "No description available"
-                    }
-                },
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/auth/mfa/webauthn/": {
-            "post": {
-                "security": [
-                    {}
-                ],
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/WebAuthnTotpSchema"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/TokenResponse"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/APIErrorResponse"
-                                }
-                            }
-                        }
-                    }
-                },
-                "tags": [
-                    "api"
-                ]
-            }
-        },
-        "/api/auth/mfa/totp/": {
-            "post": {
-                "security": [
-                    {}
-                ],
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/TotpSchema"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/TokenResponse"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/APIErrorResponse"
-                                }
-                            }
-                        }
                     }
                 },
                 "tags": [
