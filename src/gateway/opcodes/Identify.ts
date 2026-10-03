@@ -18,7 +18,7 @@
 
 import { In } from "typeorm";
 import { PreloadedUserSettings } from "discord-protos";
-import { Capabilities, CLOSECODES, getGuildCache, OPCODES, Payload, resumableSockets, Send, setupListener, WebSocket } from "@spacebar/gateway";
+import { Capabilities, CLOSECODES, genSessionId, getGuildCache, OPCODES, Payload, Send, setupListener, WebSocket } from "@spacebar/gateway";
 import { arrayGroupBy, ElapsedTime, Stopwatch, timeFunction, timePromise } from "@spacebar/extensions";
 import {
     getDatabase,
@@ -207,17 +207,8 @@ export async function onIdentify(this: WebSocket, data: Payload) {
             "opt for token refresh.",
         );
 
-    this.session_id = session.session_id;
+    this.session_id = genSessionId();
     this.session = session;
-
-    const heldSocket = resumableSockets.get(this.session_id);
-    if (heldSocket) {
-        resumableSockets.delete(this.session_id);
-        clearTimeout(heldSocket.resumeTimer);
-        heldSocket.resumeBuffer = undefined;
-        heldSocket.replayBuffer = undefined;
-        heldSocket.listenerCleanup?.().catch((e) => console.error(`[Gateway/${this.user_id}] listener cleanup failed`, e));
-    }
 
     this.pendingDispatches = [];
     this.isBot = !!user.bot;
@@ -255,7 +246,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
         { result: members, elapsed: membersQueryTime },
         { result: recipients, elapsed: recipientsQueryTime },
     ] = await Promise.all([
-        timePromise(() => getConnectedSessions(this.user_id).then((x) => x.filter((s) => s.session_id !== this.session_id))),
+        timePromise(() => getConnectedSessions(this.user_id).then((x) => x.filter((s) => s.session_id !== session.session_id))),
         timePromise(() =>
             Relationship.find({
                 where: { from_id: this.user_id },
@@ -664,6 +655,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     const appendRelationshipsTime = taskSw.getElapsedAndReset();
 
     const allSessions = sessions.concat(this.session!).map((x) => x.toPrivateGatewayDeviceInfo());
+    const ownSessions = allSessions.map((x) => (x.session_id === session.session_id ? { ...x, session_id: this.session_id } : x));
     const findAndGenerateSessionReplaceTime = taskSw.getElapsedAndReset();
 
     const { elapsed: emitSessionsReplaceTime } = await timePromise(() =>
@@ -748,7 +740,7 @@ export async function onIdentify(this: WebSocket, data: Payload) {
                 country_code: this.session?.last_seen_location_info?.country_code ?? (user.settings?.locale?.split("-")[1] || "US").toUpperCase(),
                 users: Array.from(users.values()),
                 merged_members: merged_members,
-                sessions: allSessions,
+                sessions: ownSessions,
 
                 resume_gateway_url: Config.get().gateway.endpointPublic!,
 
@@ -870,8 +862,8 @@ export async function onIdentify(this: WebSocket, data: Payload) {
     await listenerPromise;
 
     if (this.readyState !== this.OPEN) {
-        if (!openConnections.some((x) => x !== this && x.session_id === this.session_id && x.user_id === this.user_id)) {
-            await Session.update({ user_id: this.user_id, session_id: this.session_id }, { status: "offline", activities: [], client_status: {} });
+        if (!openConnections.some((x) => x !== this && x.session?.session_id === session.session_id && x.user_id === this.user_id)) {
+            await Session.update({ user_id: this.user_id, session_id: session.session_id }, { status: "offline", activities: [], client_status: {} });
             await emitSessionsReplace(this.user_id);
             await broadcastPresence(this.user_id);
         }

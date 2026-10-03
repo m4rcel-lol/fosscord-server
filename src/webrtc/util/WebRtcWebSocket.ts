@@ -18,7 +18,7 @@ export interface WebRtcWebSocket extends WebSocket {
     sessionEnded?: boolean;
     resumeTimer?: NodeJS.Timeout;
     lastActivity?: number;
-    speaking?: boolean;
+    speaking?: number;
     moderation?: VoiceModeration;
 }
 

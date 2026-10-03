@@ -202,6 +202,9 @@ export async function subscribeToProducers(this: WebRtcWebSocket): Promise<void>
                     ],
                 } as VoiceVideoSchema,
             });
+            const { speaking, moderation } = client.websocket;
+            if (speaking && !moderation?.mute && ssrcs.audio_ssrc)
+                await Send(this, { op: VoiceOPCodes.SPEAKING, d: { user_id: client.user_id, speaking, ssrc: ssrcs.audio_ssrc } });
         }),
     );
 }

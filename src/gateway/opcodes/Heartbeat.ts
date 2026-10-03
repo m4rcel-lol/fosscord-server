@@ -43,7 +43,8 @@ export async function onHeartbeat(this: WebSocket, data: Payload) {
     }
 
     await Send(this, { op: 11, d: {} });
-    Session.update({ session_id: this.session_id!, user_id: this.user_id } as FindOptionsWhere<Session>, { last_seen: new Date() }).catch((e) =>
-        console.error(`[Gateway/${this.user_id}] failed to record heartbeat`, e),
-    );
+    if (this.session)
+        Session.update({ session_id: this.session.session_id, user_id: this.user_id } as FindOptionsWhere<Session>, { last_seen: new Date() }).catch((e) =>
+            console.error(`[Gateway/${this.user_id}] failed to record heartbeat`, e),
+        );
 }

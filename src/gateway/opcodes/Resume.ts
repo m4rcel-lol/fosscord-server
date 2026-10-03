@@ -70,11 +70,11 @@ export async function onResume(this: WebSocket, { d }: Payload) {
     for (const payload of missed) await Send(this, payload);
     await Send(this, { op: OPCODES.Dispatch, t: "RESUMED", s: this.sequence++, d: {} });
 
-    const stored = await Session.findOne({ where: { session_id: this.session_id }, select: { session_id: true, status: true } });
     if (this.session) {
+        const stored = await Session.findOne({ where: { session_id: this.session.session_id }, select: { session_id: true, status: true } });
         this.session.last_seen = new Date();
         await Session.update(
-            { session_id: this.session_id },
+            { session_id: this.session.session_id },
             { last_seen: this.session.last_seen, status: this.session.status, activities: this.session.activities, client_status: this.session.client_status },
         );
         if (stored?.status === "offline" && this.session.status !== "offline") await broadcastPresence(this.user_id);

@@ -122,6 +122,8 @@ export async function setupListener(this: WebSocket) {
 
         this.events[this.user_id] = await listenEvent(this.user_id, consumer, opts);
         this.events[this.session_id] = await listenEvent(this.session_id, consumer, opts);
+        const authSessionId = this.session?.session_id;
+        if (authSessionId && authSessionId !== this.session_id) this.events[authSessionId] = await listenEvent(authSessionId, consumer, opts);
 
         await Promise.all([
             ...friendIds.map(async (id) => {
@@ -255,7 +257,7 @@ async function consume(this: WebSocket, opts: EventOpts): Promise<void> {
         case "CHANNEL_DELETE":
         case "GUILD_DELETE": {
             const target = typeof data?.id === "string" ? data.id : id;
-            if (target !== this.user_id && target !== this.session_id) {
+            if (target !== this.user_id && target !== this.session_id && target !== this.session?.session_id) {
                 this.events[target]?.();
                 delete this.events[target];
             }
@@ -433,10 +435,14 @@ async function consume(this: WebSocket, opts: EventOpts): Promise<void> {
         }
     }
 
+    const authSessionId = this.session?.session_id;
     await Send(this, {
         op: OPCODES.Dispatch,
         t: event,
-        d: data,
+        d:
+            event === "SESSIONS_REPLACE" && Array.isArray(data)
+                ? data.map((x: { session_id?: string }) => (x?.session_id === authSessionId ? { ...x, session_id: this.session_id } : x))
+                : data,
         s: this.sequence++,
     });
 
