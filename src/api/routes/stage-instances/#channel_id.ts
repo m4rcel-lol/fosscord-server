@@ -18,7 +18,7 @@
 
 import { Request, Response, Router } from "express";
 import { route } from "@spacebar/api/middlewares";
-import { StageInstances } from "@spacebar/database";
+import { StageInstances, VoiceChannels } from "@spacebar/database";
 import { DiscordApiErrors } from "@spacebar/util";
 import { stageModerator } from "./index";
 
@@ -48,8 +48,9 @@ router.patch("/", route({ responses: { 200: {}, 400: {}, 403: {}, 404: {} } }), 
 router.delete("/", route({ responses: { 204: {}, 403: {}, 404: {} } }), async (req: Request, res: Response) => {
     const { moderator } = await stageModerator(req.user_id, req.params.channel_id as string);
     if (!moderator) throw DiscordApiErrors.MISSING_PERMISSIONS.withParams("MANAGE_CHANNELS");
-    await instanceFor(req);
+    const { guild_id } = await instanceFor(req);
     await StageInstances.delete(req.params.channel_id as string);
+    await VoiceChannels.evict(guild_id, req.params.channel_id as string);
     res.sendStatus(204);
 });
 

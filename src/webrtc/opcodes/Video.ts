@@ -21,6 +21,8 @@ import { mediaServer, Send, VoiceOPCodes, VoicePayload, WebRtcWebSocket } from "
 import type { WebRtcClient } from "@spacebarchat/spacebar-webrtc-types";
 import { validateSchema, VoiceVideoSchema } from "@spacebar/schemas";
 
+const pendingVideo = new WeakMap<WebRtcClient<WebRtcWebSocket>, VoicePayload>();
+
 export async function onVideo(this: WebRtcWebSocket, payload: VoicePayload) {
     if (!this.webRtcClient) return;
 
@@ -47,28 +49,19 @@ export async function onVideo(this: WebRtcWebSocket, payload: VoicePayload) {
     const wantsToProduceAudio = d.audio_ssrc !== 0;
     const wantsToProduceVideo = d.video_ssrc !== 0 && stream?.active;
 
-    // this is to handle a really weird case where the client sends audio info before the
-    // dtls ice connection is completely connected. Wait for connection for 3 seconds
-    // and if no connection, just ignore this message
     if (!this.webRtcClient.webrtcConnected) {
-        if (wantsToProduceAudio) {
-            try {
-                await Promise.race([
-                    new Promise<void>((resolve, _) => {
-                        this.webRtcClient?.emitter.once("connected", () => resolve());
-                    }),
-                    new Promise<void>((resolve, reject) => {
-                        // Reject after 3 seconds if still not connected
-                        setTimeout(() => {
-                            if (this.webRtcClient?.webrtcConnected) resolve();
-                            else reject();
-                        }, 3000);
-                    }),
-                ]);
-            } catch (e) {
-                return; // just ignore this message if client didn't connect within 3 seconds
-            }
-        } else return;
+        if (!wantsToProduceAudio) return;
+        const client = this.webRtcClient;
+        const waiting = pendingVideo.has(client);
+        pendingVideo.set(client, payload);
+        if (waiting) return;
+        client.emitter.once("connected", () => {
+            const latest = pendingVideo.get(client);
+            pendingVideo.delete(client);
+            if (latest && this.webRtcClient === client)
+                onVideo.call(this, latest).catch((error) => console.error(`[WebRTC] ${this.user_id} could not apply a queued video payload`, error));
+        });
+        return;
     }
 
     await Send(this, { op: VoiceOPCodes.MEDIA_SINK_WANTS, d: { any: 100 } });

@@ -71,8 +71,8 @@ router.post(
             const last = thread.last_message_id ? byId.get(thread.last_message_id) : undefined;
             objRet.threads[thread.id] = {
                 owner: owner ? { ...owner.toPublicMember(), roles: owner.roles.filter((r) => r.id !== guild_id).map((r) => r.id) } : null,
-                first_message: byId.get(thread.id)?.toJSON() ?? null,
-                most_recent_message: last && last.id !== thread.id ? last.toJSON() : null,
+                first_message: byId.get(thread.id)?.toPublicJSON(req.user_id) ?? null,
+                most_recent_message: last && last.id !== thread.id ? last.toPublicJSON(req.user_id) : null,
             };
         }
         return res.json(objRet);
