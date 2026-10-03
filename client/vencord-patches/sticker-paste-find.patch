@@ -1,0 +1,13 @@
+diff --git a/src/plugins/stickerPaste/index.ts b/src/plugins/stickerPaste/index.ts
+index 0dd0bd2..fe3665c 100644
+--- a/src/plugins/stickerPaste/index.ts
++++ b/src/plugins/stickerPaste/index.ts
+@@ -15,7 +15,7 @@ export default definePlugin({
+ 
+     patches: [
+         {
+-            find: ".stickers,previewSticker:",
++            find: "isReplacement:null!=",
+             replacement: {
+                 match: /if\(\i\.\i\.getUploadCount/,
+                 replace: "return true;$&",

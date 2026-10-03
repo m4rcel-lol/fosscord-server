@@ -1,0 +1,31 @@
+diff --git a/src/plugins/roleColorEverywhere/index.tsx b/src/plugins/roleColorEverywhere/index.tsx
+index d505963..4144080 100644
+--- a/src/plugins/roleColorEverywhere/index.tsx
++++ b/src/plugins/roleColorEverywhere/index.tsx
+@@ -104,11 +104,11 @@ export default definePlugin({
+         },
+         // Member List Role Headers
+         {
+-            find: 'tutorialId:"whos-online',
++            find: '["\\xa0\\u2014 ",',
+             replacement: [
+                 {
+-                    match: /(#{intl::CHANNEL_MEMBERS_A11Y_LABEL}.+}\):null,).{0,100}?(?:—|\\u2014) ",\i\]\}\)\]/,
+-                    replace: "$1$self.RoleGroupColor(arguments[0])]"
++                    match: /#{intl::CHANNEL_MEMBERS_A11Y_LABEL}.{0,150}?"aria-hidden":!0,/,
++                    replace: "$&style:$self.getRoleGroupStyle(arguments[0]),"
+                 },
+             ],
+             predicate: () => settings.store.memberList
+@@ -213,6 +213,11 @@ export default definePlugin({
+         return null;
+     },
+ 
++    getRoleGroupStyle({ id, guildId }: { id: string; guildId: string; }) {
++        const color = GuildRoleStore.getRole(guildId, id)?.colorString;
++        return color ? { color } : undefined;
++    },
++
+     RoleGroupColor: ErrorBoundary.wrap(({ id, count, title, guildId, label }: { id: string; count: number; title: string; guildId: string; label: string; }) => {
+         const role = GuildRoleStore.getRole(guildId, id);
+ 

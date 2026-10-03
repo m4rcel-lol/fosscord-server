@@ -53,6 +53,15 @@ Google Chrome 154 on macOS quits headless sessions after about 30 seconds. Point
 
 On build 626571 (October 2026) with Vencord `7f0c10c`, every upstream patch and every one of ours matches. The one upstream failure was the `SettingsRouter` lookup, which still asked for `USER_SETTINGS_MODAL_KEY`. Discord no longer exports it, which broke `Ctrl+,` in WebKeybinds and the settings links in BetterSessions and Decor, so `client/vencord-patches/settings-router.patch` drops that key.
 
+Build 627798 broke three more upstream lookups, and four patches in `client/vencord-patches` fix them:
+
+- `sticker-paste-find.patch`. StickerPaste found its module by `.stickers,previewSticker:`, which now only occurs in Discord's sticker helper module, so its patch never reached the chat input function that decides whether a picked sticker is sent or attached. The find is now `isReplacement:null!=`, which only the chat input has. With the plugin on, picking a sticker attaches it to the message box instead of sending it.
+- `role-color-member-list.patch`. Discord moved the member list role header out of the member list module into its own module, which renders the role icon, the role name and the member count as separate spans. RoleColorEverywhere now finds that module by its `"\xa0\u2014 "` separator and sets the role color on the header row, so the name and the count both take it. The thread member list still has the old inline header, and the plugin's `THREAD_BROWSER_PRIVATE` patch still colors that one.
+- `better-role-context-member-list.patch`. BetterRoleContext lost its context menu on the same header. The reporter could not see this, because the old patch still matches the header of the thread member list. The new patch adds the menu to the server member list header as well.
+- `user-profile-actions.patch`. Discord's profile modal module now only exports `openUserProfileModal`, and closing the modal is a `USER_PROFILE_MODAL_CLOSE` dispatch in another module. `UserProfileActions` now looks the module up by `openUserProfileModal` alone. `openUserProfile` in `@utils/discord` goes through it, and TypingTweaks and ServerInfo from the default set call that to open a profile.
+
+The check now reports no failures on build 627798. RoleColorEverywhere, StickerPaste and BetterRoleContext stay out of the default set, because Discord shows none of these by itself: it doesn't color member list role headers or user mentions, and it sends a sticker as soon as it is picked from an empty message box.
+
 ## Branding
 
 These `client.*` config keys control what the client shows in place of Discord's brand:
