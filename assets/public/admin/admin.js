@@ -461,6 +461,7 @@ const TABS = {
     overview: renderOverview,
     settings: renderSettings,
     users: renderUsers,
+    reports: renderReports,
     badges: renderBadges,
     announcements: renderAnnouncements,
     guilds: renderGuilds,
@@ -532,6 +533,7 @@ async function renderOverview(view) {
                     ${stat("Memberships", fmtNumber(o.counts.members))}
                     ${stat("Disabled accounts", fmtNumber(o.counts.disabled_users), o.access.users ? "#/users" : null)}
                     ${stat("Open incidents", fmtNumber(o.counts.open_incidents), o.access.status ? "#/status" : null)}
+                    ${stat("Open reports", fmtNumber(o.counts.open_reports), o.access.users ? "#/reports" : null)}
                 </div>
                 <div class="card">
                     <h3>Instance</h3>
@@ -1051,6 +1053,233 @@ async function openUser(id, reload) {
             closeDrawer();
             reload?.();
         }
+    });
+}
+
+/* ---------- reports ---------- */
+
+const REPORT_TYPES = {
+    message: "Message",
+    user: "User",
+    guild: "Server",
+    guild_discovery: "Server discovery",
+    guild_directory_entry: "Directory entry",
+    guild_scheduled_event: "Event",
+    stage_channel: "Stage",
+    first_dm: "First DM",
+    application: "App",
+    widget: "Widget",
+};
+const REPORT_STATUSES = [
+    ["open", "Open"],
+    ["actioned", "Actioned"],
+    ["dismissed", "Dismissed"],
+    ["all", "All"],
+];
+const reportStatusBadge = (status) =>
+    status === 1 ? html`<span class="badge ok">Actioned</span>` : status === 2 ? html`<span class="badge">Dismissed</span>` : html`<span class="badge warn">Open</span>`;
+
+const guessViolationType = (reasons) => {
+    const text = reasons.join(" ").toLowerCase();
+    const rules = [
+        ["spam", 3030],
+        ["scam", 4010],
+        ["fraud", 4010],
+        ["impersonat", 711],
+        ["hate", 320],
+        ["harass", 290],
+        ["abuse", 290],
+        ["violence", 210],
+        ["self-harm", 5090],
+        ["self harm", 5090],
+        ["minor", 280],
+        ["private identifying", 5305],
+        ["sexual", 100],
+        ["porn", 100],
+        ["illegal goods", 240],
+        ["drugs", 240],
+        ["stolen accounts", 230],
+        ["too young", 5411],
+    ];
+    return rules.find(([needle]) => text.includes(needle))?.[1] ?? 1;
+};
+
+const reportsState = { status: "open" };
+
+async function renderReports(view) {
+    mount(
+        view,
+        html`
+            <div class="page-head">
+                <div>
+                    <h1>Reports</h1>
+                    <p class="muted">Messages and accounts people reported from the app. Open one to issue a violation or dismiss it.</p>
+                </div>
+            </div>
+            <div class="row" style="margin-bottom:12px">
+                <select id="report-status" style="width:auto">
+                    ${options(REPORT_STATUSES, reportsState.status)}
+                </select>
+                <span class="muted" id="report-counts"></span>
+            </div>
+            <div id="report-results"><div class="spinner">Loading…</div></div>
+        `,
+    );
+
+    const load = async () => {
+        const { reports, counts } = await api(`/admin/reports?status=${encodeURIComponent(reportsState.status)}&limit=100`);
+        const results = $("#report-results");
+        if (!results) return;
+        $("#report-counts").textContent = `${fmtNumber(counts.open)} open · ${fmtNumber(counts.actioned)} actioned · ${fmtNumber(counts.dismissed)} dismissed`;
+        mount(
+            results,
+            reports.length
+                ? html`
+                      <div class="table-wrap">
+                          <table>
+                              <thead>
+                                  <tr>
+                                      <th>Reported</th>
+                                      <th>Reason</th>
+                                      <th class="hide-sm">Reporter</th>
+                                      <th class="hide-sm">Received</th>
+                                      <th>Status</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  ${reports.map(
+                                      (r) => html`
+                                          <tr data-id="${r.id}">
+                                              <td>
+                                                  <div class="ident">
+                                                      ${r.reported_user ? avatar(r.reported_user) : guildIcon(r.guild)}
+                                                      <div>
+                                                          <strong>${r.reported_user ? userName(r.reported_user) : (r.guild?.name ?? "Unknown")}</strong>
+                                                          <span class="muted">${REPORT_TYPES[r.type] ?? r.type}${r.guild?.name && r.reported_user ? ` in ${r.guild.name}` : ""}</span>
+                                                      </div>
+                                                  </div>
+                                              </td>
+                                              <td>${r.reasons.length ? r.reasons[r.reasons.length - 1] : html`<span class="muted">No reason</span>`}</td>
+                                              <td class="hide-sm">${r.reporter ? userName(r.reporter) : "—"}</td>
+                                              <td class="hide-sm">${fmtDate(r.created_at)}</td>
+                                              <td>${reportStatusBadge(r.status)}</td>
+                                          </tr>
+                                      `,
+                                  )}
+                              </tbody>
+                          </table>
+                      </div>
+                  `
+                : html`<div class="card empty">${reportsState.status === "open" ? "No open reports. New reports from the app show up here." : "No reports here."}</div>`,
+        );
+        for (const row of $$("tbody tr", results)) row.addEventListener("click", () => openReport(reports.find((r) => r.id === row.dataset.id), load));
+    };
+
+    $("#report-status").addEventListener("change", (e) => {
+        reportsState.status = e.target.value;
+        load();
+    });
+    await load();
+}
+
+function openReport(report, reload) {
+    const isImage = (a) => /^image\//.test(a.content_type ?? "") || /\.(png|jpe?g|gif|webp|avif)$/i.test(a.filename);
+    const elements = Object.entries(report.elements ?? {}).filter(([, v]) => Array.isArray(v) && v.length);
+    const person = (u) => (u ? html`<button class="btn small ghost" type="button" data-open-user="${u.id}">${userName(u)} ${userTag(u)}</button>` : "—");
+    const body = openDrawer(
+        "Report",
+        html`
+            <div class="stack">
+                <div class="row">${reportStatusBadge(report.status)}<span class="muted">${REPORT_TYPES[report.type] ?? report.type} report · ${fmtDate(report.created_at)}</span></div>
+                <div class="card stack">
+                    <h3>Reason</h3>
+                    <p style="margin:0">${report.reasons.length ? report.reasons.join(" › ") : "No reason given"}</p>
+                    ${elements.length ? html`<div class="badges">${elements.flatMap(([, v]) => v.map((x) => html`<span class="badge">${x}</span>`))}</div>` : ""}
+                </div>
+                <div class="card">
+                    <div class="list">
+                        <div class="list-item"><span class="grow muted">Reported</span>${person(report.reported_user)}</div>
+                        <div class="list-item"><span class="grow muted">Reporter</span>${person(report.reporter)}</div>
+                        ${report.guild ? html`<div class="list-item"><span class="grow muted">Server</span><span>${report.guild.name ?? report.guild.id}</span></div>` : ""}
+                        ${report.channel
+                            ? html`<div class="list-item"><span class="grow muted">Channel</span><span>${report.channel.name ? `#${report.channel.name}` : "Direct message"}</span></div>`
+                            : ""}
+                        ${report.resolved_by
+                            ? html`<div class="list-item"><span class="grow muted">Handled by</span><span>${userName(report.resolved_by)} · ${fmtDate(report.resolved_at)}</span></div>`
+                            : ""}
+                    </div>
+                </div>
+                ${report.snapshot
+                    ? html`<div class="card stack">
+                          <h3>Reported message</h3>
+                          <p class="report-message">${report.snapshot.content || html`<span class="muted">No text</span>`}</p>
+                          ${report.snapshot.attachments?.length
+                              ? html`<div class="report-attachments">
+                                    ${report.snapshot.attachments.map((a) =>
+                                        isImage(a)
+                                            ? html`<a href="${a.url}" target="_blank" rel="noopener"><img src="${a.url}" alt="Attachment ${a.filename}" loading="lazy" /></a>`
+                                            : html`<a href="${a.url}" target="_blank" rel="noopener">${a.filename}</a>`,
+                                    )}
+                                </div>`
+                              : ""}
+                          <span class="muted">Sent ${fmtDate(report.snapshot.timestamp)}. This is the message as it was when it was reported.</span>
+                      </div>`
+                    : ""}
+                ${report.status === 0 && report.reported_user
+                    ? html`<form id="report-violation" class="card stack">
+                          <h3>Issue a violation</h3>
+                          <label>Type<select name="classification_type">${options(VIOLATION_TYPES, guessViolationType(report.reasons))}</select></label>
+                          <label
+                              >Message to the user<span class="hint">Shown on their Account Standing page, with the reported message attached.</span
+                              ><textarea name="description" required maxlength="2000">${report.reasons.length ? `Reported for: ${report.reasons[report.reasons.length - 1]}` : ""}</textarea></label
+                          >
+                          <div class="stack">
+                              <span class="muted">Actions taken</span>
+                              <div class="checks">
+                                  ${VIOLATION_ACTIONS.map(
+                                      ([id, label]) => html`<label class="toggle"><input type="checkbox" name="action" value="${id}" ${id === 4 ? raw("checked") : ""} /><span>${label}</span></label>`,
+                                  )}
+                              </div>
+                          </div>
+                          <label>Counts against them for<select name="duration">${options(VIOLATION_DURATIONS, 90)}</select></label>
+                          <div class="form-actions">
+                              <button class="btn ghost" type="button" data-dismiss>Dismiss report</button>
+                              <button class="btn danger" type="submit">Issue violation</button>
+                          </div>
+                      </form>`
+                    : report.status === 0
+                      ? html`<div class="form-actions"><button class="btn" type="button" data-dismiss>Dismiss report</button></div>`
+                      : html`<div class="form-actions"><button class="btn" type="button" data-reopen>Reopen report</button></div>`}
+            </div>
+        `,
+    );
+
+    for (const btn of $$("[data-open-user]", body)) btn.addEventListener("click", () => openUser(btn.dataset.openUser, reload));
+    $("[data-dismiss]", body)?.addEventListener("click", async (e) => {
+        const done = await act(e.currentTarget, () => api(`/admin/reports/${report.id}`, { method: "PATCH", body: { status: 2 } }), "Report dismissed");
+        if (!done) return;
+        closeDrawer();
+        reload();
+    });
+    $("[data-reopen]", body)?.addEventListener("click", async (e) => {
+        const done = await act(e.currentTarget, () => api(`/admin/reports/${report.id}`, { method: "PATCH", body: { status: 0 } }), "Report reopened");
+        if (!done) return;
+        openReport(done, reload);
+        reload();
+    });
+    $("#report-violation", body)?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const form = e.currentTarget;
+        const payload = {
+            classification_type: Number(form.classification_type.value),
+            description: form.description.value,
+            actions: $$("input[name=action]:checked", form).map((x) => ({ action_type: Number(x.value) })),
+            expires_in_days: form.duration.value ? Number(form.duration.value) : null,
+        };
+        const done = await act($("button[type=submit]", form), () => api(`/admin/reports/${report.id}/violation`, { method: "POST", body: payload }), "Violation issued");
+        if (!done) return;
+        closeDrawer();
+        reload();
     });
 }
 
