@@ -77,6 +77,7 @@ export * from "./StatusComponent";
 export * from "./StatusIncident";
 export * from "./UserViolation";
 export * from "./Announcement";
+export * from "./AnnouncementMessage";
 export * from "./GuildScheduledEvent";
 export * from "./EmbeddedActivity";
 export * from "./SavedMessage";

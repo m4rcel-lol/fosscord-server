@@ -9883,13 +9883,8 @@
             "AdminAnnouncementCreateSchema": {
                 "type": "object",
                 "properties": {
-                    "title": {
-                        "minLength": 1,
-                        "maxLength": 256,
-                        "type": "string"
-                    },
                     "body": {
-                        "description": "Markdown, shown as the announcement's text",
+                        "description": "Markdown, sent as the message's text",
                         "minLength": 1,
                         "maxLength": 4000,
                         "type": "string"
@@ -9905,8 +9900,7 @@
                 },
                 "required": [
                     "audience",
-                    "body",
-                    "title"
+                    "body"
                 ]
             },
             "AdminReportUpdateSchema": {
@@ -46346,7 +46340,7 @@
                         "bearer": []
                     }
                 ],
-                "description": "DM an announcement from the official account",
+                "description": "DM an announcement from the official account, as a plain message with any attached files",
                 "requestBody": {
                     "required": true,
                     "content": {
@@ -46362,6 +46356,42 @@
                         "description": "No description available"
                     }
                 },
+                "tags": [
+                    "api"
+                ],
+                "x-badges": [
+                    {
+                        "label": "Spacebar-only",
+                        "color": "red"
+                    }
+                ]
+            }
+        },
+        "/api/admin/announcements/{announcement_id}/": {
+            "delete": {
+                "x-right-required": "OPERATOR",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "description": "Delete an announcement and take back every dm it was sent as, with their attachments",
+                "responses": {
+                    "204": {
+                        "description": "No description available"
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "announcement_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "announcement_id"
+                    }
+                ],
                 "tags": [
                     "api"
                 ],

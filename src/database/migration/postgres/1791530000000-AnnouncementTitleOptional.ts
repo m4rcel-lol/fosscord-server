@@ -16,30 +16,17 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Column, Entity } from "typeorm";
-import { BaseClass } from "./BaseClass";
+import { MigrationInterface, QueryRunner } from "typeorm";
 
-// a staff announcement the official system account sent out from the admin panel
-@Entity({
-    name: "announcements",
-})
-export class Announcement extends BaseClass {
-    // only announcements sent before they became plain messages have one
-    @Column({ type: "character varying", nullable: true })
-    title?: string | null;
+export class AnnouncementTitleOptional1791530000000 implements MigrationInterface {
+    name = "AnnouncementTitleOptional1791530000000";
 
-    @Column({ type: "text" })
-    body: string;
+    public async up(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`ALTER TABLE "announcements" ALTER COLUMN "title" DROP NOT NULL`);
+    }
 
-    @Column()
-    audience: string; // "everyone" | "staff"
-
-    @Column({ type: "int8", nullable: true })
-    sent_by?: string | null;
-
-    @Column({ type: "int", default: 0 })
-    recipient_count: number = 0;
-
-    @Column({ type: "timestamptz", default: () => "now()" })
-    created_at: Date = new Date();
+    public async down(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`UPDATE "announcements" SET "title" = '' WHERE "title" IS NULL`);
+        await queryRunner.query(`ALTER TABLE "announcements" ALTER COLUMN "title" SET NOT NULL`);
+    }
 }

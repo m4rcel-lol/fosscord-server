@@ -174,10 +174,12 @@ function describeError(body) {
 }
 
 async function api(path, { method = "GET", body, auth: useAuth = true } = {}) {
+    // FormData goes as multipart, and the browser sets its content type with the boundary
+    const multipart = body instanceof FormData;
     const headers = {};
-    if (body !== undefined) headers["Content-Type"] = "application/json";
+    if (body !== undefined && !multipart) headers["Content-Type"] = "application/json";
     if (useAuth && currentToken()) headers.Authorization = currentToken();
-    const res = await fetch(API + path, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined }).catch(() => {
+    const res = await fetch(API + path, { method, headers, body: body !== undefined && !multipart ? JSON.stringify(body) : body }).catch(() => {
         throw new ApiError(0, { message: "Couldn't reach the server. Check your connection and try again." });
     });
     const text = await res.text();
@@ -1665,7 +1667,7 @@ async function renderAnnouncements(view) {
                 <div>
                     <h1>Announcements</h1>
                     <p class="muted">
-                        Sent as a direct message from <strong>${official.global_name || official.username}</strong>, the instance's official system account.
+                        Sent as a plain direct message from <strong>${official.global_name || official.username}</strong>, the instance's official system account.
                         Users can't reply to it.
                     </p>
                 </div>
@@ -1673,11 +1675,14 @@ async function renderAnnouncements(view) {
             <div class="stack">
                 <form id="announce-form" class="card stack">
                     <h2>New announcement</h2>
-                    <label>Title<input name="title" required maxlength="256" placeholder="Scheduled maintenance tonight" /></label>
                     <label
                         >Message<span class="hint">Markdown works: **bold**, *italics*, links, lists.</span
                         ><textarea name="body" required maxlength="4000" rows="6" placeholder="We'll be upgrading the database at 23:00 UTC…"></textarea
                     ></label>
+                    <label
+                        >Attachments<span class="hint">Optional. Images, videos or any other files, sent along with the message.</span
+                        ><input name="files" type="file" multiple
+                    /></label>
                     <label
                         >Send to<select name="audience" style="max-width:320px">
                             ${options(
@@ -1695,13 +1700,14 @@ async function renderAnnouncements(view) {
                     <h2>Sent</h2>
                     ${announcements.length
                         ? announcements.map(
-                              (a) => html`<div class="card stack" style="gap:6px">
+                              (a) => html`<div class="card stack" style="gap:6px" data-id="${a.id}">
                                   <div class="row">
-                                      <strong class="grow">${a.title}</strong>
+                                      <span class="grow muted">${fmtDate(a.created_at)}</span>
                                       <span class="badge">${a.audience === "staff" ? "Staff" : "Everyone"} · ${fmtNumber(a.recipient_count)}</span>
+                                      <button class="btn danger small announcement-delete" type="button">Delete</button>
                                   </div>
+                                  ${a.title ? html`<strong>${a.title}</strong>` : ""}
                                   <p style="margin:0;white-space:pre-wrap">${a.body}</p>
-                                  <span class="muted">${fmtDate(a.created_at)}</span>
                               </div>`,
                           )
                         : html`<div class="card empty">Nothing sent yet.</div>`}
@@ -1715,15 +1721,28 @@ async function renderAnnouncements(view) {
         const form = e.currentTarget;
         const audience = form.audience.value;
         if (audience === "everyone" && !confirm("Send this announcement to every user on the instance?")) return;
-        const sent = await act(
-            $("button[type=submit]", form),
-            () => api("/admin/announcements", { method: "POST", body: { title: form.title.value, body: form.body.value, audience } }),
-        );
+        const payload = { body: form.body.value, audience };
+        const files = [...form.files.files];
+        let body = payload;
+        if (files.length) {
+            body = new FormData();
+            body.append("payload_json", JSON.stringify(payload));
+            files.forEach((file, i) => body.append(`files[${i}]`, file, file.name));
+        }
+        const sent = await act($("button[type=submit]", form), () => api("/admin/announcements", { method: "POST", body }));
         if (sent) {
             toast(`Sending to ${fmtNumber(sent.recipient_count)} ${sent.recipient_count === 1 ? "user" : "users"}`);
             renderAnnouncements(view);
         }
     });
+
+    for (const button of $$(".announcement-delete", view))
+        button.addEventListener("click", async (e) => {
+            const id = e.currentTarget.closest("[data-id]").dataset.id;
+            if (!confirm("Delete this announcement? Its message, and any attachments, are removed from every user's DMs.")) return;
+            const done = await act(e.currentTarget, () => api(`/admin/announcements/${id}`, { method: "DELETE" }), "Announcement deleted");
+            if (done !== undefined) renderAnnouncements(view);
+        });
 }
 
 /* ---------- badges ---------- */

@@ -41,6 +41,7 @@ import {
     RecentAvatar,
     PublicUser,
     PublicUserProjection,
+    UserFlags,
     UserGuildSettings,
     UserPrivate,
 } from "@spacebar/schemas";
@@ -264,6 +265,8 @@ export class User extends BaseClass {
     applyPremiumDefaults() {
         const { premium, premiumType } = Config.get().defaults.user;
         if (!premium || this.bot || this.premium_type === undefined || this.premium_type >= premiumType) return;
+        // the instance's own system accounts (official, appeals) never get premium
+        if (this.system || BigInt(this.flags ?? 0) & UserFlags.FLAGS.SYSTEM) return;
         this.premium_type = premiumType;
         if (this.premium !== undefined) this.premium = true;
         this.premium_since ??= this.created_at;

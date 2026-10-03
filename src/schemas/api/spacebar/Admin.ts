@@ -340,12 +340,7 @@ export interface AdminStatusIncidentPostUpdateSchema {
 
 export interface AdminAnnouncementCreateSchema {
     /**
-     * @minLength 1
-     * @maxLength 256
-     */
-    title: string;
-    /**
-     * Markdown, shown as the announcement's text
+     * Markdown, sent as the message's text
      * @minLength 1
      * @maxLength 4000
      */

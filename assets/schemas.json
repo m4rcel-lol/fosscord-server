@@ -10803,13 +10803,8 @@
     "AdminAnnouncementCreateSchema": {
         "type": "object",
         "properties": {
-            "title": {
-                "minLength": 1,
-                "maxLength": 256,
-                "type": "string"
-            },
             "body": {
-                "description": "Markdown, shown as the announcement's text",
+                "description": "Markdown, sent as the message's text",
                 "minLength": 1,
                 "maxLength": 4000,
                 "type": "string"
@@ -10826,8 +10821,7 @@
         "additionalProperties": false,
         "required": [
             "audience",
-            "body",
-            "title"
+            "body"
         ],
         "$schema": "http://json-schema.org/draft-07/schema#"
     },

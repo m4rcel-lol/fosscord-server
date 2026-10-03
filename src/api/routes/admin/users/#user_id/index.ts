@@ -80,37 +80,53 @@ router.patch(
         if (targetIsOperator && !callerIsOperator && !isSelf) throw new HTTPError("Only operators can edit other operators", 403);
         if (isSelf && body.disabled) throw new HTTPError("You can't disable your own account", 400);
 
+        // only some columns are loaded, and the entity has class-level defaults (system, mfa_enabled, ...) for the rest,
+        // so save() would write those defaults over the real values. Only the columns this request changes get written
+        const changed = new Set<keyof User>();
+
         if (body.rights !== undefined) {
             if (!callerIsOperator) throw new HTTPError("Only operators can change rights", 403);
             if (!/^\d+$/.test(body.rights)) throw new HTTPError("rights must be a decimal bitfield string", 400);
             if (isSelf && !new Rights(body.rights).has("OPERATOR")) throw new HTTPError("You can't remove OPERATOR from yourself", 400);
             user.rights = body.rights;
+            changed.add("rights");
         }
 
-        if (body.hide_premium_badge !== undefined) user.hide_premium_badge = body.hide_premium_badge;
+        const set = <K extends keyof User>(key: K, value: User[K]) => {
+            user[key] = value;
+            changed.add(key);
+        };
+
+        if (body.hide_premium_badge !== undefined) set("hide_premium_badge", body.hide_premium_badge);
         const standingBefore = body.account_standing !== undefined ? await currentStanding(user.id) : null;
-        if (body.account_standing !== undefined) user.account_standing = body.account_standing;
-        if (body.tag !== undefined) applyUserTag(user, body.tag);
+        if (body.account_standing !== undefined) set("account_standing", body.account_standing);
+        if (body.tag !== undefined) {
+            applyUserTag(user, body.tag);
+            changed.add("public_flags").add("flags");
+        }
         if (body.badge_ids !== undefined) {
             const ids = [...new Set(body.badge_ids)];
             const known = ids.length ? await Badge.find({ where: { id: In(ids) }, select: { id: true } }) : [];
             const unknown = ids.filter((id) => !known.some((b) => b.id === id));
             if (unknown.length) throw new HTTPError(`Unknown badge: ${unknown.join(", ")}`, 400);
-            user.badge_ids = ids;
+            set("badge_ids", ids);
         }
-        if (body.global_name !== undefined) user.global_name = body.global_name?.trim() || null;
-        if (body.bio !== undefined) user.bio = body.bio;
-        if (body.disabled !== undefined) user.disabled = body.disabled;
-        if (body.verified !== undefined) user.verified = body.verified;
+        if (body.global_name !== undefined) set("global_name", body.global_name?.trim() || null);
+        if (body.bio !== undefined) set("bio", body.bio);
+        if (body.disabled !== undefined) set("disabled", body.disabled);
+        if (body.verified !== undefined) set("verified", body.verified);
         if (body.premium_type !== undefined) {
-            if (body.premium_type > 0 && !user.premium_type) user.premium_since = new Date();
-            user.premium_type = body.premium_type;
-            user.premium = body.premium_type > 0;
+            if (body.premium_type > 0 && !user.premium_type) set("premium_since", new Date());
+            set("premium_type", body.premium_type);
+            set("premium", body.premium_type > 0);
         }
 
-        if (body.rights !== undefined) await syncStaffBadge(user, hadAdminAccess);
+        if (body.rights !== undefined) {
+            await syncStaffBadge(user, hadAdminAccess);
+            changed.add("badge_ids");
+        }
 
-        await user.save();
+        if (changed.size) await User.update({ id: user.id }, Object.fromEntries([...changed].map((key) => [key, user[key]])));
 
         if (standingBefore !== null) await notifyStandingDrop(user.id, standingBefore, await currentStanding(user.id));
 
