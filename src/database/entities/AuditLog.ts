@@ -22,6 +22,16 @@ import { Snowflake } from "@spacebar/util/util/Snowflake";
 import { User } from "./User";
 import { AuditLogChange, AuditLogEntry, AuditLogEvents } from "@spacebar/schemas";
 
+type AuditLogInput = {
+    guild_id: string;
+    user_id: string;
+    action_type: AuditLogEvents;
+    target_id?: string | null;
+    changes?: AuditLogChange[];
+    options?: AuditLog["options"];
+    reason?: string | string[];
+};
+
 @Entity({
     name: "audit_logs",
 })
@@ -92,15 +102,7 @@ export class AuditLog extends BaseClass {
             .map((key) => ({ key, old_value: old[key] ?? undefined, new_value: now[key] ?? undefined }) as unknown as AuditLogChange);
     }
 
-    static async log(entry: {
-        guild_id: string;
-        user_id: string;
-        action_type: AuditLogEvents;
-        target_id?: string | null;
-        changes?: AuditLogChange[];
-        options?: AuditLog["options"];
-        reason?: string | string[];
-    }) {
+    static entry(entry: AuditLogInput) {
         const reason = Array.isArray(entry.reason) ? entry.reason[0] : entry.reason;
         return AuditLog.create({
             guild_id: entry.guild_id,
@@ -110,9 +112,18 @@ export class AuditLog extends BaseClass {
             changes: entry.changes ?? [],
             options: entry.options,
             reason: reason ? decodeURIComponent(reason).slice(0, 512) : undefined,
-        })
+        });
+    }
+
+    static async log(entry: AuditLogInput) {
+        return AuditLog.entry(entry)
             .save()
             .catch((e) => console.error("[AuditLog] failed to write entry", e));
+    }
+
+    static async logMany(entries: AuditLogInput[]) {
+        if (!entries.length) return;
+        await AuditLog.insert(entries.map((entry) => AuditLog.entry(entry))).catch((e) => console.error("[AuditLog] failed to write entries", e));
     }
 
     static async logMessageDelete(guild_id: string, user_id: string, author_id: string, channel_id: string, reason?: string | string[]) {

@@ -82,10 +82,18 @@ export class GuildInsights {
         GuildInsights.increment(guildId, entries).catch(report("join counter"));
     }
 
-    static recordLeave(guildId: string, joinedAt?: Date | null) {
-        const days = joinedAt ? (Date.now() - new Date(joinedAt).getTime()) / DAY : Infinity;
-        const bucket = TENURE_LIMIT_DAYS.findIndex((limit) => days < limit);
-        GuildInsights.increment(guildId, [["leaves", `${bucket === -1 ? TENURE_LIMIT_DAYS.length : bucket}`, 1]]).catch(report("leave counter"));
+    static recordLeave(guildId: string, ...joinedAt: (Date | null | undefined)[]) {
+        const counts = new Map<string, number>();
+        for (const joined of joinedAt) {
+            const days = joined ? (Date.now() - new Date(joined).getTime()) / DAY : Infinity;
+            const bucket = TENURE_LIMIT_DAYS.findIndex((limit) => days < limit);
+            const key = `${bucket === -1 ? TENURE_LIMIT_DAYS.length : bucket}`;
+            counts.set(key, (counts.get(key) ?? 0) + 1);
+        }
+        GuildInsights.increment(
+            guildId,
+            [...counts].map(([key, amount]) => ["leaves", key, amount]),
+        ).catch(report("leave counter"));
     }
 
     static async markActivity(channelId: string, userId: string, kinds: number) {

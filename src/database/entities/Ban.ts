@@ -24,6 +24,7 @@ import { User } from "./User";
 @Entity({
     name: "bans",
 })
+@Index("IDX_bans_guild_user", ["guild_id", "user_id"])
 export class Ban extends BaseClass {
     @Column({ nullable: true })
     user_id: string;
@@ -35,7 +36,6 @@ export class Ban extends BaseClass {
     user: User;
 
     @Column({ nullable: true })
-    @Index("IDX_bans_guild_id")
     guild_id: string;
 
     @JoinColumn({ name: "guild_id", foreignKeyConstraintName: "FK_ban_guild_id" })

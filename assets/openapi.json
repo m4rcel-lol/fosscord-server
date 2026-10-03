@@ -2849,6 +2849,12 @@
                             "discriminator": {
                                 "type": "string"
                             },
+                            "global_name": {
+                                "type": [
+                                    "null",
+                                    "string"
+                                ]
+                            },
                             "id": {
                                 "type": "string"
                             },
