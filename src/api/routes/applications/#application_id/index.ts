@@ -17,14 +17,17 @@
 */
 
 import { Request, Response, Router } from "express";
+import { Not } from "typeorm";
 import { HTTPError } from "lambert-server/HTTPError";
 import { verifyToken } from "node-2fa";
 import { route } from "@spacebar/api/middlewares";
 import { APPLICATION_EMBEDDED, APPLICATION_EMBEDDED_RELEASED, enableApplicationActivity } from "@spacebar/api/activities";
 import { forgetActivityLookup } from "@spacebar/api/activities/ActivityHost";
 import { ensureInteractionKeys, toOwnedApplication, verifyInteractionsEndpoint } from "@spacebar/api/util/handlers/Application";
-import { Application, Guild, User } from "@spacebar/database";
-import { DiscordApiErrors, FieldErrors, handleFile } from "@spacebar/util";
+import { Application, ApplicationCommand, Guild, Member, Message, User } from "@spacebar/database";
+import { DiscordApiErrors, emitEvent, FieldErrors, GuildIntegrationUpdateEvent, handleFile } from "@spacebar/util";
+import { emitCommandIndexUpdate } from "@spacebar/api/util/handlers/ApplicationCommands";
+import { revokeSessions } from "@spacebar/api/util";
 import { ApplicationModifySchema } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
@@ -204,8 +207,20 @@ router.post(
 
         if (app.owner.totp_secret && (!req.body.code || !verifyToken(app.owner.totp_secret, req.body.code))) throw new HTTPError(req.t("auth:login.INVALID_TOTP_CODE"), 60008);
         if (app.bot) {
-            await User.delete({ id: app.id });
+            const memberships = await Member.find({ where: { id: app.bot.id, guild: { owner_id: Not(app.bot.id) } }, select: { guild_id: true } });
+            for (const { guild_id } of memberships) {
+                await Member.removeFromGuild(app.bot.id, guild_id);
+                await emitEvent({ event: "GUILD_INTEGRATIONS_UPDATE", guild_id, data: { guild_id } } satisfies GuildIntegrationUpdateEvent);
+                await emitCommandIndexUpdate(app.id, guild_id);
+            }
+            await revokeSessions(app.bot.id);
+            await User.update(
+                { id: app.bot.id },
+                { deleted: true, username: "Deleted User", discriminator: "0000", global_name: null, avatar: () => "NULL", banner: () => "NULL", bio: "" },
+            );
         }
+        await ApplicationCommand.delete({ application_id: app.id });
+        await Message.update({ application_id: app.id }, { application_id: () => "NULL" });
         await Application.delete({ id: app.id });
 
         res.send().status(200);

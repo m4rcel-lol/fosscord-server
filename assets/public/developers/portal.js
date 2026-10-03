@@ -523,7 +523,37 @@
         );
         const deleteError = errorLine();
         const danger = el("section", { class: "card" }, el("h2", {}, "Delete application"), el("p", { class: "muted" }, "Deleting an application also deletes its bot user."), remove, deleteError);
-        return [form, danger];
+        const discoveryError = errorLine();
+        const discoveryToggle = el("input", {
+            id: "app-discoverable",
+            type: "checkbox",
+            checked: app.is_discoverable === true,
+            onchange: async () => {
+                discoveryError.hidden = true;
+                discoveryToggle.disabled = true;
+                try {
+                    Object.assign(app, await api("PATCH", `/applications/${app.id}`, { discoverability_state: discoveryToggle.checked ? 3 : 2 }));
+                } catch (e) {
+                    discoveryToggle.checked = !discoveryToggle.checked;
+                    showError(discoveryError, e);
+                } finally {
+                    discoveryToggle.disabled = false;
+                }
+            },
+        });
+        const discovery = el(
+            "section",
+            { class: "card" },
+            el("h2", {}, "App Directory"),
+            el("p", { class: "muted" }, "Listed apps show up in the App Directory and the app launcher for everyone on this instance."),
+            el(
+                "div",
+                { class: "fields" },
+                switchRow("app-discoverable", "List this app in the App Directory", 'Only public bots are listed, so "Let anyone add this bot" on the Bot page has to be on.', discoveryToggle),
+            ),
+            discoveryError,
+        );
+        return [form, discovery, danger];
     };
 
     const renderBot = (app) => {

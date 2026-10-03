@@ -41,6 +41,7 @@ export interface ApplicationModifySchema {
     terms_of_service_url?: string | null;
     bot_public?: boolean;
     bot_require_code_grant?: boolean;
+    discoverability_state?: 2 | 3;
     flags?: number;
     custom_install_url?: string | null;
     guild_id?: string;

@@ -304,7 +304,7 @@ router.post(
             await authorizeUser(1);
             return res.json({ location: "/oauth2/authorized" });
         }
-        if (!scopes.includes("bot") && !body.guild_id) {
+        if (!scopes.includes("bot")) {
             const response_type = req.query.response_type ?? "code";
             if (response_type !== "code" && response_type !== "token") throw FieldErrors({ response_type: { code: "INVALID_RESPONSE_TYPE", message: "Invalid response_type" } });
             const redirect = redirectFor(app, req.query.redirect_uri);

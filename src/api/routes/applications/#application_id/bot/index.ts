@@ -21,7 +21,7 @@ import { HTTPError } from "lambert-server/HTTPError";
 import { verifyToken } from "node-2fa";
 import { route } from "@spacebar/api/middlewares";
 import { Application, User } from "@spacebar/database";
-import { DiscordApiErrors, FieldErrors, createAppBotUser, generateToken, handleFile } from "@spacebar/util";
+import { DiscordApiErrors, FieldErrors, broadcastUserUpdate, createAppBotUser, generateToken, handleFile } from "@spacebar/util";
 import { BotModifySchema } from "@spacebar/schemas";
 
 const router: Router = Router({ mergeParams: true });
@@ -122,9 +122,11 @@ router.patch(
 
         if (body.avatar) body.avatar = await handleFile(`/avatars/${app.id}`, body.avatar as string);
 
+        const before = JSON.stringify(app.bot.toPublicUser());
         app.bot.assign(body);
 
         await app.bot.save();
+        if (JSON.stringify(app.bot.toPublicUser()) !== before) await broadcastUserUpdate(app.bot.id);
 
         res.json(app.bot.toPublicUser());
     },

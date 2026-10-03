@@ -63,6 +63,8 @@ export async function verifyInteractionsEndpoint(applicationId: string, url: str
     return ok && rejectsForgery;
 }
 
+export const isDiscoverable = (app: Application) => app.discoverability_state === 3 || app.discoverability_state === 4;
+
 export function toPublicApplication(app: Application) {
     return {
         id: app.id,
@@ -91,7 +93,7 @@ export function toPublicApplication(app: Application) {
         },
         is_monetized: false,
         is_verified: false,
-        is_discoverable: true,
+        is_discoverable: isDiscoverable(app),
         storefront_available: false,
         ...(app.bot && { bot: app.bot.toPublicUser() }),
     };
@@ -131,7 +133,8 @@ export async function findPublicApplications(ids: string[]) {
     });
 }
 
-export const isDirectoryApplication = async (app: Application) => (app.bot_public && !!app.bot) || EmbeddedActivity.exists({ where: { application_id: app.id, on_shelf: true } });
+export const isDirectoryApplication = async (app: Application) =>
+    (app.bot_public && !!app.bot && isDiscoverable(app)) || EmbeddedActivity.exists({ where: { application_id: app.id, on_shelf: true } });
 
 export async function toDirectoryApplication(app: Application) {
     const guildCount = app.bot ? await Member.count({ where: { id: app.bot.id } }) : 0;
@@ -194,7 +197,7 @@ export async function listDirectoryApplications(query: string, skip: number, tak
     const name = query ? { name: ILike(`%${query.replace(/[%_\\]/g, (c) => `\\${c}`)}%`) } : {};
     const activityIds = (await EmbeddedActivity.find({ where: { on_shelf: true }, select: { application_id: true } })).map((a) => a.application_id);
     const [apps, total] = await Application.findAndCount({
-        where: [{ bot_public: true, bot: { id: Not(IsNull()) }, ...name }, ...(activityIds.length ? [{ id: In(activityIds), ...name }] : [])],
+        where: [{ bot_public: true, bot: { id: Not(IsNull()) }, discoverability_state: In([3, 4]), ...name }, ...(activityIds.length ? [{ id: In(activityIds), ...name }] : [])],
         relations: { bot: true },
         order: { name: "ASC" },
         skip,

@@ -21,7 +21,7 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import { route } from "@spacebar/api/middlewares";
 import { Application, AuditLog, Channel, User, Webhook } from "@spacebar/database";
-import { Config, DiscordApiErrors, emitEvent, handleFile, ValidateName, WebhooksUpdateEvent } from "@spacebar/util";
+import { Config, DiscordApiErrors, emitEvent, handleFile, Snowflake, ValidateName, WebhooksUpdateEvent } from "@spacebar/util";
 import { webhookToJSON } from "@spacebar/api/util/handlers/Webhook";
 import { AuditLogEvents, isTextChannel, WebhookCreateSchema, WebhookType } from "@spacebar/schemas";
 import { trimSpecial } from "@spacebar/extensions";
@@ -87,9 +87,11 @@ router.post(
             ValidateName(name);
         }
 
-        if (avatar) avatar = await handleFile(`/avatars/${channel_id}`, avatar);
+        const id = Snowflake.generate();
+        if (avatar) avatar = await handleFile(`/avatars/${id}`, avatar);
 
         const hook = await Webhook.create({
+            id,
             type: WebhookType.Incoming,
             name,
             avatar,
