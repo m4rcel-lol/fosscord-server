@@ -33,6 +33,7 @@ export async function publishUserMessage(opts: {
     permission?: Permissions;
 }) {
     const { channel, user_id, body, message_id, attachments, permission } = opts;
+    const last_message_id = channel.last_message_id || null;
     const embeds = body.embeds || [];
     if (body.embed) embeds.push(body.embed);
     const message = await handleMessage(
@@ -51,7 +52,7 @@ export async function publishUserMessage(opts: {
     );
     Object.assign(message, { edited_timestamp: null });
 
-    await reopenDirectMessage(channel, user_id);
+    await reopenDirectMessage(channel, user_id, { last_message_id });
 
     if (channel.isThread())
         await onThreadMessage(

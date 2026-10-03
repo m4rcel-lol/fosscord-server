@@ -61,7 +61,11 @@ async function isMessageRequest(channelId: string, recipientId: string, senderId
 }
 
 // neverMessageRequest: for messages the server itself sends (official notices), which must not land in message requests
-export async function reopenDirectMessage(channel: Channel, senderId: string, { neverMessageRequest = false }: { neverMessageRequest?: boolean } = {}) {
+export async function reopenDirectMessage(
+    channel: Channel,
+    senderId: string,
+    { neverMessageRequest = false, last_message_id }: { neverMessageRequest?: boolean; last_message_id?: string | null } = {},
+) {
     if (!channel.isDm()) return;
     const sender = channel.recipients?.find((recipient) => recipient.user_id === senderId);
     const closed = channel.recipients?.filter((recipient) => recipient.closed) ?? [];
@@ -70,6 +74,7 @@ export async function reopenDirectMessage(channel: Channel, senderId: string, { 
         ? new Map(channel.recipients.map((recipient) => [recipient.user_id, recipient.user]))
         : undefined;
     const channelDto = await DmChannelDTO.from(channel, [], undefined, users);
+    if (last_message_id !== undefined) channelDto.last_message_id = last_message_id;
     if (sender?.message_request_timestamp) {
         sender.message_request_timestamp = null;
         await Promise.all([
