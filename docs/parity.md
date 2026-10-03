@@ -171,19 +171,19 @@ Each feature has one of four marks:
 
 ## Apps and bots
 
-| Feature                                       | Status   | Notes                                                                                                                       |
-| --------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Applications, bots and the developer portal   | working  |                                                                                                                             |
-| Bot gateway with intents                      | working  |                                                                                                                             |
-| OAuth2 bot and user authorization             | working  |                                                                                                                             |
-| Slash commands, context menu commands         | working  |                                                                                                                             |
-| Slash command autocomplete                    | working  | Autocomplete interactions reach the bot and its choices come back.                                                          |
-| Message components and components v2          | working  |                                                                                                                             |
-| Modals                                        | working  |                                                                                                                             |
-| User-installed apps in DMs                    | working  | User installs are listed in `/users/@me/application-command-index`, which the client merges into the command picker in DMs. |
-| App directory and app launcher                | working  |                                                                                                                             |
-| Webhooks, including GitHub and Slack formats  | working  |                                                                                                                             |
-| Premium apps, entitlements, app subscriptions | excluded | Paid features.                                                                                                              |
+| Feature                                       | Status   | Notes                                                                                                                                                               |
+| --------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Applications, bots and the developer portal   | working  |                                                                                                                                                                     |
+| Bot gateway with intents                      | working  |                                                                                                                                                                     |
+| OAuth2 bot and user authorization             | working  |                                                                                                                                                                     |
+| Slash commands, context menu commands         | working  |                                                                                                                                                                     |
+| Slash command autocomplete                    | working  | Autocomplete interactions reach the bot and its choices come back.                                                                                                  |
+| Message components and components v2          | working  |                                                                                                                                                                     |
+| Modals                                        | working  |                                                                                                                                                                     |
+| User-installed apps in DMs                    | working  | User installs are listed in `/users/@me/application-command-index`, which the client merges into the command picker in DMs.                                         |
+| App directory and app launcher                | working  | Apps are listed only after the owner turns on "List this app in the App Directory" under General information in the developer portal, and only public bots qualify. |
+| Webhooks, including GitHub and Slack formats  | working  |                                                                                                                                                                     |
+| Premium apps, entitlements, app subscriptions | excluded | Paid features.                                                                                                                                                      |
 
 ## Settings
 

@@ -8328,6 +8328,13 @@
             "bot_require_code_grant": {
                 "type": "boolean"
             },
+            "discoverability_state": {
+                "enum": [
+                    2,
+                    3
+                ],
+                "type": "number"
+            },
             "flags": {
                 "type": "integer"
             },
