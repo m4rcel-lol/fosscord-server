@@ -226,9 +226,15 @@ const start = async (userId: string) => {
             }
         });
         ui.refresh();
-        if (engine.locked && !ui.unlockSnoozed()) ui.showUnlock();
     } catch (error) {
-        fail(`Self-test failed: ${error instanceof Error ? error.message : String(error)}`);
+        const res = error as { status?: number; body?: { retry_after?: number; message?: string } } | null;
+        if (res?.status === 429) {
+            started = false;
+            setTimeout(startWhenReady, Math.max(Number(res.body?.retry_after) || 60, 1) * 1000 + 1000);
+            return;
+        }
+        const reason = error instanceof Error ? error.message : res?.status ? `HTTP ${res.status}${res.body?.message ? ` ${res.body.message}` : ""}` : String(error);
+        fail(`Self-test failed: ${reason}`);
     }
 };
 

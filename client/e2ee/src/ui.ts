@@ -59,6 +59,7 @@ const css = `
 @media (hover:hover){.fe2ee-button:hover:not(:disabled){background:var(--control-primary-background-hover,#4752c4)}.fe2ee-button[data-variant="secondary"]:hover:not(:disabled){background:var(--control-secondary-background-hover,#6d6f78)}.fe2ee-button[data-variant="danger"]:hover:not(:disabled){background:var(--control-critical-primary-background-hover,#a12829)}.fe2ee-button[data-variant="link"]:hover:not(:disabled){background:none;text-decoration:underline}}
 .fe2ee-dialog{border:0;padding:0;border-radius:12px;width:min(480px,calc(100vw - 32px));max-height:min(720px,calc(100dvh - 64px));overflow:hidden;color:var(--text-default,#dbdee1);background:var(--modal-background,var(--background-base-low,#313338));box-shadow:0 0 0 1px var(--border-subtle,rgb(255 255 255 / .06)),0 4px 8px rgb(0 0 0 / .16),0 16px 48px rgb(0 0 0 / .32)}
 .fe2ee-dialog[open]{display:flex;flex-direction:column}
+.fe2ee-dialog:focus{outline:none}
 .fe2ee-dialog::backdrop{background:rgb(0 0 0 / .7)}
 .fe2ee-dialog-head{flex:none;display:flex;align-items:flex-start;gap:16px;padding:20px 16px 4px 20px}
 .fe2ee-dialog h2{flex:1;margin:0;font-size:20px;line-height:24px;font-weight:600;text-wrap:balance;color:var(--text-strong,#f2f3f5)}
@@ -150,25 +151,6 @@ const ago = (iso: string) => {
 };
 
 type Notice = { tone: "danger" | "warning" | "info"; text: string; action?: { label: string; run: () => void } };
-
-const UNLOCK_SNOOZE_KEY = "fe2ee-unlock-snoozed-until";
-const UNLOCK_SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
-
-const unlockSnoozed = () => {
-    try {
-        return Number(localStorage.getItem(UNLOCK_SNOOZE_KEY)) > Date.now();
-    } catch {
-        return false;
-    }
-};
-
-const snoozeUnlock = () => {
-    try {
-        localStorage.setItem(UNLOCK_SNOOZE_KEY, String(Date.now() + UNLOCK_SNOOZE_MS));
-    } catch {
-        return;
-    }
-};
 
 export interface UiOptions {
     engine: Engine;
@@ -311,8 +293,10 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
             pressedBackdrop = false;
         });
         build(body, actions, handle);
+        el.tabIndex = -1;
         document.body.append(el);
         el.showModal();
+        if (!el.querySelector("[autofocus]")) el.focus();
         return handle;
     };
 
@@ -587,7 +571,6 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
             el.addEventListener("close", () => {
                 stop();
                 unlockOpen = null;
-                if (engine.locked) snoozeUnlock();
             });
             actions.append(
                 button("Not now", "secondary", () => {
@@ -1108,7 +1091,6 @@ export const createUi = ({ engine, states, enableChannel, link, verifyPassword, 
         refresh,
         showError,
         showUnlock,
-        unlockSnoozed,
         showApproval,
         dismissApproval,
         showSettings,
